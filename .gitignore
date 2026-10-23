@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Swift Package Manager
+ui/.build/
+ui/.swiftpm/
+*.xcodeproj
+*.xcworkspace
+
+# Local exports and scratch
+data.json
+*.local.json

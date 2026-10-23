@@ -1,0 +1,207 @@
+"""Shared test helpers: a fake filesystem with git repos, and a CONTRACT.md validator."""
+
+import os
+import re
+import shutil
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+FIXTURES = os.path.join(HERE, "fixtures")
+FIXTURE_DIRS = {
+    "claude": [os.path.join(FIXTURES, "claude")],
+    "antigravity": [os.path.join(FIXTURES, "antigravity")],
+    "codex": [os.path.join(FIXTURES, "codex")],
+}
+ALICE = "/Users/alice"
+GITHUB = ALICE + "/Documents/GitHub"
+
+
+class FakeFS:
+    """A temp directory standing in for "/" (passed to Resolver as fs_root)."""
+
+    def __init__(self):
+        self.root = tempfile.mkdtemp(prefix="aicost-test-")
+
+    def cleanup(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def real(self, path):
+        return self.root + path
+
+    def mkdir(self, path):
+        os.makedirs(self.real(path), exist_ok=True)
+        return path
+
+    def write(self, path, text):
+        os.makedirs(os.path.dirname(self.real(path)), exist_ok=True)
+        with open(self.real(path), "w", encoding="utf-8") as handle:
+            handle.write(text)
+        return path
+
+    def repo(self, path, remotes=None):
+        """remotes: list of (name, url)."""
+        self.mkdir(path + "/.git")
+        config = "[core]\n\trepositoryformatversion = 0\n"
+        for name, url in remotes or []:
+            config += '[remote "%s"]\n\turl = %s\n\tfetch = +refs/heads/*:refs/remotes/%s/*\n' % (name, url, name)
+        self.write(path + "/.git/config", config)
+        return path
+
+    def worktree(self, main, path, name=None, create_dir=True, admin=True):
+        """A linked worktree of ``main``. admin=False simulates `git worktree prune`;
+        create_dir=False simulates a deleted worktree directory that is still registered."""
+        name = name or os.path.basename(path)
+        admin_dir = main + "/.git/worktrees/" + name
+        if admin:
+            self.write(admin_dir + "/gitdir", path + "/.git\n")
+            self.write(admin_dir + "/commondir", "../..\n")
+        if create_dir:
+            self.write(path + "/.git", "gitdir: %s\n" % admin_dir)
+        return path
+
+
+def standard_fs():
+    """Repos matching the fixture logs."""
+    fs = FakeFS()
+    fs.repo(GITHUB + "/FocusApp", [("origin", "https://github.com/alice/FocusApp.git")])
+    # the Claude scratchpad worktree used by an Antigravity fixture session, since deleted
+    fs.worktree(GITHUB + "/FocusApp",
+                "/private/tmp/claude-501/-Users-alice-Documents-GitHub-FocusApp/"
+                "928ec0a9-8451-40d6-9f13-8bc49461b9b5/scratchpad/redesign", create_dir=False)
+    fs.repo(GITHUB + "/tcf-canada")  # no remote
+    fs.mkdir(ALICE + "/Downloads")
+    return fs
+
+
+# ---- contract validation -----------------------------------------------------------
+ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+TOKEN_KEYS = {"input", "output", "cache_read", "cache_write", "thinking", "total"}
+AGG_KEYS = {"cost", "tokens", "sessions", "first_active", "last_active"}
+SESSION_KEYS = {"id", "agent", "label", "started", "ended", "cwd", "branch", "models", "cost",
+                "tokens", "share", "attribution", "subagents", "title"}
+PROJECT_KINDS = {"dominant", "split", "cwd", "scratchpad", "override"}
+COST_NOTE = "API-equivalent cost estimated from public API prices. Not actual subscription spend."
+
+
+def _check_tokens(tc, t, where):
+    tc.assertTrue(TOKEN_KEYS <= set(t), where)
+    for k in TOKEN_KEYS:
+        tc.assertIsInstance(t[k], int, "%s.%s" % (where, k))
+        tc.assertGreaterEqual(t[k], 0, "%s.%s" % (where, k))
+    tc.assertEqual(t["total"], t["input"] + t["output"] + t["cache_read"] + t["cache_write"], where)
+
+
+def _check_cost(tc, v, where):
+    tc.assertIsInstance(v, (int, float), where)
+    tc.assertEqual(round(v, 4), v, where + " has more than 4 decimals")
+    tc.assertGreaterEqual(v, 0, where)
+
+
+def _check_agg(tc, a, where):
+    tc.assertTrue(AGG_KEYS <= set(a), "%s missing %s" % (where, AGG_KEYS - set(a)))
+    _check_cost(tc, a["cost"], where + ".cost")
+    _check_tokens(tc, a["tokens"], where + ".tokens")
+    tc.assertIsInstance(a["sessions"], int)
+    for k in ("first_active", "last_active"):
+        tc.assertTrue(a[k] is None or DAY.match(a[k]), "%s.%s" % (where, k))
+    if a["first_active"] and a["last_active"]:
+        tc.assertLessEqual(a["first_active"], a["last_active"])
+
+
+def _check_session(tc, s, where, kinds, share_one=False):
+    tc.assertTrue(SESSION_KEYS <= set(s), "%s missing %s" % (where, SESSION_KEYS - set(s)))
+    tc.assertIn(s["attribution"], kinds, where)
+    tc.assertRegex(s["started"], ISO_UTC)
+    tc.assertRegex(s["ended"], ISO_UTC)  # required
+    tc.assertLessEqual(s["started"], s["ended"])
+    tc.assertTrue(0 < s["share"] <= 1, where)
+    if share_one:
+        tc.assertEqual(s["share"], 1)
+    if s["attribution"] == "split":
+        tc.assertLess(s["share"], 1, where)
+    _check_cost(tc, s["cost"], where + ".cost")
+    _check_tokens(tc, s["tokens"], where + ".tokens")
+    tc.assertIsInstance(s["models"], list)
+    tc.assertIsInstance(s["subagents"], int)
+    tc.assertTrue(s["title"] is None or len(s["title"]) <= 80)
+    tc.assertTrue(s["cwd"] is None or isinstance(s["cwd"], str))
+
+
+def _desc(seq):
+    return all(a >= b for a, b in zip(seq, seq[1:]))
+
+
+def validate_contract(tc, doc):
+    """Assert that ``doc`` follows CONTRACT.md (structure, ordering, invariants)."""
+    for k in ("schema_version", "generated_at", "generated_by", "timezone", "currency", "cost_note",
+              "config", "totals", "projects", "buckets"):
+        tc.assertIn(k, doc)
+    tc.assertEqual(doc["schema_version"], 1)
+    tc.assertRegex(doc["generated_at"], ISO_UTC)
+    tc.assertTrue(doc["generated_by"].startswith("aicost "))
+    tc.assertRegex(doc["timezone"], r"^[A-Za-z_]+(/[A-Za-z0-9_+\-]+)*$")
+    tc.assertEqual(doc["currency"], "USD")
+    tc.assertEqual(doc["cost_note"], COST_NOTE)
+    tc.assertIsInstance(doc["config"]["dominant_threshold"], (int, float))
+
+    _check_agg(tc, doc["totals"], "totals")
+    tc.assertIn("unique_sessions", doc["totals"])
+    b = doc["buckets"]
+    for name, kind in (("unattributed", "none"), ("excluded", "excluded")):
+        _check_agg(tc, b[name], name)
+        for s in b[name]["sessions_detail"]:
+            _check_session(tc, s, name, {kind}, share_one=True)
+        tc.assertEqual(len(b[name]["sessions_detail"]), b[name]["sessions"])
+    tc.assertEqual(b["parse_failed"]["sessions"], len(b["parse_failed"]["files"]))
+
+    projects = doc["projects"]
+    tc.assertTrue(_desc([p["cost"] for p in projects]), "projects not sorted by cost desc")
+    ids = [p["id"] for p in projects]
+    tc.assertEqual(len(ids), len(set(ids)), "duplicate project ids")
+    for p in projects:
+        where = "project %s" % p["id"]
+        _check_agg(tc, p, where)
+        for k in ("id", "name", "remote", "paths", "path_missing", "by_agent", "by_model", "by_day",
+                  "by_branch", "sessions_detail"):
+            tc.assertIn(k, p, where)
+        if p["remote"] is not None:
+            tc.assertEqual(p["id"], p["remote"])
+        else:
+            tc.assertTrue(p["id"].startswith("/"), where)
+        if p["path_missing"]:
+            tc.assertIsNone(p["remote"], where)  # unless aliased; tests do not alias these
+        tc.assertTrue(_desc([a["cost"] for a in p["by_agent"]]), where + " by_agent order")
+        tc.assertTrue(_desc([m["cost"] for m in p["by_model"]]), where + " by_model order")
+        tc.assertTrue(_desc([x["cost"] for x in p["by_branch"]]), where + " by_branch order")
+        days = [d["day"] for d in p["by_day"]]
+        tc.assertEqual(days, sorted(set(days)), where + " by_day must be ascending and unique")
+        for d in p["by_day"]:
+            tc.assertRegex(d["day"], DAY)
+            tc.assertIsInstance(d["tokens"], int)
+        for a in p["by_agent"]:
+            tc.assertTrue({"agent", "label", "cost", "tokens", "sessions"} <= set(a))
+            _check_tokens(tc, a["tokens"], where + " by_agent")
+        for m in p["by_model"]:
+            tc.assertTrue({"model", "agent", "cost", "tokens", "estimated"} <= set(m))
+            tc.assertIsInstance(m["estimated"], bool)
+        for x in p["by_branch"]:
+            tc.assertTrue({"branch", "cost", "sessions"} <= set(x))
+        if p["by_branch"]:
+            tc.assertTrue(any(x["branch"] != "(unknown)" for x in p["by_branch"]),
+                          where + ": by_branch must be [] when no session has a branch")
+        started = [s["started"] for s in p["sessions_detail"]]
+        tc.assertEqual(started, sorted(started, reverse=True), where + " sessions_detail order")
+        tc.assertEqual(len(p["sessions_detail"]), p["sessions"])
+        for s in p["sessions_detail"]:
+            _check_session(tc, s, where, PROJECT_KINDS)
+        tc.assertAlmostEqual(sum(s["cost"] for s in p["sessions_detail"]), p["cost"], delta=0.01)
+        tc.assertEqual(sum(a["sessions"] for a in p["by_agent"]), p["sessions"])
+
+    # reconciliation invariant
+    parts = projects + [b["unattributed"], b["excluded"]]
+    tc.assertAlmostEqual(doc["totals"]["cost"], sum(x["cost"] for x in parts), delta=0.01)
+    for k in TOKEN_KEYS:
+        tc.assertEqual(doc["totals"]["tokens"][k], sum(x["tokens"][k] for x in parts), "tokens." + k)
+    tc.assertEqual(doc["totals"]["sessions"], sum(x["sessions"] for x in parts))
+    tc.assertLessEqual(doc["totals"]["unique_sessions"], doc["totals"]["sessions"])

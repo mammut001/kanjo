@@ -1,0 +1,4563 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-23T02:00:00Z",
+  "currency": "USD",
+  "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "config": {
+    "dominant_threshold": 0.8
+  },
+  "totals": {
+    "cost": 275.2326,
+    "tokens": {
+      "input": 1796112,
+      "output": 2610841,
+      "cache_read": 170560233,
+      "cache_write": 14021801,
+      "thinking": 528936,
+      "total": 188988987
+    },
+    "sessions": 119,
+    "first_active": "2026-07-28",
+    "last_active": "2026-10-23"
+  },
+  "projects": [
+    {
+      "id": "github.com/dogecoin/focusapp",
+      "name": "FocusApp",
+      "remote": "github.com/dogecoin/focusapp",
+      "paths": [
+        "/Users/dogecoin/Documents/GitHub/FocusApp",
+        "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+        "/Users/dogecoin/Documents/GitHub/FocusApp-paylag"
+      ],
+      "path_missing": false,
+      "cost": 152.7382,
+      "tokens": {
+        "input": 785881,
+        "output": 1120999,
+        "cache_read": 75050180,
+        "cache_write": 6076734,
+        "thinking": 208116,
+        "total": 83033794
+      },
+      "sessions": 37,
+      "first_active": "2026-08-13",
+      "last_active": "2026-10-23",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 150.353,
+          "tokens": {
+            "input": 676686,
+            "output": 948420,
+            "cache_read": 68855945,
+            "cache_write": 4905208,
+            "thinking": 208116,
+            "total": 75386259
+          },
+          "sessions": 31
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 2.3852,
+          "tokens": {
+            "input": 109195,
+            "output": 172579,
+            "cache_read": 6194235,
+            "cache_write": 1171526,
+            "thinking": 0,
+            "total": 7647535
+          },
+          "sessions": 6
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 116.8196,
+          "tokens": {
+            "input": 288457,
+            "output": 379144,
+            "cache_read": 30526769,
+            "cache_write": 2040898,
+            "thinking": 85317,
+            "total": 33235268
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 24.6273,
+          "tokens": {
+            "input": 266928,
+            "output": 455411,
+            "cache_read": 29348129,
+            "cache_write": 2184253,
+            "thinking": 97542,
+            "total": 32254721
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-6-preview",
+          "agent": "claude",
+          "cost": 6.9292,
+          "tokens": {
+            "input": 29381,
+            "output": 8843,
+            "cache_read": 1666942,
+            "cache_write": 177323,
+            "thinking": 1957,
+            "total": 1882489
+          },
+          "estimated": true
+        },
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 2.3224,
+          "tokens": {
+            "input": 104786,
+            "output": 154728,
+            "cache_read": 5153208,
+            "cache_write": 1104009,
+            "thinking": 0,
+            "total": 6516731
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 1.9769,
+          "tokens": {
+            "input": 91920,
+            "output": 105022,
+            "cache_read": 7314105,
+            "cache_write": 502734,
+            "thinking": 23300,
+            "total": 8013781
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.0628,
+          "tokens": {
+            "input": 4409,
+            "output": 17851,
+            "cache_read": 1041027,
+            "cache_write": 67517,
+            "thinking": 0,
+            "total": 1130804
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-13",
+          "cost": 10.7014,
+          "tokens": 5569274
+        },
+        {
+          "day": "2026-08-14",
+          "cost": 11.783,
+          "tokens": 3723630
+        },
+        {
+          "day": "2026-08-16",
+          "cost": 5.7344,
+          "tokens": 4106286
+        },
+        {
+          "day": "2026-08-19",
+          "cost": 13.1569,
+          "tokens": 3478165
+        },
+        {
+          "day": "2026-08-22",
+          "cost": 8.6938,
+          "tokens": 3164211
+        },
+        {
+          "day": "2026-08-23",
+          "cost": 1.176,
+          "tokens": 606799
+        },
+        {
+          "day": "2026-08-24",
+          "cost": 0.2234,
+          "tokens": 1383232
+        },
+        {
+          "day": "2026-08-25",
+          "cost": 12.8144,
+          "tokens": 3798887
+        },
+        {
+          "day": "2026-09-02",
+          "cost": 7.8896,
+          "tokens": 2223076
+        },
+        {
+          "day": "2026-09-04",
+          "cost": 1.2688,
+          "tokens": 2270382
+        },
+        {
+          "day": "2026-09-06",
+          "cost": 1.3031,
+          "tokens": 573163
+        },
+        {
+          "day": "2026-09-12",
+          "cost": 3.4494,
+          "tokens": 1644724
+        },
+        {
+          "day": "2026-09-16",
+          "cost": 1.2756,
+          "tokens": 1407196
+        },
+        {
+          "day": "2026-09-23",
+          "cost": 1.9051,
+          "tokens": 3431615
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 1.0084,
+          "tokens": 1135763
+        },
+        {
+          "day": "2026-09-30",
+          "cost": 0.3965,
+          "tokens": 643925
+        },
+        {
+          "day": "2026-10-02",
+          "cost": 1.5502,
+          "tokens": 1854451
+        },
+        {
+          "day": "2026-10-03",
+          "cost": 1.9501,
+          "tokens": 3307386
+        },
+        {
+          "day": "2026-10-05",
+          "cost": 1.5578,
+          "tokens": 2547319
+        },
+        {
+          "day": "2026-10-08",
+          "cost": 1.2856,
+          "tokens": 1501388
+        },
+        {
+          "day": "2026-10-10",
+          "cost": 0.352,
+          "tokens": 1648486
+        },
+        {
+          "day": "2026-10-11",
+          "cost": 2.4221,
+          "tokens": 2615158
+        },
+        {
+          "day": "2026-10-14",
+          "cost": 5.5669,
+          "tokens": 1649794
+        },
+        {
+          "day": "2026-10-15",
+          "cost": 10.376,
+          "tokens": 3532010
+        },
+        {
+          "day": "2026-10-16",
+          "cost": 2.3962,
+          "tokens": 3278128
+        },
+        {
+          "day": "2026-10-17",
+          "cost": 5.8067,
+          "tokens": 3157635
+        },
+        {
+          "day": "2026-10-18",
+          "cost": 11.308,
+          "tokens": 7955673
+        },
+        {
+          "day": "2026-10-21",
+          "cost": 18.1581,
+          "tokens": 7671192
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 0.2995,
+          "tokens": 1272357
+        },
+        {
+          "day": "2026-10-23",
+          "cost": 6.9292,
+          "tokens": 1882489
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "(unknown)",
+          "cost": 53.1139,
+          "sessions": 9
+        },
+        {
+          "branch": "feat/paylag",
+          "cost": 28.4051,
+          "sessions": 12
+        },
+        {
+          "branch": "release-1.4.5",
+          "cost": 27.9967,
+          "sessions": 5
+        },
+        {
+          "branch": "fix/146-quota",
+          "cost": 21.7593,
+          "sessions": 5
+        },
+        {
+          "branch": "main",
+          "cost": 21.4632,
+          "sessions": 6
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "f6c31218-c183-6315-330f-8be1a689b424",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-23T00:45:00Z",
+          "ended": "2026-10-23T03:09:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/focusapp",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-6-preview"
+          ],
+          "cost": 6.9292,
+          "tokens": {
+            "input": 29381,
+            "output": 8843,
+            "cache_read": 1666942,
+            "cache_write": 177323,
+            "thinking": 1957,
+            "total": 1882489
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "a38295d3-1e0e-f546-b0b6-dedf4f9c4027",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-21T20:10:00Z",
+          "ended": "2026-10-21T22:13:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2995,
+          "tokens": {
+            "input": 8896,
+            "output": 15120,
+            "cache_read": 1097081,
+            "cache_write": 151260,
+            "thinking": 0,
+            "total": 1272357
+          },
+          "share": 0.7,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "93829b43-922f-e15a-e1e3-db63ef7ddc76",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T12:08:00Z",
+          "ended": "2026-10-21T12:13:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.4469,
+          "tokens": {
+            "input": 6478,
+            "output": 38093,
+            "cache_read": 1398600,
+            "cache_write": 253117,
+            "thinking": 10206,
+            "total": 1696288
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T04:58:00Z",
+          "ended": "2026-10-21T05:37:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.2593,
+          "tokens": {
+            "input": 30328,
+            "output": 40053,
+            "cache_read": 3340277,
+            "cache_write": 39361,
+            "thinking": 8422,
+            "total": 3450019
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "e645f129-629c-2ae3-1d9a-f65982ec9f2d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T00:19:00Z",
+          "ended": "2026-10-21T00:32:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.4519,
+          "tokens": {
+            "input": 6545,
+            "output": 24802,
+            "cache_read": 2403060,
+            "cache_write": 90478,
+            "thinking": 5975,
+            "total": 2524885
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": null
+        },
+        {
+          "id": "f42d47cc-00d4-af59-7427-3ca3287d06ca",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-18T07:39:00Z",
+          "ended": "2026-10-18T09:58:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.2451,
+          "tokens": {
+            "input": 20452,
+            "output": 40514,
+            "cache_read": 3702391,
+            "cache_write": 205285,
+            "thinking": 7041,
+            "total": 3968642
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "da7b9095-63d6-2a39-c0e3-befd4c71e0fe",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-18T06:23:00Z",
+          "ended": "2026-10-18T08:13:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.6492,
+          "tokens": {
+            "input": 5693,
+            "output": 55526,
+            "cache_read": 1826705,
+            "cache_write": 235842,
+            "thinking": 0,
+            "total": 2123766
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "5f987c71-a65e-688e-abf3-ad39fec21bbe",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-17T21:25:00Z",
+          "ended": "2026-10-18T00:17:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.4137,
+          "tokens": {
+            "input": 22477,
+            "output": 37805,
+            "cache_read": 1558822,
+            "cache_write": 244161,
+            "thinking": 7944,
+            "total": 1863265
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "05379ff6-d6d7-b3b8-3309-4d353f4df561",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T22:34:00Z",
+          "ended": "2026-10-17T00:07:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 5.8067,
+          "tokens": {
+            "input": 10761,
+            "output": 7200,
+            "cache_read": 3116731,
+            "cache_write": 22943,
+            "thinking": 1113,
+            "total": 3157635
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "2ef91276-6c00-6f61-23e2-fcb472d8567d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-15T19:31:00Z",
+          "ended": "2026-10-15T21:20:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.3962,
+          "tokens": {
+            "input": 23912,
+            "output": 44023,
+            "cache_read": 2935501,
+            "cache_write": 274692,
+            "thinking": 7322,
+            "total": 3278128
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "0ed42f1a-3d4c-bf37-4eb9-3effce88cb2d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-15T02:27:00Z",
+          "ended": "2026-10-15T03:10:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 10.376,
+          "tokens": {
+            "input": 22310,
+            "output": 18520,
+            "cache_read": 3224675,
+            "cache_write": 266505,
+            "thinking": 5397,
+            "total": 3532010
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "d3b59af7-67ce-378f-e5a4-983ba383889a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-13T17:21:00Z",
+          "ended": "2026-10-13T17:53:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 5.5669,
+          "tokens": {
+            "input": 10165,
+            "output": 24141,
+            "cache_read": 1501578,
+            "cache_write": 113910,
+            "thinking": 3896,
+            "total": 1649794
+          },
+          "share": 0.6,
+          "attribution": "split",
+          "subagents": 1,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "f05db76e-1a84-a51a-a9d3-d7c7ee87905e",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-11T06:03:00Z",
+          "ended": "2026-10-11T08:43:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.9575,
+          "tokens": {
+            "input": 38412,
+            "output": 42721,
+            "cache_read": 1780294,
+            "cache_write": 177962,
+            "thinking": 9962,
+            "total": 2039389
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "3602f8ac-10f1-bc81-448a-aa9e66b2bc5b",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-10T19:52:00Z",
+          "ended": "2026-10-10T22:51:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4646,
+          "tokens": {
+            "input": 14403,
+            "output": 40855,
+            "cache_read": 304526,
+            "cache_write": 215985,
+            "thinking": 0,
+            "total": 575769
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "2b70e525-bc67-f831-cbc8-4759f5b78cc7",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-10T00:45:00Z",
+          "ended": "2026-10-10T03:09:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.352,
+          "tokens": {
+            "input": 36529,
+            "output": 24803,
+            "cache_read": 1345258,
+            "cache_write": 241896,
+            "thinking": 0,
+            "total": 1648486
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "a43825b5-59e4-b671-4774-bc58c5f8bc16",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-08T02:46:00Z",
+          "ended": "2026-10-08T03:48:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.2856,
+          "tokens": {
+            "input": 10714,
+            "output": 35647,
+            "cache_read": 1373213,
+            "cache_write": 81814,
+            "thinking": 5718,
+            "total": 1501388
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "c1581092-f335-cba3-513a-7052986f9025",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-04T18:49:00Z",
+          "ended": "2026-10-04T19:49:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.5578,
+          "tokens": {
+            "input": 17371,
+            "output": 56441,
+            "cache_read": 2403632,
+            "cache_write": 69875,
+            "thinking": 11291,
+            "total": 2547319
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "f8e1daa7-cbce-abde-eede-db07e623a689",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-03T10:28:00Z",
+          "ended": "2026-10-03T12:55:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.9501,
+          "tokens": {
+            "input": 11195,
+            "output": 15498,
+            "cache_read": 3033304,
+            "cache_write": 247389,
+            "thinking": 3308,
+            "total": 3307386
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "6c6f7633-a260-7723-17a0-df490d01280f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-02T15:46:00Z",
+          "ended": "2026-10-02T16:42:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.5502,
+          "tokens": {
+            "input": 27624,
+            "output": 44925,
+            "cache_read": 1706876,
+            "cache_write": 75026,
+            "thinking": 12858,
+            "total": 1854451
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "e1805081-5958-a499-eeea-163e21e8ac68",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-30T14:00:00Z",
+          "ended": "2026-09-30T16:01:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "fix/146-quota",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.3965,
+          "tokens": {
+            "input": 25210,
+            "output": 30979,
+            "cache_read": 441941,
+            "cache_write": 145795,
+            "thinking": 0,
+            "total": 643925
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "284d82e5-87f7-e1fb-da4b-d9caeb5cf467",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-23T19:14:00Z",
+          "ended": "2026-09-23T21:40:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.0084,
+          "tokens": {
+            "input": 34037,
+            "output": 29016,
+            "cache_read": 999592,
+            "cache_write": 73118,
+            "thinking": 4713,
+            "total": 1135763
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "405bfdc9-4e7e-d827-455a-c7627428a656",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-22T18:04:00Z",
+          "ended": "2026-09-22T20:09:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.9051,
+          "tokens": {
+            "input": 22746,
+            "output": 20434,
+            "cache_read": 3239490,
+            "cache_write": 148945,
+            "thinking": 4143,
+            "total": 3431615
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "b0cbc61f-3d85-de89-c217-14298e200724",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-16T00:14:00Z",
+          "ended": "2026-09-16T01:12:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.2756,
+          "tokens": {
+            "input": 21222,
+            "output": 23513,
+            "cache_read": 1184058,
+            "cache_write": 178403,
+            "thinking": 6120,
+            "total": 1407196
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "b3aa7efe-4458-a885-ab90-99a435a240ae",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-11T16:19:00Z",
+          "ended": "2026-09-11T16:40:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 3.4494,
+          "tokens": {
+            "input": 5837,
+            "output": 19178,
+            "cache_read": 1561223,
+            "cache_write": 58486,
+            "thinking": 3635,
+            "total": 1644724
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "6a18ce4c-7496-2764-12a4-def0c4bbb7a9",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-06T15:19:00Z",
+          "ended": "2026-09-06T16:20:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.3031,
+          "tokens": {
+            "input": 31958,
+            "output": 10987,
+            "cache_read": 274186,
+            "cache_write": 256032,
+            "thinking": 2655,
+            "total": 573163
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "dc713d96-0c0f-d195-c17a-f08a1745d6d8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-03T22:12:00Z",
+          "ended": "2026-09-03T22:52:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.2688,
+          "tokens": {
+            "input": 21061,
+            "output": 21539,
+            "cache_read": 2085038,
+            "cache_write": 142744,
+            "thinking": 5054,
+            "total": 2270382
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "42c18a62-ef48-e8d5-50fd-9d3f85d51695",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-02T10:37:00Z",
+          "ended": "2026-09-02T13:06:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 7.8896,
+          "tokens": {
+            "input": 11562,
+            "output": 32496,
+            "cache_read": 2062470,
+            "cache_write": 116548,
+            "thinking": 7719,
+            "total": 2223076
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "28c13091-444d-610b-3f87-e362cf8d446a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-25T13:47:00Z",
+          "ended": "2026-08-25T14:51:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 12.8144,
+          "tokens": {
+            "input": 41423,
+            "output": 55824,
+            "cache_read": 3418143,
+            "cache_write": 283497,
+            "thinking": 9206,
+            "total": 3798887
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 3,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "eb67146a-77a6-e17c-d72b-61082a405f12",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-24T02:14:00Z",
+          "ended": "2026-08-24T03:27:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2234,
+          "tokens": {
+            "input": 18464,
+            "output": 5296,
+            "cache_read": 1178724,
+            "cache_write": 180748,
+            "thinking": 0,
+            "total": 1383232
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "ce9ff57f-43b7-a3a6-9a8d-ca03580d7b71",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-23T15:31:00Z",
+          "ended": "2026-08-23T16:14:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.176,
+          "tokens": {
+            "input": 10437,
+            "output": 40624,
+            "cache_read": 448896,
+            "cache_write": 106842,
+            "thinking": 8281,
+            "total": 606799
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "7367c28d-e1b2-94de-4767-d76c162f8a24",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-21T22:19:00Z",
+          "ended": "2026-08-22T00:36:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.6938,
+          "tokens": {
+            "input": 42356,
+            "output": 26655,
+            "cache_read": 2893429,
+            "cache_write": 201771,
+            "thinking": 6439,
+            "total": 3164211
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "7b3a4e3e-7c52-fa17-680a-c07a2a935d62",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-19T11:34:00Z",
+          "ended": "2026-08-19T14:24:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 13.1569,
+          "tokens": {
+            "input": 38973,
+            "output": 44112,
+            "cache_read": 3153268,
+            "cache_write": 241812,
+            "thinking": 12232,
+            "total": 3478165
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "14a0bccb-8a47-6a87-e49d-681d51d87c64",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-16T01:39:00Z",
+          "ended": "2026-08-16T03:38:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.7301,
+          "tokens": {
+            "input": 18387,
+            "output": 20069,
+            "cache_read": 2212440,
+            "cache_write": 223048,
+            "thinking": 4418,
+            "total": 2473944
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "56666f9f-53ac-2ab9-7467-2cd9362f5e5c",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-16T01:31:00Z",
+          "ended": "2026-08-16T01:56:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.0043,
+          "tokens": {
+            "input": 25996,
+            "output": 10427,
+            "cache_read": 1570499,
+            "cache_write": 25420,
+            "thinking": 2156,
+            "total": 1632342
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "2095eef6-8ded-f9fb-4bb0-0f20b27c4026",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-14T15:57:00Z",
+          "ended": "2026-08-14T17:34:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 11.783,
+          "tokens": {
+            "input": 20083,
+            "output": 61338,
+            "cache_read": 3430860,
+            "cache_write": 211349,
+            "thinking": 14706,
+            "total": 3723630
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "d97dc9cd-033d-2bce-575a-ed2ca5c5650c",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-13T11:21:00Z",
+          "ended": "2026-08-13T11:51:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 9.2848,
+          "tokens": {
+            "input": 33776,
+            "output": 19874,
+            "cache_read": 2712929,
+            "cache_write": 256063,
+            "thinking": 5194,
+            "total": 3022642
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "9424aed5-1bac-5c15-4fa0-3f26f6f7f0cc",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-13T00:02:00Z",
+          "ended": "2026-08-13T01:40:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "branch": "feat/paylag",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.4166,
+          "tokens": {
+            "input": 8707,
+            "output": 33108,
+            "cache_read": 2463528,
+            "cache_write": 41289,
+            "thinking": 9035,
+            "total": 2546632
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        }
+      ]
+    },
+    {
+      "id": "github.com/dogecoin/lifemint",
+      "name": "LifeMint",
+      "remote": "github.com/dogecoin/lifemint",
+      "paths": [
+        "/Users/dogecoin/Documents/GitHub/LifeMint",
+        "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding"
+      ],
+      "path_missing": false,
+      "cost": 35.273,
+      "tokens": {
+        "input": 382970,
+        "output": 511432,
+        "cache_read": 31185987,
+        "cache_write": 2702351,
+        "thinking": 110742,
+        "total": 34782740
+      },
+      "sessions": 24,
+      "first_active": "2026-09-09",
+      "last_active": "2026-10-22",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 28.8152,
+          "tokens": {
+            "input": 189650,
+            "output": 237411,
+            "cache_read": 9683549,
+            "cache_write": 1359129,
+            "thinking": 50989,
+            "total": 11469739
+          },
+          "sessions": 11
+        },
+        {
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "cost": 4.9658,
+          "tokens": {
+            "input": 153020,
+            "output": 196859,
+            "cache_read": 14896025,
+            "cache_write": 884049,
+            "thinking": 59753,
+            "total": 16129953
+          },
+          "sessions": 9
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 1.492,
+          "tokens": {
+            "input": 40300,
+            "output": 77162,
+            "cache_read": 6606413,
+            "cache_write": 459173,
+            "thinking": 0,
+            "total": 7183048
+          },
+          "sessions": 4
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 21.801,
+          "tokens": {
+            "input": 82973,
+            "output": 83888,
+            "cache_read": 3770087,
+            "cache_write": 459182,
+            "thinking": 19580,
+            "total": 4396130
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 6.6353,
+          "tokens": {
+            "input": 89889,
+            "output": 137072,
+            "cache_read": 4569974,
+            "cache_write": 783629,
+            "thinking": 27988,
+            "total": 5580564
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-pro",
+          "agent": "antigravity",
+          "cost": 4.0964,
+          "tokens": {
+            "input": 81896,
+            "output": 134804,
+            "cache_read": 10055704,
+            "cache_write": 607559,
+            "thinking": 38876,
+            "total": 10879963
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 1.453,
+          "tokens": {
+            "input": 31987,
+            "output": 71521,
+            "cache_read": 5582762,
+            "cache_write": 416295,
+            "thinking": 0,
+            "total": 6102565
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3.5-pro-exp",
+          "agent": "antigravity",
+          "cost": 0.5997,
+          "tokens": {
+            "input": 27422,
+            "output": 6310,
+            "cache_read": 1477920,
+            "cache_write": 111678,
+            "thinking": 2446,
+            "total": 1623330
+          },
+          "estimated": true
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.3788,
+          "tokens": {
+            "input": 16788,
+            "output": 16451,
+            "cache_read": 1343488,
+            "cache_write": 116318,
+            "thinking": 3421,
+            "total": 1493045
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-flash",
+          "agent": "antigravity",
+          "cost": 0.2698,
+          "tokens": {
+            "input": 43702,
+            "output": 55745,
+            "cache_read": 3362401,
+            "cache_write": 164812,
+            "thinking": 18431,
+            "total": 3626660
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.039,
+          "tokens": {
+            "input": 8313,
+            "output": 5641,
+            "cache_read": 1023651,
+            "cache_write": 42878,
+            "thinking": 0,
+            "total": 1080483
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-09-09",
+          "cost": 4.5302,
+          "tokens": 822564
+        },
+        {
+          "day": "2026-09-10",
+          "cost": 0.3396,
+          "tokens": 1748299
+        },
+        {
+          "day": "2026-09-12",
+          "cost": 0.3232,
+          "tokens": 2276940
+        },
+        {
+          "day": "2026-09-17",
+          "cost": 1.4123,
+          "tokens": 4832769
+        },
+        {
+          "day": "2026-09-18",
+          "cost": 0.1399,
+          "tokens": 1626895
+        },
+        {
+          "day": "2026-09-21",
+          "cost": 5.2352,
+          "tokens": 2525071
+        },
+        {
+          "day": "2026-09-22",
+          "cost": 0.3929,
+          "tokens": 821006
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 2.6667,
+          "tokens": 4125947
+        },
+        {
+          "day": "2026-09-26",
+          "cost": 0.4504,
+          "tokens": 933035
+        },
+        {
+          "day": "2026-09-29",
+          "cost": 1.1279,
+          "tokens": 1052144
+        },
+        {
+          "day": "2026-09-30",
+          "cost": 4.9671,
+          "tokens": 1331258
+        },
+        {
+          "day": "2026-10-10",
+          "cost": 2.1691,
+          "tokens": 5288510
+        },
+        {
+          "day": "2026-10-14",
+          "cost": 3.7112,
+          "tokens": 1099861
+        },
+        {
+          "day": "2026-10-17",
+          "cost": 4.8785,
+          "tokens": 1038347
+        },
+        {
+          "day": "2026-10-20",
+          "cost": 2.1602,
+          "tokens": 2958258
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 0.7686,
+          "tokens": 2301836
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "agy/streaks",
+          "cost": 12.6587,
+          "sessions": 6
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 11.5594,
+          "sessions": 7
+        },
+        {
+          "branch": "main",
+          "cost": 8.6389,
+          "sessions": 7
+        },
+        {
+          "branch": "agy/onboarding",
+          "cost": 2.416,
+          "sessions": 4
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "9b69554d-7c54-535f-6c8c-3b6aa974d079",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-21T16:53:00Z",
+          "ended": "2026-10-21T17:37:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.7686,
+          "tokens": {
+            "input": 11906,
+            "output": 28714,
+            "cache_read": 2124096,
+            "cache_write": 137120,
+            "thinking": 7092,
+            "total": 2301836
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "1bb43332-d8e7-012f-3968-1c817b70c3b8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-20T09:13:00Z",
+          "ended": "2026-10-20T10:47:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "agy/streaks",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.5605,
+          "tokens": {
+            "input": 26076,
+            "output": 37315,
+            "cache_read": 1081987,
+            "cache_write": 189550,
+            "thinking": 5935,
+            "total": 1334928
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "ebe5841f-e9c9-6c52-098c-60b3efc9909e",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-20T05:30:00Z",
+          "ended": "2026-10-20T05:49:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/lifemint",
+          "branch": "main",
+          "models": [
+            "gemini-3.5-pro-exp"
+          ],
+          "cost": 0.5997,
+          "tokens": {
+            "input": 27422,
+            "output": 6310,
+            "cache_read": 1477920,
+            "cache_write": 111678,
+            "thinking": 2446,
+            "total": 1623330
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "0d6a05b3-43ef-2016-2c9b-662e040a3aae",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-17T05:36:00Z",
+          "ended": "2026-10-17T08:29:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "agy/streaks",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.8785,
+          "tokens": {
+            "input": 23634,
+            "output": 7089,
+            "cache_read": 863803,
+            "cache_write": 143821,
+            "thinking": 1689,
+            "total": 1038347
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "d3b59af7-67ce-378f-e5a4-983ba383889a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-13T17:21:00Z",
+          "ended": "2026-10-13T17:53:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 3.7112,
+          "tokens": {
+            "input": 6776,
+            "output": 16094,
+            "cache_read": 1001051,
+            "cache_write": 75940,
+            "thinking": 2597,
+            "total": 1099861
+          },
+          "share": 0.4,
+          "attribution": "split",
+          "subagents": 1,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "d65e59dd-e62d-2d06-cf9b-85581a7f195b",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-10T03:57:00Z",
+          "ended": "2026-10-10T06:29:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.8473,
+          "tokens": {
+            "input": 20324,
+            "output": 32418,
+            "cache_read": 2304432,
+            "cache_write": 94603,
+            "thinking": 12636,
+            "total": 2451777
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "5024bdc6-dcb3-3df3-13ee-cdc6ebd14d2c",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-10T01:23:00Z",
+          "ended": "2026-10-10T03:17:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.3788,
+          "tokens": {
+            "input": 11756,
+            "output": 16635,
+            "cache_read": 2097781,
+            "cache_write": 98602,
+            "thinking": 0,
+            "total": 2224774
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "b89f72f3-2a60-c652-e714-7668cf1d7d3a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-09T18:32:00Z",
+          "ended": "2026-10-09T21:14:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.943,
+          "tokens": {
+            "input": 5102,
+            "output": 15244,
+            "cache_read": 440453,
+            "cache_write": 151160,
+            "thinking": 4049,
+            "total": 611959
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "01f7c7ec-0e06-30cd-996d-5c50fc04a168",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-30T00:39:00Z",
+          "ended": "2026-09-30T01:55:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.9671,
+          "tokens": {
+            "input": 18891,
+            "output": 22451,
+            "cache_read": 1228177,
+            "cache_write": 61739,
+            "thinking": 4110,
+            "total": 1331258
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "8fb864e4-f173-8856-e25d-36eb9e9a9f83",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-28T22:30:00Z",
+          "ended": "2026-09-29T01:03:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.1279,
+          "tokens": {
+            "input": 11401,
+            "output": 23963,
+            "cache_read": 892383,
+            "cache_write": 124397,
+            "thinking": 5289,
+            "total": 1052144
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 0,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "f020e992-b576-255e-9854-9f222102f9c9",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-25T23:04:00Z",
+          "ended": "2026-09-26T01:37:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4504,
+          "tokens": {
+            "input": 18523,
+            "output": 33227,
+            "cache_read": 760100,
+            "cache_write": 121185,
+            "thinking": 0,
+            "total": 933035
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "134a5a2f-a7cf-705c-c257-cf73c29d782b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-24T14:07:00Z",
+          "ended": "2026-09-24T16:56:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.5077,
+          "tokens": {
+            "input": 22338,
+            "output": 10567,
+            "cache_read": 406319,
+            "cache_write": 42733,
+            "thinking": 2539,
+            "total": 481957
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "38b8f24e-56ea-57b3-beed-10b64f6e274b",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-24T06:38:00Z",
+          "ended": "2026-09-24T07:25:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.8051,
+          "tokens": {
+            "input": 27763,
+            "output": 25983,
+            "cache_read": 2227665,
+            "cache_write": 190929,
+            "thinking": 6547,
+            "total": 2472340
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "adaa44ca-8ed6-ad5e-1831-8aa354669d19",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-24T00:10:00Z",
+          "ended": "2026-09-24T02:06:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.3539,
+          "tokens": {
+            "input": 20335,
+            "output": 29332,
+            "cache_read": 926796,
+            "cache_write": 195187,
+            "thinking": 6053,
+            "total": 1171650
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "review this diff"
+        },
+        {
+          "id": "7634c169-4f76-e388-12fe-28bf81e0d489",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-22T10:22:00Z",
+          "ended": "2026-09-22T12:18:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.3929,
+          "tokens": {
+            "input": 3520,
+            "output": 17425,
+            "cache_read": 744092,
+            "cache_write": 55969,
+            "thinking": 4140,
+            "total": 821006
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "17dded81-15da-705c-d4ef-00aa175a81ec",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-21T12:04:00Z",
+          "ended": "2026-09-21T13:06:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.3871,
+          "tokens": {
+            "input": 14646,
+            "output": 33049,
+            "cache_read": 1488696,
+            "cache_write": 165374,
+            "thinking": 6574,
+            "total": 1701765
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "98eeac2b-fe9f-ecaa-6182-f347533f5a72",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-21T00:36:00Z",
+          "ended": "2026-09-21T02:02:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.8481,
+          "tokens": {
+            "input": 17129,
+            "output": 4887,
+            "cache_read": 684034,
+            "cache_write": 117256,
+            "thinking": 1135,
+            "total": 823306
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "review this diff"
+        },
+        {
+          "id": "7a9e8eef-ffa3-61be-0f92-40e107f97d05",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-18T01:44:00Z",
+          "ended": "2026-09-18T01:59:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": null,
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.1399,
+          "tokens": {
+            "input": 20126,
+            "output": 32961,
+            "cache_read": 1513230,
+            "cache_write": 60578,
+            "thinking": 12187,
+            "total": 1626895
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "31274148-7c7c-404e-c422-d03ef29a6339",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-17T11:00:00Z",
+          "ended": "2026-09-17T13:55:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": "agy/onboarding",
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.0708,
+          "tokens": {
+            "input": 12469,
+            "output": 14748,
+            "cache_read": 873210,
+            "cache_write": 39824,
+            "thinking": 4029,
+            "total": 940251
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "5da36f1b-8eac-0a33-cdf9-74a7d882b5c1",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-16T18:59:00Z",
+          "ended": "2026-09-16T19:39:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.5365,
+          "tokens": {
+            "input": 20804,
+            "output": 10212,
+            "cache_read": 1550859,
+            "cache_write": 124323,
+            "thinking": 3210,
+            "total": 1706198
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "6699cd99-a847-bce7-90fa-6b5724ac2130",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-16T18:12:00Z",
+          "ended": "2026-09-16T19:02:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.805,
+          "tokens": {
+            "input": 8686,
+            "output": 28088,
+            "cache_read": 2080521,
+            "cache_write": 69025,
+            "thinking": 7466,
+            "total": 2186320
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "7421ff46-637e-4b01-22ba-e10e899ca782",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-12T03:51:00Z",
+          "ended": "2026-09-12T04:30:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.3232,
+          "tokens": {
+            "input": 2942,
+            "output": 3939,
+            "cache_read": 2241203,
+            "cache_write": 28856,
+            "thinking": 0,
+            "total": 2276940
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "e6d5901d-8b62-1d41-5e09-a9eeaf88bdec",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-10T12:20:00Z",
+          "ended": "2026-09-10T15:11:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.3396,
+          "tokens": {
+            "input": 7079,
+            "output": 23361,
+            "cache_read": 1507329,
+            "cache_write": 210530,
+            "thinking": 0,
+            "total": 1748299
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "541c7a86-3ba5-cd2f-dea4-5c19d0243d72",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-09T12:20:00Z",
+          "ended": "2026-09-09T15:08:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 4.5302,
+          "tokens": {
+            "input": 23322,
+            "output": 37420,
+            "cache_read": 669850,
+            "cache_write": 91972,
+            "thinking": 11019,
+            "total": 822564
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "draft README for the new CLI flags"
+        }
+      ]
+    },
+    {
+      "id": "github.com/cclank/tokei",
+      "name": "tokei",
+      "remote": "github.com/cclank/tokei",
+      "paths": [
+        "/Users/dogecoin/Documents/GitHub/tokei"
+      ],
+      "path_missing": false,
+      "cost": 33.7207,
+      "tokens": {
+        "input": 325772,
+        "output": 478651,
+        "cache_read": 30684278,
+        "cache_write": 3090522,
+        "thinking": 134139,
+        "total": 34579223
+      },
+      "sessions": 21,
+      "first_active": "2026-08-24",
+      "last_active": "2026-10-19",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 29.1945,
+          "tokens": {
+            "input": 141217,
+            "output": 283841,
+            "cache_read": 16959046,
+            "cache_write": 1700222,
+            "thinking": 64966,
+            "total": 19084326
+          },
+          "sessions": 12
+        },
+        {
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "cost": 4.5262,
+          "tokens": {
+            "input": 184555,
+            "output": 194810,
+            "cache_read": 13725232,
+            "cache_write": 1390300,
+            "thinking": 69173,
+            "total": 15494897
+          },
+          "sessions": 9
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 17.6976,
+          "tokens": {
+            "input": 33859,
+            "output": 61183,
+            "cache_read": 3934223,
+            "cache_write": 357313,
+            "thinking": 12899,
+            "total": 4386578
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 10.9428,
+          "tokens": {
+            "input": 91296,
+            "output": 190843,
+            "cache_read": 11247445,
+            "cache_write": 1181884,
+            "thinking": 44485,
+            "total": 12711468
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-pro",
+          "agent": "antigravity",
+          "cost": 3.3857,
+          "tokens": {
+            "input": 98569,
+            "output": 124259,
+            "cache_read": 6744521,
+            "cache_write": 697056,
+            "thinking": 43655,
+            "total": 7664405
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3.5-pro-exp",
+          "agent": "antigravity",
+          "cost": 0.7581,
+          "tokens": {
+            "input": 28149,
+            "output": 4344,
+            "cache_read": 2106887,
+            "cache_write": 159712,
+            "thinking": 1159,
+            "total": 2299092
+          },
+          "estimated": true
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.5542,
+          "tokens": {
+            "input": 16062,
+            "output": 31815,
+            "cache_read": 1777378,
+            "cache_write": 161025,
+            "thinking": 7582,
+            "total": 1986280
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-flash",
+          "agent": "antigravity",
+          "cost": 0.3824,
+          "tokens": {
+            "input": 57837,
+            "output": 66207,
+            "cache_read": 4873824,
+            "cache_write": 533532,
+            "thinking": 24359,
+            "total": 5531400
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-24",
+          "cost": 0.067,
+          "tokens": 781161
+        },
+        {
+          "day": "2026-08-25",
+          "cost": 1.4436,
+          "tokens": 2680594
+        },
+        {
+          "day": "2026-08-27",
+          "cost": 0.135,
+          "tokens": 2082443
+        },
+        {
+          "day": "2026-08-29",
+          "cost": 1.4782,
+          "tokens": 1862823
+        },
+        {
+          "day": "2026-08-30",
+          "cost": 0.6225,
+          "tokens": 2088800
+        },
+        {
+          "day": "2026-09-01",
+          "cost": 0.7294,
+          "tokens": 444821
+        },
+        {
+          "day": "2026-09-06",
+          "cost": 1.9295,
+          "tokens": 2735588
+        },
+        {
+          "day": "2026-09-17",
+          "cost": 5.4075,
+          "tokens": 770865
+        },
+        {
+          "day": "2026-09-20",
+          "cost": 8.3132,
+          "tokens": 1832027
+        },
+        {
+          "day": "2026-09-23",
+          "cost": 1.1386,
+          "tokens": 359519
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 0.0684,
+          "tokens": 910897
+        },
+        {
+          "day": "2026-09-26",
+          "cost": 0.6221,
+          "tokens": 807802
+        },
+        {
+          "day": "2026-09-27",
+          "cost": 6.0009,
+          "tokens": 6976503
+        },
+        {
+          "day": "2026-10-02",
+          "cost": 1.5969,
+          "tokens": 2568127
+        },
+        {
+          "day": "2026-10-08",
+          "cost": 1.3446,
+          "tokens": 1397094
+        },
+        {
+          "day": "2026-10-12",
+          "cost": 0.9098,
+          "tokens": 2866258
+        },
+        {
+          "day": "2026-10-16",
+          "cost": 1.1554,
+          "tokens": 1114809
+        },
+        {
+          "day": "2026-10-19",
+          "cost": 0.7581,
+          "tokens": 2299092
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 10.7114,
+          "sessions": 10
+        },
+        {
+          "branch": "feat/pricing-json",
+          "cost": 9.29,
+          "sessions": 3
+        },
+        {
+          "branch": "fix/dedupe-stream",
+          "cost": 8.1957,
+          "sessions": 3
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 5.5236,
+          "sessions": 5
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "ed10f004-df4e-713e-f64e-3dfcbfbeac7a",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-18T21:42:00Z",
+          "ended": "2026-10-18T22:31:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "gemini-3.5-pro-exp"
+          ],
+          "cost": 0.7581,
+          "tokens": {
+            "input": 28149,
+            "output": 4344,
+            "cache_read": 2106887,
+            "cache_write": 159712,
+            "thinking": 1159,
+            "total": 2299092
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "a757cb10-42f5-25b9-02ed-73ce92a81713",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T12:35:00Z",
+          "ended": "2026-10-16T15:30:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.1554,
+          "tokens": {
+            "input": 5184,
+            "output": 29174,
+            "cache_read": 944516,
+            "cache_write": 135935,
+            "thinking": 4684,
+            "total": 1114809
+          },
+          "share": 0.55,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "3c19e71d-1184-05ad-9e11-d2cd0930aef6",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-12T03:07:00Z",
+          "ended": "2026-10-12T05:50:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "feat/pricing-json",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.9098,
+          "tokens": {
+            "input": 24555,
+            "output": 30722,
+            "cache_read": 2600466,
+            "cache_write": 210515,
+            "thinking": 12862,
+            "total": 2866258
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "6f962882-95d8-2980-ff37-d19c2e76128b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-07T19:20:00Z",
+          "ended": "2026-10-07T21:51:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.3446,
+          "tokens": {
+            "input": 3126,
+            "output": 30981,
+            "cache_read": 1229201,
+            "cache_write": 133786,
+            "thinking": 8904,
+            "total": 1397094
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": null
+        },
+        {
+          "id": "409d3602-5084-3242-168b-1625746f7891",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-02T11:05:00Z",
+          "ended": "2026-10-02T12:54:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.5969,
+          "tokens": {
+            "input": 21422,
+            "output": 13664,
+            "cache_read": 2368464,
+            "cache_write": 164577,
+            "thinking": 3177,
+            "total": 2568127
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "821c1336-9970-cf60-ebff-8d1530cbd755",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-27T10:04:00Z",
+          "ended": "2026-09-27T10:38:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.2284,
+          "tokens": {
+            "input": 23543,
+            "output": 13909,
+            "cache_read": 2646698,
+            "cache_write": 89650,
+            "thinking": 3119,
+            "total": 2773800
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "b28f41de-fb14-0bc3-304b-8590de9e3757",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-27T00:24:00Z",
+          "ended": "2026-09-27T01:44:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.7956,
+          "tokens": {
+            "input": 29339,
+            "output": 28282,
+            "cache_read": 2166580,
+            "cache_write": 194816,
+            "thinking": 9623,
+            "total": 2419017
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "e3a68a70-7e71-0b55-8639-bd418b15bd94",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-26T18:44:00Z",
+          "ended": "2026-09-26T20:04:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/tokei-bench",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.9769,
+          "tokens": {
+            "input": 12532,
+            "output": 4879,
+            "cache_read": 1721429,
+            "cache_write": 44846,
+            "thinking": 1455,
+            "total": 1783686
+          },
+          "share": 1.0,
+          "attribution": "override",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "9c07a751-1437-4509-2cd1-586a2b840c67",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-25T21:54:00Z",
+          "ended": "2026-09-25T22:40:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.6221,
+          "tokens": {
+            "input": 24555,
+            "output": 38522,
+            "cache_read": 554077,
+            "cache_write": 190648,
+            "thinking": 11445,
+            "total": 807802
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "6cd5e859-32a4-47b2-ef04-e57dcdccc33a",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-23T19:52:00Z",
+          "ended": "2026-09-23T21:52:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": null,
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.0684,
+          "tokens": {
+            "input": 3993,
+            "output": 11636,
+            "cache_read": 734931,
+            "cache_write": 160337,
+            "thinking": 4162,
+            "total": 910897
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "af908e3c-dd75-0e98-90e0-b95f0212b554",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-23T01:22:00Z",
+          "ended": "2026-09-23T03:53:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.1386,
+          "tokens": {
+            "input": 10284,
+            "output": 28873,
+            "cache_read": 152655,
+            "cache_write": 167707,
+            "thinking": 6045,
+            "total": 359519
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "782a65e0-48ca-7651-92f5-df7b0323d342",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-20T02:29:00Z",
+          "ended": "2026-09-20T04:54:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 8.3132,
+          "tokens": {
+            "input": 10179,
+            "output": 37931,
+            "cache_read": 1630887,
+            "cache_write": 153030,
+            "thinking": 6273,
+            "total": 1832027
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "e9da484a-8075-9f1f-87e5-f0fe5da8d6d2",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-17T11:13:00Z",
+          "ended": "2026-09-17T12:32:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 5.4075,
+          "tokens": {
+            "input": 11148,
+            "output": 18373,
+            "cache_read": 581907,
+            "cache_write": 159437,
+            "thinking": 5171,
+            "total": 770865
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "e912b4bf-86a4-bae4-1986-b4b270b7e868",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-06T02:26:00Z",
+          "ended": "2026-09-06T04:07:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.9295,
+          "tokens": {
+            "input": 13569,
+            "output": 32952,
+            "cache_read": 2448902,
+            "cache_write": 240165,
+            "thinking": 7696,
+            "total": 2735588
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "fix quota reset after midnight rollover"
+        },
+        {
+          "id": "c693da11-39c6-a1ca-9e50-aa42ca6dfda1",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-01T02:28:00Z",
+          "ended": "2026-09-01T04:37:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.7294,
+          "tokens": {
+            "input": 6700,
+            "output": 36232,
+            "cache_read": 324731,
+            "cache_write": 77158,
+            "thinking": 8557,
+            "total": 444821
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "e7457704-18df-bc3c-a0d4-de3d2303f6c6",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-08-29T17:06:00Z",
+          "ended": "2026-08-29T19:52:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.6225,
+          "tokens": {
+            "input": 7323,
+            "output": 12273,
+            "cache_read": 1913385,
+            "cache_write": 155819,
+            "thinking": 4641,
+            "total": 2088800
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "bc0a6a5d-6e99-6e3e-e3b1-37fc0a3450fc",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-08-29T09:29:00Z",
+          "ended": "2026-08-29T12:05:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.5477,
+          "tokens": {
+            "input": 28368,
+            "output": 33529,
+            "cache_read": 1117948,
+            "cache_write": 59582,
+            "thinking": 11442,
+            "total": 1239427
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "b0b862ef-6c9f-82b9-f647-8986a3917c99",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-29T03:20:00Z",
+          "ended": "2026-08-29T06:07:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.9305,
+          "tokens": {
+            "input": 14354,
+            "output": 14658,
+            "cache_read": 412590,
+            "cache_write": 181794,
+            "thinking": 4075,
+            "total": 623396
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "3a3c563e-4bd6-cee6-31b1-b099d52721e7",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-08-26T22:22:00Z",
+          "ended": "2026-08-27T00:29:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": null,
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.135,
+          "tokens": {
+            "input": 9741,
+            "output": 24814,
+            "cache_read": 1924498,
+            "cache_write": 123390,
+            "thinking": 11057,
+            "total": 2082443
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "a14923c2-f920-264c-0763-fcd01f15c7b6",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-24T18:32:00Z",
+          "ended": "2026-08-24T18:49:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.4436,
+          "tokens": {
+            "input": 9176,
+            "output": 22215,
+            "cache_read": 2497066,
+            "cache_write": 152137,
+            "thinking": 5810,
+            "total": 2680594
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "2812859a-1337-739e-8d4f-5d272c7f0b79",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-08-24T15:52:00Z",
+          "ended": "2026-08-24T16:21:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "branch": "feat/pricing-json",
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.067,
+          "tokens": {
+            "input": 28532,
+            "output": 10688,
+            "cache_read": 606460,
+            "cache_write": 135481,
+            "thinking": 2782,
+            "total": 781161
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "fix quota reset after midnight rollover"
+        }
+      ]
+    },
+    {
+      "id": "github.com/dogecoin/token-usage",
+      "name": "token-usage",
+      "remote": "github.com/dogecoin/token-usage",
+      "paths": [
+        "/Users/dogecoin/Documents/GitHub/token-usage"
+      ],
+      "path_missing": false,
+      "cost": 28.4849,
+      "tokens": {
+        "input": 75259,
+        "output": 168483,
+        "cache_read": 10815989,
+        "cache_write": 803005,
+        "thinking": 34719,
+        "total": 11862736
+      },
+      "sessions": 8,
+      "first_active": "2026-10-16",
+      "last_active": "2026-10-22",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 28.4849,
+          "tokens": {
+            "input": 75259,
+            "output": 168483,
+            "cache_read": 10815989,
+            "cache_write": 803005,
+            "thinking": 34719,
+            "total": 11862736
+          },
+          "sessions": 8
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 25.0366,
+          "tokens": {
+            "input": 46603,
+            "output": 100033,
+            "cache_read": 6067993,
+            "cache_write": 412431,
+            "thinking": 19453,
+            "total": 6627060
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 3.1716,
+          "tokens": {
+            "input": 19135,
+            "output": 59130,
+            "cache_read": 3726970,
+            "cache_write": 295779,
+            "thinking": 12876,
+            "total": 4101014
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.2767,
+          "tokens": {
+            "input": 9521,
+            "output": 9320,
+            "cache_read": 1021026,
+            "cache_write": 94795,
+            "thinking": 2390,
+            "total": 1134662
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-16",
+          "cost": 0.9454,
+          "tokens": 912119
+        },
+        {
+          "day": "2026-10-20",
+          "cost": 4.1789,
+          "tokens": 1412763
+        },
+        {
+          "day": "2026-10-21",
+          "cost": 8.0677,
+          "tokens": 2571108
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 15.2929,
+          "tokens": 6966746
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 28.4849,
+          "sessions": 8
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "81e03a5e-8b48-f496-86ab-d4e7f4124360",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-22T15:39:00Z",
+          "ended": "2026-10-22T16:44:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.8996,
+          "tokens": {
+            "input": 14382,
+            "output": 7944,
+            "cache_read": 1362972,
+            "cache_write": 87569,
+            "thinking": 1621,
+            "total": 1472867
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 2,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "eada79a3-4970-ed9a-09ce-3cfb2339ba19",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T23:04:00Z",
+          "ended": "2026-10-22T00:05:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.3638,
+          "tokens": {
+            "input": 2231,
+            "output": 29952,
+            "cache_read": 1691218,
+            "cache_write": 106794,
+            "thinking": 8048,
+            "total": 1830195
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "2227219f-551f-f086-c1b5-b5cabc3536df",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T22:08:00Z",
+          "ended": "2026-10-21T23:43:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 5.4058,
+          "tokens": {
+            "input": 19262,
+            "output": 12606,
+            "cache_read": 1487246,
+            "cache_write": 103495,
+            "thinking": 3349,
+            "total": 1622609
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "f75d599f-6b2d-5b09-8707-9ad480be7e35",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T18:01:00Z",
+          "ended": "2026-10-21T20:21:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 7.6237,
+          "tokens": {
+            "input": 11155,
+            "output": 35802,
+            "cache_read": 1817476,
+            "cache_write": 176642,
+            "thinking": 6833,
+            "total": 2041075
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "38d77b9a-e916-da57-f248-23ab177a8a5f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T03:50:00Z",
+          "ended": "2026-10-21T05:06:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.6151,
+          "tokens": {
+            "input": 3478,
+            "output": 7145,
+            "cache_read": 942692,
+            "cache_write": 86029,
+            "thinking": 1962,
+            "total": 1039344
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "095ffa81-40d9-2bce-7930-ba208b040f49",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-20T17:54:00Z",
+          "ended": "2026-10-20T18:32:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 4.4526,
+          "tokens": {
+            "input": 4530,
+            "output": 26285,
+            "cache_read": 1426762,
+            "cache_write": 74187,
+            "thinking": 4243,
+            "total": 1531764
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": null
+        },
+        {
+          "id": "7ff4cec6-e7b7-b4c6-d631-2a801c612ec2",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-20T08:46:00Z",
+          "ended": "2026-10-20T09:28:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 4.1789,
+          "tokens": {
+            "input": 15979,
+            "output": 24879,
+            "cache_read": 1314837,
+            "cache_write": 57068,
+            "thinking": 4830,
+            "total": 1412763
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 2,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "a757cb10-42f5-25b9-02ed-73ce92a81713",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T12:35:00Z",
+          "ended": "2026-10-16T15:30:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.9454,
+          "tokens": {
+            "input": 4242,
+            "output": 23870,
+            "cache_read": 772786,
+            "cache_write": 111221,
+            "thinking": 3833,
+            "total": 912119
+          },
+          "share": 0.45,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        }
+      ]
+    },
+    {
+      "id": "gitlab.com/acme/infra-scripts",
+      "name": "infra-scripts",
+      "remote": "gitlab.com/acme/infra-scripts",
+      "paths": [
+        "/Users/dogecoin/Documents/GitHub/infra-scripts"
+      ],
+      "path_missing": false,
+      "cost": 7.973,
+      "tokens": {
+        "input": 90584,
+        "output": 104332,
+        "cache_read": 7794047,
+        "cache_write": 515277,
+        "thinking": 9519,
+        "total": 8504240
+      },
+      "sessions": 10,
+      "first_active": "2026-08-07",
+      "last_active": "2026-10-22",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 6.8749,
+          "tokens": {
+            "input": 34923,
+            "output": 42241,
+            "cache_read": 3769757,
+            "cache_write": 243550,
+            "thinking": 9519,
+            "total": 4090471
+          },
+          "sessions": 4
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 1.0981,
+          "tokens": {
+            "input": 55661,
+            "output": 62091,
+            "cache_read": 4024290,
+            "cache_write": 271727,
+            "thinking": 0,
+            "total": 4413769
+          },
+          "sessions": 6
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 5.4216,
+          "tokens": {
+            "input": 11631,
+            "output": 14716,
+            "cache_read": 1503327,
+            "cache_write": 100715,
+            "thinking": 3014,
+            "total": 1630389
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 1.3307,
+          "tokens": {
+            "input": 20466,
+            "output": 18586,
+            "cache_read": 1906148,
+            "cache_write": 111642,
+            "thinking": 5080,
+            "total": 2056842
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 1.0742,
+          "tokens": {
+            "input": 53321,
+            "output": 56191,
+            "cache_read": 3565175,
+            "cache_write": 242607,
+            "thinking": 0,
+            "total": 3917294
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.1225,
+          "tokens": {
+            "input": 2826,
+            "output": 8939,
+            "cache_read": 360282,
+            "cache_write": 31193,
+            "thinking": 1425,
+            "total": 403240
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.0239,
+          "tokens": {
+            "input": 2340,
+            "output": 5900,
+            "cache_read": 459115,
+            "cache_write": 29120,
+            "thinking": 0,
+            "total": 496475
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-07",
+          "cost": 0.2189,
+          "tokens": 935869
+        },
+        {
+          "day": "2026-08-08",
+          "cost": 0.1645,
+          "tokens": 558609
+        },
+        {
+          "day": "2026-08-18",
+          "cost": 3.3536,
+          "tokens": 1088880
+        },
+        {
+          "day": "2026-08-24",
+          "cost": 0.0874,
+          "tokens": 368397
+        },
+        {
+          "day": "2026-08-27",
+          "cost": 2.068,
+          "tokens": 541509
+        },
+        {
+          "day": "2026-09-04",
+          "cost": 0.2953,
+          "tokens": 785109
+        },
+        {
+          "day": "2026-09-20",
+          "cost": 0.2037,
+          "tokens": 1220490
+        },
+        {
+          "day": "2026-10-07",
+          "cost": 0.6079,
+          "tokens": 1088119
+        },
+        {
+          "day": "2026-10-08",
+          "cost": 0.8454,
+          "tokens": 1371963
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 0.1283,
+          "tokens": 545295
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 3.9961,
+          "sessions": 4
+        },
+        {
+          "branch": "chore/terraform-1.9",
+          "cost": 3.9769,
+          "sessions": 6
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "a38295d3-1e0e-f546-b0b6-dedf4f9c4027",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-21T20:10:00Z",
+          "ended": "2026-10-21T22:13:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.1283,
+          "tokens": {
+            "input": 3812,
+            "output": 6480,
+            "cache_read": 470177,
+            "cache_write": 64826,
+            "thinking": 0,
+            "total": 545295
+          },
+          "share": 0.3,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "4ddb1b36-272c-0588-84a2-576c1fc905f8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-07T22:05:00Z",
+          "ended": "2026-10-08T00:08:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.8454,
+          "tokens": {
+            "input": 11407,
+            "output": 12716,
+            "cache_read": 1245837,
+            "cache_write": 102003,
+            "thinking": 2702,
+            "total": 1371963
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "6a662fce-7089-fc6d-2877-f5d90f5675f8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-07T09:32:00Z",
+          "ended": "2026-10-07T12:14:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.6079,
+          "tokens": {
+            "input": 11885,
+            "output": 14809,
+            "cache_read": 1020593,
+            "cache_write": 40832,
+            "thinking": 3803,
+            "total": 1088119
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "4c9a9f24-d7b4-c294-bd44-089d9dd2f9de",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-19T18:29:00Z",
+          "ended": "2026-09-19T21:08:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2037,
+          "tokens": {
+            "input": 13503,
+            "output": 4085,
+            "cache_read": 1167642,
+            "cache_write": 35260,
+            "thinking": 0,
+            "total": 1220490
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "80051b10-66c1-4dca-8255-da619a3b0319",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-04T14:14:00Z",
+          "ended": "2026-09-04T15:58:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2953,
+          "tokens": {
+            "input": 6224,
+            "output": 19755,
+            "cache_read": 719398,
+            "cache_write": 39732,
+            "thinking": 0,
+            "total": 785109
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "31d4ee09-8fd3-3afc-91fd-fa4f0d18ab95",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-27T00:09:00Z",
+          "ended": "2026-08-27T02:03:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 2.068,
+          "tokens": {
+            "input": 2875,
+            "output": 6392,
+            "cache_read": 488933,
+            "cache_write": 43309,
+            "thinking": 1002,
+            "total": 541509
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "4a4b5563-0cf4-77ef-18c8-a61624108e9a",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-23T19:09:00Z",
+          "ended": "2026-08-23T20:47:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.0874,
+          "tokens": {
+            "input": 8209,
+            "output": 3464,
+            "cache_read": 340085,
+            "cache_write": 16639,
+            "thinking": 0,
+            "total": 368397
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "65edcfe3-4f2d-ad3f-10d4-de39161237c9",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-18T15:19:00Z",
+          "ended": "2026-08-18T16:55:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.3536,
+          "tokens": {
+            "input": 8756,
+            "output": 8324,
+            "cache_read": 1014394,
+            "cache_write": 57406,
+            "thinking": 2012,
+            "total": 1088880
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": null
+        },
+        {
+          "id": "566e3cbe-9aea-622f-e6e9-87cab87b6384",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-08T05:16:00Z",
+          "ended": "2026-08-08T06:10:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.1645,
+          "tokens": {
+            "input": 11899,
+            "output": 12844,
+            "cache_read": 495186,
+            "cache_write": 38680,
+            "thinking": 0,
+            "total": 558609
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "4806f804-0cf0-374c-0c74-dc0f5a575539",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-06T16:41:00Z",
+          "ended": "2026-08-06T17:33:00Z",
+          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.2189,
+          "tokens": {
+            "input": 12014,
+            "output": 15463,
+            "cache_read": 831802,
+            "cache_write": 76590,
+            "thinking": 0,
+            "total": 935869
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        }
+      ]
+    },
+    {
+      "id": "github.com/dogecoin/old-blog",
+      "name": "old-blog",
+      "remote": "github.com/dogecoin/old-blog",
+      "paths": [
+        "/Users/dogecoin/Sites/old-blog"
+      ],
+      "path_missing": true,
+      "cost": 6.888,
+      "tokens": {
+        "input": 28911,
+        "output": 36321,
+        "cache_read": 2588350,
+        "cache_write": 191588,
+        "thinking": 8716,
+        "total": 2845170
+      },
+      "sessions": 4,
+      "first_active": "2026-07-28",
+      "last_active": "2026-08-09",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 6.888,
+          "tokens": {
+            "input": 28911,
+            "output": 36321,
+            "cache_read": 2588350,
+            "cache_write": 191588,
+            "thinking": 8716,
+            "total": 2845170
+          },
+          "sessions": 4
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 6.223,
+          "tokens": {
+            "input": 17644,
+            "output": 19714,
+            "cache_read": 1359187,
+            "cache_write": 130189,
+            "thinking": 4324,
+            "total": 1526734
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 0.5565,
+          "tokens": {
+            "input": 6671,
+            "output": 11873,
+            "cache_read": 783621,
+            "cache_write": 32894,
+            "thinking": 3244,
+            "total": 835059
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.1085,
+          "tokens": {
+            "input": 4596,
+            "output": 4734,
+            "cache_read": 445542,
+            "cache_write": 28505,
+            "thinking": 1148,
+            "total": 483377
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-07-28",
+          "cost": 2.2701,
+          "tokens": 702757
+        },
+        {
+          "day": "2026-08-02",
+          "cost": 0.5931,
+          "tokens": 1021104
+        },
+        {
+          "day": "2026-08-03",
+          "cost": 1.4525,
+          "tokens": 474592
+        },
+        {
+          "day": "2026-08-09",
+          "cost": 2.5723,
+          "tokens": 646717
+        }
+      ],
+      "by_branch": [],
+      "sessions_detail": [
+        {
+          "id": "c5e78b23-f461-3f09-585a-befbd1812f77",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-09T14:03:00Z",
+          "ended": "2026-08-09T17:03:00Z",
+          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.5723,
+          "tokens": {
+            "input": 9660,
+            "output": 6642,
+            "cache_read": 547240,
+            "cache_write": 83175,
+            "thinking": 1808,
+            "total": 646717
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "06d25913-a117-3719-b023-a0eadf41e335",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-03T10:28:00Z",
+          "ended": "2026-08-03T12:06:00Z",
+          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.4525,
+          "tokens": {
+            "input": 4509,
+            "output": 2822,
+            "cache_read": 439878,
+            "cache_write": 27383,
+            "thinking": 803,
+            "total": 474592
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": null
+        },
+        {
+          "id": "b0c4a01c-69b7-c0fa-26c4-32f66b352f85",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-02T12:19:00Z",
+          "ended": "2026-08-02T13:06:00Z",
+          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.5931,
+          "tokens": {
+            "input": 7549,
+            "output": 14291,
+            "cache_read": 961746,
+            "cache_write": 37518,
+            "thinking": 3766,
+            "total": 1021104
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "43ad3d62-b17c-fb21-cdbc-2c1ca4afe7bd",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-07-28T02:46:00Z",
+          "ended": "2026-07-28T05:13:00Z",
+          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.2701,
+          "tokens": {
+            "input": 7193,
+            "output": 12566,
+            "cache_read": 639486,
+            "cache_write": 43512,
+            "thinking": 2339,
+            "total": 702757
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": null
+        }
+      ]
+    },
+    {
+      "id": "/Users/dogecoin/Documents/experiments/rust-playground",
+      "name": "rust-playground",
+      "remote": null,
+      "paths": [
+        "/Users/dogecoin/Documents/experiments/rust-playground"
+      ],
+      "path_missing": false,
+      "cost": 1.7104,
+      "tokens": {
+        "input": 59279,
+        "output": 102899,
+        "cache_read": 5940415,
+        "cache_write": 288195,
+        "thinking": 0,
+        "total": 6390788
+      },
+      "sessions": 6,
+      "first_active": "2026-09-14",
+      "last_active": "2026-10-09",
+      "by_agent": [
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 1.7104,
+          "tokens": {
+            "input": 59279,
+            "output": 102899,
+            "cache_read": 5940415,
+            "cache_write": 288195,
+            "thinking": 0,
+            "total": 6390788
+          },
+          "sessions": 6
+        }
+      ],
+      "by_model": [
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 1.6766,
+          "tokens": {
+            "input": 54718,
+            "output": 95205,
+            "cache_read": 5249486,
+            "cache_write": 252873,
+            "thinking": 0,
+            "total": 5652282
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.0338,
+          "tokens": {
+            "input": 4561,
+            "output": 7694,
+            "cache_read": 690929,
+            "cache_write": 35322,
+            "thinking": 0,
+            "total": 738506
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-09-14",
+          "cost": 0.3895,
+          "tokens": 1405002
+        },
+        {
+          "day": "2026-09-15",
+          "cost": 0.1679,
+          "tokens": 563944
+        },
+        {
+          "day": "2026-09-25",
+          "cost": 0.3874,
+          "tokens": 1802443
+        },
+        {
+          "day": "2026-10-05",
+          "cost": 0.1612,
+          "tokens": 298792
+        },
+        {
+          "day": "2026-10-08",
+          "cost": 0.2795,
+          "tokens": 1505157
+        },
+        {
+          "day": "2026-10-09",
+          "cost": 0.3249,
+          "tokens": 815450
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "(unknown)",
+          "cost": 1.2697,
+          "sessions": 4
+        },
+        {
+          "branch": "master",
+          "cost": 0.4407,
+          "sessions": 2
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "b69f68c3-e60f-d420-2c33-350c73b911d8",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-08T22:06:00Z",
+          "ended": "2026-10-09T00:46:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.3249,
+          "tokens": {
+            "input": 5997,
+            "output": 22145,
+            "cache_read": 767328,
+            "cache_write": 19980,
+            "thinking": 0,
+            "total": 815450
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "f2a9dc8a-ca9e-4a62-fae3-114ba3b442bd",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-07T19:14:00Z",
+          "ended": "2026-10-07T22:07:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.2795,
+          "tokens": {
+            "input": 8343,
+            "output": 16182,
+            "cache_read": 1436612,
+            "cache_write": 44020,
+            "thinking": 0,
+            "total": 1505157
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "9136f1f8-f310-46dc-6202-bee65cb5e69c",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-05T08:49:00Z",
+          "ended": "2026-10-05T11:28:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.1612,
+          "tokens": {
+            "input": 12591,
+            "output": 11527,
+            "cache_read": 241771,
+            "cache_write": 32903,
+            "thinking": 0,
+            "total": 298792
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "6e3c4532-1434-8f62-6cac-028cba220065",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-25T03:11:00Z",
+          "ended": "2026-09-25T05:06:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.3874,
+          "tokens": {
+            "input": 18527,
+            "output": 21512,
+            "cache_read": 1696028,
+            "cache_write": 66376,
+            "thinking": 0,
+            "total": 1802443
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "7fc15858-2fa0-d842-bc55-300b06a241af",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-14T20:59:00Z",
+          "ended": "2026-09-14T23:29:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.1679,
+          "tokens": {
+            "input": 3513,
+            "output": 9946,
+            "cache_read": 512715,
+            "cache_write": 37770,
+            "thinking": 0,
+            "total": 563944
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "5c8ac066-cb2f-afa3-2c91-3a7ca3404f08",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-14T05:14:00Z",
+          "ended": "2026-09-14T07:38:00Z",
+          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.3895,
+          "tokens": {
+            "input": 10308,
+            "output": 21587,
+            "cache_read": 1285961,
+            "cache_write": 87146,
+            "thinking": 0,
+            "total": 1405002
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        }
+      ]
+    },
+    {
+      "id": "github.com/dogecoin/dotfiles",
+      "name": "dotfiles",
+      "remote": "github.com/dogecoin/dotfiles",
+      "paths": [
+        "/Users/dogecoin/.dotfiles"
+      ],
+      "path_missing": false,
+      "cost": 0.0013,
+      "tokens": {
+        "input": 8,
+        "output": 3,
+        "cache_read": 450,
+        "cache_write": 31,
+        "thinking": 0,
+        "total": 492
+      },
+      "sessions": 1,
+      "first_active": "2026-10-02",
+      "last_active": "2026-10-02",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 0.0013,
+          "tokens": {
+            "input": 8,
+            "output": 3,
+            "cache_read": 450,
+            "cache_write": 31,
+            "thinking": 0,
+            "total": 492
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 0.0013,
+          "tokens": {
+            "input": 7,
+            "output": 3,
+            "cache_read": 434,
+            "cache_write": 18,
+            "thinking": 0,
+            "total": 462
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.0,
+          "tokens": {
+            "input": 1,
+            "output": 0,
+            "cache_read": 16,
+            "cache_write": 13,
+            "thinking": 0,
+            "total": 30
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-02",
+          "cost": 0.0013,
+          "tokens": 492
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 0.0013,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "69ce1e4e-19a6-92c9-0d70-0ea43b9b2d45",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-02T03:49:00Z",
+          "ended": "2026-10-02T04:44:00Z",
+          "cwd": "/Users/dogecoin/.dotfiles",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.0013,
+          "tokens": {
+            "input": 8,
+            "output": 3,
+            "cache_read": 450,
+            "cache_write": 31,
+            "thinking": 0,
+            "total": 492
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        }
+      ]
+    }
+  ],
+  "buckets": {
+    "unattributed": {
+      "cost": 3.1781,
+      "tokens": {
+        "input": 25776,
+        "output": 50299,
+        "cache_read": 3465853,
+        "cache_write": 170406,
+        "thinking": 14388,
+        "total": 3712334
+      },
+      "sessions": 5,
+      "first_active": "2026-08-30",
+      "last_active": "2026-10-10",
+      "sessions_detail": [
+        {
+          "id": "14f573d0-c991-2032-df85-c77798874bfe",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-09T19:58:00Z",
+          "ended": "2026-10-09T20:41:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.4865,
+          "tokens": {
+            "input": 6161,
+            "output": 14326,
+            "cache_read": 455117,
+            "cache_write": 54616,
+            "thinking": 4024,
+            "total": 530220
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 2,
+          "title": null
+        },
+        {
+          "id": "2e13418d-68ab-80ea-497e-c6d1081fc6dc",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-04T14:14:00Z",
+          "ended": "2026-10-04T15:23:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.2301,
+          "tokens": {
+            "input": 7741,
+            "output": 12161,
+            "cache_read": 622108,
+            "cache_write": 7314,
+            "thinking": 4073,
+            "total": 649324
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "convert this curl to python"
+        },
+        {
+          "id": "74f0beae-6a59-43ce-8364-35e321c71aa3",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-19T05:35:00Z",
+          "ended": "2026-09-19T08:05:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.8127,
+          "tokens": {
+            "input": 6762,
+            "output": 4307,
+            "cache_read": 814529,
+            "cache_write": 35282,
+            "thinking": 937,
+            "total": 860880
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 2,
+          "title": "convert this curl to python"
+        },
+        {
+          "id": "08987462-980c-b95c-19d4-5deb1139fa12",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-03T16:21:00Z",
+          "ended": "2026-09-03T17:53:00Z",
+          "cwd": "/Users/dogecoin",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.207,
+          "tokens": {
+            "input": 3439,
+            "output": 4923,
+            "cache_read": 836171,
+            "cache_write": 60050,
+            "thinking": 1233,
+            "total": 904583
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "what's the difference between tokio and async-std?"
+        },
+        {
+          "id": "05d1fb63-c194-f97f-00e3-a026d5b6de85",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-30T14:28:00Z",
+          "ended": "2026-08-30T16:08:00Z",
+          "cwd": "/Users/dogecoin/Downloads",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.4418,
+          "tokens": {
+            "input": 1673,
+            "output": 14582,
+            "cache_read": 737928,
+            "cache_write": 13144,
+            "thinking": 4121,
+            "total": 767327
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "convert this curl to python"
+        }
+      ]
+    },
+    "excluded": {
+      "cost": 5.265,
+      "tokens": {
+        "input": 21672,
+        "output": 37422,
+        "cache_read": 3034684,
+        "cache_write": 183692,
+        "thinking": 8597,
+        "total": 3277470
+      },
+      "sessions": 3,
+      "first_active": "2026-09-28",
+      "last_active": "2026-10-13",
+      "sessions_detail": [
+        {
+          "id": "d0d75e37-3bf2-025f-4a0d-2b73fe54ee4b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-13T07:03:00Z",
+          "ended": "2026-10-13T08:49:00Z",
+          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.8776,
+          "tokens": {
+            "input": 7145,
+            "output": 11485,
+            "cache_read": 955262,
+            "cache_write": 78726,
+            "thinking": 1964,
+            "total": 1052618
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 3,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "97777f10-f2d2-393f-8e85-140d0f9aeb70",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-10T07:51:00Z",
+          "ended": "2026-10-10T08:55:00Z",
+          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.4281,
+          "tokens": {
+            "input": 5224,
+            "output": 4150,
+            "cache_read": 842254,
+            "cache_write": 25999,
+            "thinking": 809,
+            "total": 877627
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 3,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "39b02e2a-d96e-684f-3db0-174e7938878a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-28T01:02:00Z",
+          "ended": "2026-09-28T03:28:00Z",
+          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.9593,
+          "tokens": {
+            "input": 9303,
+            "output": 21787,
+            "cache_read": 1237168,
+            "cache_write": 78967,
+            "thinking": 5824,
+            "total": 1347225
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        }
+      ]
+    },
+    "parse_failed": {
+      "sessions": 2,
+      "files": [
+        "/Users/dogecoin/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
+        "/Users/dogecoin/.claude/projects/-Users-dogecoin-Documents-GitHub-FocusApp/0c1d-broken.jsonl"
+      ]
+    }
+  }
+}
