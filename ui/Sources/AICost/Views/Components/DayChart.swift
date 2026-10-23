@@ -44,7 +44,7 @@ struct DayChart: View {
                 Text("No daily data.").font(.system(size: 11)).foregroundStyle(.secondary)
             } else {
                 chart(pts)
-                    .frame(height: 120)
+                    .frame(height: 110)
             }
         }
     }
@@ -58,7 +58,7 @@ struct DayChart: View {
                 BarMark(x: .value("Day", p.date, unit: .day),
                         y: .value("Cost", p.cost))
                     .foregroundStyle(hovered?.day == p.day ? AgentPalette.chartBarHover : AgentPalette.chartBar)
-                    .cornerRadius(2)
+                    .cornerRadius(1.5)
             }
             if let h = hovered {
                 RuleMark(x: .value("Day", h.date, unit: .day))
@@ -69,7 +69,7 @@ struct DayChart: View {
         .chartXScale(domain: lo...hi)
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.10))
+                AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
                 // 显式用 secondaryLabelColor：层级样式 .secondary 在图表里会继承柱子的蓝色，玻璃上发暗。
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day(), centered: false)
                     .font(.system(size: 9).monospacedDigit())
@@ -78,7 +78,7 @@ struct DayChart: View {
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.12))
+                AxisGridLine().foregroundStyle(Color.primary.opacity(0.08))
                 AxisValueLabel {
                     if let d = v.as(Double.self) {
                         Text(axisMoney(d)).font(.system(size: 9).monospacedDigit())

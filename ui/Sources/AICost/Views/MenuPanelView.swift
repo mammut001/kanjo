@@ -13,71 +13,82 @@ enum BucketKind: String {
     case unattributed, excluded
 }
 
+/// 开发开关 `--route <value>`：启动后直接打开某一页，便于截图。
+/// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
+/// `bucket:unattributed` / `bucket:excluded`、`settings`。
+enum DevRoute {
+    static let requested: String? = {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--route"), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }()
+
+    /// 需要数据才能解析的取值在 report 为 nil 时返回 nil（等数据到了再解析）。
+    static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?)? {
+        switch raw {
+        case "settings": return (.settings, nil)
+        case "overview": return (.overview, nil)
+        case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor)
+        default: break
+        }
+        guard let r = report else { return nil }
+        if raw.hasPrefix("project:"), let i = Int(raw.dropFirst("project:".count)) {
+            let sorted = r.projects.sorted { $0.cost > $1.cost }
+            guard sorted.indices.contains(i) else { return (.overview, nil) }
+            return (.project(sorted[i].id), nil)
+        }
+        if raw.hasPrefix("bucket:"), let k = BucketKind(rawValue: String(raw.dropFirst("bucket:".count))) {
+            return (.bucket(k), nil)
+        }
+        return (.overview, nil)
+    }
+}
+
 struct MenuPanelView: View {
     @EnvironmentObject var store: ReportStore
     @State private var route: Route = .overview
+    @State private var pendingDevRoute = DevRoute.requested
+    @State private var overviewAnchor: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            banners
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             footer
         }
         .frame(width: 380, height: 620)
-        .background(PanelBackdrop())
+        .onReceive(store.$report) { r in
+            guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: r) else { return }
+            pendingDevRoute = nil
+            route = resolved.route
+            overviewAnchor = resolved.anchor
+        }
     }
 
-    // 顶部：cost_note 原文（不可隐藏）+ schema 警告 + 刷新错误。都是玻璃小条，放在同一个容器里。
-    @ViewBuilder private var header: some View {
-        if store.report != nil {
-            GlassGroup(spacing: 6) {
-                VStack(spacing: 6) {
-                    if let r = store.report {
-                        HStack(spacing: 6) {
-                            Image(systemName: "info.circle").font(.system(size: 10.5, weight: .semibold))
-                            Text(r.costNote)
-                                .font(.system(size: 10.5, weight: .medium))
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
-                        }
-                        .foregroundStyle(.primary.opacity(0.85))
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .glassSurface(cornerRadius: 12, fallbackFill: Color.primary.opacity(0.04))
-                        if r.isNewerSchema {
-                            banner(icon: "exclamationmark.triangle.fill",
-                                   text: "This data uses schema_version \(r.schemaVersion); this app understands version \(supportedSchemaVersion). Rendering anyway — some fields may be missing or misread.",
-                                   tint: AgentPalette.warnTint, fill: AgentPalette.warnFill, ink: AgentPalette.warnInk)
-                        }
+    // 只在出问题时出现：schema 版本过新（警告）、刷新失败但还有旧数据（错误）。
+    @ViewBuilder private var banners: some View {
+        let schemaWarning = store.report?.isNewerSchema == true
+        let refreshFailed = store.report != nil && store.error != nil
+        if schemaWarning || refreshFailed {
+            VStack(spacing: 6) {
+                if let r = store.report, r.isNewerSchema {
+                    StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
+                        Text("This data uses schema_version \(r.schemaVersion); this app understands version \(supportedSchemaVersion). Rendering anyway — some fields may be missing or misread.")
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    if let err = store.error {
-                        banner(icon: "xmark.octagon.fill",
-                               text: "Last refresh failed — showing previous data.\n\(err)",
-                               tint: AgentPalette.badTint, fill: AgentPalette.badFill, ink: AgentPalette.bad)
+                }
+                if store.report != nil, let err = store.error {
+                    StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
+                        Text("Last refresh failed — showing previous data.").fontWeight(.semibold)
+                        Text(err)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
                     }
                 }
             }
             .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
-        } else {
-            // 没有数据时（加载中 / 错误卡片）也留一条顶边：macOS 26+ 上 ScrollView 紧贴面板顶边时，
-            // 里面玻璃面的内容（文字、按钮标题）实测整块不绘制，只剩空玻璃。隔开几个点即可。
-            Color.clear.frame(height: 6)
         }
-    }
-
-    private func banner(icon: String, text: String, tint: Color, fill: Color, ink: Color) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: icon)
-            Text(text).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-            Spacer(minLength: 0)
-        }
-        .font(.system(size: 10.5, weight: .medium))
-        .foregroundStyle(ink)
-        .padding(.horizontal, 12).padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: 12, tint: tint, fallbackFill: fill)
     }
 
     @ViewBuilder private var content: some View {
@@ -99,14 +110,14 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    OverviewView(report: r, onSelect: { route = $0 })
+                    OverviewView(report: r, scrollAnchor: overviewAnchor, onSelect: { route = $0 })
                 }
             } else if let err = store.error {
                 ErrorStateView(message: err, source: store.sourceDescription,
                                onRetry: { store.refresh() }, onSettings: { route = .settings })
             } else {
                 VStack(spacing: 8) {
-                    ProgressView()
+                    ProgressView().controlSize(.small)
                     Text("Loading…").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
@@ -115,72 +126,58 @@ struct MenuPanelView: View {
 
     private func missing(_ text: String) -> some View {
         VStack(spacing: 8) {
-            Text(text).foregroundStyle(.secondary)
-            Button("Back to overview") { route = .overview }.glassButtonStyle()
+            Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
+            BackButton(title: "Back to overview") { route = .overview }
         }
     }
 
+    // 底栏：一条玻璃条，里面是无底的图标按钮。
     private var footer: some View {
-        GlassGroup(spacing: 8) {
-            HStack(spacing: 8) {
-                Button {
-                    store.refresh()
-                } label: {
-                    Image(systemName: "arrow.clockwise").frame(width: 16, height: 16)
-                }
-                .glassButtonStyle()
-                .help("Refresh now")
-                .disabled(store.isLoading)
+        HStack(spacing: 2) {
+            Button {
+                store.refresh()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(IconButtonStyle())
+            .help("Refresh now")
+            .disabled(store.isLoading)
 
-                Group {
-                    if store.isLoading {
-                        ProgressView().controlSize(.small).scaleEffect(0.7)
-                        Text("Refreshing…")
-                    } else if let t = store.lastRefresh {
-                        Text("Updated \(Fmt.clock(t))")
-                    } else {
-                        Text("Not refreshed yet")
-                    }
-                }
-                .font(.system(size: 10.5).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .help(store.sourceDescription)
-
-                Spacer()
-                // 设置 + 退出靠得很近（2pt < 容器 spacing 8）：在 macOS 26 上两枚玻璃按钮融合成一个胶囊组。
-                HStack(spacing: 2) {
-                Button {
-                    route = route == .settings ? .overview : .settings
-                    if route == .overview { store.applySettings() }
-                } label: {
-                    Image(systemName: "gearshape").frame(width: 16, height: 16)
-                }
-                .glassButtonStyle()
-                .help("Settings")
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Image(systemName: "power").frame(width: 16, height: 16)
-                }
-                .glassButtonStyle()
-                .help("Quit AICost")
+            Group {
+                if store.isLoading {
+                    Text("Refreshing…")
+                } else if let t = store.lastRefresh {
+                    Text("Updated \(ShortDate.clock(t))")
+                } else {
+                    Text("Not refreshed yet")
                 }
             }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-    }
-}
+            .font(.system(size: 11).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .help(store.sourceDescription)
 
-/// 面板最底层：一层很淡的强调色渐变，给上面的玻璃一点可折射的内容，同时不影响文字对比度。
-/// MenuBarExtra 窗口本身已有系统材质，这里不再铺不透明底色。
-struct PanelBackdrop: View {
-    @Environment(\.colorScheme) private var scheme
-    var body: some View {
-        LinearGradient(colors: [Color.accentColor.opacity(scheme == .dark ? 0.16 : 0.10),
-                                Color.accentColor.opacity(0.0)],
-                       startPoint: .top, endPoint: .bottom)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+            Spacer()
+
+            Button {
+                route = route == .settings ? .overview : .settings
+                if route == .overview { store.applySettings() }
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(IconButtonStyle())
+            .help("Settings")
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+            }
+            .buttonStyle(IconButtonStyle())
+            .help("Quit AICost")
+        }
+        .padding(.horizontal, 5).padding(.vertical, 3)
+        .glassSurface(cornerRadius: 12)
+        .padding(.horizontal, 8).padding(.bottom, 8).padding(.top, 4)
     }
 }
 
@@ -192,34 +189,31 @@ struct ErrorStateView: View {
 
     var body: some View {
         ScrollView {
-            // 不给整张卡再套一层玻璃（里面已有染红的玻璃消息框和玻璃按钮，避免玻璃叠玻璃），
-            // 它们放进同一个 GlassEffectContainer。
-            GlassGroup(spacing: 6) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Could not load usage data", systemImage: "xmark.octagon.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AgentPalette.bad)
-                    Text(message)
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .glassSurface(cornerRadius: 10, tint: AgentPalette.badTint, fallbackFill: AgentPalette.badFill)
-                    Text("Source — \(source)")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button("Retry", action: onRetry).glassButtonStyle(prominent: true)
-                        Button("Open Settings", action: onSettings).glassButtonStyle()
-                    }
-                    Text("Expected a JSON file produced by `aicost export` (see CONTRACT.md).")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Could not load usage data", systemImage: "xmark.octagon.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AgentPalette.bad)
+                Text(message)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentPalette.badFill))
+                Text("Source — \(source)")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Retry", action: onRetry).buttonStyle(.borderedProminent)
+                    Button("Open Settings", action: onSettings).buttonStyle(.bordered)
                 }
-                .padding(14)
+                .controlSize(.regular)
+                Text("Expected a JSON file produced by `aicost export` (see CONTRACT.md).")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
             }
+            .padding(Metrics.pagePadding)
         }
     }
 }
-

@@ -16,12 +16,12 @@ struct SessionRow: View {
                         Text("(untitled)").foregroundColor(.secondary).italic()
                     }
                 }
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.system(size: 12))
                 .lineLimit(2)
                 .help(session.title ?? "")
                 Spacer(minLength: 6)
                 Text(Fmt.money(session.cost, currency: currency))
-                    .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
+                    .font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit()
             }
             HStack(spacing: 5) {
                 AgentDot(agent: session.agent, size: 6)
@@ -34,7 +34,7 @@ struct SessionRow: View {
                     Text(b).lineLimit(1).truncationMode(.middle)
                 }
             }
-            .font(.system(size: 10))
+            .font(.system(size: 10.5))
             .foregroundStyle(.secondary)
 
             HStack(spacing: 5) {
@@ -56,7 +56,7 @@ struct SessionRow: View {
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 }
 
@@ -94,13 +94,15 @@ struct SessionList: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 140)
+                .controlSize(.small)
+                .frame(width: 130)
                 Button {
                     descending.toggle()
                 } label: {
                     Image(systemName: descending ? "arrow.down" : "arrow.up")
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
                 .help(descending ? "Descending" : "Ascending")
                 Spacer()
                 AttributionLegendButton(threshold: threshold)
@@ -111,13 +113,11 @@ struct SessionList: View {
             let list = sorted
             let shown = showAll ? list : Array(list.prefix(initialLimit))
             ForEach(Array(shown.enumerated()), id: \.offset) { i, s in
-                if i > 0 { Divider() }
+                if i > 0 { Divider().opacity(0.6) }
                 SessionRow(session: s, threshold: threshold, currency: currency)
             }
             if list.count > initialLimit {
-                Button(showAll ? "Show fewer" : "Show all \(list.count) sessions") { showAll.toggle() }
-                    .buttonStyle(.link)
-                    .font(.system(size: 11))
+                ShowAllButton(expanded: $showAll, total: list.count, noun: "sessions")
                     .padding(.top, 4)
             }
         }
@@ -135,6 +135,7 @@ struct AttributionLegendButton: View {
         } label: {
             Label("Attribution", systemImage: "questionmark.circle")
                 .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
         }
         .buttonStyle(.borderless)
         .help("What the attribution values mean")

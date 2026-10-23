@@ -1,20 +1,22 @@
 import AppKit
 import SwiftUI
 
-/// agent 身份色：固定分配，颜色跟着 agent 走，不跟名次走。
-/// 已知 agent 用固定色；未知 key 按名字哈希落到后备色槽。
+/// 全部颜色在这里定义。原则：
+/// - 文字只用系统语义色（.primary / .secondary），这里的颜色只给色块、细条、图表用；
+/// - agent 色是低饱和的「土色」，浅深两套，颜色跟着 agent 走，不跟名次走；
+/// - 状态色（警告 / 错误）只在真的出问题时出现。
 enum AgentPalette {
     private static let known: [String: (UInt32, UInt32)] = [
-        "claude": (0xEB6834, 0xD95926),       // orange
-        "antigravity": (0x2A78D6, 0x3987E5),  // blue
-        "codex": (0x1BAF7A, 0x199E70),        // aqua
+        "claude": (0xC27A5E, 0xD4917A),       // terracotta
+        "codex": (0x6C84A6, 0x8EA4C6),        // slate blue
+        "antigravity": (0x7F9B78, 0x98B492),  // sage
     ]
     private static let fallback: [(UInt32, UInt32)] = [
-        (0xEDA100, 0xC98500),  // yellow
-        (0xE87BA4, 0xD55181),  // magenta
-        (0x008300, 0x008300),  // green
-        (0x6250D6, 0x9085E9),  // violet
-        (0xE34948, 0xE66767),  // red
+        (0xB89A5B, 0xCDB27A),  // ochre
+        (0xA67D96, 0xBF9AB1),  // mauve
+        (0x6E9897, 0x8DB4B3),  // teal grey
+        (0x8B85B5, 0xA7A1CE),  // lavender
+        (0xB9787A, 0xCF9497),  // rose
     ]
 
     static func color(for agent: String) -> Color {
@@ -29,38 +31,38 @@ enum AgentPalette {
         return dynamic(light: pair.0, dark: pair.1)
     }
 
-    static func dynamic(light: UInt32, dark: UInt32) -> Color {
+    static func dynamic(light: UInt32, dark: UInt32, lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return nsColor(isDark ? dark : light)
+            return nsColor(isDark ? dark : light, alpha: isDark ? darkAlpha : lightAlpha)
         })
     }
 
-    private static func nsColor(_ hex: UInt32) -> NSColor {
+    private static func nsColor(_ hex: UInt32, alpha: CGFloat) -> NSColor {
         NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
                 green: CGFloat((hex >> 8) & 0xFF) / 255,
-                blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+                blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
     }
 
-    static let tokenInput = dynamic(light: 0x2A78D6, dark: 0x3987E5)
-    static let tokenOutput = dynamic(light: 0xEB6834, dark: 0xD95926)
-    // 深色玻璃上原来的 0x1C5CAB 几乎看不见，改成更亮的浅蓝（仍与 tokenInput 区分得开）。
-    static let tokenCacheRead = dynamic(light: 0x7FB0EC, dark: 0x8DC0F7)
-    static let tokenCacheWrite = dynamic(light: 0x6250D6, dark: 0x9085E9)
-    static let bad = dynamic(light: 0xB3261E, dark: 0xFF7B7B)  // 加深 / 提亮：染红玻璃上也要 ≥4.5:1
-    static let warnFill = dynamic(light: 0xFDECC8, dark: 0x3D2E0A)
-    static let warnInk = dynamic(light: 0x6B4A00, dark: 0xF7D48A)
-    static let badFill = dynamic(light: 0xFBE3E3, dark: 0x3D1717)
-    /// 对账通过的绿字：系统绿在浅色玻璃上对比度不够，用更深的绿。
-    static let good = dynamic(light: 0x1E7A3A, dark: 0x5FD37E)
+    // Token 构成：input / output 借用 agent 的两种主色，cache 用更浅更安静的色（它通常占绝大部分）。
+    static let tokenInput = dynamic(light: 0x6C84A6, dark: 0x8EA4C6)
+    static let tokenOutput = dynamic(light: 0xC27A5E, dark: 0xD4917A)
+    static let tokenCacheRead = dynamic(light: 0xB7C3D4, dark: 0x5E6C83)
+    static let tokenCacheWrite = dynamic(light: 0x9A93C2, dark: 0xA39DCB)
 
-    // 玻璃背景上的图表色：比 accentColor.opacity(0.7) 更实，浅色用深蓝、深色用亮蓝。
-    static let chartBar = dynamic(light: 0x2468C8, dark: 0x5BA4F5)
-    static let chartBarHover = dynamic(light: 0x0F4A9E, dark: 0xA8D0FF)
-    /// 横向条 / 堆叠条的底轨：玻璃会提亮背景，原来 0.07 的灰在浅色下看不出来。
-    static let track = Color.primary.opacity(0.12)
+    // 图表：中性的石板色，悬停时加深（浅色）/ 提亮（深色）。
+    static let chartBar = dynamic(light: 0x8796B0, dark: 0x7E8EAA)
+    static let chartBarHover = dynamic(light: 0x4F607F, dark: 0xC3CFE4)
 
-    // 横幅玻璃的着色（半透明，玻璃仍可见，文字用 warnInk / bad）。
-    static let warnTint = dynamic(light: 0xF5B83D, dark: 0xB07A10).opacity(0.30)
-    static let badTint = dynamic(light: 0xE5484D, dark: 0xC0383C).opacity(0.18)
+    // 分组底色：一层很淡的填充，替代卡片描边。
+    static let groupFill = dynamic(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.04, darkAlpha: 0.06)
+    static let rowHover = Color.primary.opacity(0.06)
+    static let rowPressed = Color.primary.opacity(0.11)
+
+    // 状态色。
+    static let good = dynamic(light: 0x2E7D4A, dark: 0x74C98F)
+    static let bad = dynamic(light: 0xB3261E, dark: 0xFF8A80)
+    static let badFill = dynamic(light: 0xE5484D, dark: 0xE5484D, lightAlpha: 0.10, darkAlpha: 0.18)
+    static let warnInk = dynamic(light: 0x6E5512, dark: 0xE8CF94)
+    static let warnFill = dynamic(light: 0xD9A53A, dark: 0xD9A53A, lightAlpha: 0.16, darkAlpha: 0.18)
 }

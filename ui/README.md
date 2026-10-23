@@ -20,7 +20,11 @@ Development helpers:
 swift run AICost --data /path/to/data.json    # use this file (overrides Settings)
 AICOST_DATA=/path/to/data.json swift run AICost
 swift run AICost --window                     # also show the panel in a normal window (screenshots/debugging)
+swift run AICost --window --route project:0   # open straight on a page (for screenshots)
 ```
+
+`--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
+`project:<index>` (0-based, in cost order), `bucket:unattributed`, `bucket:excluded`, `settings`.
 
 ## Data source
 
