@@ -155,7 +155,7 @@ fork 的 remote 是 `github.com/<you>/tokei`，上游是 `github.com/cclank/toke
 
 ## 8. 用户配置 (覆盖规则)
 
-配置文件 `~/.config/<project-name>/attribution.toml`（文件名待定）：
+配置文件 `~/.config/kanjo/attribution.toml`（Python 3.11 以下可用同目录的 `attribution.json`）：
 
 ```toml
 # 顶层键必须写在任何 [table] 之前，否则按 TOML 语法会归入上一个表

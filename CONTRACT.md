@@ -3,19 +3,19 @@
 CLI 和 UI 分别独立开发，唯一的接口是这份 JSON。
 CLI 负责产出它，UI 负责消费它。双方都不能改这份格式而不改本文档。
 
-工作名：`aicost`（repo 定名后统一替换）。
+正式名：**Kanjo（勘定）**。命令和包名 `kanjo`，菜单栏应用 `Kanjo`。
 
 ---
 
 ## 1. 产出方式
 
 ```bash
-aicost export            # 输出 JSON 到 stdout
-aicost export -o data.json
+kanjo export            # 输出 JSON 到 stdout
+kanjo export -o data.json
 ```
 
 UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
-执行 `aicost export` 读 stdout，或直接读一个已导出的 JSON 文件。
+执行 `kanjo export` 读 stdout，或直接读一个已导出的 JSON 文件。
 两种方式的内容完全相同，都是本文档定义的格式。
 
 ---
@@ -26,12 +26,21 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 {
   "schema_version": 1,
   "generated_at": "2026-10-23T10:00:00Z",     // ISO 8601 UTC
-  "generated_by": "aicost 0.1.0",             // 产出工具和版本
+  "generated_by": "kanjo 0.1.0",             // 产出工具和版本
   "timezone": "Asia/Shanghai",                // IANA 时区名；所有 YYYY-MM-DD 日期按此时区划分
   "currency": "USD",                          // 第一版固定 USD，UI 不需要处理其他币种
   "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
   "config": {
     "dominant_threshold": 0.8
+  },
+  "quota_windows": {                          // 各 agent 的额度窗口，供 UI 的「Since reset」范围用；拿不到的 agent 不出现
+    "claude": {
+      "weekly_resets_at": "2026-10-27T10:00:00Z",   // 下次周重置，ISO 8601 UTC
+      "weekly_window_hours": 168,
+      "five_hour_resets_at": "2026-10-24T09:30:00Z", // 可为 null
+      "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存）或 manual
+    },
+    "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" }
   },
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
@@ -125,7 +134,9 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
     { "model": "claude-opus-5-5", "agent": "claude", "cost": 50.0, "tokens": Tokens, "estimated": false }
   ],
   "by_day": [
-    { "day": "2026-10-22", "cost": 3.2, "tokens": 120000 }   // 按 day 升序；tokens 是 total
+    { "day": "2026-10-22", "cost": 3.2, "tokens": 120000,     // 按 day 升序；tokens 是 total
+      "by_agent": { "claude": 2.1, "codex": 1.1 },             // 当天各 agent 的 cost，和等于 cost；没用过的 agent 不出现
+      "by_agent_tokens": { "claude": 80000, "codex": 40000 } } // 当天各 agent 的 tokens.total，和等于 tokens
   ],
   "by_branch": [
     { "branch": "main", "cost": 40.0, "sessions": 12 }
@@ -136,7 +147,8 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 
 - `by_agent`、`by_model` 按 cost 降序。
 - `by_model.estimated = true` 表示该模型价格是按家族回退估的。
-- `by_day` 覆盖项目活跃的每一天，没活动的天不出现。
+- `by_day` 覆盖项目活跃的每一天，没活动的天不出现。每天的 `by_agent` 是 {agent key: cost}，
+  各项之和等于当天 `cost`（容忍 0.01）。UI 遇到缺这个字段的旧数据要能回退到项目级的主力 agent。
 - `by_branch`：项目下**没有任何会话带分支**时给空数组；否则分支未知的会话归 `"(unknown)"`。按 cost 降序。
 - `path_missing = true` 的项目：目录已不存在，读不到 remote，所以 `id` 是路径、`remote` 为 null，
   除非用户在配置的 aliases 里把该路径映射到了某个 remote。
@@ -190,10 +202,17 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 
 ---
 
+## 6.1 时间范围（UI 侧计算）
+
+UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`30d`、`Last week`（上一个周一到周日）、
+`Since reset`（各 agent 自己的周窗口起点 = `weekly_resets_at - weekly_window_hours`，缺 `quota_windows` 的 agent 在该范围下不计入并在 UI 标明）。
+范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出，sessions 数按 `sessions_detail[].started` 落在范围内计数。
+对账行只在 `All` 下显示。`cost_note` 在任何范围下都显示。
+
 ## 7. UI 必须展示的内容
 
 1. 顶部横幅：`cost_note` 原文，不可隐藏。
-2. 项目列表，按 cost 降序，每行：name、cost、sessions、last_active、by_agent 的小条形或色块。
+2. 项目列表，按 cost 降序，每行：name、cost、sessions、last_active，以及能看出用了哪些 agent 的标记（色点、色块或小条形均可）。
 3. 项目详情：by_agent、by_model、by_day 时间线、by_branch、sessions_detail 表。
 4. 三个桶各一行，显示数量和金额，即使为 0。
 5. 对账行：`totals.cost` 与各项之和，差异超过 0.01 时高亮。

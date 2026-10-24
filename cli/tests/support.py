@@ -20,7 +20,7 @@ class FakeFS:
     """A temp directory standing in for "/" (passed to Resolver as fs_root)."""
 
     def __init__(self):
-        self.root = tempfile.mkdtemp(prefix="aicost-test-")
+        self.root = tempfile.mkdtemp(prefix="kanjo-test-")
 
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -128,6 +128,22 @@ def _check_session(tc, s, where, kinds, share_one=False):
     tc.assertTrue(s["cwd"] is None or isinstance(s["cwd"], str))
 
 
+QUOTA_KEYS = {"weekly_resets_at", "weekly_window_hours", "five_hour_resets_at", "source"}
+
+
+def check_quota_windows(tc, qw):
+    tc.assertIsInstance(qw, dict, "quota_windows")
+    for agent, w in qw.items():
+        where = "quota_windows.%s" % agent
+        tc.assertEqual(set(w), QUOTA_KEYS, where)
+        tc.assertRegex(w["weekly_resets_at"], ISO_UTC)
+        tc.assertIsInstance(w["weekly_window_hours"], int, where)
+        tc.assertNotIsInstance(w["weekly_window_hours"], bool, where)
+        tc.assertGreater(w["weekly_window_hours"], 0, where)
+        tc.assertTrue(w["five_hour_resets_at"] is None or ISO_UTC.match(w["five_hour_resets_at"]), where)
+        tc.assertIn(w["source"], {"tokei", "manual"}, where)
+
+
 def _desc(seq):
     return all(a >= b for a, b in zip(seq, seq[1:]))
 
@@ -135,15 +151,16 @@ def _desc(seq):
 def validate_contract(tc, doc):
     """Assert that ``doc`` follows CONTRACT.md (structure, ordering, invariants)."""
     for k in ("schema_version", "generated_at", "generated_by", "timezone", "currency", "cost_note",
-              "config", "totals", "projects", "buckets"):
+              "config", "quota_windows", "totals", "projects", "buckets"):
         tc.assertIn(k, doc)
     tc.assertEqual(doc["schema_version"], 1)
     tc.assertRegex(doc["generated_at"], ISO_UTC)
-    tc.assertTrue(doc["generated_by"].startswith("aicost "))
+    tc.assertTrue(doc["generated_by"].startswith("kanjo "))
     tc.assertRegex(doc["timezone"], r"^[A-Za-z_]+(/[A-Za-z0-9_+\-]+)*$")
     tc.assertEqual(doc["currency"], "USD")
     tc.assertEqual(doc["cost_note"], COST_NOTE)
     tc.assertIsInstance(doc["config"]["dominant_threshold"], (int, float))
+    check_quota_windows(tc, doc["quota_windows"])
 
     _check_agg(tc, doc["totals"], "totals")
     tc.assertIn("unique_sessions", doc["totals"])
@@ -179,6 +196,16 @@ def validate_contract(tc, doc):
         for d in p["by_day"]:
             tc.assertRegex(d["day"], DAY)
             tc.assertIsInstance(d["tokens"], int)
+            tc.assertIsInstance(d["by_agent"], dict, where + " by_day.by_agent")
+            tc.assertTrue(d["by_agent"], where + " by_day.by_agent must not be empty")
+            tc.assertLessEqual(set(d["by_agent"]), {a["agent"] for a in p["by_agent"]}, where)
+            tc.assertAlmostEqual(sum(d["by_agent"].values()), d["cost"], delta=0.01, msg=where + " " + d["day"])
+            tc.assertIsInstance(d["by_agent_tokens"], dict, where + " by_day.by_agent_tokens")
+            tc.assertEqual(set(d["by_agent_tokens"]), set(d["by_agent"]), where + " " + d["day"])
+            for v in d["by_agent_tokens"].values():
+                tc.assertIsInstance(v, int, where + " by_agent_tokens")
+                tc.assertGreaterEqual(v, 0, where + " by_agent_tokens")
+            tc.assertEqual(sum(d["by_agent_tokens"].values()), d["tokens"], where + " " + d["day"])
         for a in p["by_agent"]:
             tc.assertTrue({"agent", "label", "cost", "tokens", "sessions"} <= set(a))
             _check_tokens(tc, a["tokens"], where + " by_agent")

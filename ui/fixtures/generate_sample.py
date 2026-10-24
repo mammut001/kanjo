@@ -114,13 +114,18 @@ def build_project(pid, name, remote, paths, path_missing, rows_pm):
             bm = by_model.setdefault(m, {"model": m, "agent": r["agent"], "cost": 0.0, "tokens": zero_t(), "estimated": PRICES[m][4]})
             bm["cost"] += c; add_t(bm["tokens"], tok_obj(st))
         d = local_day(datetime.strptime(r["started"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc))
-        bd = by_day.setdefault(d, {"day": d, "cost": 0.0, "tokens": 0})
+        bd = by_day.setdefault(d, {"day": d, "cost": 0.0, "tokens": 0, "by_agent": {}, "by_agent_tokens": {}})
         bd["cost"] += r["cost"]; bd["tokens"] += r["tokens"]["total"]
+        bd["by_agent"][r["agent"]] = bd["by_agent"].get(r["agent"], 0.0) + r["cost"]
+        bd["by_agent_tokens"][r["agent"]] = bd["by_agent_tokens"].get(r["agent"], 0) + r["tokens"]["total"]
         b = r["branch"] or "(unknown)"
         bb = by_branch.setdefault(b, {"branch": b, "cost": 0.0, "sessions": 0})
         bb["cost"] += r["cost"]; bb["sessions"] += 1
     for coll in (by_agent, by_model, by_day, by_branch):
         for v in coll.values(): v["cost"] = round(v["cost"], 4)
+    for v in by_day.values():  # 当天各 agent 的 cost，按 cost 降序
+        v["by_agent"] = {k: round(c, 4) for k, c in sorted(v["by_agent"].items(), key=lambda kv: -kv[1])}
+        v["by_agent_tokens"] = {k: v["by_agent_tokens"][k] for k in v["by_agent"]}
     if all(r["branch"] is None for r, _ in rows_pm):
         by_branch = {}
     p = {"id": pid, "name": name, "remote": remote, "paths": paths, "path_missing": path_missing}
@@ -139,27 +144,27 @@ def rand_time(days_back_max, days_back_min=0):
     # bias to working hours local
     return t.replace(second=0, microsecond=0)
 
-H = "/Users/dogecoin/Documents/GitHub/"
+H = "/Users/alice/Documents/GitHub/"
 SPECS = [
     # id, name, remote, paths, missing, agents weights, n sessions, scale, days window, branches
-    ("github.com/dogecoin/focusapp", "FocusApp", "github.com/dogecoin/focusapp",
-     [H+"FocusApp", H+"FocusApp-fixes-146", H+"FocusApp-paylag"], False,
-     {"claude": 6, "codex": 2, "antigravity": 1}, 34, 1.3, (0, 75), ["main", "release-1.4.5", "fix/146-quota", "feat/paylag", None]),
-    ("github.com/cclank/tokei", "tokei", "github.com/cclank/tokei", [H+"tokei"], False,
+    ("github.com/alice/pocket-timer", "PocketTimer", "github.com/alice/pocket-timer",
+     [H+"PocketTimer", H+"PocketTimer-fixes-146", H+"PocketTimer-widgets"], False,
+     {"claude": 6, "codex": 2, "antigravity": 1}, 34, 1.3, (0, 75), ["main", "release-1.4.5", "fix/146-quota", "feat/widgets", None]),
+    ("github.com/bobchen/meterkit", "meterkit", "github.com/bobchen/meterkit", [H+"meterkit"], False,
      {"claude": 3, "antigravity": 2}, 18, 1.0, (2, 60), ["main", "feat/pricing-json", "fix/dedupe-stream"]),
-    ("github.com/dogecoin/lifemint", "LifeMint", "github.com/dogecoin/lifemint",
-     [H+"LifeMint", H+"LifeMint/.worktrees/agy-onboarding"], False,
+    ("github.com/alice/habit-garden", "HabitGarden", "github.com/alice/habit-garden",
+     [H+"HabitGarden", H+"HabitGarden/.worktrees/agy-onboarding"], False,
      {"claude": 2, "antigravity": 3, "codex": 2}, 22, 0.9, (0, 45), ["main", "agy/onboarding", "agy/streaks", None]),
-    ("github.com/dogecoin/token-usage", "token-usage", "github.com/dogecoin/token-usage", [H+"token-usage"], False,
+    ("github.com/alice/weather-cli", "weather-cli", "github.com/alice/weather-cli", [H+"weather-cli"], False,
      {"claude": 1}, 7, 0.8, (0, 3), ["main"]),
-    ("/Users/dogecoin/Documents/experiments/rust-playground", "rust-playground", None,
-     ["/Users/dogecoin/Documents/experiments/rust-playground"], False,
+    ("/Users/alice/Documents/experiments/rust-playground", "rust-playground", None,
+     ["/Users/alice/Documents/experiments/rust-playground"], False,
      {"codex": 1}, 6, 0.6, (5, 40), ["master", None]),
     ("gitlab.com/acme/infra-scripts", "infra-scripts", "gitlab.com/acme/infra-scripts", [H+"infra-scripts"], False,
      {"codex": 2, "claude": 1}, 9, 0.5, (10, 80), ["main", "chore/terraform-1.9"]),
-    ("github.com/dogecoin/old-blog", "old-blog", "github.com/dogecoin/old-blog", ["/Users/dogecoin/Sites/old-blog"], True,
+    ("github.com/alice/old-blog", "old-blog", "github.com/alice/old-blog", ["/Users/alice/Sites/old-blog"], True,
      {"claude": 1}, 4, 0.4, (70, 90), [None]),
-    ("github.com/dogecoin/dotfiles", "dotfiles", "github.com/dogecoin/dotfiles", ["/Users/dogecoin/.dotfiles"], False,
+    ("github.com/alice/dotfiles", "dotfiles", "github.com/alice/dotfiles", ["/Users/alice/.dotfiles"], False,
      {"claude": 1}, 1, 0.0003, (20, 21), ["main"]),
 ]
 
@@ -180,21 +185,21 @@ for pid, name, remote, paths, missing, aw, n, scale, (lo, hi), branches in SPECS
         project_rows[pid].append(portion(raw, 1.0, attribution))
 
 # estimated models: inject a few sessions
-for pid, agent, model in [("github.com/dogecoin/focusapp", "claude", "claude-opus-5-6-preview"),
-                          ("github.com/dogecoin/lifemint", "antigravity", "gemini-3.5-pro-exp"),
-                          ("github.com/cclank/tokei", "antigravity", "gemini-3.5-pro-exp")]:
+for pid, agent, model in [("github.com/alice/pocket-timer", "claude", "claude-opus-5-6-preview"),
+                          ("github.com/alice/habit-garden", "antigravity", "gemini-3.5-pro-exp"),
+                          ("github.com/bobchen/meterkit", "antigravity", "gemini-3.5-pro-exp")]:
     raw = make_raw_session(agent, rand_time(10), H + pid.split("/")[-1], "main", 1.0, models=[model])
     project_rows[pid].append(portion(raw, 1.0, "dominant"))
 
 # override session
-raw = make_raw_session("claude", rand_time(30), "/Users/dogecoin/Documents/experiments/tokei-bench", None, 0.7)
-project_rows["github.com/cclank/tokei"].append(portion(raw, 1.0, "override"))
+raw = make_raw_session("claude", rand_time(30), "/Users/alice/Documents/experiments/meterkit-bench", None, 0.7)
+project_rows["github.com/bobchen/meterkit"].append(portion(raw, 1.0, "override"))
 
 # split sessions (same session id across projects)
-for a, b, share_a, agent in [("github.com/dogecoin/focusapp", "github.com/dogecoin/lifemint", 0.6, "claude"),
-                             ("github.com/cclank/tokei", "github.com/dogecoin/token-usage", 0.55, "claude"),
-                             ("github.com/dogecoin/focusapp", "gitlab.com/acme/infra-scripts", 0.7, "codex")]:
-    raw = make_raw_session(agent, rand_time(20), "/Users/dogecoin", "main", 1.2)
+for a, b, share_a, agent in [("github.com/alice/pocket-timer", "github.com/alice/habit-garden", 0.6, "claude"),
+                             ("github.com/bobchen/meterkit", "github.com/alice/weather-cli", 0.55, "claude"),
+                             ("github.com/alice/pocket-timer", "gitlab.com/acme/infra-scripts", 0.7, "codex")]:
+    raw = make_raw_session(agent, rand_time(20), "/Users/alice", "main", 1.2)
     project_rows[a].append(portion(raw, share_a, "split"))
     project_rows[b].append(portion(raw, round(1 - share_a, 4), "split"))
 
@@ -210,18 +215,18 @@ def bucket(rows_pm):
 un = []
 for i in range(5):
     agent = pick({"claude": 2, "antigravity": 1, "codex": 1})
-    raw = make_raw_session(agent, rand_time(60), rnd.choice(["/Users/dogecoin", "/Users/dogecoin/Downloads", "/tmp"]), None, 0.3)
+    raw = make_raw_session(agent, rand_time(60), rnd.choice(["/Users/alice", "/Users/alice/Downloads", "/tmp"]), None, 0.3)
     raw["title"] = rnd.choice(["what's the difference between tokio and async-std?", "summarize this pdf", None, "convert this curl to python"])
     un.append(portion(raw, 1.0, "none"))
 ex = []
 for i in range(3):
-    raw = make_raw_session("claude", rand_time(40), "/Users/dogecoin/scratch/llm-evals", None, 0.5)
+    raw = make_raw_session("claude", rand_time(40), "/Users/alice/scratch/llm-evals", None, 0.5)
     ex.append(portion(raw, 1.0, "excluded"))
 
 buckets = {"unattributed": bucket(un), "excluded": bucket(ex),
            "parse_failed": {"sessions": 2, "files": [
-               "/Users/dogecoin/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
-               "/Users/dogecoin/.claude/projects/-Users-dogecoin-Documents-GitHub-FocusApp/0c1d-broken.jsonl"]}}
+               "/Users/alice/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
+               "/Users/alice/.claude/projects/-Users-alice-Documents-GitHub-PocketTimer/0c1d-broken.jsonl"]}}
 
 tt = zero_t()
 for p in projects: add_t(tt, p["tokens"])
@@ -233,9 +238,18 @@ totals = {"cost": round(sum(p["cost"] for p in projects) + buckets["unattributed
           "sessions": sum(p["sessions"] for p in projects) + buckets["unattributed"]["sessions"] + buckets["excluded"]["sessions"],
           "first_active": min(all_days), "last_active": max(all_days)}
 
-out = {"schema_version": 1, "generated_at": "2026-10-23T02:00:00Z", "currency": "USD",
+# 额度窗口：claude / codex 有（来源不同），antigravity 没有 → UI 的「Since reset」下 antigravity 不计入。
+quota_windows = {
+    "claude": {"weekly_resets_at": "2026-10-27T10:00:00Z", "weekly_window_hours": 168,
+               "five_hour_resets_at": "2026-10-23T04:30:00Z", "source": "tokei"},
+    "codex": {"weekly_resets_at": "2026-10-28T08:00:00Z", "weekly_window_hours": 168,
+              "five_hour_resets_at": None, "source": "manual"},
+}
+out = {"schema_version": 1, "generated_at": "2026-10-23T02:00:00Z", "generated_by": "generate_sample.py",
+       "timezone": "Asia/Shanghai", "currency": "USD",
        "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
-       "config": {"dominant_threshold": 0.8}, "totals": totals, "projects": projects, "buckets": buckets}
+       "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
+       "totals": totals, "projects": projects, "buckets": buckets}
 import os
 dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample.json")
 json.dump(out, open(dest, "w"), indent=2, ensure_ascii=False)
@@ -249,6 +263,11 @@ for p in projects:
     assert abs(sum(x["cost"] for x in p["sessions_detail"]) - p["cost"]) < 0.01
     assert sum(x["tokens"]["total"] for x in p["by_model"]) == p["tokens"]["total"]
     assert sum(x["tokens"] for x in p["by_day"]) == p["tokens"]["total"]
+    for d in p["by_day"]:
+        assert abs(sum(d["by_agent"].values()) - d["cost"]) < 0.01, (p["id"], d["day"])
+        assert set(d["by_agent"]) <= {a["agent"] for a in p["by_agent"]}, (p["id"], d["day"])
+        assert set(d["by_agent_tokens"]) == set(d["by_agent"]), (p["id"], d["day"])
+        assert sum(d["by_agent_tokens"].values()) == d["tokens"], (p["id"], d["day"])
 print("ok", round(totals["cost"], 2), totals["sessions"])
 for p in projects: print(f'{p["name"]:16} {p["cost"]:10.4f} {p["sessions"]:3} {[a["agent"] for a in p["by_agent"]]} branches={len(p["by_branch"])}')
 print("buckets", buckets["unattributed"]["cost"], buckets["excluded"]["cost"])

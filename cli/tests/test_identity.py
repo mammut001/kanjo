@@ -1,8 +1,8 @@
 import os
 import unittest
 
-from aicost.identity import Resolver, ScratchpadDecoder, normalize_remote, parse_git_config_remotes, pick_remote
-from aicost.sources.base import extract_paths
+from kanjo.identity import Resolver, ScratchpadDecoder, normalize_remote, parse_git_config_remotes, pick_remote
+from kanjo.sources.base import extract_paths
 
 from tests.support import ALICE, GITHUB, FakeFS
 

@@ -1,0 +1,266 @@
+import XCTest
+@testable import KanjoCore
+
+final class TimeRangeTests: XCTestCase {
+    private let shanghai = TimeZone(identifier: "Asia/Shanghai")!
+    private var cal: Calendar { RangeEngine.calendar(timezone: shanghai) }
+
+    private func ts(_ s: String) -> Date { ReportDates.parseTimestamp(s)! }
+    private func day(_ s: String) -> Date { HeatStrip.parseDay(s, calendar: cal)! }
+
+    // 2026-10-24 是周六。now = 上海时间 Oct 24 15:00。
+    private let now = ReportDates.parseTimestamp("2026-10-24T07:00:00Z")!
+
+    func testMenuBarPrefix() {
+        XCTAssertEqual(TimeRange.allCases.map(\.menuBarPrefix), [nil, "7d", "30d", "wk", "rst"])
+    }
+
+    private func spec(_ r: TimeRange, quota: [String: QuotaWindow]? = nil, now: Date? = nil) -> RangeSpec {
+        RangeEngine.dateInterval(for: r, now: now ?? self.now, timezone: shanghai, quota: quota)
+    }
+
+    // MARK: - 区间
+
+    func testAllIsUnbounded() {
+        let s = spec(.all)
+        XCTAssertTrue(s.isAll)
+        XCTAssertNil(s.start); XCTAssertNil(s.end)
+        XCTAssertTrue(s.includes(.distantPast, agent: "anything"))
+    }
+
+    func testSevenAndThirtyDays() {
+        let s7 = spec(.days7)
+        XCTAssertEqual(s7.start, day("2026-10-18"))
+        XCTAssertEqual(s7.end, now)
+        let s30 = spec(.days30)
+        XCTAssertEqual(s30.start, day("2026-09-25"))
+        // 边界日：Oct 18 算，Oct 17 不算。
+        XCTAssertTrue(s7.includes(dayStart: day("2026-10-18"), dayEnd: day("2026-10-19"), agent: "claude"))
+        XCTAssertFalse(s7.includes(dayStart: day("2026-10-17"), dayEnd: day("2026-10-18"), agent: "claude"))
+        XCTAssertTrue(s7.includes(dayStart: day("2026-10-24"), dayEnd: day("2026-10-25"), agent: "claude"))
+        // 上海 Oct 18 00:00 = UTC Oct 17 16:00。
+        XCTAssertTrue(s7.includes(ts("2026-10-17T16:00:00Z"), agent: "x"))
+        XCTAssertFalse(s7.includes(ts("2026-10-17T15:59:59Z"), agent: "x"))
+    }
+
+    func testLastWeekIsPreviousMondayToSunday() {
+        let s = spec(.lastWeek)
+        XCTAssertEqual(s.start, day("2026-10-12"))
+        XCTAssertEqual(s.end, day("2026-10-19"))
+        XCTAssertTrue(s.includes(dayStart: day("2026-10-18"), dayEnd: day("2026-10-19"), agent: "c"))   // 周日
+        XCTAssertFalse(s.includes(dayStart: day("2026-10-19"), dayEnd: day("2026-10-20"), agent: "c"))  // 本周一
+        XCTAssertFalse(s.includes(dayStart: day("2026-10-11"), dayEnd: day("2026-10-12"), agent: "c"))
+    }
+
+    func testMondayAlgorithmOnEveryWeekday() {
+        // Oct 19 (Mon) … Oct 25 (Sun) 都属于同一周，上周是 Oct 12–18。
+        for d in 19...25 {
+            let n = ts(String(format: "2026-10-%02dT04:00:00Z", d))
+            XCTAssertEqual(spec(.lastWeek, now: n).start, day("2026-10-12"), "Oct \(d)")
+            XCTAssertEqual(RangeEngine.mondayOnOrBefore(cal.startOfDay(for: n), calendar: cal), day("2026-10-19"))
+        }
+        // 周一凌晨（上海 00:30）：本周就是这周，上周是前一周。
+        XCTAssertEqual(spec(.lastWeek, now: ts("2026-10-25T16:30:00Z")).start, day("2026-10-19"))
+        // 时区决定是哪一天：UTC 周日 20:00 在上海已是周一。
+        let utcSpec = RangeEngine.dateInterval(for: .lastWeek, now: ts("2026-10-25T20:00:00Z"),
+                                               timezone: TimeZone(identifier: "UTC")!, quota: nil)
+        XCTAssertEqual(utcSpec.start, ts("2026-10-12T00:00:00Z"))
+        XCTAssertEqual(spec(.lastWeek, now: ts("2026-10-25T20:00:00Z")).start, day("2026-10-19"))
+    }
+
+    func testSinceResetPerAgentStarts() {
+        let quota = ["claude": QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z"),
+                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z", source: "manual")]
+        let s = spec(.sinceReset, quota: quota)
+        XCTAssertEqual(s.agentStarts["claude"], ts("2026-10-20T10:00:00Z"))
+        XCTAssertEqual(s.agentStarts["codex"], ts("2026-10-21T08:00:00Z"))
+        XCTAssertNil(s.window(for: "antigravity"))
+        XCTAssertFalse(s.includes(now, agent: "antigravity"))
+        XCTAssertTrue(s.includes(ts("2026-10-20T10:00:00Z"), agent: "claude"))
+        XCTAssertFalse(s.includes(ts("2026-10-20T10:00:00Z"), agent: "codex"))
+        // Oct 20（上海）与 claude 的窗口相交，与 codex 的不相交。
+        XCTAssertTrue(s.includes(dayStart: day("2026-10-20"), dayEnd: day("2026-10-21"), agent: "claude"))
+        XCTAssertFalse(s.includes(dayStart: day("2026-10-20"), dayEnd: day("2026-10-21"), agent: "codex"))
+    }
+
+    func testWindowStartRollsBackAndForward() {
+        // 下次重置在一个多窗口之后（起点仍在未来）→ 再往前推一个窗口。
+        let far = QuotaWindow(weeklyResetsAt: "2026-11-02T07:00:00Z")    // now + 9 天
+        XCTAssertEqual(RangeEngine.windowStart(far, now: now), ts("2026-10-19T07:00:00Z"))
+        // 缓存过期：重置时间已过去 → 当前窗口从那次重置开始。
+        let stale = QuotaWindow(weeklyResetsAt: "2026-10-22T07:00:00Z")
+        XCTAssertEqual(RangeEngine.windowStart(stale, now: now), ts("2026-10-22T07:00:00Z"))
+        let fiveHour = QuotaWindow(weeklyResetsAt: "2026-10-24T09:00:00Z", weeklyWindowHours: 5)
+        XCTAssertEqual(RangeEngine.windowStart(fiveHour, now: now), ts("2026-10-24T04:00:00Z"))
+        XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "garbage"), now: now))
+        XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z", weeklyWindowHours: 0), now: now))
+    }
+
+    func testSinceResetWithoutQuotaIncludesNothing() {
+        let s = spec(.sinceReset, quota: nil)
+        XCTAssertTrue(s.agentStarts.isEmpty)
+        let f = RangeEngine.filter(project(), range: s, fallbackAgent: "claude")
+        XCTAssertEqual(f.cost, 0); XCTAssertEqual(f.tokens, 0); XCTAssertEqual(f.sessions, 0)
+        XCTAssertFalse(f.hasUsage)
+    }
+
+    // MARK: - 过滤
+
+    private func session(_ agent: String, _ started: String, cost: Double = 1) -> Session {
+        Session(id: UUID().uuidString, agent: agent, label: agent.capitalized, started: started, ended: started,
+                cwd: nil, branch: nil, models: [], cost: cost, tokens: Tokens(total: 10), share: 1,
+                attribution: "dominant", subagents: 0, title: nil)
+    }
+
+    /// 上海时区的天：Oct 12、Oct 18、Oct 20、Oct 22。
+    private func project(byAgentTokens: Bool = true) -> Project {
+        func d(_ day: String, _ split: [String: Double], _ toks: [String: Int]) -> DayCost {
+            DayCost(day: day, cost: split.values.reduce(0, +), tokens: toks.values.reduce(0, +),
+                    byAgent: split, byAgentTokens: byAgentTokens ? toks : nil)
+        }
+        let days = [d("2026-10-12", ["claude": 1], ["claude": 100]),
+                    d("2026-10-18", ["claude": 2, "codex": 3], ["claude": 200, "codex": 300]),
+                    d("2026-10-20", ["claude": 4, "antigravity": 5], ["claude": 400, "antigravity": 500]),
+                    d("2026-10-22", ["codex": 6], ["codex": 600])]
+        let sessions = [session("codex", "2026-10-22T03:00:00Z", cost: 6),
+                        session("antigravity", "2026-10-20T05:00:00Z", cost: 5),
+                        session("claude", "2026-10-20T05:00:00Z", cost: 4),    // claude 重置（10:00Z）之前
+                        session("codex", "2026-10-18T03:00:00Z", cost: 3),
+                        session("claude", "2026-10-18T02:00:00Z", cost: 2),
+                        session("claude", "2026-10-12T02:00:00Z", cost: 1)]
+        let agents = ["claude": 7.0, "codex": 9.0, "antigravity": 5.0]
+        return Project(id: "p", name: "p", remote: nil, paths: [], pathMissing: false,
+                       cost: 21, tokens: Tokens(total: 2100), sessions: 6,
+                       firstActive: "2026-10-12", lastActive: "2026-10-22",
+                       byAgent: agents.sorted { $0.value > $1.value }.map { kv in
+                           AgentCost(agent: kv.key, label: kv.key.capitalized, cost: kv.value,
+                                     tokens: Tokens(total: Int(kv.value * 100)),
+                                     sessions: sessions.filter { $0.agent == kv.key }.count)
+                       },
+                       byModel: [], byDay: days, byBranch: [], sessionsDetail: sessions)
+    }
+
+    func testSevenDaysFilter() {
+        let f = RangeEngine.filter(project(), range: spec(.days7), fallbackAgent: "claude")
+        XCTAssertEqual(f.cost, 20, accuracy: 1e-9)
+        XCTAssertEqual(f.tokens, 2000)
+        XCTAssertEqual(f.sessions, 5)
+        XCTAssertEqual(f.byDay.map(\.day), ["2026-10-18", "2026-10-20", "2026-10-22"])
+        XCTAssertEqual(f.firstActive, "2026-10-18"); XCTAssertEqual(f.lastActive, "2026-10-22")
+        XCTAssertEqual(f.byAgent.map(\.agent), ["codex", "claude", "antigravity"])
+        XCTAssertEqual(f.byAgent.first?.tokens.total, 900)
+        XCTAssertEqual(f.byAgent.first?.sessions, 2)
+        XCTAssertEqual(f.projected.cost, 20, accuracy: 1e-9)
+        XCTAssertEqual(f.projected.sessionsDetail.count, 5)
+    }
+
+    func testLastWeekFilter() {
+        let f = RangeEngine.filter(project(), range: spec(.lastWeek), fallbackAgent: "claude")
+        XCTAssertEqual(f.cost, 6, accuracy: 1e-9)       // Oct 12 + Oct 18
+        XCTAssertEqual(f.tokens, 600)
+        XCTAssertEqual(f.sessions, 3)
+    }
+
+    func testSinceResetFilterPerAgent() {
+        let quota = ["claude": QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z"),
+                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z")]
+        let f = RangeEngine.filter(project(), range: spec(.sinceReset, quota: quota), fallbackAgent: "claude")
+        // claude：Oct 20 那天与窗口相交（4）；codex：只有 Oct 22（6）；antigravity 无 quota，不计入。
+        XCTAssertEqual(f.cost, 10, accuracy: 1e-9)
+        XCTAssertEqual(f.tokens, 1000)
+        XCTAssertEqual(Set(f.byAgent.map(\.agent)), ["claude", "codex"])
+        XCTAssertEqual(f.byDay.map(\.day), ["2026-10-20", "2026-10-22"])
+        XCTAssertEqual(f.byDay.first?.byAgent, ["claude": 4])
+        XCTAssertEqual(f.byDay.first?.cost ?? 0, 4, accuracy: 1e-9)
+        // 会话按精确时刻：claude 那条 05:00Z 早于重置，不算；codex Oct 22 算。
+        XCTAssertEqual(f.sessions, 1)
+        XCTAssertEqual(f.sessionsDetail.map(\.agent), ["codex"])
+        XCTAssertEqual(f.byAgent.first { $0.agent == "claude" }?.sessions, 0)
+    }
+
+    func testMissingByAgentTokensFallsBackToFallbackAgent() {
+        let quota = ["codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z")]
+        let p = project(byAgentTokens: false)
+        let all7 = RangeEngine.filter(p, range: spec(.days7), fallbackAgent: "codex")
+        XCTAssertEqual(all7.tokens, 2000)
+        XCTAssertEqual(all7.byAgent.first { $0.agent == "codex" }?.tokens.total, 2000)
+        XCTAssertEqual(all7.byAgent.first { $0.agent == "claude" }?.tokens.total, 0)
+        // sinceReset 下只有 codex 有 quota：回退到 codex 的 tokens 按 codex 的窗口算（Oct 22 一天 600）。
+        let sr = RangeEngine.filter(p, range: spec(.sinceReset, quota: quota), fallbackAgent: "codex")
+        XCTAssertEqual(sr.tokens, 600)
+        XCTAssertEqual(sr.cost, 6, accuracy: 1e-9)
+        // 缺 by_agent（cost）同样回退。
+        var old = p
+        old.byDay = old.byDay.map { DayCost(day: $0.day, cost: $0.cost, tokens: $0.tokens) }
+        let f = RangeEngine.filter(old, range: spec(.days7), fallbackAgent: "claude")
+        XCTAssertEqual(f.byAgent.map(\.agent).first, "claude")
+        XCTAssertEqual(f.byAgent.first?.cost ?? 0, 20, accuracy: 1e-9)
+    }
+
+    // MARK: - 夹具
+
+    private func fixture() throws -> UsageReport {
+        try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
+    }
+
+    private func fallback(_ p: Project) -> String { dominantAgent(p.byAgent)?.agent ?? "unknown" }
+
+    func testAllEqualsReport() throws {
+        let r = try fixture()
+        let f = RangeEngine.filtered(r, range: RangeEngine.spec(.all, report: r, now: now), fallbackAgentFor: fallback)
+        XCTAssertEqual(f.cost, r.totals.cost)
+        XCTAssertEqual(f.tokens, r.totals.tokens.total)
+        XCTAssertEqual(f.sessions, r.totals.sessions)
+        XCTAssertEqual(f.firstActive, r.totals.firstActive)
+        XCTAssertEqual(f.lastActive, r.totals.lastActive)
+        XCTAssertEqual(f.projects.map(\.id), r.projects.map(\.id))
+        for (fp, p) in zip(f.projects, r.projects) {
+            XCTAssertEqual(fp.projected, p, p.id)
+            XCTAssertEqual(fp.cost, p.cost); XCTAssertEqual(fp.tokens, p.tokens.total); XCTAssertEqual(fp.sessions, p.sessions)
+        }
+        XCTAssertEqual(f.unattributed.cost, r.buckets.unattributed.cost)
+        XCTAssertEqual(f.excluded.sessions, r.buckets.excluded.sessions)
+    }
+
+    /// 走累加路径但区间无界：结果与报告原值一致（金额容忍 0.01）。
+    func testUnboundedIntervalMatchesReport() throws {
+        let r = try fixture()
+        let cal = RangeEngine.calendar(timezone: RangeEngine.timezone(of: r))
+        let spec = RangeSpec(range: .days30, calendar: cal, start: .distantPast, end: .distantFuture)
+        let f = RangeEngine.filtered(r, range: spec, fallbackAgentFor: fallback)
+        XCTAssertEqual(f.cost, r.totals.cost, accuracy: 0.01)
+        XCTAssertEqual(f.tokens, r.totals.tokens.total)
+        XCTAssertEqual(f.sessions, r.totals.sessions)
+        for p in r.projects {
+            let fp = try XCTUnwrap(f.project(p.id))
+            XCTAssertEqual(fp.cost, p.cost, accuracy: 0.01, p.id)
+            XCTAssertEqual(fp.tokens, p.tokens.total, p.id)
+            XCTAssertEqual(fp.sessions, p.sessions, p.id)
+            XCTAssertEqual(fp.byDay.map(\.day), p.byDay.map(\.day), p.id)
+            for a in p.byAgent {
+                let fa = try XCTUnwrap(fp.byAgent.first { $0.agent == a.agent }, "\(p.id) \(a.agent)")
+                XCTAssertEqual(fa.cost, a.cost, accuracy: 0.01)
+                XCTAssertEqual(fa.tokens.total, a.tokens.total)
+                XCTAssertEqual(fa.sessions, a.sessions)
+            }
+        }
+    }
+
+    func testFixtureRangesAreConsistent() throws {
+        let r = try fixture()
+        XCTAssertEqual(r.quotaWindows?["claude"]?.source, "tokei")
+        XCTAssertNil(r.quotaWindows?["antigravity"])
+        for range in TimeRange.allCases {
+            let f = RangeEngine.filtered(r, range: RangeEngine.spec(range, report: r, now: now), fallbackAgentFor: fallback)
+            XCTAssertLessThanOrEqual(f.cost, r.totals.cost + 0.01, range.rawValue)
+            XCTAssertEqual(f.projects.map(\.cost), f.projects.map(\.cost).sorted(by: >), range.rawValue)
+            let sum = f.projects.reduce(0) { $0 + $1.cost } + f.unattributed.cost + f.excluded.cost
+            XCTAssertEqual(f.cost, sum, accuracy: 0.01, range.rawValue)
+            for p in f.projects {
+                XCTAssertEqual(p.byDay.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
+                XCTAssertEqual(p.byAgent.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
+                if range == .sinceReset { XCTAssertFalse(p.byAgent.contains { $0.agent == "antigravity" }) }
+            }
+        }
+    }
+}

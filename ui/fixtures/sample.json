@@ -1,10 +1,26 @@
 {
   "schema_version": 1,
   "generated_at": "2026-10-23T02:00:00Z",
+  "generated_by": "generate_sample.py",
+  "timezone": "Asia/Shanghai",
   "currency": "USD",
   "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
   "config": {
     "dominant_threshold": 0.8
+  },
+  "quota_windows": {
+    "claude": {
+      "weekly_resets_at": "2026-10-27T10:00:00Z",
+      "weekly_window_hours": 168,
+      "five_hour_resets_at": "2026-10-23T04:30:00Z",
+      "source": "tokei"
+    },
+    "codex": {
+      "weekly_resets_at": "2026-10-28T08:00:00Z",
+      "weekly_window_hours": 168,
+      "five_hour_resets_at": null,
+      "source": "manual"
+    }
   },
   "totals": {
     "cost": 275.2326,
@@ -22,13 +38,13 @@
   },
   "projects": [
     {
-      "id": "github.com/dogecoin/focusapp",
-      "name": "FocusApp",
-      "remote": "github.com/dogecoin/focusapp",
+      "id": "github.com/alice/pocket-timer",
+      "name": "PocketTimer",
+      "remote": "github.com/alice/pocket-timer",
       "paths": [
-        "/Users/dogecoin/Documents/GitHub/FocusApp",
-        "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-        "/Users/dogecoin/Documents/GitHub/FocusApp-paylag"
+        "/Users/alice/Documents/GitHub/PocketTimer",
+        "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+        "/Users/alice/Documents/GitHub/PocketTimer-widgets"
       ],
       "path_missing": false,
       "cost": 152.7382,
@@ -163,152 +179,336 @@
         {
           "day": "2026-08-13",
           "cost": 10.7014,
-          "tokens": 5569274
+          "tokens": 5569274,
+          "by_agent": {
+            "claude": 10.7014
+          },
+          "by_agent_tokens": {
+            "claude": 5569274
+          }
         },
         {
           "day": "2026-08-14",
           "cost": 11.783,
-          "tokens": 3723630
+          "tokens": 3723630,
+          "by_agent": {
+            "claude": 11.783
+          },
+          "by_agent_tokens": {
+            "claude": 3723630
+          }
         },
         {
           "day": "2026-08-16",
           "cost": 5.7344,
-          "tokens": 4106286
+          "tokens": 4106286,
+          "by_agent": {
+            "claude": 5.7344
+          },
+          "by_agent_tokens": {
+            "claude": 4106286
+          }
         },
         {
           "day": "2026-08-19",
           "cost": 13.1569,
-          "tokens": 3478165
+          "tokens": 3478165,
+          "by_agent": {
+            "claude": 13.1569
+          },
+          "by_agent_tokens": {
+            "claude": 3478165
+          }
         },
         {
           "day": "2026-08-22",
           "cost": 8.6938,
-          "tokens": 3164211
+          "tokens": 3164211,
+          "by_agent": {
+            "claude": 8.6938
+          },
+          "by_agent_tokens": {
+            "claude": 3164211
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 1.176,
-          "tokens": 606799
+          "tokens": 606799,
+          "by_agent": {
+            "claude": 1.176
+          },
+          "by_agent_tokens": {
+            "claude": 606799
+          }
         },
         {
           "day": "2026-08-24",
           "cost": 0.2234,
-          "tokens": 1383232
+          "tokens": 1383232,
+          "by_agent": {
+            "codex": 0.2234
+          },
+          "by_agent_tokens": {
+            "codex": 1383232
+          }
         },
         {
           "day": "2026-08-25",
           "cost": 12.8144,
-          "tokens": 3798887
+          "tokens": 3798887,
+          "by_agent": {
+            "claude": 12.8144
+          },
+          "by_agent_tokens": {
+            "claude": 3798887
+          }
         },
         {
           "day": "2026-09-02",
           "cost": 7.8896,
-          "tokens": 2223076
+          "tokens": 2223076,
+          "by_agent": {
+            "claude": 7.8896
+          },
+          "by_agent_tokens": {
+            "claude": 2223076
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 1.2688,
-          "tokens": 2270382
+          "tokens": 2270382,
+          "by_agent": {
+            "claude": 1.2688
+          },
+          "by_agent_tokens": {
+            "claude": 2270382
+          }
         },
         {
           "day": "2026-09-06",
           "cost": 1.3031,
-          "tokens": 573163
+          "tokens": 573163,
+          "by_agent": {
+            "claude": 1.3031
+          },
+          "by_agent_tokens": {
+            "claude": 573163
+          }
         },
         {
           "day": "2026-09-12",
           "cost": 3.4494,
-          "tokens": 1644724
+          "tokens": 1644724,
+          "by_agent": {
+            "claude": 3.4494
+          },
+          "by_agent_tokens": {
+            "claude": 1644724
+          }
         },
         {
           "day": "2026-09-16",
           "cost": 1.2756,
-          "tokens": 1407196
+          "tokens": 1407196,
+          "by_agent": {
+            "claude": 1.2756
+          },
+          "by_agent_tokens": {
+            "claude": 1407196
+          }
         },
         {
           "day": "2026-09-23",
           "cost": 1.9051,
-          "tokens": 3431615
+          "tokens": 3431615,
+          "by_agent": {
+            "claude": 1.9051
+          },
+          "by_agent_tokens": {
+            "claude": 3431615
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 1.0084,
-          "tokens": 1135763
+          "tokens": 1135763,
+          "by_agent": {
+            "claude": 1.0084
+          },
+          "by_agent_tokens": {
+            "claude": 1135763
+          }
         },
         {
           "day": "2026-09-30",
           "cost": 0.3965,
-          "tokens": 643925
+          "tokens": 643925,
+          "by_agent": {
+            "codex": 0.3965
+          },
+          "by_agent_tokens": {
+            "codex": 643925
+          }
         },
         {
           "day": "2026-10-02",
           "cost": 1.5502,
-          "tokens": 1854451
+          "tokens": 1854451,
+          "by_agent": {
+            "claude": 1.5502
+          },
+          "by_agent_tokens": {
+            "claude": 1854451
+          }
         },
         {
           "day": "2026-10-03",
           "cost": 1.9501,
-          "tokens": 3307386
+          "tokens": 3307386,
+          "by_agent": {
+            "claude": 1.9501
+          },
+          "by_agent_tokens": {
+            "claude": 3307386
+          }
         },
         {
           "day": "2026-10-05",
           "cost": 1.5578,
-          "tokens": 2547319
+          "tokens": 2547319,
+          "by_agent": {
+            "claude": 1.5578
+          },
+          "by_agent_tokens": {
+            "claude": 2547319
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 1.2856,
-          "tokens": 1501388
+          "tokens": 1501388,
+          "by_agent": {
+            "claude": 1.2856
+          },
+          "by_agent_tokens": {
+            "claude": 1501388
+          }
         },
         {
           "day": "2026-10-10",
           "cost": 0.352,
-          "tokens": 1648486
+          "tokens": 1648486,
+          "by_agent": {
+            "codex": 0.352
+          },
+          "by_agent_tokens": {
+            "codex": 1648486
+          }
         },
         {
           "day": "2026-10-11",
           "cost": 2.4221,
-          "tokens": 2615158
+          "tokens": 2615158,
+          "by_agent": {
+            "claude": 1.9575,
+            "codex": 0.4646
+          },
+          "by_agent_tokens": {
+            "claude": 2039389,
+            "codex": 575769
+          }
         },
         {
           "day": "2026-10-14",
           "cost": 5.5669,
-          "tokens": 1649794
+          "tokens": 1649794,
+          "by_agent": {
+            "claude": 5.5669
+          },
+          "by_agent_tokens": {
+            "claude": 1649794
+          }
         },
         {
           "day": "2026-10-15",
           "cost": 10.376,
-          "tokens": 3532010
+          "tokens": 3532010,
+          "by_agent": {
+            "claude": 10.376
+          },
+          "by_agent_tokens": {
+            "claude": 3532010
+          }
         },
         {
           "day": "2026-10-16",
           "cost": 2.3962,
-          "tokens": 3278128
+          "tokens": 3278128,
+          "by_agent": {
+            "claude": 2.3962
+          },
+          "by_agent_tokens": {
+            "claude": 3278128
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 5.8067,
-          "tokens": 3157635
+          "tokens": 3157635,
+          "by_agent": {
+            "claude": 5.8067
+          },
+          "by_agent_tokens": {
+            "claude": 3157635
+          }
         },
         {
           "day": "2026-10-18",
           "cost": 11.308,
-          "tokens": 7955673
+          "tokens": 7955673,
+          "by_agent": {
+            "claude": 10.6588,
+            "codex": 0.6492
+          },
+          "by_agent_tokens": {
+            "claude": 5831907,
+            "codex": 2123766
+          }
         },
         {
           "day": "2026-10-21",
           "cost": 18.1581,
-          "tokens": 7671192
+          "tokens": 7671192,
+          "by_agent": {
+            "claude": 18.1581
+          },
+          "by_agent_tokens": {
+            "claude": 7671192
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 0.2995,
-          "tokens": 1272357
+          "tokens": 1272357,
+          "by_agent": {
+            "codex": 0.2995
+          },
+          "by_agent_tokens": {
+            "codex": 1272357
+          }
         },
         {
           "day": "2026-10-23",
           "cost": 6.9292,
-          "tokens": 1882489
+          "tokens": 1882489,
+          "by_agent": {
+            "claude": 6.9292
+          },
+          "by_agent_tokens": {
+            "claude": 1882489
+          }
         }
       ],
       "by_branch": [
@@ -318,7 +518,7 @@
           "sessions": 9
         },
         {
-          "branch": "feat/paylag",
+          "branch": "feat/widgets",
           "cost": 28.4051,
           "sessions": 12
         },
@@ -345,7 +545,7 @@
           "label": "Claude Code",
           "started": "2026-10-23T00:45:00Z",
           "ended": "2026-10-23T03:09:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/focusapp",
+          "cwd": "/Users/alice/Documents/GitHub/pocket-timer",
           "branch": "main",
           "models": [
             "claude-opus-5-6-preview"
@@ -370,7 +570,7 @@
           "label": "Codex CLI",
           "started": "2026-10-21T20:10:00Z",
           "ended": "2026-10-21T22:13:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "gpt-5.5-codex"
@@ -395,7 +595,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T12:08:00Z",
           "ended": "2026-10-21T12:13:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -421,7 +621,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T04:58:00Z",
           "ended": "2026-10-21T05:37:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "fix/146-quota",
           "models": [
             "claude-opus-5-5",
@@ -447,7 +647,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T00:19:00Z",
           "ended": "2026-10-21T00:32:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "fix/146-quota",
           "models": [
             "claude-sonnet-5"
@@ -472,8 +672,8 @@
           "label": "Claude Code",
           "started": "2026-10-18T07:39:00Z",
           "ended": "2026-10-18T09:58:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -498,8 +698,8 @@
           "label": "Codex CLI",
           "started": "2026-10-18T06:23:00Z",
           "ended": "2026-10-18T08:13:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "gpt-5.5-codex",
             "gpt-5.5-mini"
@@ -524,7 +724,7 @@
           "label": "Claude Code",
           "started": "2026-10-17T21:25:00Z",
           "ended": "2026-10-18T00:17:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -550,7 +750,7 @@
           "label": "Claude Code",
           "started": "2026-10-16T22:34:00Z",
           "ended": "2026-10-17T00:07:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
           "branch": "main",
           "models": [
             "claude-opus-5-5"
@@ -575,8 +775,8 @@
           "label": "Claude Code",
           "started": "2026-10-15T19:31:00Z",
           "ended": "2026-10-15T21:20:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -601,7 +801,7 @@
           "label": "Claude Code",
           "started": "2026-10-15T02:27:00Z",
           "ended": "2026-10-15T03:10:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
           "branch": "fix/146-quota",
           "models": [
             "claude-opus-5-5",
@@ -627,7 +827,7 @@
           "label": "Claude Code",
           "started": "2026-10-13T17:21:00Z",
           "ended": "2026-10-13T17:53:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -653,7 +853,7 @@
           "label": "Claude Code",
           "started": "2026-10-11T06:03:00Z",
           "ended": "2026-10-11T08:43:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
           "branch": null,
           "models": [
             "claude-sonnet-5"
@@ -678,8 +878,8 @@
           "label": "Codex CLI",
           "started": "2026-10-10T19:52:00Z",
           "ended": "2026-10-10T22:51:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "gpt-5.5-codex"
           ],
@@ -703,7 +903,7 @@
           "label": "Codex CLI",
           "started": "2026-10-10T00:45:00Z",
           "ended": "2026-10-10T03:09:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": null,
           "models": [
             "gpt-5.5-codex",
@@ -729,8 +929,8 @@
           "label": "Claude Code",
           "started": "2026-10-08T02:46:00Z",
           "ended": "2026-10-08T03:48:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5"
           ],
@@ -754,7 +954,7 @@
           "label": "Claude Code",
           "started": "2026-10-04T18:49:00Z",
           "ended": "2026-10-04T19:49:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -780,8 +980,8 @@
           "label": "Claude Code",
           "started": "2026-10-03T10:28:00Z",
           "ended": "2026-10-03T12:55:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -806,7 +1006,7 @@
           "label": "Claude Code",
           "started": "2026-10-02T15:46:00Z",
           "ended": "2026-10-02T16:42:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": null,
           "models": [
             "claude-sonnet-5"
@@ -831,7 +1031,7 @@
           "label": "Codex CLI",
           "started": "2026-09-30T14:00:00Z",
           "ended": "2026-09-30T16:01:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "fix/146-quota",
           "models": [
             "gpt-5.5-codex"
@@ -856,8 +1056,8 @@
           "label": "Claude Code",
           "started": "2026-09-23T19:14:00Z",
           "ended": "2026-09-23T21:40:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -882,7 +1082,7 @@
           "label": "Claude Code",
           "started": "2026-09-22T18:04:00Z",
           "ended": "2026-09-22T20:09:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": "release-1.4.5",
           "models": [
             "claude-sonnet-5"
@@ -907,7 +1107,7 @@
           "label": "Claude Code",
           "started": "2026-09-16T00:14:00Z",
           "ended": "2026-09-16T01:12:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "fix/146-quota",
           "models": [
             "claude-sonnet-5",
@@ -933,7 +1133,7 @@
           "label": "Claude Code",
           "started": "2026-09-11T16:19:00Z",
           "ended": "2026-09-11T16:40:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -959,7 +1159,7 @@
           "label": "Claude Code",
           "started": "2026-09-06T15:19:00Z",
           "ended": "2026-09-06T16:20:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -984,8 +1184,8 @@
           "label": "Claude Code",
           "started": "2026-09-03T22:12:00Z",
           "ended": "2026-09-03T22:52:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -1010,7 +1210,7 @@
           "label": "Claude Code",
           "started": "2026-09-02T10:37:00Z",
           "ended": "2026-09-02T13:06:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": "release-1.4.5",
           "models": [
             "claude-opus-5-5"
@@ -1035,8 +1235,8 @@
           "label": "Claude Code",
           "started": "2026-08-25T13:47:00Z",
           "ended": "2026-08-25T14:51:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
           "models": [
             "claude-opus-5-5",
             "claude-haiku-5-5"
@@ -1061,7 +1261,7 @@
           "label": "Codex CLI",
           "started": "2026-08-24T02:14:00Z",
           "ended": "2026-08-24T03:27:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": "release-1.4.5",
           "models": [
             "gpt-5.5-codex"
@@ -1086,8 +1286,8 @@
           "label": "Claude Code",
           "started": "2026-08-23T15:31:00Z",
           "ended": "2026-08-23T16:14:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5"
           ],
@@ -1111,7 +1311,7 @@
           "label": "Claude Code",
           "started": "2026-08-21T22:19:00Z",
           "ended": "2026-08-22T00:36:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-fixes-146",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
           "branch": "release-1.4.5",
           "models": [
             "claude-opus-5-5",
@@ -1137,7 +1337,7 @@
           "label": "Claude Code",
           "started": "2026-08-19T11:34:00Z",
           "ended": "2026-08-19T14:24:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -1162,8 +1362,8 @@
           "label": "Claude Code",
           "started": "2026-08-16T01:39:00Z",
           "ended": "2026-08-16T03:38:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5",
             "claude-haiku-5-5"
@@ -1188,7 +1388,7 @@
           "label": "Claude Code",
           "started": "2026-08-16T01:31:00Z",
           "ended": "2026-08-16T01:56:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -1213,7 +1413,7 @@
           "label": "Claude Code",
           "started": "2026-08-14T15:57:00Z",
           "ended": "2026-08-14T17:34:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -1239,7 +1439,7 @@
           "label": "Claude Code",
           "started": "2026-08-13T11:21:00Z",
           "ended": "2026-08-13T11:51:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
           "branch": "release-1.4.5",
           "models": [
             "claude-opus-5-5",
@@ -1265,8 +1465,8 @@
           "label": "Claude Code",
           "started": "2026-08-13T00:02:00Z",
           "ended": "2026-08-13T01:40:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/FocusApp-paylag",
-          "branch": "feat/paylag",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
           "models": [
             "claude-sonnet-5"
           ],
@@ -1287,12 +1487,12 @@
       ]
     },
     {
-      "id": "github.com/dogecoin/lifemint",
-      "name": "LifeMint",
-      "remote": "github.com/dogecoin/lifemint",
+      "id": "github.com/alice/habit-garden",
+      "name": "HabitGarden",
+      "remote": "github.com/alice/habit-garden",
       "paths": [
-        "/Users/dogecoin/Documents/GitHub/LifeMint",
-        "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding"
+        "/Users/alice/Documents/GitHub/HabitGarden",
+        "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding"
       ],
       "path_missing": false,
       "cost": 35.273,
@@ -1469,82 +1669,186 @@
         {
           "day": "2026-09-09",
           "cost": 4.5302,
-          "tokens": 822564
+          "tokens": 822564,
+          "by_agent": {
+            "claude": 4.5302
+          },
+          "by_agent_tokens": {
+            "claude": 822564
+          }
         },
         {
           "day": "2026-09-10",
           "cost": 0.3396,
-          "tokens": 1748299
+          "tokens": 1748299,
+          "by_agent": {
+            "codex": 0.3396
+          },
+          "by_agent_tokens": {
+            "codex": 1748299
+          }
         },
         {
           "day": "2026-09-12",
           "cost": 0.3232,
-          "tokens": 2276940
+          "tokens": 2276940,
+          "by_agent": {
+            "codex": 0.3232
+          },
+          "by_agent_tokens": {
+            "codex": 2276940
+          }
         },
         {
           "day": "2026-09-17",
           "cost": 1.4123,
-          "tokens": 4832769
+          "tokens": 4832769,
+          "by_agent": {
+            "antigravity": 1.4123
+          },
+          "by_agent_tokens": {
+            "antigravity": 4832769
+          }
         },
         {
           "day": "2026-09-18",
           "cost": 0.1399,
-          "tokens": 1626895
+          "tokens": 1626895,
+          "by_agent": {
+            "antigravity": 0.1399
+          },
+          "by_agent_tokens": {
+            "antigravity": 1626895
+          }
         },
         {
           "day": "2026-09-21",
           "cost": 5.2352,
-          "tokens": 2525071
+          "tokens": 2525071,
+          "by_agent": {
+            "claude": 5.2352
+          },
+          "by_agent_tokens": {
+            "claude": 2525071
+          }
         },
         {
           "day": "2026-09-22",
           "cost": 0.3929,
-          "tokens": 821006
+          "tokens": 821006,
+          "by_agent": {
+            "antigravity": 0.3929
+          },
+          "by_agent_tokens": {
+            "antigravity": 821006
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 2.6667,
-          "tokens": 4125947
+          "tokens": 4125947,
+          "by_agent": {
+            "claude": 1.8616,
+            "antigravity": 0.8051
+          },
+          "by_agent_tokens": {
+            "claude": 1653607,
+            "antigravity": 2472340
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 0.4504,
-          "tokens": 933035
+          "tokens": 933035,
+          "by_agent": {
+            "codex": 0.4504
+          },
+          "by_agent_tokens": {
+            "codex": 933035
+          }
         },
         {
           "day": "2026-09-29",
           "cost": 1.1279,
-          "tokens": 1052144
+          "tokens": 1052144,
+          "by_agent": {
+            "claude": 1.1279
+          },
+          "by_agent_tokens": {
+            "claude": 1052144
+          }
         },
         {
           "day": "2026-09-30",
           "cost": 4.9671,
-          "tokens": 1331258
+          "tokens": 1331258,
+          "by_agent": {
+            "claude": 4.9671
+          },
+          "by_agent_tokens": {
+            "claude": 1331258
+          }
         },
         {
           "day": "2026-10-10",
           "cost": 2.1691,
-          "tokens": 5288510
+          "tokens": 5288510,
+          "by_agent": {
+            "claude": 0.943,
+            "antigravity": 0.8473,
+            "codex": 0.3788
+          },
+          "by_agent_tokens": {
+            "claude": 611959,
+            "antigravity": 2451777,
+            "codex": 2224774
+          }
         },
         {
           "day": "2026-10-14",
           "cost": 3.7112,
-          "tokens": 1099861
+          "tokens": 1099861,
+          "by_agent": {
+            "claude": 3.7112
+          },
+          "by_agent_tokens": {
+            "claude": 1099861
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 4.8785,
-          "tokens": 1038347
+          "tokens": 1038347,
+          "by_agent": {
+            "claude": 4.8785
+          },
+          "by_agent_tokens": {
+            "claude": 1038347
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 2.1602,
-          "tokens": 2958258
+          "tokens": 2958258,
+          "by_agent": {
+            "claude": 1.5605,
+            "antigravity": 0.5997
+          },
+          "by_agent_tokens": {
+            "claude": 1334928,
+            "antigravity": 1623330
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 0.7686,
-          "tokens": 2301836
+          "tokens": 2301836,
+          "by_agent": {
+            "antigravity": 0.7686
+          },
+          "by_agent_tokens": {
+            "antigravity": 2301836
+          }
         }
       ],
       "by_branch": [
@@ -1576,7 +1880,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-21T16:53:00Z",
           "ended": "2026-10-21T17:37:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -1602,7 +1906,7 @@
           "label": "Claude Code",
           "started": "2026-10-20T09:13:00Z",
           "ended": "2026-10-20T10:47:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "agy/streaks",
           "models": [
             "claude-sonnet-5",
@@ -1628,7 +1932,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-20T05:30:00Z",
           "ended": "2026-10-20T05:49:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/lifemint",
+          "cwd": "/Users/alice/Documents/GitHub/habit-garden",
           "branch": "main",
           "models": [
             "gemini-3.5-pro-exp"
@@ -1653,7 +1957,7 @@
           "label": "Claude Code",
           "started": "2026-10-17T05:36:00Z",
           "ended": "2026-10-17T08:29:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "agy/streaks",
           "models": [
             "claude-opus-5-5"
@@ -1678,7 +1982,7 @@
           "label": "Claude Code",
           "started": "2026-10-13T17:21:00Z",
           "ended": "2026-10-13T17:53:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -1704,7 +2008,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-10T03:57:00Z",
           "ended": "2026-10-10T06:29:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "main",
           "models": [
             "gemini-3-pro",
@@ -1730,7 +2034,7 @@
           "label": "Codex CLI",
           "started": "2026-10-10T01:23:00Z",
           "ended": "2026-10-10T03:17:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "main",
           "models": [
             "gpt-5.5-codex",
@@ -1756,7 +2060,7 @@
           "label": "Claude Code",
           "started": "2026-10-09T18:32:00Z",
           "ended": "2026-10-09T21:14:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -1781,7 +2085,7 @@
           "label": "Claude Code",
           "started": "2026-09-30T00:39:00Z",
           "ended": "2026-09-30T01:55:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/streaks",
           "models": [
             "claude-opus-5-5"
@@ -1806,7 +2110,7 @@
           "label": "Claude Code",
           "started": "2026-09-28T22:30:00Z",
           "ended": "2026-09-29T01:03:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": null,
           "models": [
             "claude-sonnet-5"
@@ -1831,7 +2135,7 @@
           "label": "Codex CLI",
           "started": "2026-09-25T23:04:00Z",
           "ended": "2026-09-26T01:37:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/onboarding",
           "models": [
             "gpt-5.5-codex"
@@ -1856,7 +2160,7 @@
           "label": "Claude Code",
           "started": "2026-09-24T14:07:00Z",
           "ended": "2026-09-24T16:56:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/onboarding",
           "models": [
             "claude-sonnet-5"
@@ -1881,7 +2185,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-24T06:38:00Z",
           "ended": "2026-09-24T07:25:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -1907,7 +2211,7 @@
           "label": "Claude Code",
           "started": "2026-09-24T00:10:00Z",
           "ended": "2026-09-24T02:06:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -1933,7 +2237,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-22T10:22:00Z",
           "ended": "2026-09-22T12:18:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/streaks",
           "models": [
             "gemini-3-pro"
@@ -1958,7 +2262,7 @@
           "label": "Claude Code",
           "started": "2026-09-21T12:04:00Z",
           "ended": "2026-09-21T13:06:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/onboarding",
           "models": [
             "claude-sonnet-5",
@@ -1984,7 +2288,7 @@
           "label": "Claude Code",
           "started": "2026-09-21T00:36:00Z",
           "ended": "2026-09-21T02:02:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -2009,7 +2313,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-18T01:44:00Z",
           "ended": "2026-09-18T01:59:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": null,
           "models": [
             "gemini-3-flash"
@@ -2034,7 +2338,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-17T11:00:00Z",
           "ended": "2026-09-17T13:55:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": "agy/onboarding",
           "models": [
             "gemini-3-flash"
@@ -2059,7 +2363,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-16T18:59:00Z",
           "ended": "2026-09-16T19:39:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/streaks",
           "models": [
             "gemini-3-pro"
@@ -2084,7 +2388,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-16T18:12:00Z",
           "ended": "2026-09-16T19:02:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "main",
           "models": [
             "gemini-3-pro"
@@ -2109,7 +2413,7 @@
           "label": "Codex CLI",
           "started": "2026-09-12T03:51:00Z",
           "ended": "2026-09-12T04:30:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint/.worktrees/agy-onboarding",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
           "branch": "agy/streaks",
           "models": [
             "gpt-5.5-codex"
@@ -2134,7 +2438,7 @@
           "label": "Codex CLI",
           "started": "2026-09-10T12:20:00Z",
           "ended": "2026-09-10T15:11:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": null,
           "models": [
             "gpt-5.5-codex",
@@ -2160,7 +2464,7 @@
           "label": "Claude Code",
           "started": "2026-09-09T12:20:00Z",
           "ended": "2026-09-09T15:08:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/LifeMint",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -2183,11 +2487,11 @@
       ]
     },
     {
-      "id": "github.com/cclank/tokei",
-      "name": "tokei",
-      "remote": "github.com/cclank/tokei",
+      "id": "github.com/bobchen/meterkit",
+      "name": "meterkit",
+      "remote": "github.com/bobchen/meterkit",
       "paths": [
-        "/Users/dogecoin/Documents/GitHub/tokei"
+        "/Users/alice/Documents/GitHub/meterkit"
       ],
       "path_missing": false,
       "cost": 33.7207,
@@ -2322,92 +2626,204 @@
         {
           "day": "2026-08-24",
           "cost": 0.067,
-          "tokens": 781161
+          "tokens": 781161,
+          "by_agent": {
+            "antigravity": 0.067
+          },
+          "by_agent_tokens": {
+            "antigravity": 781161
+          }
         },
         {
           "day": "2026-08-25",
           "cost": 1.4436,
-          "tokens": 2680594
+          "tokens": 2680594,
+          "by_agent": {
+            "claude": 1.4436
+          },
+          "by_agent_tokens": {
+            "claude": 2680594
+          }
         },
         {
           "day": "2026-08-27",
           "cost": 0.135,
-          "tokens": 2082443
+          "tokens": 2082443,
+          "by_agent": {
+            "antigravity": 0.135
+          },
+          "by_agent_tokens": {
+            "antigravity": 2082443
+          }
         },
         {
           "day": "2026-08-29",
           "cost": 1.4782,
-          "tokens": 1862823
+          "tokens": 1862823,
+          "by_agent": {
+            "claude": 0.9305,
+            "antigravity": 0.5477
+          },
+          "by_agent_tokens": {
+            "claude": 623396,
+            "antigravity": 1239427
+          }
         },
         {
           "day": "2026-08-30",
           "cost": 0.6225,
-          "tokens": 2088800
+          "tokens": 2088800,
+          "by_agent": {
+            "antigravity": 0.6225
+          },
+          "by_agent_tokens": {
+            "antigravity": 2088800
+          }
         },
         {
           "day": "2026-09-01",
           "cost": 0.7294,
-          "tokens": 444821
+          "tokens": 444821,
+          "by_agent": {
+            "claude": 0.7294
+          },
+          "by_agent_tokens": {
+            "claude": 444821
+          }
         },
         {
           "day": "2026-09-06",
           "cost": 1.9295,
-          "tokens": 2735588
+          "tokens": 2735588,
+          "by_agent": {
+            "claude": 1.9295
+          },
+          "by_agent_tokens": {
+            "claude": 2735588
+          }
         },
         {
           "day": "2026-09-17",
           "cost": 5.4075,
-          "tokens": 770865
+          "tokens": 770865,
+          "by_agent": {
+            "claude": 5.4075
+          },
+          "by_agent_tokens": {
+            "claude": 770865
+          }
         },
         {
           "day": "2026-09-20",
           "cost": 8.3132,
-          "tokens": 1832027
+          "tokens": 1832027,
+          "by_agent": {
+            "claude": 8.3132
+          },
+          "by_agent_tokens": {
+            "claude": 1832027
+          }
         },
         {
           "day": "2026-09-23",
           "cost": 1.1386,
-          "tokens": 359519
+          "tokens": 359519,
+          "by_agent": {
+            "claude": 1.1386
+          },
+          "by_agent_tokens": {
+            "claude": 359519
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 0.0684,
-          "tokens": 910897
+          "tokens": 910897,
+          "by_agent": {
+            "antigravity": 0.0684
+          },
+          "by_agent_tokens": {
+            "antigravity": 910897
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 0.6221,
-          "tokens": 807802
+          "tokens": 807802,
+          "by_agent": {
+            "antigravity": 0.6221
+          },
+          "by_agent_tokens": {
+            "antigravity": 807802
+          }
         },
         {
           "day": "2026-09-27",
           "cost": 6.0009,
-          "tokens": 6976503
+          "tokens": 6976503,
+          "by_agent": {
+            "claude": 5.2053,
+            "antigravity": 0.7956
+          },
+          "by_agent_tokens": {
+            "claude": 4557486,
+            "antigravity": 2419017
+          }
         },
         {
           "day": "2026-10-02",
           "cost": 1.5969,
-          "tokens": 2568127
+          "tokens": 2568127,
+          "by_agent": {
+            "claude": 1.5969
+          },
+          "by_agent_tokens": {
+            "claude": 2568127
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 1.3446,
-          "tokens": 1397094
+          "tokens": 1397094,
+          "by_agent": {
+            "claude": 1.3446
+          },
+          "by_agent_tokens": {
+            "claude": 1397094
+          }
         },
         {
           "day": "2026-10-12",
           "cost": 0.9098,
-          "tokens": 2866258
+          "tokens": 2866258,
+          "by_agent": {
+            "antigravity": 0.9098
+          },
+          "by_agent_tokens": {
+            "antigravity": 2866258
+          }
         },
         {
           "day": "2026-10-16",
           "cost": 1.1554,
-          "tokens": 1114809
+          "tokens": 1114809,
+          "by_agent": {
+            "claude": 1.1554
+          },
+          "by_agent_tokens": {
+            "claude": 1114809
+          }
         },
         {
           "day": "2026-10-19",
           "cost": 0.7581,
-          "tokens": 2299092
+          "tokens": 2299092,
+          "by_agent": {
+            "antigravity": 0.7581
+          },
+          "by_agent_tokens": {
+            "antigravity": 2299092
+          }
         }
       ],
       "by_branch": [
@@ -2439,7 +2855,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-18T21:42:00Z",
           "ended": "2026-10-18T22:31:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "gemini-3.5-pro-exp"
@@ -2464,7 +2880,7 @@
           "label": "Claude Code",
           "started": "2026-10-16T12:35:00Z",
           "ended": "2026-10-16T15:30:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -2490,7 +2906,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-12T03:07:00Z",
           "ended": "2026-10-12T05:50:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "feat/pricing-json",
           "models": [
             "gemini-3-pro",
@@ -2516,7 +2932,7 @@
           "label": "Claude Code",
           "started": "2026-10-07T19:20:00Z",
           "ended": "2026-10-07T21:51:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "fix/dedupe-stream",
           "models": [
             "claude-sonnet-5"
@@ -2541,7 +2957,7 @@
           "label": "Claude Code",
           "started": "2026-10-02T11:05:00Z",
           "ended": "2026-10-02T12:54:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -2566,7 +2982,7 @@
           "label": "Claude Code",
           "started": "2026-09-27T10:04:00Z",
           "ended": "2026-09-27T10:38:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -2592,7 +3008,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-27T00:24:00Z",
           "ended": "2026-09-27T01:44:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -2618,7 +3034,7 @@
           "label": "Claude Code",
           "started": "2026-09-26T18:44:00Z",
           "ended": "2026-09-26T20:04:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/tokei-bench",
+          "cwd": "/Users/alice/Documents/experiments/meterkit-bench",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -2643,7 +3059,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-25T21:54:00Z",
           "ended": "2026-09-25T22:40:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "gemini-3-pro",
@@ -2669,7 +3085,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-23T19:52:00Z",
           "ended": "2026-09-23T21:52:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": null,
           "models": [
             "gemini-3-flash"
@@ -2694,7 +3110,7 @@
           "label": "Claude Code",
           "started": "2026-09-23T01:22:00Z",
           "ended": "2026-09-23T03:53:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -2719,7 +3135,7 @@
           "label": "Claude Code",
           "started": "2026-09-20T02:29:00Z",
           "ended": "2026-09-20T04:54:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "feat/pricing-json",
           "models": [
             "claude-opus-5-5"
@@ -2744,7 +3160,7 @@
           "label": "Claude Code",
           "started": "2026-09-17T11:13:00Z",
           "ended": "2026-09-17T12:32:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "fix/dedupe-stream",
           "models": [
             "claude-opus-5-5"
@@ -2769,7 +3185,7 @@
           "label": "Claude Code",
           "started": "2026-09-06T02:26:00Z",
           "ended": "2026-09-06T04:07:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -2795,7 +3211,7 @@
           "label": "Claude Code",
           "started": "2026-09-01T02:28:00Z",
           "ended": "2026-09-01T04:37:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -2821,7 +3237,7 @@
           "label": "Antigravity CLI",
           "started": "2026-08-29T17:06:00Z",
           "ended": "2026-08-29T19:52:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "gemini-3-pro"
@@ -2846,7 +3262,7 @@
           "label": "Antigravity CLI",
           "started": "2026-08-29T09:29:00Z",
           "ended": "2026-08-29T12:05:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -2872,7 +3288,7 @@
           "label": "Claude Code",
           "started": "2026-08-29T03:20:00Z",
           "ended": "2026-08-29T06:07:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -2898,7 +3314,7 @@
           "label": "Antigravity CLI",
           "started": "2026-08-26T22:22:00Z",
           "ended": "2026-08-27T00:29:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": null,
           "models": [
             "gemini-3-flash"
@@ -2923,7 +3339,7 @@
           "label": "Claude Code",
           "started": "2026-08-24T18:32:00Z",
           "ended": "2026-08-24T18:49:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "fix/dedupe-stream",
           "models": [
             "claude-sonnet-5",
@@ -2949,7 +3365,7 @@
           "label": "Antigravity CLI",
           "started": "2026-08-24T15:52:00Z",
           "ended": "2026-08-24T16:21:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/tokei",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
           "branch": "feat/pricing-json",
           "models": [
             "gemini-3-flash"
@@ -2971,11 +3387,11 @@
       ]
     },
     {
-      "id": "github.com/dogecoin/token-usage",
-      "name": "token-usage",
-      "remote": "github.com/dogecoin/token-usage",
+      "id": "github.com/alice/weather-cli",
+      "name": "weather-cli",
+      "remote": "github.com/alice/weather-cli",
       "paths": [
-        "/Users/dogecoin/Documents/GitHub/token-usage"
+        "/Users/alice/Documents/GitHub/weather-cli"
       ],
       "path_missing": false,
       "cost": 28.4849,
@@ -3054,22 +3470,46 @@
         {
           "day": "2026-10-16",
           "cost": 0.9454,
-          "tokens": 912119
+          "tokens": 912119,
+          "by_agent": {
+            "claude": 0.9454
+          },
+          "by_agent_tokens": {
+            "claude": 912119
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 4.1789,
-          "tokens": 1412763
+          "tokens": 1412763,
+          "by_agent": {
+            "claude": 4.1789
+          },
+          "by_agent_tokens": {
+            "claude": 1412763
+          }
         },
         {
           "day": "2026-10-21",
           "cost": 8.0677,
-          "tokens": 2571108
+          "tokens": 2571108,
+          "by_agent": {
+            "claude": 8.0677
+          },
+          "by_agent_tokens": {
+            "claude": 2571108
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 15.2929,
-          "tokens": 6966746
+          "tokens": 6966746,
+          "by_agent": {
+            "claude": 15.2929
+          },
+          "by_agent_tokens": {
+            "claude": 6966746
+          }
         }
       ],
       "by_branch": [
@@ -3086,7 +3526,7 @@
           "label": "Claude Code",
           "started": "2026-10-22T15:39:00Z",
           "ended": "2026-10-22T16:44:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -3111,7 +3551,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T23:04:00Z",
           "ended": "2026-10-22T00:05:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-sonnet-5"
@@ -3136,7 +3576,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T22:08:00Z",
           "ended": "2026-10-21T23:43:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-opus-5-5"
@@ -3161,7 +3601,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T18:01:00Z",
           "ended": "2026-10-21T20:21:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -3187,7 +3627,7 @@
           "label": "Claude Code",
           "started": "2026-10-21T03:50:00Z",
           "ended": "2026-10-21T05:06:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-opus-5-5"
@@ -3212,7 +3652,7 @@
           "label": "Claude Code",
           "started": "2026-10-20T17:54:00Z",
           "ended": "2026-10-20T18:32:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -3238,7 +3678,7 @@
           "label": "Claude Code",
           "started": "2026-10-20T08:46:00Z",
           "ended": "2026-10-20T09:28:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/token-usage",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -3264,7 +3704,7 @@
           "label": "Claude Code",
           "started": "2026-10-16T12:35:00Z",
           "ended": "2026-10-16T15:30:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "claude-sonnet-5",
@@ -3291,7 +3731,7 @@
       "name": "infra-scripts",
       "remote": "gitlab.com/acme/infra-scripts",
       "paths": [
-        "/Users/dogecoin/Documents/GitHub/infra-scripts"
+        "/Users/alice/Documents/GitHub/infra-scripts"
       ],
       "path_missing": false,
       "cost": 7.973,
@@ -3412,52 +3852,112 @@
         {
           "day": "2026-08-07",
           "cost": 0.2189,
-          "tokens": 935869
+          "tokens": 935869,
+          "by_agent": {
+            "codex": 0.2189
+          },
+          "by_agent_tokens": {
+            "codex": 935869
+          }
         },
         {
           "day": "2026-08-08",
           "cost": 0.1645,
-          "tokens": 558609
+          "tokens": 558609,
+          "by_agent": {
+            "codex": 0.1645
+          },
+          "by_agent_tokens": {
+            "codex": 558609
+          }
         },
         {
           "day": "2026-08-18",
           "cost": 3.3536,
-          "tokens": 1088880
+          "tokens": 1088880,
+          "by_agent": {
+            "claude": 3.3536
+          },
+          "by_agent_tokens": {
+            "claude": 1088880
+          }
         },
         {
           "day": "2026-08-24",
           "cost": 0.0874,
-          "tokens": 368397
+          "tokens": 368397,
+          "by_agent": {
+            "codex": 0.0874
+          },
+          "by_agent_tokens": {
+            "codex": 368397
+          }
         },
         {
           "day": "2026-08-27",
           "cost": 2.068,
-          "tokens": 541509
+          "tokens": 541509,
+          "by_agent": {
+            "claude": 2.068
+          },
+          "by_agent_tokens": {
+            "claude": 541509
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 0.2953,
-          "tokens": 785109
+          "tokens": 785109,
+          "by_agent": {
+            "codex": 0.2953
+          },
+          "by_agent_tokens": {
+            "codex": 785109
+          }
         },
         {
           "day": "2026-09-20",
           "cost": 0.2037,
-          "tokens": 1220490
+          "tokens": 1220490,
+          "by_agent": {
+            "codex": 0.2037
+          },
+          "by_agent_tokens": {
+            "codex": 1220490
+          }
         },
         {
           "day": "2026-10-07",
           "cost": 0.6079,
-          "tokens": 1088119
+          "tokens": 1088119,
+          "by_agent": {
+            "claude": 0.6079
+          },
+          "by_agent_tokens": {
+            "claude": 1088119
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 0.8454,
-          "tokens": 1371963
+          "tokens": 1371963,
+          "by_agent": {
+            "claude": 0.8454
+          },
+          "by_agent_tokens": {
+            "claude": 1371963
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 0.1283,
-          "tokens": 545295
+          "tokens": 545295,
+          "by_agent": {
+            "codex": 0.1283
+          },
+          "by_agent_tokens": {
+            "codex": 545295
+          }
         }
       ],
       "by_branch": [
@@ -3479,7 +3979,7 @@
           "label": "Codex CLI",
           "started": "2026-10-21T20:10:00Z",
           "ended": "2026-10-21T22:13:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": "main",
           "models": [
             "gpt-5.5-codex"
@@ -3504,7 +4004,7 @@
           "label": "Claude Code",
           "started": "2026-10-07T22:05:00Z",
           "ended": "2026-10-08T00:08:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "claude-sonnet-5",
@@ -3530,7 +4030,7 @@
           "label": "Claude Code",
           "started": "2026-10-07T09:32:00Z",
           "ended": "2026-10-07T12:14:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "claude-sonnet-5",
@@ -3556,7 +4056,7 @@
           "label": "Codex CLI",
           "started": "2026-09-19T18:29:00Z",
           "ended": "2026-09-19T21:08:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "gpt-5.5-codex"
@@ -3581,7 +4081,7 @@
           "label": "Codex CLI",
           "started": "2026-09-04T14:14:00Z",
           "ended": "2026-09-04T15:58:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "main",
           "models": [
             "gpt-5.5-codex"
@@ -3606,7 +4106,7 @@
           "label": "Claude Code",
           "started": "2026-08-27T00:09:00Z",
           "ended": "2026-08-27T02:03:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "claude-opus-5-5"
@@ -3631,7 +4131,7 @@
           "label": "Codex CLI",
           "started": "2026-08-23T19:09:00Z",
           "ended": "2026-08-23T20:47:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "gpt-5.5-codex"
@@ -3656,7 +4156,7 @@
           "label": "Claude Code",
           "started": "2026-08-18T15:19:00Z",
           "ended": "2026-08-18T16:55:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "main",
           "models": [
             "claude-opus-5-5"
@@ -3681,7 +4181,7 @@
           "label": "Codex CLI",
           "started": "2026-08-08T05:16:00Z",
           "ended": "2026-08-08T06:10:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "chore/terraform-1.9",
           "models": [
             "gpt-5.5-codex",
@@ -3707,7 +4207,7 @@
           "label": "Codex CLI",
           "started": "2026-08-06T16:41:00Z",
           "ended": "2026-08-06T17:33:00Z",
-          "cwd": "/Users/dogecoin/Documents/GitHub/infra-scripts",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
           "branch": "main",
           "models": [
             "gpt-5.5-codex",
@@ -3730,11 +4230,11 @@
       ]
     },
     {
-      "id": "github.com/dogecoin/old-blog",
+      "id": "github.com/alice/old-blog",
       "name": "old-blog",
-      "remote": "github.com/dogecoin/old-blog",
+      "remote": "github.com/alice/old-blog",
       "paths": [
-        "/Users/dogecoin/Sites/old-blog"
+        "/Users/alice/Sites/old-blog"
       ],
       "path_missing": true,
       "cost": 6.888,
@@ -3813,22 +4313,46 @@
         {
           "day": "2026-07-28",
           "cost": 2.2701,
-          "tokens": 702757
+          "tokens": 702757,
+          "by_agent": {
+            "claude": 2.2701
+          },
+          "by_agent_tokens": {
+            "claude": 702757
+          }
         },
         {
           "day": "2026-08-02",
           "cost": 0.5931,
-          "tokens": 1021104
+          "tokens": 1021104,
+          "by_agent": {
+            "claude": 0.5931
+          },
+          "by_agent_tokens": {
+            "claude": 1021104
+          }
         },
         {
           "day": "2026-08-03",
           "cost": 1.4525,
-          "tokens": 474592
+          "tokens": 474592,
+          "by_agent": {
+            "claude": 1.4525
+          },
+          "by_agent_tokens": {
+            "claude": 474592
+          }
         },
         {
           "day": "2026-08-09",
           "cost": 2.5723,
-          "tokens": 646717
+          "tokens": 646717,
+          "by_agent": {
+            "claude": 2.5723
+          },
+          "by_agent_tokens": {
+            "claude": 646717
+          }
         }
       ],
       "by_branch": [],
@@ -3839,7 +4363,7 @@
           "label": "Claude Code",
           "started": "2026-08-09T14:03:00Z",
           "ended": "2026-08-09T17:03:00Z",
-          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "cwd": "/Users/alice/Sites/old-blog",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -3865,7 +4389,7 @@
           "label": "Claude Code",
           "started": "2026-08-03T10:28:00Z",
           "ended": "2026-08-03T12:06:00Z",
-          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "cwd": "/Users/alice/Sites/old-blog",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -3890,7 +4414,7 @@
           "label": "Claude Code",
           "started": "2026-08-02T12:19:00Z",
           "ended": "2026-08-02T13:06:00Z",
-          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "cwd": "/Users/alice/Sites/old-blog",
           "branch": null,
           "models": [
             "claude-sonnet-5",
@@ -3916,7 +4440,7 @@
           "label": "Claude Code",
           "started": "2026-07-28T02:46:00Z",
           "ended": "2026-07-28T05:13:00Z",
-          "cwd": "/Users/dogecoin/Sites/old-blog",
+          "cwd": "/Users/alice/Sites/old-blog",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -3939,11 +4463,11 @@
       ]
     },
     {
-      "id": "/Users/dogecoin/Documents/experiments/rust-playground",
+      "id": "/Users/alice/Documents/experiments/rust-playground",
       "name": "rust-playground",
       "remote": null,
       "paths": [
-        "/Users/dogecoin/Documents/experiments/rust-playground"
+        "/Users/alice/Documents/experiments/rust-playground"
       ],
       "path_missing": false,
       "cost": 1.7104,
@@ -4008,32 +4532,68 @@
         {
           "day": "2026-09-14",
           "cost": 0.3895,
-          "tokens": 1405002
+          "tokens": 1405002,
+          "by_agent": {
+            "codex": 0.3895
+          },
+          "by_agent_tokens": {
+            "codex": 1405002
+          }
         },
         {
           "day": "2026-09-15",
           "cost": 0.1679,
-          "tokens": 563944
+          "tokens": 563944,
+          "by_agent": {
+            "codex": 0.1679
+          },
+          "by_agent_tokens": {
+            "codex": 563944
+          }
         },
         {
           "day": "2026-09-25",
           "cost": 0.3874,
-          "tokens": 1802443
+          "tokens": 1802443,
+          "by_agent": {
+            "codex": 0.3874
+          },
+          "by_agent_tokens": {
+            "codex": 1802443
+          }
         },
         {
           "day": "2026-10-05",
           "cost": 0.1612,
-          "tokens": 298792
+          "tokens": 298792,
+          "by_agent": {
+            "codex": 0.1612
+          },
+          "by_agent_tokens": {
+            "codex": 298792
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 0.2795,
-          "tokens": 1505157
+          "tokens": 1505157,
+          "by_agent": {
+            "codex": 0.2795
+          },
+          "by_agent_tokens": {
+            "codex": 1505157
+          }
         },
         {
           "day": "2026-10-09",
           "cost": 0.3249,
-          "tokens": 815450
+          "tokens": 815450,
+          "by_agent": {
+            "codex": 0.3249
+          },
+          "by_agent_tokens": {
+            "codex": 815450
+          }
         }
       ],
       "by_branch": [
@@ -4055,7 +4615,7 @@
           "label": "Codex CLI",
           "started": "2026-10-08T22:06:00Z",
           "ended": "2026-10-09T00:46:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": null,
           "models": [
             "gpt-5.5-codex"
@@ -4080,7 +4640,7 @@
           "label": "Codex CLI",
           "started": "2026-10-07T19:14:00Z",
           "ended": "2026-10-07T22:07:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": "master",
           "models": [
             "gpt-5.5-codex",
@@ -4106,7 +4666,7 @@
           "label": "Codex CLI",
           "started": "2026-10-05T08:49:00Z",
           "ended": "2026-10-05T11:28:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": "master",
           "models": [
             "gpt-5.5-codex"
@@ -4131,7 +4691,7 @@
           "label": "Codex CLI",
           "started": "2026-09-25T03:11:00Z",
           "ended": "2026-09-25T05:06:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": null,
           "models": [
             "gpt-5.5-codex",
@@ -4157,7 +4717,7 @@
           "label": "Codex CLI",
           "started": "2026-09-14T20:59:00Z",
           "ended": "2026-09-14T23:29:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": null,
           "models": [
             "gpt-5.5-codex"
@@ -4182,7 +4742,7 @@
           "label": "Codex CLI",
           "started": "2026-09-14T05:14:00Z",
           "ended": "2026-09-14T07:38:00Z",
-          "cwd": "/Users/dogecoin/Documents/experiments/rust-playground",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
           "branch": null,
           "models": [
             "gpt-5.5-codex"
@@ -4204,11 +4764,11 @@
       ]
     },
     {
-      "id": "github.com/dogecoin/dotfiles",
+      "id": "github.com/alice/dotfiles",
       "name": "dotfiles",
-      "remote": "github.com/dogecoin/dotfiles",
+      "remote": "github.com/alice/dotfiles",
       "paths": [
-        "/Users/dogecoin/.dotfiles"
+        "/Users/alice/.dotfiles"
       ],
       "path_missing": false,
       "cost": 0.0013,
@@ -4273,7 +4833,13 @@
         {
           "day": "2026-10-02",
           "cost": 0.0013,
-          "tokens": 492
+          "tokens": 492,
+          "by_agent": {
+            "claude": 0.0013
+          },
+          "by_agent_tokens": {
+            "claude": 492
+          }
         }
       ],
       "by_branch": [
@@ -4290,7 +4856,7 @@
           "label": "Claude Code",
           "started": "2026-10-02T03:49:00Z",
           "ended": "2026-10-02T04:44:00Z",
-          "cwd": "/Users/dogecoin/.dotfiles",
+          "cwd": "/Users/alice/.dotfiles",
           "branch": "main",
           "models": [
             "claude-opus-5-5",
@@ -4334,7 +4900,7 @@
           "label": "Claude Code",
           "started": "2026-10-09T19:58:00Z",
           "ended": "2026-10-09T20:41:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": null,
           "models": [
             "claude-sonnet-5",
@@ -4360,7 +4926,7 @@
           "label": "Antigravity CLI",
           "started": "2026-10-04T14:14:00Z",
           "ended": "2026-10-04T15:23:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -4386,7 +4952,7 @@
           "label": "Claude Code",
           "started": "2026-09-19T05:35:00Z",
           "ended": "2026-09-19T08:05:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": null,
           "models": [
             "claude-opus-5-5",
@@ -4412,7 +4978,7 @@
           "label": "Antigravity CLI",
           "started": "2026-09-03T16:21:00Z",
           "ended": "2026-09-03T17:53:00Z",
-          "cwd": "/Users/dogecoin",
+          "cwd": "/Users/alice",
           "branch": null,
           "models": [
             "gemini-3-pro",
@@ -4438,7 +5004,7 @@
           "label": "Claude Code",
           "started": "2026-08-30T14:28:00Z",
           "ended": "2026-08-30T16:08:00Z",
-          "cwd": "/Users/dogecoin/Downloads",
+          "cwd": "/Users/alice/Downloads",
           "branch": null,
           "models": [
             "claude-sonnet-5",
@@ -4480,7 +5046,7 @@
           "label": "Claude Code",
           "started": "2026-10-13T07:03:00Z",
           "ended": "2026-10-13T08:49:00Z",
-          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "cwd": "/Users/alice/scratch/llm-evals",
           "branch": null,
           "models": [
             "claude-opus-5-5"
@@ -4505,7 +5071,7 @@
           "label": "Claude Code",
           "started": "2026-10-10T07:51:00Z",
           "ended": "2026-10-10T08:55:00Z",
-          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "cwd": "/Users/alice/scratch/llm-evals",
           "branch": null,
           "models": [
             "claude-sonnet-5"
@@ -4530,7 +5096,7 @@
           "label": "Claude Code",
           "started": "2026-09-28T01:02:00Z",
           "ended": "2026-09-28T03:28:00Z",
-          "cwd": "/Users/dogecoin/scratch/llm-evals",
+          "cwd": "/Users/alice/scratch/llm-evals",
           "branch": null,
           "models": [
             "claude-sonnet-5",
@@ -4555,8 +5121,8 @@
     "parse_failed": {
       "sessions": 2,
       "files": [
-        "/Users/dogecoin/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
-        "/Users/dogecoin/.claude/projects/-Users-dogecoin-Documents-GitHub-FocusApp/0c1d-broken.jsonl"
+        "/Users/alice/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
+        "/Users/alice/.claude/projects/-Users-alice-Documents-GitHub-PocketTimer/0c1d-broken.jsonl"
       ]
     }
   }

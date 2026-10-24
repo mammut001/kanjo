@@ -1,27 +1,41 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-23T14:12:23Z",
-  "generated_by": "aicost 0.1.0",
+  "generated_at": "2026-10-24T11:51:08Z",
+  "generated_by": "kanjo 0.1.0",
   "timezone": "America/Montreal",
   "currency": "USD",
   "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
   "config": {
     "dominant_threshold": 0.8
   },
-  "totals": {
-    "cost": 3875.574,
-    "tokens": {
-      "input": 625611694,
-      "output": 80112764,
-      "cache_read": 20975453913,
-      "cache_write": 75694367,
-      "thinking": 42212381,
-      "total": 21756872738
+  "quota_windows": {
+    "claude": {
+      "weekly_resets_at": "2026-10-27T14:00:00Z",
+      "weekly_window_hours": 168,
+      "five_hour_resets_at": "2026-10-24T16:30:00Z",
+      "source": "tokei"
     },
-    "sessions": 609,
+    "codex": {
+      "weekly_resets_at": "2026-10-31T04:53:24Z",
+      "weekly_window_hours": 168,
+      "five_hour_resets_at": "2026-10-24T16:51:06Z",
+      "source": "tokei"
+    }
+  },
+  "totals": {
+    "cost": 4049.5791,
+    "tokens": {
+      "input": 625664182,
+      "output": 81168188,
+      "cache_read": 21361761661,
+      "cache_write": 83168199,
+      "thinking": 42506519,
+      "total": 22151762230
+    },
+    "sessions": 611,
     "first_active": "2026-06-28",
-    "last_active": "2026-10-23",
-    "unique_sessions": 584
+    "last_active": "2026-10-24",
+    "unique_sessions": 587
   },
   "projects": [
     {
@@ -35,6 +49,7 @@
         "/Users/alice/Documents/GitHub/FocusApp-paylag",
         "/Users/alice/Documents/GitHub/FocusApp-screenshots",
         "/Users/alice/Documents/GitHub/FocusApp-verify-146",
+        "/Users/alice/Documents/GitHub/FocusApp/Packages/FocusKit",
         "/Users/alice/orca/workspaces/FocusApp/mako",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-FocusApp/2ed18e2d-86ef-41f1-8f48-d62ac85ef0e3/scratchpad/agy-biweekly",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-FocusApp/2ed18e2d-86ef-41f1-8f48-d62ac85ef0e3/scratchpad/agy-csv",
@@ -53,19 +68,33 @@
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-FocusApp/928ec0a9-8451-40d6-9f13-8bc49461b9b5/scratchpad/widgetgoals"
       ],
       "path_missing": false,
-      "cost": 1196.2941,
+      "cost": 1228.2947,
       "tokens": {
-        "input": 245599516,
-        "output": 19005487,
-        "cache_read": 7118286061,
-        "cache_write": 17604038,
-        "thinking": 8821187,
-        "total": 7400495102
+        "input": 246139708,
+        "output": 19146163,
+        "cache_read": 7230036398,
+        "cache_write": 18434162,
+        "thinking": 8865441,
+        "total": 7513756431
       },
       "sessions": 153,
       "first_active": "2026-06-30",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 450.3282,
+          "tokens": {
+            "input": 11176,
+            "output": 2183037,
+            "cache_read": 1200524190,
+            "cache_write": 18434162,
+            "thinking": 541416,
+            "total": 1221152565
+          },
+          "sessions": 10
+        },
         {
           "agent": "codex",
           "label": "Codex CLI",
@@ -81,30 +110,16 @@
           "sessions": 76
         },
         {
-          "agent": "claude",
-          "label": "Claude Code",
-          "cost": 420.2024,
-          "tokens": {
-            "input": 10886,
-            "output": 2072232,
-            "cache_read": 1094070703,
-            "cache_write": 17604038,
-            "thinking": 513743,
-            "total": 1113757859
-          },
-          "sessions": 10
-        },
-        {
           "agent": "antigravity",
           "label": "Antigravity CLI",
-          "cost": 351.9165,
+          "cost": 353.7913,
           "tokens": {
-            "input": 142264795,
-            "output": 8748379,
-            "cache_read": 1990029560,
+            "input": 142804697,
+            "output": 8778250,
+            "cache_read": 1995326410,
             "cache_write": 0,
-            "thinking": 4547180,
-            "total": 2141042734
+            "thinking": 4563761,
+            "total": 2146909357
           },
           "sessions": 67
         }
@@ -113,28 +128,28 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 370.2954,
+          "cost": 400.4185,
           "tokens": {
-            "input": 5514,
-            "output": 1762413,
-            "cache_read": 1000360931,
-            "cache_write": 16869117,
-            "thinking": 413504,
-            "total": 1018997975
+            "input": 5804,
+            "output": 1872776,
+            "cache_read": 1106777274,
+            "cache_write": 17698039,
+            "thinking": 440995,
+            "total": 1126353893
           },
           "estimated": false
         },
         {
           "model": "gemini-default",
           "agent": "antigravity",
-          "cost": 125.2263,
+          "cost": 127.0948,
           "tokens": {
-            "input": 36703931,
-            "output": 1447996,
-            "cache_read": 380922663,
+            "input": 37242408,
+            "output": 1477660,
+            "cache_read": 386215269,
             "cache_write": 0,
-            "thinking": 722405,
-            "total": 419074590
+            "thinking": 738800,
+            "total": 424935337
           },
           "estimated": true
         },
@@ -407,14 +422,14 @@
         {
           "model": "gemini-pro-default",
           "agent": "antigravity",
-          "cost": 5.6682,
+          "cost": 5.6743,
           "tokens": {
-            "input": 1248567,
-            "output": 85538,
-            "cache_read": 10722827,
+            "input": 1249993,
+            "output": 85745,
+            "cache_read": 10727071,
             "cache_write": 0,
-            "thinking": 59392,
-            "total": 12056932
+            "thinking": 59578,
+            "total": 12062809
           },
           "estimated": true
         },
@@ -491,14 +506,14 @@
         {
           "model": "claude-haiku-5-5",
           "agent": "claude",
-          "cost": 0.0133,
+          "cost": 0.016,
           "tokens": {
-            "input": 4,
-            "output": 2835,
-            "cache_read": 202076,
-            "cache_write": 7553,
-            "thinking": 1323,
-            "total": 212468
+            "input": 5,
+            "output": 3277,
+            "cache_read": 239219,
+            "cache_write": 8754,
+            "thinking": 1505,
+            "total": 251255
           },
           "estimated": false
         }
@@ -507,424 +522,1026 @@
         {
           "day": "2026-06-30",
           "cost": 1.7976,
-          "tokens": 1544930
+          "tokens": 1544930,
+          "by_agent": {
+            "codex": 1.7976
+          },
+          "by_agent_tokens": {
+            "codex": 1544930
+          }
         },
         {
           "day": "2026-07-01",
           "cost": 7.2824,
-          "tokens": 6883221
+          "tokens": 6883221,
+          "by_agent": {
+            "codex": 7.2824
+          },
+          "by_agent_tokens": {
+            "codex": 6883221
+          }
         },
         {
           "day": "2026-07-03",
           "cost": 20.8245,
-          "tokens": 72992320
+          "tokens": 72992320,
+          "by_agent": {
+            "antigravity": 20.7591,
+            "codex": 0.0654
+          },
+          "by_agent_tokens": {
+            "antigravity": 72957991,
+            "codex": 34329
+          }
         },
         {
           "day": "2026-07-04",
           "cost": 29.5085,
-          "tokens": 90369917
+          "tokens": 90369917,
+          "by_agent": {
+            "antigravity": 29.5085
+          },
+          "by_agent_tokens": {
+            "antigravity": 90369917
+          }
         },
         {
           "day": "2026-07-05",
           "cost": 20.5564,
-          "tokens": 43019819
+          "tokens": 43019819,
+          "by_agent": {
+            "antigravity": 11.5084,
+            "codex": 9.048
+          },
+          "by_agent_tokens": {
+            "antigravity": 35510804,
+            "codex": 7509015
+          }
         },
         {
           "day": "2026-07-06",
           "cost": 7.6609,
-          "tokens": 15442114
+          "tokens": 15442114,
+          "by_agent": {
+            "antigravity": 0.9486,
+            "codex": 6.7123
+          },
+          "by_agent_tokens": {
+            "antigravity": 8005285,
+            "codex": 7436829
+          }
         },
         {
           "day": "2026-07-07",
           "cost": 23.2112,
-          "tokens": 67245346
+          "tokens": 67245346,
+          "by_agent": {
+            "antigravity": 4.7931,
+            "codex": 18.4182
+          },
+          "by_agent_tokens": {
+            "antigravity": 46744934,
+            "codex": 20500412
+          }
         },
         {
           "day": "2026-07-08",
           "cost": 6.9976,
-          "tokens": 25970751
+          "tokens": 25970751,
+          "by_agent": {
+            "antigravity": 1.616,
+            "codex": 5.3816
+          },
+          "by_agent_tokens": {
+            "antigravity": 19236750,
+            "codex": 6734001
+          }
         },
         {
           "day": "2026-07-09",
           "cost": 12.1452,
-          "tokens": 20816847
+          "tokens": 20816847,
+          "by_agent": {
+            "antigravity": 0.7436,
+            "codex": 11.4016
+          },
+          "by_agent_tokens": {
+            "antigravity": 6838431,
+            "codex": 13978416
+          }
         },
         {
           "day": "2026-07-10",
           "cost": 54.0449,
-          "tokens": 101754371
+          "tokens": 101754371,
+          "by_agent": {
+            "antigravity": 1.9079,
+            "codex": 52.137
+          },
+          "by_agent_tokens": {
+            "antigravity": 21776267,
+            "codex": 79978104
+          }
         },
         {
           "day": "2026-07-11",
           "cost": 23.5635,
-          "tokens": 59563824
+          "tokens": 59563824,
+          "by_agent": {
+            "antigravity": 0.8616,
+            "codex": 22.7018
+          },
+          "by_agent_tokens": {
+            "antigravity": 8426131,
+            "codex": 51137693
+          }
         },
         {
           "day": "2026-07-12",
           "cost": 13.3627,
-          "tokens": 126958650
+          "tokens": 126958650,
+          "by_agent": {
+            "antigravity": 10.6954,
+            "codex": 2.6673
+          },
+          "by_agent_tokens": {
+            "antigravity": 120475572,
+            "codex": 6483078
+          }
         },
         {
           "day": "2026-07-13",
           "cost": 23.4891,
-          "tokens": 377967033
+          "tokens": 377967033,
+          "by_agent": {
+            "antigravity": 11.6252,
+            "codex": 11.8639
+          },
+          "by_agent_tokens": {
+            "antigravity": 134718743,
+            "codex": 243248290
+          }
         },
         {
           "day": "2026-07-14",
-          "cost": 29.9988,
-          "tokens": 111608329
+          "cost": 30.1915,
+          "tokens": 112169764,
+          "by_agent": {
+            "antigravity": 23.9374,
+            "codex": 6.2541
+          },
+          "by_agent_tokens": {
+            "antigravity": 71684589,
+            "codex": 40485175
+          }
         },
         {
           "day": "2026-07-15",
           "cost": 0.9852,
-          "tokens": 16702395
+          "tokens": 16702395,
+          "by_agent": {
+            "codex": 0.9852
+          },
+          "by_agent_tokens": {
+            "codex": 16702395
+          }
         },
         {
           "day": "2026-07-16",
           "cost": 21.0881,
-          "tokens": 62391438
+          "tokens": 62391438,
+          "by_agent": {
+            "codex": 21.0881
+          },
+          "by_agent_tokens": {
+            "codex": 62391438
+          }
         },
         {
           "day": "2026-07-17",
           "cost": 2.1231,
-          "tokens": 58373237
+          "tokens": 58373237,
+          "by_agent": {
+            "codex": 2.1231
+          },
+          "by_agent_tokens": {
+            "codex": 58373237
+          }
         },
         {
           "day": "2026-07-18",
           "cost": 3.7961,
-          "tokens": 33394859
+          "tokens": 33394859,
+          "by_agent": {
+            "codex": 3.7961
+          },
+          "by_agent_tokens": {
+            "codex": 33394859
+          }
         },
         {
           "day": "2026-07-19",
-          "cost": 34.3568,
-          "tokens": 126998303
+          "cost": 35.4276,
+          "tokens": 130194528,
+          "by_agent": {
+            "antigravity": 35.4276
+          },
+          "by_agent_tokens": {
+            "antigravity": 130194528
+          }
         },
         {
           "day": "2026-07-20",
-          "cost": 32.5127,
-          "tokens": 243556315
+          "cost": 33.124,
+          "tokens": 245665278,
+          "by_agent": {
+            "antigravity": 29.3744,
+            "codex": 3.7496
+          },
+          "by_agent_tokens": {
+            "antigravity": 131823741,
+            "codex": 113841537
+          }
         },
         {
           "day": "2026-07-21",
           "cost": 1.9058,
-          "tokens": 65410783
+          "tokens": 65410783,
+          "by_agent": {
+            "codex": 1.9058
+          },
+          "by_agent_tokens": {
+            "codex": 65410783
+          }
         },
         {
           "day": "2026-07-22",
           "cost": 3.6698,
-          "tokens": 54463086
+          "tokens": 54463086,
+          "by_agent": {
+            "codex": 3.6698
+          },
+          "by_agent_tokens": {
+            "codex": 54463086
+          }
         },
         {
           "day": "2026-07-23",
           "cost": 1.7837,
-          "tokens": 13446978
+          "tokens": 13446978,
+          "by_agent": {
+            "codex": 1.7837
+          },
+          "by_agent_tokens": {
+            "codex": 13446978
+          }
         },
         {
           "day": "2026-07-25",
           "cost": 0.653,
-          "tokens": 26231932
+          "tokens": 26231932,
+          "by_agent": {
+            "codex": 0.653
+          },
+          "by_agent_tokens": {
+            "codex": 26231932
+          }
         },
         {
           "day": "2026-07-26",
           "cost": 3.6157,
-          "tokens": 37988871
+          "tokens": 37988871,
+          "by_agent": {
+            "antigravity": 3.3226,
+            "codex": 0.2931
+          },
+          "by_agent_tokens": {
+            "antigravity": 26376049,
+            "codex": 11612822
+          }
         },
         {
           "day": "2026-07-27",
           "cost": 30.5723,
-          "tokens": 177035158
+          "tokens": 177035158,
+          "by_agent": {
+            "antigravity": 7.7164,
+            "codex": 22.8559
+          },
+          "by_agent_tokens": {
+            "antigravity": 57971832,
+            "codex": 119063326
+          }
         },
         {
           "day": "2026-07-28",
           "cost": 11.6566,
-          "tokens": 118856109
+          "tokens": 118856109,
+          "by_agent": {
+            "antigravity": 11.1233,
+            "codex": 0.5334
+          },
+          "by_agent_tokens": {
+            "antigravity": 98428633,
+            "codex": 20427476
+          }
         },
         {
           "day": "2026-07-30",
           "cost": 6.5818,
-          "tokens": 104419899
+          "tokens": 104419899,
+          "by_agent": {
+            "antigravity": 4.6948,
+            "codex": 1.8869
+          },
+          "by_agent_tokens": {
+            "antigravity": 36048544,
+            "codex": 68371355
+          }
         },
         {
           "day": "2026-07-31",
           "cost": 6.6725,
-          "tokens": 96109360
+          "tokens": 96109360,
+          "by_agent": {
+            "codex": 6.6725
+          },
+          "by_agent_tokens": {
+            "codex": 96109360
+          }
         },
         {
           "day": "2026-08-01",
           "cost": 2.2501,
-          "tokens": 94660312
+          "tokens": 94660312,
+          "by_agent": {
+            "codex": 2.2501
+          },
+          "by_agent_tokens": {
+            "codex": 94660312
+          }
         },
         {
           "day": "2026-08-02",
           "cost": 1.3503,
-          "tokens": 57639620
+          "tokens": 57639620,
+          "by_agent": {
+            "codex": 1.3503
+          },
+          "by_agent_tokens": {
+            "codex": 57639620
+          }
         },
         {
           "day": "2026-08-05",
           "cost": 0.82,
-          "tokens": 29228906
+          "tokens": 29228906,
+          "by_agent": {
+            "codex": 0.82
+          },
+          "by_agent_tokens": {
+            "codex": 29228906
+          }
         },
         {
           "day": "2026-08-06",
           "cost": 1.3921,
-          "tokens": 49254666
+          "tokens": 49254666,
+          "by_agent": {
+            "codex": 1.3921
+          },
+          "by_agent_tokens": {
+            "codex": 49254666
+          }
         },
         {
           "day": "2026-08-08",
           "cost": 17.7876,
-          "tokens": 204757584
+          "tokens": 204757584,
+          "by_agent": {
+            "antigravity": 14.17,
+            "codex": 3.6176
+          },
+          "by_agent_tokens": {
+            "antigravity": 111771357,
+            "codex": 92986227
+          }
         },
         {
           "day": "2026-08-09",
           "cost": 0.3687,
-          "tokens": 13398151
+          "tokens": 13398151,
+          "by_agent": {
+            "codex": 0.3687
+          },
+          "by_agent_tokens": {
+            "codex": 13398151
+          }
         },
         {
           "day": "2026-08-10",
           "cost": 4.137,
-          "tokens": 105491089
+          "tokens": 105491089,
+          "by_agent": {
+            "antigravity": 3.6559,
+            "codex": 0.4811
+          },
+          "by_agent_tokens": {
+            "antigravity": 32224290,
+            "codex": 73266799
+          }
         },
         {
           "day": "2026-08-13",
           "cost": 0.4708,
-          "tokens": 15890337
+          "tokens": 15890337,
+          "by_agent": {
+            "codex": 0.4708
+          },
+          "by_agent_tokens": {
+            "codex": 15890337
+          }
         },
         {
           "day": "2026-08-14",
           "cost": 0.3609,
-          "tokens": 2173772
+          "tokens": 2173772,
+          "by_agent": {
+            "antigravity": 0.3609
+          },
+          "by_agent_tokens": {
+            "antigravity": 2173772
+          }
         },
         {
           "day": "2026-08-15",
           "cost": 2.1135,
-          "tokens": 66205579
+          "tokens": 66205579,
+          "by_agent": {
+            "codex": 2.1135
+          },
+          "by_agent_tokens": {
+            "codex": 66205579
+          }
         },
         {
           "day": "2026-08-16",
           "cost": 2.9215,
-          "tokens": 40873651
+          "tokens": 40873651,
+          "by_agent": {
+            "codex": 2.9215
+          },
+          "by_agent_tokens": {
+            "codex": 40873651
+          }
         },
         {
           "day": "2026-08-17",
           "cost": 0.1448,
-          "tokens": 4670380
+          "tokens": 4670380,
+          "by_agent": {
+            "codex": 0.1448
+          },
+          "by_agent_tokens": {
+            "codex": 4670380
+          }
         },
         {
           "day": "2026-08-20",
           "cost": 18.64,
-          "tokens": 41615372
+          "tokens": 41615372,
+          "by_agent": {
+            "codex": 18.64
+          },
+          "by_agent_tokens": {
+            "codex": 41615372
+          }
         },
         {
           "day": "2026-08-21",
           "cost": 4.1614,
-          "tokens": 6788090
+          "tokens": 6788090,
+          "by_agent": {
+            "codex": 4.1614
+          },
+          "by_agent_tokens": {
+            "codex": 6788090
+          }
         },
         {
           "day": "2026-08-22",
           "cost": 6.7583,
-          "tokens": 161235046
+          "tokens": 161235046,
+          "by_agent": {
+            "antigravity": 3.3566,
+            "codex": 3.4016
+          },
+          "by_agent_tokens": {
+            "antigravity": 29426359,
+            "codex": 131808687
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 25.1839,
-          "tokens": 101721391
+          "tokens": 101721391,
+          "by_agent": {
+            "antigravity": 0.212,
+            "codex": 24.9719
+          },
+          "by_agent_tokens": {
+            "antigravity": 1308869,
+            "codex": 100412522
+          }
         },
         {
           "day": "2026-08-24",
           "cost": 0.013,
-          "tokens": 983899
+          "tokens": 983899,
+          "by_agent": {
+            "codex": 0.013
+          },
+          "by_agent_tokens": {
+            "codex": 983899
+          }
         },
         {
           "day": "2026-08-26",
           "cost": 11.3609,
-          "tokens": 22899119
+          "tokens": 22899119,
+          "by_agent": {
+            "codex": 11.3609
+          },
+          "by_agent_tokens": {
+            "codex": 22899119
+          }
         },
         {
           "day": "2026-08-28",
           "cost": 5.5789,
-          "tokens": 26033306
+          "tokens": 26033306,
+          "by_agent": {
+            "antigravity": 2.2334,
+            "codex": 3.3455
+          },
+          "by_agent_tokens": {
+            "antigravity": 20467167,
+            "codex": 5566139
+          }
         },
         {
           "day": "2026-09-02",
           "cost": 1.1856,
-          "tokens": 47700224
+          "tokens": 47700224,
+          "by_agent": {
+            "codex": 1.1856
+          },
+          "by_agent_tokens": {
+            "codex": 47700224
+          }
         },
         {
           "day": "2026-09-03",
           "cost": 2.3151,
-          "tokens": 90046971
+          "tokens": 90046971,
+          "by_agent": {
+            "codex": 2.3151
+          },
+          "by_agent_tokens": {
+            "codex": 90046971
+          }
         },
         {
           "day": "2026-09-05",
           "cost": 0.8577,
-          "tokens": 90024680
+          "tokens": 90024680,
+          "by_agent": {
+            "codex": 0.8577
+          },
+          "by_agent_tokens": {
+            "codex": 90024680
+          }
         },
         {
           "day": "2026-09-13",
           "cost": 3.4196,
-          "tokens": 36847699
+          "tokens": 36847699,
+          "by_agent": {
+            "codex": 3.4196
+          },
+          "by_agent_tokens": {
+            "codex": 36847699
+          }
         },
         {
           "day": "2026-09-14",
           "cost": 1.2933,
-          "tokens": 6520115
+          "tokens": 6520115,
+          "by_agent": {
+            "antigravity": 1.2933
+          },
+          "by_agent_tokens": {
+            "antigravity": 6520115
+          }
         },
         {
           "day": "2026-09-17",
           "cost": 13.4451,
-          "tokens": 40486795
+          "tokens": 40486795,
+          "by_agent": {
+            "antigravity": 2.5644,
+            "codex": 10.8807
+          },
+          "by_agent_tokens": {
+            "antigravity": 10281647,
+            "codex": 30205148
+          }
         },
         {
           "day": "2026-09-18",
           "cost": 1.053,
-          "tokens": 40339776
+          "tokens": 40339776,
+          "by_agent": {
+            "codex": 1.053
+          },
+          "by_agent_tokens": {
+            "codex": 40339776
+          }
         },
         {
           "day": "2026-09-19",
           "cost": 1.2732,
-          "tokens": 48391818
+          "tokens": 48391818,
+          "by_agent": {
+            "codex": 1.2732
+          },
+          "by_agent_tokens": {
+            "codex": 48391818
+          }
         },
         {
           "day": "2026-09-20",
           "cost": 1.3916,
-          "tokens": 53745063
+          "tokens": 53745063,
+          "by_agent": {
+            "codex": 1.3916
+          },
+          "by_agent_tokens": {
+            "codex": 53745063
+          }
         },
         {
           "day": "2026-09-21",
           "cost": 0.4479,
-          "tokens": 15413574
+          "tokens": 15413574,
+          "by_agent": {
+            "codex": 0.4479
+          },
+          "by_agent_tokens": {
+            "codex": 15413574
+          }
         },
         {
           "day": "2026-09-22",
           "cost": 3.1072,
-          "tokens": 106426798
+          "tokens": 106426798,
+          "by_agent": {
+            "codex": 3.1072
+          },
+          "by_agent_tokens": {
+            "codex": 106426798
+          }
         },
         {
           "day": "2026-09-23",
           "cost": 3.0588,
-          "tokens": 225807819
+          "tokens": 225807819,
+          "by_agent": {
+            "codex": 3.0588
+          },
+          "by_agent_tokens": {
+            "codex": 225807819
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 23.2002,
-          "tokens": 249949818
+          "tokens": 249949818,
+          "by_agent": {
+            "antigravity": 21.6462,
+            "codex": 1.554
+          },
+          "by_agent_tokens": {
+            "antigravity": 133249927,
+            "codex": 116699891
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 25.2276,
-          "tokens": 108279493
+          "tokens": 108279493,
+          "by_agent": {
+            "claude": 0.4733,
+            "codex": 24.7543
+          },
+          "by_agent_tokens": {
+            "claude": 461756,
+            "codex": 107817737
+          }
         },
         {
           "day": "2026-09-27",
           "cost": 12.5131,
-          "tokens": 49708082
+          "tokens": 49708082,
+          "by_agent": {
+            "antigravity": 0.1614,
+            "claude": 1.7645,
+            "codex": 10.5872
+          },
+          "by_agent_tokens": {
+            "antigravity": 427397,
+            "claude": 4976671,
+            "codex": 44304014
+          }
         },
         {
           "day": "2026-09-28",
           "cost": 9.7634,
-          "tokens": 20954073
+          "tokens": 20954073,
+          "by_agent": {
+            "antigravity": 0.388,
+            "claude": 9.3755
+          },
+          "by_agent_tokens": {
+            "antigravity": 2203125,
+            "claude": 18750948
+          }
         },
         {
           "day": "2026-09-29",
           "cost": 64.7908,
-          "tokens": 191868143
+          "tokens": 191868143,
+          "by_agent": {
+            "claude": 60.3543,
+            "codex": 4.4366
+          },
+          "by_agent_tokens": {
+            "claude": 172676384,
+            "codex": 19191759
+          }
         },
         {
           "day": "2026-09-30",
           "cost": 62.1669,
-          "tokens": 254900030
+          "tokens": 254900030,
+          "by_agent": {
+            "antigravity": 13.2433,
+            "claude": 38.0092,
+            "codex": 10.9144
+          },
+          "by_agent_tokens": {
+            "antigravity": 98112248,
+            "claude": 104353030,
+            "codex": 52434752
+          }
         },
         {
           "day": "2026-10-01",
           "cost": 54.4967,
-          "tokens": 312239938
+          "tokens": 312239938,
+          "by_agent": {
+            "antigravity": 28.0716,
+            "claude": 21.2477,
+            "codex": 5.1774
+          },
+          "by_agent_tokens": {
+            "antigravity": 206290948,
+            "claude": 65680230,
+            "codex": 40268760
+          }
         },
         {
           "day": "2026-10-02",
           "cost": 37.2886,
-          "tokens": 137250491
+          "tokens": 137250491,
+          "by_agent": {
+            "antigravity": 13.1289,
+            "claude": 23.949,
+            "codex": 0.2107
+          },
+          "by_agent_tokens": {
+            "antigravity": 104767598,
+            "claude": 31290052,
+            "codex": 1192841
+          }
         },
         {
           "day": "2026-10-03",
           "cost": 18.8828,
-          "tokens": 59453051
+          "tokens": 59453051,
+          "by_agent": {
+            "claude": 15.1499,
+            "codex": 3.7329
+          },
+          "by_agent_tokens": {
+            "claude": 33647552,
+            "codex": 25805499
+          }
         },
         {
           "day": "2026-10-04",
           "cost": 17.9636,
-          "tokens": 55410966
+          "tokens": 55410966,
+          "by_agent": {
+            "antigravity": 1.5107,
+            "claude": 16.4529
+          },
+          "by_agent_tokens": {
+            "antigravity": 10337803,
+            "claude": 45073163
+          }
         },
         {
           "day": "2026-10-05",
           "cost": 82.6732,
-          "tokens": 339802619
+          "tokens": 339802619,
+          "by_agent": {
+            "antigravity": 22.8108,
+            "claude": 59.8624
+          },
+          "by_agent_tokens": {
+            "antigravity": 173436573,
+            "claude": 166366046
+          }
         },
         {
           "day": "2026-10-06",
           "cost": 37.6061,
-          "tokens": 265751912
+          "tokens": 265751912,
+          "by_agent": {
+            "antigravity": 4.8716,
+            "claude": 30.8694,
+            "codex": 1.8652
+          },
+          "by_agent_tokens": {
+            "antigravity": 34346725,
+            "claude": 80260795,
+            "codex": 151144392
+          }
         },
         {
           "day": "2026-10-07",
           "cost": 44.485,
-          "tokens": 217537876
+          "tokens": 217537876,
+          "by_agent": {
+            "claude": 43.4693,
+            "codex": 1.0157
+          },
+          "by_agent_tokens": {
+            "claude": 135086768,
+            "codex": 82451108
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 4.8905,
-          "tokens": 8329039
+          "tokens": 8329039,
+          "by_agent": {
+            "claude": 4.8905
+          },
+          "by_agent_tokens": {
+            "claude": 8329039
+          }
         },
         {
           "day": "2026-10-12",
           "cost": 2.3944,
-          "tokens": 199320025
+          "tokens": 199320025,
+          "by_agent": {
+            "codex": 2.3944
+          },
+          "by_agent_tokens": {
+            "codex": 199320025
+          }
         },
         {
           "day": "2026-10-13",
           "cost": 8.1217,
-          "tokens": 64909711
+          "tokens": 64909711,
+          "by_agent": {
+            "claude": 7.5938,
+            "codex": 0.528
+          },
+          "by_agent_tokens": {
+            "claude": 24685304,
+            "codex": 40224407
+          }
         },
         {
           "day": "2026-10-14",
           "cost": 0.8256,
-          "tokens": 1616026
+          "tokens": 1616026,
+          "by_agent": {
+            "claude": 0.8256
+          },
+          "by_agent_tokens": {
+            "claude": 1616026
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 0.6769,
-          "tokens": 4139082
+          "tokens": 4139082,
+          "by_agent": {
+            "codex": 0.6769
+          },
+          "by_agent_tokens": {
+            "codex": 4139082
+          }
         },
         {
           "day": "2026-10-19",
           "cost": 3.0408,
-          "tokens": 99728813
+          "tokens": 99728813,
+          "by_agent": {
+            "codex": 3.0408
+          },
+          "by_agent_tokens": {
+            "codex": 99728813
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 10.6372,
-          "tokens": 129152454
+          "tokens": 129152454,
+          "by_agent": {
+            "antigravity": 9.5482,
+            "codex": 1.089
+          },
+          "by_agent_tokens": {
+            "antigravity": 51974695,
+            "codex": 77177759
+          }
         },
         {
           "day": "2026-10-21",
-          "cost": 2.5461,
-          "tokens": 120584479
+          "cost": 2.5385,
+          "tokens": 120557748,
+          "by_agent": {
+            "claude": 1.0342,
+            "codex": 1.5043
+          },
+          "by_agent_tokens": {
+            "claude": 3584934,
+            "codex": 116972814
+          }
         },
         {
           "day": "2026-10-22",
-          "cost": 70.4329,
-          "tokens": 209904483
+          "cost": 70.4242,
+          "tokens": 209867448,
+          "by_agent": {
+            "claude": 58.2734,
+            "codex": 12.1509
+          },
+          "by_agent_tokens": {
+            "claude": 121938696,
+            "codex": 87928752
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 26.5914,
-          "tokens": 94916701
+          "cost": 26.5898,
+          "tokens": 94911796,
+          "by_agent": {
+            "claude": 26.5898
+          },
+          "by_agent_tokens": {
+            "claude": 94911796
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 30.1437,
+          "tokens": 107463376,
+          "by_agent": {
+            "claude": 30.1437
+          },
+          "by_agent_tokens": {
+            "claude": 107463376
+          }
         }
       ],
       "by_branch": [
         {
           "branch": "main",
-          "cost": 600.5536,
+          "cost": 602.4283,
           "sessions": 91
+        },
+        {
+          "branch": "feat/watch-moment-ui",
+          "cost": 136.3019,
+          "sessions": 4
         },
         {
           "branch": "claude/redesign-on-main",
@@ -934,11 +1551,6 @@
         {
           "branch": "claude/practical-franklin-qj591w",
           "cost": 115.7481,
-          "sessions": 4
-        },
-        {
-          "branch": "feat/watch-moment-ui",
-          "cost": 106.1893,
           "sessions": 4
         },
         {
@@ -1088,7 +1700,7 @@
         },
         {
           "branch": "codex/google-site-name",
-          "cost": 1.425,
+          "cost": 1.4381,
           "sessions": 2
         },
         {
@@ -1203,25 +1815,25 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-21T18:35:01Z",
-          "ended": "2026-10-23T13:18:14Z",
+          "ended": "2026-10-24T11:51:00Z",
           "cwd": "/Users/alice/Documents/GitHub/tcf-canada",
           "branch": "codex/google-site-name",
           "models": [
             "claude-opus-5-5",
             "claude-haiku-5-5"
           ],
-          "cost": 0.6649,
+          "cost": 0.678,
           "tokens": {
             "input": 15,
-            "output": 5523,
-            "cache_read": 2515109,
-            "cache_write": 24448,
-            "thinking": 1756,
-            "total": 2545095
+            "output": 5989,
+            "cache_read": 2549663,
+            "cache_write": 26954,
+            "thinking": 1943,
+            "total": 2582621
           },
-          "share": 0.005199,
+          "share": 0.005059,
           "attribution": "split",
-          "subagents": 14,
+          "subagents": 16,
           "title": "Session title 2 (redacted)"
         },
         {
@@ -1581,20 +2193,20 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-05T07:13:54Z",
-          "ended": "2026-10-23T13:27:08Z",
+          "ended": "2026-10-24T06:58:33Z",
           "cwd": "/Users/alice/Documents/GitHub/FocusApp",
-          "branch": "main",
+          "branch": "feat/watch-moment-ui",
           "models": [
             "claude-opus-5-5"
           ],
-          "cost": 118.5914,
+          "cost": 148.7041,
           "tokens": {
-            "input": 1892,
-            "output": 573962,
-            "cache_read": 364761627,
-            "cache_write": 4269036,
-            "thinking": 120841,
-            "total": 369606517
+            "input": 2182,
+            "output": 684301,
+            "cache_read": 471180560,
+            "cache_write": 5096654,
+            "thinking": 148327,
+            "total": 476963697
           },
           "share": 1.0,
           "attribution": "dominant",
@@ -4185,17 +4797,17 @@
           "models": [
             "gemini-default"
           ],
-          "cost": 3.0177,
+          "cost": 4.0885,
           "tokens": {
-            "input": 888320,
-            "output": 52807,
-            "cache_read": 8066418,
+            "input": 1203530,
+            "output": 71545,
+            "cache_read": 10928695,
             "cache_write": 0,
-            "thinking": 31373,
-            "total": 9007545
+            "thinking": 42506,
+            "total": 12203770
           },
-          "share": 0.738095,
-          "attribution": "split",
+          "share": 1.0,
+          "attribution": "dominant",
           "subagents": 0,
           "title": "Session title 91 (redacted)"
         },
@@ -4315,16 +4927,16 @@
             "gemini-default",
             "gemini-pro-default"
           ],
-          "cost": 17.7877,
+          "cost": 18.5917,
           "tokens": {
-            "input": 4971309,
-            "output": 246314,
-            "cache_read": 53864927,
+            "input": 5196001,
+            "output": 257447,
+            "cache_read": 56299500,
             "cache_write": 0,
-            "thinking": 120538,
-            "total": 59082550
+            "thinking": 125986,
+            "total": 61752948
           },
-          "share": 0.722449,
+          "share": 0.755102,
           "attribution": "split",
           "subagents": 0,
           "title": "Session title 96 (redacted)"
@@ -5026,30 +5638,30 @@
         "/Users/alice/Documents/GitHub/tcf-canada"
       ],
       "path_missing": false,
-      "cost": 1035.3287,
+      "cost": 1036.4599,
       "tokens": {
-        "input": 132758110,
-        "output": 36113240,
-        "cache_read": 5183427399,
-        "cache_write": 41359878,
-        "thinking": 21627518,
-        "total": 5393658627
+        "input": 132804976,
+        "output": 36149898,
+        "cache_read": 5186391659,
+        "cache_write": 41547765,
+        "thinking": 21641559,
+        "total": 5396894298
       },
-      "sessions": 192,
+      "sessions": 193,
       "first_active": "2026-10-06",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 591.9483,
+          "cost": 592.9314,
           "tokens": {
-            "input": 14529,
-            "output": 13920957,
-            "cache_read": 1985853508,
-            "cache_write": 41359878,
-            "thinking": 9916349,
-            "total": 2041148872
+            "input": 14589,
+            "output": 13955893,
+            "cache_read": 1988445032,
+            "cache_write": 41547765,
+            "thinking": 9930382,
+            "total": 2043963279
           },
           "sessions": 15
         },
@@ -5070,30 +5682,30 @@
         {
           "agent": "codex",
           "label": "Codex CLI",
-          "cost": 52.3332,
+          "cost": 52.4813,
           "tokens": {
-            "input": 8046428,
-            "output": 985170,
-            "cache_read": 478384000,
+            "input": 8093234,
+            "output": 986892,
+            "cache_read": 478756736,
             "cache_write": 0,
-            "thinking": 566884,
-            "total": 487415598
+            "thinking": 566892,
+            "total": 487836862
           },
-          "sessions": 6
+          "sessions": 7
         }
       ],
       "by_model": [
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 554.1479,
+          "cost": 554.9278,
           "tokens": {
-            "input": 9770,
-            "output": 2705737,
-            "cache_read": 1759258503,
-            "cache_write": 18517931,
-            "thinking": 500638,
-            "total": 1780491941
+            "input": 9773,
+            "output": 2707527,
+            "cache_read": 1759064275,
+            "cache_write": 18615793,
+            "thinking": 500998,
+            "total": 1780397368
           },
           "estimated": false
         },
@@ -5114,28 +5726,28 @@
         {
           "model": "gpt-6.1-sol",
           "agent": "codex",
-          "cost": 48.5285,
+          "cost": 48.6766,
           "tokens": {
-            "input": 4541913,
-            "output": 490084,
-            "cache_read": 345438208,
+            "input": 4588719,
+            "output": 491806,
+            "cache_read": 345810944,
             "cache_write": 0,
-            "thinking": 185052,
-            "total": 350470205
+            "thinking": 185060,
+            "total": 350891469
           },
           "estimated": false
         },
         {
           "model": "claude-haiku-5-5",
           "agent": "claude",
-          "cost": 37.3758,
+          "cost": 37.579,
           "tokens": {
-            "input": 4742,
-            "output": 11210578,
-            "cache_read": 226263443,
-            "cache_write": 22737798,
-            "thinking": 9414833,
-            "total": 260216561
+            "input": 4798,
+            "output": 11243724,
+            "cache_read": 229049195,
+            "cache_write": 22827824,
+            "thinking": 9428506,
+            "total": 263125541
           },
           "estimated": false
         },
@@ -5242,87 +5854,244 @@
         {
           "day": "2026-10-06",
           "cost": 46.4863,
-          "tokens": 209092512
+          "tokens": 209092512,
+          "by_agent": {
+            "antigravity": 16.3569,
+            "claude": 30.1294
+          },
+          "by_agent_tokens": {
+            "antigravity": 123270498,
+            "claude": 85822014
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 13.6303,
-          "tokens": 72665624
+          "tokens": 72665624,
+          "by_agent": {
+            "antigravity": 8.4784,
+            "claude": 5.1519
+          },
+          "by_agent_tokens": {
+            "antigravity": 63773964,
+            "claude": 8891660
+          }
         },
         {
           "day": "2026-10-09",
           "cost": 12.0011,
-          "tokens": 67558393
+          "tokens": 67558393,
+          "by_agent": {
+            "antigravity": 6.9629,
+            "claude": 5.0383
+          },
+          "by_agent_tokens": {
+            "antigravity": 57914312,
+            "claude": 9644081
+          }
         },
         {
           "day": "2026-10-10",
           "cost": 105.9753,
-          "tokens": 508024111
+          "tokens": 508024111,
+          "by_agent": {
+            "antigravity": 62.7446,
+            "claude": 43.2307
+          },
+          "by_agent_tokens": {
+            "antigravity": 378534996,
+            "claude": 129489115
+          }
         },
         {
           "day": "2026-10-11",
           "cost": 95.7627,
-          "tokens": 531699424
+          "tokens": 531699424,
+          "by_agent": {
+            "antigravity": 53.7684,
+            "claude": 41.9943
+          },
+          "by_agent_tokens": {
+            "antigravity": 392424578,
+            "claude": 139274846
+          }
         },
         {
           "day": "2026-10-12",
           "cost": 128.7452,
-          "tokens": 682587796
+          "tokens": 682587796,
+          "by_agent": {
+            "antigravity": 34.7028,
+            "claude": 78.7485,
+            "codex": 15.2939
+          },
+          "by_agent_tokens": {
+            "antigravity": 253284273,
+            "claude": 312328950,
+            "codex": 116974573
+          }
         },
         {
           "day": "2026-10-13",
           "cost": 70.6882,
-          "tokens": 364094246
+          "tokens": 364094246,
+          "by_agent": {
+            "antigravity": 16.3397,
+            "claude": 37.8498,
+            "codex": 16.4987
+          },
+          "by_agent_tokens": {
+            "antigravity": 124278461,
+            "claude": 122135558,
+            "codex": 117680227
+          }
         },
         {
           "day": "2026-10-14",
           "cost": 48.0294,
-          "tokens": 265051689
+          "tokens": 265051689,
+          "by_agent": {
+            "antigravity": 20.6381,
+            "claude": 26.2798,
+            "codex": 1.1115
+          },
+          "by_agent_tokens": {
+            "antigravity": 167422526,
+            "claude": 83556171,
+            "codex": 14072992
+          }
         },
         {
           "day": "2026-10-15",
           "cost": 65.2535,
-          "tokens": 267686596
+          "tokens": 267686596,
+          "by_agent": {
+            "antigravity": 5.2324,
+            "claude": 60.0211
+          },
+          "by_agent_tokens": {
+            "antigravity": 42617345,
+            "claude": 225069251
+          }
         },
         {
           "day": "2026-10-16",
           "cost": 28.9672,
-          "tokens": 133089634
+          "tokens": 133089634,
+          "by_agent": {
+            "antigravity": 8.0135,
+            "claude": 20.9537
+          },
+          "by_agent_tokens": {
+            "antigravity": 61297467,
+            "claude": 71792167
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 152.4041,
-          "tokens": 894095524
+          "tokens": 894095524,
+          "by_agent": {
+            "antigravity": 62.9867,
+            "claude": 87.5211,
+            "codex": 1.8962
+          },
+          "by_agent_tokens": {
+            "antigravity": 535710116,
+            "claude": 357568366,
+            "codex": 817042
+          }
         },
         {
           "day": "2026-10-18",
           "cost": 58.5485,
-          "tokens": 247151039
+          "tokens": 247151039,
+          "by_agent": {
+            "antigravity": 15.7575,
+            "claude": 42.7909
+          },
+          "by_agent_tokens": {
+            "antigravity": 130249645,
+            "claude": 116901394
+          }
         },
         {
           "day": "2026-10-19",
           "cost": 50.6386,
-          "tokens": 348453014
+          "tokens": 348453014,
+          "by_agent": {
+            "antigravity": 39.5134,
+            "claude": 9.7333,
+            "codex": 1.3919
+          },
+          "by_agent_tokens": {
+            "antigravity": 221793192,
+            "claude": 23492207,
+            "codex": 103167615
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 70.4836,
-          "tokens": 454506729
+          "tokens": 454506729,
+          "by_agent": {
+            "antigravity": 31.8301,
+            "claude": 22.5126,
+            "codex": 16.1409
+          },
+          "by_agent_tokens": {
+            "antigravity": 252154017,
+            "claude": 67649563,
+            "codex": 134703149
+          }
         },
         {
           "day": "2026-10-21",
-          "cost": 58.488,
-          "tokens": 231202125
+          "cost": 57.9181,
+          "tokens": 229197399,
+          "by_agent": {
+            "antigravity": 7.7218,
+            "claude": 50.1963
+          },
+          "by_agent_tokens": {
+            "antigravity": 60368767,
+            "claude": 168828632
+          }
         },
         {
           "day": "2026-10-22",
-          "cost": 24.5603,
-          "tokens": 103060952
+          "cost": 23.9107,
+          "tokens": 100283407,
+          "by_agent": {
+            "claude": 23.9107
+          },
+          "by_agent_tokens": {
+            "claude": 100283407
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 4.6664,
-          "tokens": 13639218
+          "cost": 4.5405,
+          "tokens": 13271212,
+          "by_agent": {
+            "claude": 4.5405
+          },
+          "by_agent_tokens": {
+            "claude": 13271212
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 2.4766,
+          "tokens": 8385946,
+          "by_agent": {
+            "claude": 2.3285,
+            "codex": 0.1481
+          },
+          "by_agent_tokens": {
+            "claude": 7964682,
+            "codex": 421264
+          }
         }
       ],
       "by_branch": [
@@ -5333,8 +6102,8 @@
         },
         {
           "branch": "codex/google-site-name",
-          "cost": 128.946,
-          "sessions": 8
+          "cost": 130.0772,
+          "sessions": 9
         },
         {
           "branch": "HEAD",
@@ -5884,6 +6653,31 @@
       ],
       "sessions_detail": [
         {
+          "id": "01a16c41-879e-7623-81b5-a985acfe9055",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-24T04:53:28Z",
+          "ended": "2026-10-24T05:01:08Z",
+          "cwd": "/Users/alice/Documents/GitHub/tcf-canada",
+          "branch": "codex/google-site-name",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.1481,
+          "tokens": {
+            "input": 46806,
+            "output": 1722,
+            "cache_read": 372736,
+            "cache_write": 0,
+            "thinking": 8,
+            "total": 421264
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        },
+        {
           "id": "03204c36-caa5-415c-971e-e4cc44f95ce6",
           "agent": "claude",
           "label": "Claude Code",
@@ -5963,25 +6757,25 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-21T18:35:01Z",
-          "ended": "2026-10-23T13:18:14Z",
+          "ended": "2026-10-24T11:51:00Z",
           "cwd": "/Users/alice/Documents/GitHub/tcf-canada",
           "branch": "codex/google-site-name",
           "models": [
             "claude-opus-5-5",
             "claude-haiku-5-5"
           ],
-          "cost": 49.8653,
+          "cost": 50.8484,
           "tokens": {
-            "input": 1091,
-            "output": 414243,
-            "cache_read": 188633177,
-            "cache_write": 1833622,
-            "thinking": 131682,
-            "total": 190882133
+            "input": 1151,
+            "output": 449179,
+            "cache_read": 191224701,
+            "cache_write": 2021509,
+            "thinking": 145715,
+            "total": 193696540
           },
-          "share": 0.389948,
+          "share": 0.379427,
           "attribution": "split",
-          "subagents": 14,
+          "subagents": 16,
           "title": "Session title 126 (redacted)"
         },
         {
@@ -11035,152 +11829,354 @@
         {
           "day": "2026-07-01",
           "cost": 12.4783,
-          "tokens": 39087897
+          "tokens": 39087897,
+          "by_agent": {
+            "antigravity": 12.4783
+          },
+          "by_agent_tokens": {
+            "antigravity": 39087897
+          }
         },
         {
           "day": "2026-07-02",
           "cost": 33.6487,
-          "tokens": 92277771
+          "tokens": 92277771,
+          "by_agent": {
+            "antigravity": 33.6487
+          },
+          "by_agent_tokens": {
+            "antigravity": 92277771
+          }
         },
         {
           "day": "2026-07-03",
           "cost": 10.6248,
-          "tokens": 45585470
+          "tokens": 45585470,
+          "by_agent": {
+            "antigravity": 10.6248
+          },
+          "by_agent_tokens": {
+            "antigravity": 45585470
+          }
         },
         {
           "day": "2026-07-06",
           "cost": 4.0949,
-          "tokens": 46131059
+          "tokens": 46131059,
+          "by_agent": {
+            "antigravity": 4.0949
+          },
+          "by_agent_tokens": {
+            "antigravity": 46131059
+          }
         },
         {
           "day": "2026-07-08",
           "cost": 21.9219,
-          "tokens": 55765621
+          "tokens": 55765621,
+          "by_agent": {
+            "antigravity": 2.6105,
+            "codex": 19.3114
+          },
+          "by_agent_tokens": {
+            "antigravity": 31074749,
+            "codex": 24690872
+          }
         },
         {
           "day": "2026-07-09",
           "cost": 14.405,
-          "tokens": 15163606
+          "tokens": 15163606,
+          "by_agent": {
+            "codex": 14.405
+          },
+          "by_agent_tokens": {
+            "codex": 15163606
+          }
         },
         {
           "day": "2026-07-10",
           "cost": 11.4428,
-          "tokens": 126293667
+          "tokens": 126293667,
+          "by_agent": {
+            "codex": 11.4428
+          },
+          "by_agent_tokens": {
+            "codex": 126293667
+          }
         },
         {
           "day": "2026-07-11",
           "cost": 8.5154,
-          "tokens": 23687112
+          "tokens": 23687112,
+          "by_agent": {
+            "codex": 8.5154
+          },
+          "by_agent_tokens": {
+            "codex": 23687112
+          }
         },
         {
           "day": "2026-07-12",
           "cost": 9.0645,
-          "tokens": 51989094
+          "tokens": 51989094,
+          "by_agent": {
+            "antigravity": 2.2337,
+            "codex": 6.8308
+          },
+          "by_agent_tokens": {
+            "antigravity": 23748881,
+            "codex": 28240213
+          }
         },
         {
           "day": "2026-08-30",
           "cost": 36.6284,
-          "tokens": 63819921
+          "tokens": 63819921,
+          "by_agent": {
+            "codex": 36.6284
+          },
+          "by_agent_tokens": {
+            "codex": 63819921
+          }
         },
         {
           "day": "2026-08-31",
           "cost": 18.6531,
-          "tokens": 36321430
+          "tokens": 36321430,
+          "by_agent": {
+            "codex": 18.6531
+          },
+          "by_agent_tokens": {
+            "codex": 36321430
+          }
         },
         {
           "day": "2026-09-01",
           "cost": 0.8561,
-          "tokens": 31957665
+          "tokens": 31957665,
+          "by_agent": {
+            "codex": 0.8561
+          },
+          "by_agent_tokens": {
+            "codex": 31957665
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 20.3952,
-          "tokens": 53990623
+          "tokens": 53990623,
+          "by_agent": {
+            "codex": 20.3952
+          },
+          "by_agent_tokens": {
+            "codex": 53990623
+          }
         },
         {
           "day": "2026-09-27",
           "cost": 14.5128,
-          "tokens": 118043647
+          "tokens": 118043647,
+          "by_agent": {
+            "antigravity": 14.5128
+          },
+          "by_agent_tokens": {
+            "antigravity": 118043647
+          }
         },
         {
           "day": "2026-09-28",
           "cost": 5.7005,
-          "tokens": 44290252
+          "tokens": 44290252,
+          "by_agent": {
+            "antigravity": 5.7005
+          },
+          "by_agent_tokens": {
+            "antigravity": 44290252
+          }
         },
         {
           "day": "2026-09-29",
           "cost": 0.7013,
-          "tokens": 4133536
+          "tokens": 4133536,
+          "by_agent": {
+            "antigravity": 0.7013
+          },
+          "by_agent_tokens": {
+            "antigravity": 4133536
+          }
         },
         {
           "day": "2026-09-30",
           "cost": 0.7764,
-          "tokens": 6555704
+          "tokens": 6555704,
+          "by_agent": {
+            "antigravity": 0.7764
+          },
+          "by_agent_tokens": {
+            "antigravity": 6555704
+          }
         },
         {
           "day": "2026-10-05",
           "cost": 35.4788,
-          "tokens": 202524003
+          "tokens": 202524003,
+          "by_agent": {
+            "antigravity": 14.0437,
+            "claude": 21.2184,
+            "codex": 0.2167
+          },
+          "by_agent_tokens": {
+            "antigravity": 123418788,
+            "claude": 64590463,
+            "codex": 14514752
+          }
         },
         {
           "day": "2026-10-06",
           "cost": 51.9976,
-          "tokens": 183767624
+          "tokens": 183767624,
+          "by_agent": {
+            "claude": 51.7249,
+            "codex": 0.2727
+          },
+          "by_agent_tokens": {
+            "claude": 166749127,
+            "codex": 17018497
+          }
         },
         {
           "day": "2026-10-07",
           "cost": 11.7063,
-          "tokens": 61100610
+          "tokens": 61100610,
+          "by_agent": {
+            "claude": 2.5302,
+            "codex": 9.1762
+          },
+          "by_agent_tokens": {
+            "claude": 1854993,
+            "codex": 59245617
+          }
         },
         {
           "day": "2026-10-08",
           "cost": 21.0512,
-          "tokens": 148851359
+          "tokens": 148851359,
+          "by_agent": {
+            "codex": 21.0512
+          },
+          "by_agent_tokens": {
+            "codex": 148851359
+          }
         },
         {
           "day": "2026-10-09",
           "cost": 9.28,
-          "tokens": 107923254
+          "tokens": 107923254,
+          "by_agent": {
+            "antigravity": 6.8738,
+            "codex": 2.4061
+          },
+          "by_agent_tokens": {
+            "antigravity": 57474272,
+            "codex": 50448982
+          }
         },
         {
           "day": "2026-10-10",
           "cost": 2.4655,
-          "tokens": 28994150
+          "tokens": 28994150,
+          "by_agent": {
+            "antigravity": 2.0956,
+            "codex": 0.3699
+          },
+          "by_agent_tokens": {
+            "antigravity": 15050987,
+            "codex": 13943163
+          }
         },
         {
           "day": "2026-10-11",
           "cost": 0.4109,
-          "tokens": 26361778
+          "tokens": 26361778,
+          "by_agent": {
+            "codex": 0.4109
+          },
+          "by_agent_tokens": {
+            "codex": 26361778
+          }
         },
         {
           "day": "2026-10-12",
           "cost": 0.261,
-          "tokens": 15847274
+          "tokens": 15847274,
+          "by_agent": {
+            "codex": 0.261
+          },
+          "by_agent_tokens": {
+            "codex": 15847274
+          }
         },
         {
           "day": "2026-10-15",
           "cost": 0.0059,
-          "tokens": 140799
+          "tokens": 140799,
+          "by_agent": {
+            "codex": 0.0059
+          },
+          "by_agent_tokens": {
+            "codex": 140799
+          }
         },
         {
           "day": "2026-10-16",
           "cost": 5.043,
-          "tokens": 38456974
+          "tokens": 38456974,
+          "by_agent": {
+            "antigravity": 3.1997,
+            "codex": 1.8433
+          },
+          "by_agent_tokens": {
+            "antigravity": 22151056,
+            "codex": 16305918
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 23.0874,
-          "tokens": 100538240
+          "tokens": 100538240,
+          "by_agent": {
+            "antigravity": 4.63,
+            "codex": 18.4574
+          },
+          "by_agent_tokens": {
+            "antigravity": 32231485,
+            "codex": 68306755
+          }
         },
         {
           "day": "2026-10-18",
           "cost": 35.2159,
-          "tokens": 106843749
+          "tokens": 106843749,
+          "by_agent": {
+            "antigravity": 1.7875,
+            "codex": 33.4283
+          },
+          "by_agent_tokens": {
+            "antigravity": 13481233,
+            "codex": 93362516
+          }
         },
         {
           "day": "2026-10-19",
           "cost": 1.6959,
-          "tokens": 12603688
+          "tokens": 12603688,
+          "by_agent": {
+            "codex": 1.6959
+          },
+          "by_agent_tokens": {
+            "codex": 12603688
+          }
         }
       ],
       "by_branch": [
@@ -12364,32 +13360,32 @@
         "/Users/alice/Documents/GitHub/gaokao/tmp/compat3_worktree"
       ],
       "path_missing": false,
-      "cost": 232.9322,
+      "cost": 298.1835,
       "tokens": {
-        "input": 19161551,
-        "output": 2816196,
-        "cache_read": 923631184,
-        "cache_write": 3079008,
-        "thinking": 1154906,
-        "total": 948687939
+        "input": 19162639,
+        "output": 3188711,
+        "cache_read": 1100319145,
+        "cache_write": 5886395,
+        "thinking": 1241847,
+        "total": 1128556890
       },
-      "sessions": 10,
+      "sessions": 12,
       "first_active": "2026-09-02",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 153.952,
+          "cost": 219.2034,
           "tokens": {
-            "input": 2296,
-            "output": 1056683,
-            "cache_read": 540885603,
-            "cache_write": 3079008,
-            "thinking": 272730,
-            "total": 545023590
+            "input": 3384,
+            "output": 1429198,
+            "cache_read": 717573564,
+            "cache_write": 5886395,
+            "thinking": 359671,
+            "total": 724892541
           },
-          "sessions": 1
+          "sessions": 3
         },
         {
           "agent": "codex",
@@ -12424,14 +13420,14 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 153.952,
+          "cost": 219.2034,
           "tokens": {
-            "input": 2296,
-            "output": 1056683,
-            "cache_read": 540885603,
-            "cache_write": 3079008,
-            "thinking": 272730,
-            "total": 545023590
+            "input": 3384,
+            "output": 1429198,
+            "cache_read": 717573564,
+            "cache_write": 5886395,
+            "thinking": 359671,
+            "total": 724892541
           },
           "estimated": false
         },
@@ -12524,74 +13520,165 @@
         {
           "day": "2026-09-02",
           "cost": 2.5658,
-          "tokens": 4921312
+          "tokens": 4921312,
+          "by_agent": {
+            "codex": 2.5658
+          },
+          "by_agent_tokens": {
+            "codex": 4921312
+          }
         },
         {
           "day": "2026-09-03",
           "cost": 0.7431,
-          "tokens": 4790180
+          "tokens": 4790180,
+          "by_agent": {
+            "antigravity": 0.7431
+          },
+          "by_agent_tokens": {
+            "antigravity": 4790180
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 1.5545,
-          "tokens": 27381199
+          "tokens": 27381199,
+          "by_agent": {
+            "antigravity": 1.2451,
+            "codex": 0.3094
+          },
+          "by_agent_tokens": {
+            "antigravity": 8521314,
+            "codex": 18859885
+          }
         },
         {
           "day": "2026-09-05",
           "cost": 0.6583,
-          "tokens": 4566006
+          "tokens": 4566006,
+          "by_agent": {
+            "antigravity": 0.6583
+          },
+          "by_agent_tokens": {
+            "antigravity": 4566006
+          }
         },
         {
           "day": "2026-09-06",
           "cost": 3.7593,
-          "tokens": 28585051
+          "tokens": 28585051,
+          "by_agent": {
+            "antigravity": 3.7593
+          },
+          "by_agent_tokens": {
+            "antigravity": 28585051
+          }
         },
         {
           "day": "2026-09-07",
           "cost": 12.7098,
-          "tokens": 104760193
+          "tokens": 104760193,
+          "by_agent": {
+            "antigravity": 12.7098
+          },
+          "by_agent_tokens": {
+            "antigravity": 104760193
+          }
         },
         {
           "day": "2026-09-08",
           "cost": 14.0159,
-          "tokens": 104437135
+          "tokens": 104437135,
+          "by_agent": {
+            "antigravity": 14.0159
+          },
+          "by_agent_tokens": {
+            "antigravity": 104437135
+          }
         },
         {
           "day": "2026-09-14",
           "cost": 0.6959,
-          "tokens": 27639711
+          "tokens": 27639711,
+          "by_agent": {
+            "codex": 0.6959
+          },
+          "by_agent_tokens": {
+            "codex": 27639711
+          }
         },
         {
           "day": "2026-09-15",
           "cost": 0.6563,
-          "tokens": 24712858
+          "tokens": 24712858,
+          "by_agent": {
+            "codex": 0.6563
+          },
+          "by_agent_tokens": {
+            "codex": 24712858
+          }
         },
         {
           "day": "2026-09-16",
           "cost": 36.5261,
-          "tokens": 62215259
+          "tokens": 62215259,
+          "by_agent": {
+            "codex": 36.5261
+          },
+          "by_agent_tokens": {
+            "codex": 62215259
+          }
         },
         {
           "day": "2026-09-17",
           "cost": 5.0952,
-          "tokens": 9655445
+          "tokens": 9655445,
+          "by_agent": {
+            "codex": 5.0952
+          },
+          "by_agent_tokens": {
+            "codex": 9655445
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 98.5239,
-          "tokens": 341261171
+          "tokens": 341261171,
+          "by_agent": {
+            "claude": 98.5239
+          },
+          "by_agent_tokens": {
+            "claude": 341261171
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 55.4281,
-          "tokens": 203762419
+          "cost": 104.5357,
+          "tokens": 351081065,
+          "by_agent": {
+            "claude": 104.5357
+          },
+          "by_agent_tokens": {
+            "claude": 351081065
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 16.1437,
+          "tokens": 32550305,
+          "by_agent": {
+            "claude": 16.1437
+          },
+          "by_agent_tokens": {
+            "claude": 32550305
+          }
         }
       ],
       "by_branch": [
         {
           "branch": "chore/cleanup-and-geometry-fixes",
-          "cost": 153.3915,
-          "sessions": 1
+          "cost": 218.6428,
+          "sessions": 3
         },
         {
           "branch": "product/math-rendering-v1",
@@ -12616,29 +13703,79 @@
       ],
       "sessions_detail": [
         {
-          "id": "3c624039-606a-438c-b2a2-95fc84bedd62",
+          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
           "agent": "claude",
           "label": "Claude Code",
-          "started": "2026-10-22T18:55:41Z",
-          "ended": "2026-10-23T14:12:15Z",
+          "started": "2026-10-24T06:53:35Z",
+          "ended": "2026-10-24T07:12:46Z",
           "cwd": "/Users/alice/Documents/GitHub/gaokao",
           "branch": "chore/cleanup-and-geometry-fixes",
           "models": [
             "claude-opus-5-5"
           ],
-          "cost": 153.952,
+          "cost": 5.0439,
           "tokens": {
-            "input": 2296,
-            "output": 1056683,
-            "cache_read": 540885603,
-            "cache_write": 3079008,
-            "thinking": 272730,
-            "total": 545023590
+            "input": 184,
+            "output": 42570,
+            "cache_read": 13142248,
+            "cache_write": 195416,
+            "thinking": 7906,
+            "total": 13380418
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "Session title 334 (redacted)"
+        },
+        {
+          "id": "cd82e2f4-2fde-415d-a20d-88037791d5c4",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-23T21:16:24Z",
+          "ended": "2026-10-24T03:07:20Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.6174,
+          "tokens": {
+            "input": 42,
+            "output": 7045,
+            "cache_read": 1013643,
+            "cache_write": 159195,
+            "thinking": 525,
+            "total": 1179925
           },
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 334 (redacted)"
+          "title": "Session title 335 (redacted)"
+        },
+        {
+          "id": "3c624039-606a-438c-b2a2-95fc84bedd62",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-22T18:55:41Z",
+          "ended": "2026-10-24T11:32:41Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 212.5421,
+          "tokens": {
+            "input": 3158,
+            "output": 1379583,
+            "cache_read": 703417673,
+            "cache_write": 5531784,
+            "thinking": 351240,
+            "total": 710332198
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 336 (redacted)"
         },
         {
           "id": "01a0acd5-ce21-77d1-930a-ffc349d41f86",
@@ -12740,7 +13877,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 335 (redacted)"
+          "title": "Session title 337 (redacted)"
         },
         {
           "id": "8e4d43bb-2c5a-4771-94b1-2f94beb88942",
@@ -12765,7 +13902,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 336 (redacted)"
+          "title": "Session title 338 (redacted)"
         },
         {
           "id": "d42677b8-e98b-4604-a9d0-512a94d35680",
@@ -12790,7 +13927,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 337 (redacted)"
+          "title": "Session title 339 (redacted)"
         },
         {
           "id": "01a06b2a-190f-7342-8858-c5e08a6797bf",
@@ -12841,7 +13978,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 338 (redacted)"
+          "title": "Session title 340 (redacted)"
         },
         {
           "id": "01a062c9-5a3c-7f42-87bc-c7b6ac398b8e",
@@ -12895,37 +14032,39 @@
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/30637786-bc63-4425-aace-fc3b00d5f0a7/scratchpad/ttsfix",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/d796bdd2-bfc1-457c-b1e8-f3c86472c575/scratchpad/mobile",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/deploy",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/fe-mt",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/fe-rp",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/fe-seo",
         "/private/tmp/gift-front-review",
         "/private/tmp/reussir-error-sync-web",
         "/private/tmp/reussir-release-validation",
         "/private/tmp/reussir-sync-pr-web"
       ],
       "path_missing": false,
-      "cost": 226.4401,
+      "cost": 245.8352,
       "tokens": {
-        "input": 18068131,
-        "output": 3285800,
-        "cache_read": 983466922,
-        "cache_write": 4629994,
-        "thinking": 1616410,
-        "total": 1009450847
+        "input": 18069277,
+        "output": 3376543,
+        "cache_read": 1013405474,
+        "cache_write": 5351020,
+        "thinking": 1649186,
+        "total": 1040202314
       },
       "sessions": 37,
       "first_active": "2026-10-20",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 141.8376,
+          "cost": 161.2326,
           "tokens": {
-            "input": 7232,
-            "output": 723292,
-            "cache_read": 304237393,
-            "cache_write": 4629994,
-            "thinking": 219541,
-            "total": 309597911
+            "input": 8378,
+            "output": 814035,
+            "cache_read": 334175945,
+            "cache_write": 5351020,
+            "thinking": 252317,
+            "total": 340349378
           },
           "sessions": 6
         },
@@ -12962,28 +14101,28 @@
         {
           "model": "claude-fable-5-1",
           "agent": "claude",
-          "cost": 76.3437,
+          "cost": 92.8179,
           "tokens": {
-            "input": 5987,
-            "output": 284781,
-            "cache_read": 65892986,
-            "cache_write": 2278579,
-            "thinking": 91716,
-            "total": 68462333
+            "input": 7033,
+            "output": 326038,
+            "cache_read": 85844420,
+            "cache_write": 2749228,
+            "thinking": 106003,
+            "total": 88926719
           },
           "estimated": false
         },
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 64.5936,
+          "cost": 67.2831,
           "tokens": {
-            "input": 978,
-            "output": 246659,
-            "cache_read": 224670607,
-            "cache_write": 1840300,
-            "thinking": 38327,
-            "total": 226758544
+            "input": 1014,
+            "output": 256410,
+            "cache_read": 231426700,
+            "cache_write": 1983192,
+            "thinking": 39965,
+            "total": 233667316
           },
           "estimated": false
         },
@@ -13046,14 +14185,14 @@
         {
           "model": "claude-haiku-5-5",
           "agent": "claude",
-          "cost": 0.9002,
+          "cost": 1.1316,
           "tokens": {
-            "input": 267,
-            "output": 191852,
-            "cache_read": 13673799,
-            "cache_write": 511115,
-            "thinking": 89498,
-            "total": 14377033
+            "input": 332,
+            "output": 231588,
+            "cache_read": 16904825,
+            "cache_write": 618600,
+            "thinking": 106349,
+            "total": 17755345
           },
           "estimated": false
         }
@@ -13062,34 +14201,81 @@
         {
           "day": "2026-10-20",
           "cost": 6.4322,
-          "tokens": 41287782
+          "tokens": 41287782,
+          "by_agent": {
+            "antigravity": 2.8857,
+            "claude": 1.755,
+            "codex": 1.7915
+          },
+          "by_agent_tokens": {
+            "antigravity": 25065291,
+            "claude": 7109086,
+            "codex": 9113405
+          }
         },
         {
           "day": "2026-10-21",
-          "cost": 87.5904,
-          "tokens": 655034846
+          "cost": 87.8983,
+          "tokens": 656117955,
+          "by_agent": {
+            "antigravity": 31.3133,
+            "claude": 38.1142,
+            "codex": 18.4708
+          },
+          "by_agent_tokens": {
+            "antigravity": 250666593,
+            "claude": 129926780,
+            "codex": 275524582
+          }
         },
         {
           "day": "2026-10-22",
-          "cost": 89.3743,
-          "tokens": 215775691
+          "cost": 89.7253,
+          "tokens": 217276335,
+          "by_agent": {
+            "claude": 67.4089,
+            "codex": 22.3164
+          },
+          "by_agent_tokens": {
+            "claude": 132367533,
+            "codex": 84908802
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 43.0432,
-          "tokens": 97352530
+          "cost": 43.1112,
+          "tokens": 97551356,
+          "by_agent": {
+            "claude": 35.2863,
+            "codex": 7.8249
+          },
+          "by_agent_tokens": {
+            "claude": 42977093,
+            "codex": 54574263
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 18.6681,
+          "tokens": 27968887,
+          "by_agent": {
+            "claude": 18.6681
+          },
+          "by_agent_tokens": {
+            "claude": 27968887
+          }
         }
       ],
       "by_branch": [
         {
-          "branch": "codex/google-site-name",
-          "cost": 73.3025,
-          "sessions": 4
+          "branch": "feat/listening-ambience",
+          "cost": 84.8598,
+          "sessions": 3
         },
         {
-          "branch": "feat/listening-ambience",
-          "cost": 68.3857,
-          "sessions": 3
+          "branch": "codex/google-site-name",
+          "cost": 76.2234,
+          "sessions": 4
         },
         {
           "branch": "main",
@@ -13216,7 +14402,7 @@
           "share": 0.551724,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 339 (redacted)"
+          "title": "Session title 341 (redacted)"
         },
         {
           "id": "fa5cb874-86b5-437e-b472-b04fff92ff8f",
@@ -13241,32 +14427,32 @@
           "share": 0.561404,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 340 (redacted)"
+          "title": "Session title 342 (redacted)"
         },
         {
           "id": "9cae970e-c52c-4c6d-9df0-ee0b3080ad46",
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-22T17:47:55Z",
-          "ended": "2026-10-23T13:21:55Z",
+          "ended": "2026-10-24T06:11:09Z",
           "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
           "branch": "feat/listening-ambience",
           "models": [
             "claude-fable-5-1"
           ],
-          "cost": 45.3481,
+          "cost": 61.8223,
           "tokens": {
-            "input": 3744,
-            "output": 161424,
-            "cache_read": 35273580,
-            "cache_write": 1421054,
-            "thinking": 57519,
-            "total": 36859802
+            "input": 4790,
+            "output": 202681,
+            "cache_read": 55225014,
+            "cache_write": 1891703,
+            "thinking": 71806,
+            "total": 57324188
           },
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 341 (redacted)"
+          "title": "Session title 343 (redacted)"
         },
         {
           "id": "01a1642e-1655-71c0-8899-e24717a63a3c",
@@ -13367,7 +14553,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 342 (redacted)"
+          "title": "Session title 344 (redacted)"
         },
         {
           "id": "b63a8705-7eb0-43bf-b583-7088db3f8f0c",
@@ -13392,7 +14578,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 343 (redacted)"
+          "title": "Session title 345 (redacted)"
         },
         {
           "id": "198992bf-c787-4c46-abb4-82cf2d257ea1",
@@ -13417,33 +14603,33 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 344 (redacted)"
+          "title": "Session title 346 (redacted)"
         },
         {
           "id": "f399c749-08d3-4b0e-9846-a7291c53288e",
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-21T18:35:01Z",
-          "ended": "2026-10-23T13:18:14Z",
+          "ended": "2026-10-24T11:51:00Z",
           "cwd": "/Users/alice/Documents/GitHub/tcf-canada",
           "branch": "codex/google-site-name",
           "models": [
             "claude-opus-5-5",
             "claude-haiku-5-5"
           ],
-          "cost": 44.9896,
+          "cost": 47.9105,
           "tokens": {
-            "input": 984,
-            "output": 373740,
-            "cache_read": 170189045,
-            "cache_write": 1654334,
-            "thinking": 118807,
-            "total": 172218103
+            "input": 1084,
+            "output": 423226,
+            "cache_read": 180176163,
+            "cache_write": 1904711,
+            "thinking": 137296,
+            "total": 182505184
           },
-          "share": 0.35182,
+          "share": 0.357504,
           "attribution": "split",
-          "subagents": 14,
-          "title": "Session title 345 (redacted)"
+          "subagents": 16,
+          "title": "Session title 347 (redacted)"
         },
         {
           "id": "ba035811-f1a8-4c8a-975e-649fbfe22680",
@@ -13468,7 +14654,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 346 (redacted)"
+          "title": "Session title 348 (redacted)"
         },
         {
           "id": "a8a3c87f-f334-4d70-803d-6c9338fca660",
@@ -13493,7 +14679,7 @@
           "share": 0.308642,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 347 (redacted)"
+          "title": "Session title 349 (redacted)"
         },
         {
           "id": "859a3d1f-54c3-456b-9658-2361ff920346",
@@ -13518,7 +14704,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 348 (redacted)"
+          "title": "Session title 350 (redacted)"
         },
         {
           "id": "8bfa563f-281c-4aca-bd7c-a244cae88190",
@@ -13543,7 +14729,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 349 (redacted)"
+          "title": "Session title 351 (redacted)"
         },
         {
           "id": "baf92a74-c509-4537-8b8c-9e09f6f6367c",
@@ -13568,7 +14754,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 350 (redacted)"
+          "title": "Session title 352 (redacted)"
         },
         {
           "id": "cfb650e7-9088-41fe-9cfe-2ab4e251863c",
@@ -13593,7 +14779,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 351 (redacted)"
+          "title": "Session title 353 (redacted)"
         },
         {
           "id": "9dcb2adf-48b1-424a-afb4-75a29b347d8a",
@@ -13618,7 +14804,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 352 (redacted)"
+          "title": "Session title 354 (redacted)"
         },
         {
           "id": "5bd504bf-7672-4267-8f3c-1b47efc3752a",
@@ -13643,7 +14829,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 353 (redacted)"
+          "title": "Session title 355 (redacted)"
         },
         {
           "id": "3869d52f-73ea-4560-b785-a285716cda6d",
@@ -13668,7 +14854,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 354 (redacted)"
+          "title": "Session title 356 (redacted)"
         },
         {
           "id": "01a15d67-90a0-7633-ad48-eac12ae9b5f7",
@@ -13743,7 +14929,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 355 (redacted)"
+          "title": "Session title 357 (redacted)"
         },
         {
           "id": "7f071cc3-8e64-4d26-a766-803e7924d8e8",
@@ -13768,7 +14954,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 356 (redacted)"
+          "title": "Session title 358 (redacted)"
         },
         {
           "id": "40f0b70a-e1c7-4899-a278-0d1d3637231e",
@@ -13793,7 +14979,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 357 (redacted)"
+          "title": "Session title 359 (redacted)"
         },
         {
           "id": "1a63f7c0-d9c6-491a-aaf6-8ec2251263ba",
@@ -13818,7 +15004,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 358 (redacted)"
+          "title": "Session title 360 (redacted)"
         },
         {
           "id": "ffb0ee19-7f18-4ff4-8c74-245236bf59d9",
@@ -13843,7 +15029,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 359 (redacted)"
+          "title": "Session title 361 (redacted)"
         },
         {
           "id": "30637786-bc63-4425-aace-fc3b00d5f0a7",
@@ -13868,7 +15054,7 @@
           "share": 0.340102,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 360 (redacted)"
+          "title": "Session title 362 (redacted)"
         },
         {
           "id": "bccc3fa0-f03f-477a-baab-253f741f64c6",
@@ -13893,7 +15079,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 361 (redacted)"
+          "title": "Session title 363 (redacted)"
         },
         {
           "id": "8387d1a5-dde0-482a-abe9-c862b9f55322",
@@ -13918,7 +15104,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 362 (redacted)"
+          "title": "Session title 364 (redacted)"
         },
         {
           "id": "80228c36-85c8-41d1-837e-4c47486721a2",
@@ -13943,7 +15129,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 363 (redacted)"
+          "title": "Session title 365 (redacted)"
         },
         {
           "id": "fcf2aa3d-eb62-49c5-a5ff-50d53c0c9888",
@@ -13968,7 +15154,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 364 (redacted)"
+          "title": "Session title 366 (redacted)"
         },
         {
           "id": "a6e7a675-83f6-4ad9-b92f-d12b398f0996",
@@ -13993,7 +15179,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 365 (redacted)"
+          "title": "Session title 367 (redacted)"
         },
         {
           "id": "641e71d9-15fd-4c85-97f0-0deff4c47f2b",
@@ -14018,7 +15204,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 366 (redacted)"
+          "title": "Session title 368 (redacted)"
         },
         {
           "id": "01a15c53-f920-7cc1-aedb-88d9acbe3367",
@@ -14068,7 +15254,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 367 (redacted)"
+          "title": "Session title 369 (redacted)"
         },
         {
           "id": "d796bdd2-bfc1-457c-b1e8-f3c86472c575",
@@ -14093,7 +15279,7 @@
           "share": 0.333333,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 368 (redacted)"
+          "title": "Session title 370 (redacted)"
         }
       ]
     },
@@ -14322,112 +15508,256 @@
         {
           "day": "2026-08-05",
           "cost": 2.2456,
-          "tokens": 15542111
+          "tokens": 15542111,
+          "by_agent": {
+            "antigravity": 2.2456
+          },
+          "by_agent_tokens": {
+            "antigravity": 15542111
+          }
         },
         {
           "day": "2026-08-06",
           "cost": 7.6726,
-          "tokens": 140370180
+          "tokens": 140370180,
+          "by_agent": {
+            "codex": 7.6726
+          },
+          "by_agent_tokens": {
+            "codex": 140370180
+          }
         },
         {
           "day": "2026-08-07",
           "cost": 5.1043,
-          "tokens": 36276604
+          "tokens": 36276604,
+          "by_agent": {
+            "antigravity": 4.0918,
+            "codex": 1.0125
+          },
+          "by_agent_tokens": {
+            "antigravity": 33020106,
+            "codex": 3256498
+          }
         },
         {
           "day": "2026-08-08",
           "cost": 0.6614,
-          "tokens": 5432144
+          "tokens": 5432144,
+          "by_agent": {
+            "antigravity": 0.6614
+          },
+          "by_agent_tokens": {
+            "antigravity": 5432144
+          }
         },
         {
           "day": "2026-08-10",
           "cost": 0.7808,
-          "tokens": 29763886
+          "tokens": 29763886,
+          "by_agent": {
+            "codex": 0.7808
+          },
+          "by_agent_tokens": {
+            "codex": 29763886
+          }
         },
         {
           "day": "2026-08-15",
           "cost": 0.2258,
-          "tokens": 8534133
+          "tokens": 8534133,
+          "by_agent": {
+            "codex": 0.2258
+          },
+          "by_agent_tokens": {
+            "codex": 8534133
+          }
         },
         {
           "day": "2026-08-17",
           "cost": 0.803,
-          "tokens": 29088118
+          "tokens": 29088118,
+          "by_agent": {
+            "codex": 0.803
+          },
+          "by_agent_tokens": {
+            "codex": 29088118
+          }
         },
         {
           "day": "2026-08-18",
           "cost": 26.082,
-          "tokens": 54145856
+          "tokens": 54145856,
+          "by_agent": {
+            "codex": 26.082
+          },
+          "by_agent_tokens": {
+            "codex": 54145856
+          }
         },
         {
           "day": "2026-08-22",
           "cost": 0.0072,
-          "tokens": 325486
+          "tokens": 325486,
+          "by_agent": {
+            "codex": 0.0072
+          },
+          "by_agent_tokens": {
+            "codex": 325486
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 10.6153,
-          "tokens": 40821728
+          "tokens": 40821728,
+          "by_agent": {
+            "antigravity": 1.308,
+            "codex": 9.3073
+          },
+          "by_agent_tokens": {
+            "antigravity": 11372625,
+            "codex": 29449103
+          }
         },
         {
           "day": "2026-08-28",
           "cost": 0.4108,
-          "tokens": 14560302
+          "tokens": 14560302,
+          "by_agent": {
+            "codex": 0.4108
+          },
+          "by_agent_tokens": {
+            "codex": 14560302
+          }
         },
         {
           "day": "2026-09-15",
           "cost": 30.5843,
-          "tokens": 82352270
+          "tokens": 82352270,
+          "by_agent": {
+            "codex": 30.5843
+          },
+          "by_agent_tokens": {
+            "codex": 82352270
+          }
         },
         {
           "day": "2026-09-16",
           "cost": 28.4262,
-          "tokens": 61951915
+          "tokens": 61951915,
+          "by_agent": {
+            "codex": 28.4262
+          },
+          "by_agent_tokens": {
+            "codex": 61951915
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 4.3598,
-          "tokens": 10323581
+          "tokens": 10323581,
+          "by_agent": {
+            "antigravity": 0.0506,
+            "claude": 4.3091
+          },
+          "by_agent_tokens": {
+            "antigravity": 61805,
+            "claude": 10261776
+          }
         },
         {
           "day": "2026-09-27",
           "cost": 1.4081,
-          "tokens": 4331764
+          "tokens": 4331764,
+          "by_agent": {
+            "claude": 1.4081
+          },
+          "by_agent_tokens": {
+            "claude": 4331764
+          }
         },
         {
           "day": "2026-09-30",
           "cost": 3.5971,
-          "tokens": 6984875
+          "tokens": 6984875,
+          "by_agent": {
+            "claude": 3.5802,
+            "codex": 0.0169
+          },
+          "by_agent_tokens": {
+            "claude": 6504907,
+            "codex": 479968
+          }
         },
         {
           "day": "2026-10-01",
           "cost": 21.0175,
-          "tokens": 68968576
+          "tokens": 68968576,
+          "by_agent": {
+            "antigravity": 4.8494,
+            "claude": 15.9979,
+            "codex": 0.1701
+          },
+          "by_agent_tokens": {
+            "antigravity": 37063735,
+            "claude": 30513655,
+            "codex": 1391186
+          }
         },
         {
           "day": "2026-10-02",
           "cost": 0.5014,
-          "tokens": 2635551
+          "tokens": 2635551,
+          "by_agent": {
+            "codex": 0.5014
+          },
+          "by_agent_tokens": {
+            "codex": 2635551
+          }
         },
         {
           "day": "2026-10-03",
           "cost": 3.9166,
-          "tokens": 22463279
+          "tokens": 22463279,
+          "by_agent": {
+            "codex": 3.9166
+          },
+          "by_agent_tokens": {
+            "codex": 22463279
+          }
         },
         {
           "day": "2026-10-04",
           "cost": 4.6149,
-          "tokens": 25405021
+          "tokens": 25405021,
+          "by_agent": {
+            "codex": 4.6149
+          },
+          "by_agent_tokens": {
+            "codex": 25405021
+          }
         },
         {
           "day": "2026-10-09",
           "cost": 8.7061,
-          "tokens": 22233949
+          "tokens": 22233949,
+          "by_agent": {
+            "claude": 8.7061
+          },
+          "by_agent_tokens": {
+            "claude": 22233949
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 0.0029,
-          "tokens": 157351
+          "tokens": 157351,
+          "by_agent": {
+            "codex": 0.0029
+          },
+          "by_agent_tokens": {
+            "codex": 157351
+          }
         }
       ],
       "by_branch": [
@@ -14531,7 +15861,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 369 (redacted)"
+          "title": "Session title 371 (redacted)"
         },
         {
           "id": "01a10026-4819-7cc3-83f4-6d5f6c9fc5c2",
@@ -14657,7 +15987,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 370 (redacted)"
+          "title": "Session title 372 (redacted)"
         },
         {
           "id": "910beadc-cd1c-468b-8fdc-aa767b6c1af9",
@@ -14682,7 +16012,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 371 (redacted)"
+          "title": "Session title 373 (redacted)"
         },
         {
           "id": "b71bfa54-63b6-41e6-a77b-3b72d5d36047",
@@ -14707,7 +16037,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 372 (redacted)"
+          "title": "Session title 374 (redacted)"
         },
         {
           "id": "01a0f09b-72e3-7e30-a357-2fe0b149f646",
@@ -14757,7 +16087,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 373 (redacted)"
+          "title": "Session title 375 (redacted)"
         },
         {
           "id": "15818664-09a7-4c3e-b048-4c77cab91efe",
@@ -14782,7 +16112,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 374 (redacted)"
+          "title": "Session title 376 (redacted)"
         },
         {
           "id": "d698c88e-4a2e-4c14-9ca8-6d43702b6b9b",
@@ -14807,7 +16137,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 375 (redacted)"
+          "title": "Session title 377 (redacted)"
         },
         {
           "id": "01a0a4cb-ce56-71c2-b023-7898da77cb9f",
@@ -15033,7 +16363,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 376 (redacted)"
+          "title": "Session title 378 (redacted)"
         },
         {
           "id": "01a015af-3169-76e0-8af8-70eed2158117",
@@ -15059,7 +16389,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 377 (redacted)"
+          "title": "Session title 379 (redacted)"
         },
         {
           "id": "01a01285-104a-7311-8b93-d5fc07a7f8ef",
@@ -15084,7 +16414,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 378 (redacted)"
+          "title": "Session title 380 (redacted)"
         },
         {
           "id": "01a005e7-0e19-7600-8b7c-30c57a04a2b1",
@@ -15109,7 +16439,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 379 (redacted)"
+          "title": "Session title 381 (redacted)"
         },
         {
           "id": "019fea21-d61d-7b11-8181-e218e1e5941b",
@@ -15134,7 +16464,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 380 (redacted)"
+          "title": "Session title 382 (redacted)"
         },
         {
           "id": "ab68cf4f-6e08-4615-84fc-ebfecc8e638b",
@@ -15159,7 +16489,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 381 (redacted)"
+          "title": "Session title 383 (redacted)"
         },
         {
           "id": "019fd9db-bc2c-7390-a6e5-3b3afa4dabeb",
@@ -15185,7 +16515,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 382 (redacted)"
+          "title": "Session title 384 (redacted)"
         },
         {
           "id": "019fd844-90c4-79b0-9937-260cd39e243c",
@@ -15210,7 +16540,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 383 (redacted)"
+          "title": "Session title 385 (redacted)"
         },
         {
           "id": "019fd589-fa79-7b11-bb8c-cb3098cf7d19",
@@ -15235,7 +16565,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 384 (redacted)"
+          "title": "Session title 386 (redacted)"
         },
         {
           "id": "0beac012-156e-45c5-8a07-bc0c9ed7a4ad",
@@ -15260,7 +16590,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 385 (redacted)"
+          "title": "Session title 387 (redacted)"
         }
       ]
     },
@@ -15474,107 +16804,237 @@
         {
           "day": "2026-07-26",
           "cost": 11.3813,
-          "tokens": 37733078
+          "tokens": 37733078,
+          "by_agent": {
+            "codex": 11.3813
+          },
+          "by_agent_tokens": {
+            "codex": 37733078
+          }
         },
         {
           "day": "2026-07-27",
           "cost": 18.8484,
-          "tokens": 218072452
+          "tokens": 218072452,
+          "by_agent": {
+            "antigravity": 7.65,
+            "codex": 11.1983
+          },
+          "by_agent_tokens": {
+            "antigravity": 56543382,
+            "codex": 161529070
+          }
         },
         {
           "day": "2026-07-30",
           "cost": 8.9559,
-          "tokens": 189986845
+          "tokens": 189986845,
+          "by_agent": {
+            "antigravity": 5.0086,
+            "codex": 3.9473
+          },
+          "by_agent_tokens": {
+            "antigravity": 37280611,
+            "codex": 152706234
+          }
         },
         {
           "day": "2026-07-31",
           "cost": 1.9992,
-          "tokens": 87900137
+          "tokens": 87900137,
+          "by_agent": {
+            "codex": 1.9992
+          },
+          "by_agent_tokens": {
+            "codex": 87900137
+          }
         },
         {
           "day": "2026-08-02",
           "cost": 0.8218,
-          "tokens": 30493779
+          "tokens": 30493779,
+          "by_agent": {
+            "codex": 0.8218
+          },
+          "by_agent_tokens": {
+            "codex": 30493779
+          }
         },
         {
           "day": "2026-08-06",
           "cost": 1.2827,
-          "tokens": 47579562
+          "tokens": 47579562,
+          "by_agent": {
+            "codex": 1.2827
+          },
+          "by_agent_tokens": {
+            "codex": 47579562
+          }
         },
         {
           "day": "2026-08-08",
           "cost": 6.0202,
-          "tokens": 33190078
+          "tokens": 33190078,
+          "by_agent": {
+            "codex": 6.0202
+          },
+          "by_agent_tokens": {
+            "codex": 33190078
+          }
         },
         {
           "day": "2026-08-13",
           "cost": 0.5061,
-          "tokens": 19301052
+          "tokens": 19301052,
+          "by_agent": {
+            "codex": 0.5061
+          },
+          "by_agent_tokens": {
+            "codex": 19301052
+          }
         },
         {
           "day": "2026-08-14",
           "cost": 0.5198,
-          "tokens": 18044205
+          "tokens": 18044205,
+          "by_agent": {
+            "codex": 0.5198
+          },
+          "by_agent_tokens": {
+            "codex": 18044205
+          }
         },
         {
           "day": "2026-08-15",
           "cost": 0.4945,
-          "tokens": 17952631
+          "tokens": 17952631,
+          "by_agent": {
+            "codex": 0.4945
+          },
+          "by_agent_tokens": {
+            "codex": 17952631
+          }
         },
         {
           "day": "2026-08-16",
           "cost": 28.0416,
-          "tokens": 52964903
+          "tokens": 52964903,
+          "by_agent": {
+            "codex": 28.0416
+          },
+          "by_agent_tokens": {
+            "codex": 52964903
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 3.3553,
-          "tokens": 5516087
+          "tokens": 5516087,
+          "by_agent": {
+            "codex": 3.3553
+          },
+          "by_agent_tokens": {
+            "codex": 5516087
+          }
         },
         {
           "day": "2026-08-24",
           "cost": 0.1662,
-          "tokens": 11590334
+          "tokens": 11590334,
+          "by_agent": {
+            "codex": 0.1662
+          },
+          "by_agent_tokens": {
+            "codex": 11590334
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 14.3977,
-          "tokens": 28142213
+          "tokens": 28142213,
+          "by_agent": {
+            "codex": 14.3977
+          },
+          "by_agent_tokens": {
+            "codex": 28142213
+          }
         },
         {
           "day": "2026-09-05",
           "cost": 17.139,
-          "tokens": 943156622
+          "tokens": 943156622,
+          "by_agent": {
+            "codex": 17.139
+          },
+          "by_agent_tokens": {
+            "codex": 943156622
+          }
         },
         {
           "day": "2026-09-06",
           "cost": 0.0712,
-          "tokens": 911299
+          "tokens": 911299,
+          "by_agent": {
+            "codex": 0.0712
+          },
+          "by_agent_tokens": {
+            "codex": 911299
+          }
         },
         {
           "day": "2026-09-07",
           "cost": 24.8429,
-          "tokens": 464313559
+          "tokens": 464313559,
+          "by_agent": {
+            "codex": 24.8429
+          },
+          "by_agent_tokens": {
+            "codex": 464313559
+          }
         },
         {
           "day": "2026-09-08",
           "cost": 0.0312,
-          "tokens": 6599712
+          "tokens": 6599712,
+          "by_agent": {
+            "codex": 0.0312
+          },
+          "by_agent_tokens": {
+            "codex": 6599712
+          }
         },
         {
           "day": "2026-09-11",
           "cost": 0.0303,
-          "tokens": 677756
+          "tokens": 677756,
+          "by_agent": {
+            "codex": 0.0303
+          },
+          "by_agent_tokens": {
+            "codex": 677756
+          }
         },
         {
           "day": "2026-09-22",
           "cost": 7.0107,
-          "tokens": 52140107
+          "tokens": 52140107,
+          "by_agent": {
+            "antigravity": 7.0107
+          },
+          "by_agent_tokens": {
+            "antigravity": 52140107
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 6.5237,
-          "tokens": 17720864
+          "tokens": 17720864,
+          "by_agent": {
+            "claude": 6.5237
+          },
+          "by_agent_tokens": {
+            "claude": 17720864
+          }
         }
       ],
       "by_branch": [
@@ -15618,7 +17078,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 386 (redacted)"
+          "title": "Session title 388 (redacted)"
         },
         {
           "id": "5f9e35ac-9112-48f3-b6a0-85d36833ce01",
@@ -15643,7 +17103,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 387 (redacted)"
+          "title": "Session title 389 (redacted)"
         },
         {
           "id": "01a09137-fdd0-7911-b7ee-b2e3b092d07f",
@@ -15724,7 +17184,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 388 (redacted)"
+          "title": "Session title 390 (redacted)"
         },
         {
           "id": "019ffde4-30e7-7513-857c-d01bb164c9b5",
@@ -15749,7 +17209,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 389 (redacted)"
+          "title": "Session title 391 (redacted)"
         },
         {
           "id": "019fe383-6c87-7d43-8dd6-d248986b0603",
@@ -15775,7 +17235,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 390 (redacted)"
+          "title": "Session title 392 (redacted)"
         },
         {
           "id": "019fd89b-d0bf-7093-81c6-2cf4e63d71c6",
@@ -15800,7 +17260,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 391 (redacted)"
+          "title": "Session title 393 (redacted)"
         },
         {
           "id": "1b51767d-ad97-4570-b403-1bc386115b97",
@@ -15825,7 +17285,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 392 (redacted)"
+          "title": "Session title 394 (redacted)"
         },
         {
           "id": "2976cad3-7d97-430b-9af3-0267c2e6fe4f",
@@ -15850,7 +17310,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 393 (redacted)"
+          "title": "Session title 395 (redacted)"
         },
         {
           "id": "1c7f599a-ffac-4aca-bf6d-31c979d9fd06",
@@ -15875,7 +17335,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 394 (redacted)"
+          "title": "Session title 396 (redacted)"
         },
         {
           "id": "d4b115ec-fadd-4cfa-ac99-3b1203a5fad0",
@@ -15900,7 +17360,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 395 (redacted)"
+          "title": "Session title 397 (redacted)"
         },
         {
           "id": "fb97c393-dd65-47b5-bc70-d4d293fde22c",
@@ -15925,7 +17385,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 396 (redacted)"
+          "title": "Session title 398 (redacted)"
         },
         {
           "id": "37db7800-7769-4520-923a-c25574c338f9",
@@ -15950,7 +17410,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 397 (redacted)"
+          "title": "Session title 399 (redacted)"
         },
         {
           "id": "0dda18ca-1a9a-4a0b-8f0b-fc72f5506d2f",
@@ -15975,7 +17435,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 398 (redacted)"
+          "title": "Session title 400 (redacted)"
         },
         {
           "id": "92481194-88f9-4a8a-ab5d-5f28e8b0df89",
@@ -16000,7 +17460,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 399 (redacted)"
+          "title": "Session title 401 (redacted)"
         },
         {
           "id": "15650efa-fb9a-46eb-8350-43fef8c247b2",
@@ -16025,7 +17485,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 400 (redacted)"
+          "title": "Session title 402 (redacted)"
         },
         {
           "id": "29949f44-5229-4949-9ee1-4e6e6a8b0c7a",
@@ -16050,7 +17510,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 401 (redacted)"
+          "title": "Session title 403 (redacted)"
         },
         {
           "id": "7dcb0f36-7cf3-4f5c-bb5c-2b5820844bb2",
@@ -16075,7 +17535,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 402 (redacted)"
+          "title": "Session title 404 (redacted)"
         },
         {
           "id": "c850f4d1-0371-47cd-95bc-46ce2d28f192",
@@ -16100,7 +17560,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 403 (redacted)"
+          "title": "Session title 405 (redacted)"
         },
         {
           "id": "019f9d43-a2b5-7ab3-b208-39402b1f38b0",
@@ -16127,7 +17587,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 404 (redacted)"
+          "title": "Session title 406 (redacted)"
         }
       ]
     },
@@ -16398,112 +17858,258 @@
         {
           "day": "2026-08-08",
           "cost": 11.2422,
-          "tokens": 43760528
+          "tokens": 43760528,
+          "by_agent": {
+            "codex": 11.2422
+          },
+          "by_agent_tokens": {
+            "codex": 43760528
+          }
         },
         {
           "day": "2026-08-09",
           "cost": 16.3989,
-          "tokens": 72862410
+          "tokens": 72862410,
+          "by_agent": {
+            "codex": 16.3989
+          },
+          "by_agent_tokens": {
+            "codex": 72862410
+          }
         },
         {
           "day": "2026-08-10",
           "cost": 1.4709,
-          "tokens": 32733695
+          "tokens": 32733695,
+          "by_agent": {
+            "codex": 1.4709
+          },
+          "by_agent_tokens": {
+            "codex": 32733695
+          }
         },
         {
           "day": "2026-08-16",
           "cost": 1.3455,
-          "tokens": 2090644
+          "tokens": 2090644,
+          "by_agent": {
+            "codex": 1.3455
+          },
+          "by_agent_tokens": {
+            "codex": 2090644
+          }
         },
         {
           "day": "2026-08-18",
           "cost": 3.6443,
-          "tokens": 5662944
+          "tokens": 5662944,
+          "by_agent": {
+            "codex": 3.6443
+          },
+          "by_agent_tokens": {
+            "codex": 5662944
+          }
         },
         {
           "day": "2026-08-20",
           "cost": 0.8351,
-          "tokens": 5486224
+          "tokens": 5486224,
+          "by_agent": {
+            "antigravity": 0.8351
+          },
+          "by_agent_tokens": {
+            "antigravity": 5486224
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 16.4619,
-          "tokens": 111208784
+          "tokens": 111208784,
+          "by_agent": {
+            "antigravity": 9.3519,
+            "codex": 7.11
+          },
+          "by_agent_tokens": {
+            "antigravity": 81704235,
+            "codex": 29504549
+          }
         },
         {
           "day": "2026-08-24",
           "cost": 11.3255,
-          "tokens": 79361160
+          "tokens": 79361160,
+          "by_agent": {
+            "antigravity": 7.5811,
+            "codex": 3.7444
+          },
+          "by_agent_tokens": {
+            "antigravity": 73545603,
+            "codex": 5815557
+          }
         },
         {
           "day": "2026-08-25",
           "cost": 2.185,
-          "tokens": 5890759
+          "tokens": 5890759,
+          "by_agent": {
+            "antigravity": 2.185
+          },
+          "by_agent_tokens": {
+            "antigravity": 5890759
+          }
         },
         {
           "day": "2026-08-29",
           "cost": 0.4079,
-          "tokens": 13774113
+          "tokens": 13774113,
+          "by_agent": {
+            "codex": 0.4079
+          },
+          "by_agent_tokens": {
+            "codex": 13774113
+          }
         },
         {
           "day": "2026-08-30",
           "cost": 0.2986,
-          "tokens": 9556804
+          "tokens": 9556804,
+          "by_agent": {
+            "codex": 0.2986
+          },
+          "by_agent_tokens": {
+            "codex": 9556804
+          }
         },
         {
           "day": "2026-09-03",
           "cost": 2.0602,
-          "tokens": 14773403
+          "tokens": 14773403,
+          "by_agent": {
+            "antigravity": 2.0602
+          },
+          "by_agent_tokens": {
+            "antigravity": 14773403
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 2.89,
-          "tokens": 21511160
+          "tokens": 21511160,
+          "by_agent": {
+            "antigravity": 2.8853,
+            "codex": 0.0048
+          },
+          "by_agent_tokens": {
+            "antigravity": 21484134,
+            "codex": 27026
+          }
         },
         {
           "day": "2026-09-05",
           "cost": 1.0955,
-          "tokens": 8624534
+          "tokens": 8624534,
+          "by_agent": {
+            "antigravity": 1.0955
+          },
+          "by_agent_tokens": {
+            "antigravity": 8624534
+          }
         },
         {
           "day": "2026-09-06",
           "cost": 1.1715,
-          "tokens": 9931053
+          "tokens": 9931053,
+          "by_agent": {
+            "antigravity": 1.1715
+          },
+          "by_agent_tokens": {
+            "antigravity": 9931053
+          }
         },
         {
           "day": "2026-09-11",
           "cost": 3.9392,
-          "tokens": 31808116
+          "tokens": 31808116,
+          "by_agent": {
+            "antigravity": 3.9392
+          },
+          "by_agent_tokens": {
+            "antigravity": 31808116
+          }
         },
         {
           "day": "2026-09-14",
           "cost": 34.3618,
-          "tokens": 49424025
+          "tokens": 49424025,
+          "by_agent": {
+            "antigravity": 4.5122,
+            "codex": 29.8496
+          },
+          "by_agent_tokens": {
+            "antigravity": 27531653,
+            "codex": 21892372
+          }
         },
         {
           "day": "2026-09-15",
           "cost": 6.7008,
-          "tokens": 18473871
+          "tokens": 18473871,
+          "by_agent": {
+            "antigravity": 6.5918,
+            "codex": 0.109
+          },
+          "by_agent_tokens": {
+            "antigravity": 15156813,
+            "codex": 3317058
+          }
         },
         {
           "day": "2026-09-22",
           "cost": 2.9067,
-          "tokens": 21202766
+          "tokens": 21202766,
+          "by_agent": {
+            "antigravity": 2.9067
+          },
+          "by_agent_tokens": {
+            "antigravity": 21202766
+          }
         },
         {
           "day": "2026-09-23",
           "cost": 16.7083,
-          "tokens": 69015620
+          "tokens": 69015620,
+          "by_agent": {
+            "antigravity": 1.7476,
+            "codex": 14.9607
+          },
+          "by_agent_tokens": {
+            "antigravity": 3658549,
+            "codex": 65357071
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 0.9726,
-          "tokens": 1853669
+          "tokens": 1853669,
+          "by_agent": {
+            "antigravity": 0.9726
+          },
+          "by_agent_tokens": {
+            "antigravity": 1853669
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 10.7931,
-          "tokens": 26628674
+          "tokens": 26628674,
+          "by_agent": {
+            "claude": 5.5665,
+            "codex": 5.2266
+          },
+          "by_agent_tokens": {
+            "claude": 11162163,
+            "codex": 15466511
+          }
         }
       ],
       "by_branch": [
@@ -16588,7 +18194,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 405 (redacted)"
+          "title": "Session title 407 (redacted)"
         },
         {
           "id": "01a0ce81-cffb-7290-b684-a06d0f90dabb",
@@ -16640,7 +18246,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 406 (redacted)"
+          "title": "Session title 408 (redacted)"
         },
         {
           "id": "01a0a742-212c-73b3-9419-1c1c7482cc0f",
@@ -16690,7 +18296,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 407 (redacted)"
+          "title": "Session title 409 (redacted)"
         },
         {
           "id": "19320798-c949-475a-a69e-9a81b14614d6",
@@ -16715,7 +18321,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 408 (redacted)"
+          "title": "Session title 410 (redacted)"
         },
         {
           "id": "74cfaa5b-8a31-4936-b434-f618048b0d27",
@@ -16740,7 +18346,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 409 (redacted)"
+          "title": "Session title 411 (redacted)"
         },
         {
           "id": "e534049b-3293-431d-a346-2be98afacf3f",
@@ -16765,7 +18371,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 410 (redacted)"
+          "title": "Session title 412 (redacted)"
         },
         {
           "id": "b3d18618-50be-4414-9bf9-3b2c1f5dcfcb",
@@ -16790,7 +18396,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 411 (redacted)"
+          "title": "Session title 413 (redacted)"
         },
         {
           "id": "01a067c1-d0fe-7353-9ba9-1626ee0e897e",
@@ -16868,7 +18474,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 412 (redacted)"
+          "title": "Session title 414 (redacted)"
         },
         {
           "id": "01a03295-7cf1-7982-a181-a849f20da163",
@@ -16944,7 +18550,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 413 (redacted)"
+          "title": "Session title 415 (redacted)"
         },
         {
           "id": "01a02e96-4e66-7852-8803-5210b6ccb761",
@@ -16994,7 +18600,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 414 (redacted)"
+          "title": "Session title 416 (redacted)"
         },
         {
           "id": "01a01586-a55d-7e51-a1d0-b7fb4b9d424b",
@@ -17019,7 +18625,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 415 (redacted)"
+          "title": "Session title 417 (redacted)"
         },
         {
           "id": "01a00b87-97d5-7263-84e6-deb12b6f6568",
@@ -17045,7 +18651,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 416 (redacted)"
+          "title": "Session title 418 (redacted)"
         },
         {
           "id": "019feb2a-1a00-7f90-a3d5-aa1f03b88e59",
@@ -17070,7 +18676,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 417 (redacted)"
+          "title": "Session title 419 (redacted)"
         },
         {
           "id": "019feb27-56a0-72d1-8fcb-adeaa8c91145",
@@ -17095,7 +18701,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 418 (redacted)"
+          "title": "Session title 420 (redacted)"
         },
         {
           "id": "019feb18-656e-73d2-807e-b245668198b0",
@@ -17120,7 +18726,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 419 (redacted)"
+          "title": "Session title 421 (redacted)"
         },
         {
           "id": "019fead5-09fd-7f91-92ee-e884336b0c09",
@@ -17145,7 +18751,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 420 (redacted)"
+          "title": "Session title 422 (redacted)"
         },
         {
           "id": "019fead3-7724-78b1-9a02-485ba7ce79ad",
@@ -17170,7 +18776,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 421 (redacted)"
+          "title": "Session title 423 (redacted)"
         },
         {
           "id": "019fea80-715c-76f2-82b2-47ff4370f0d8",
@@ -17195,7 +18801,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 422 (redacted)"
+          "title": "Session title 424 (redacted)"
         },
         {
           "id": "019fe458-643f-7fe2-b5db-7ec80185d9b0",
@@ -17221,7 +18827,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 423 (redacted)"
+          "title": "Session title 425 (redacted)"
         }
       ]
     },
@@ -17234,6 +18840,7 @@
         "/Users/alice/Documents/GitHub/scratch/reussir-api-reading",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/30637786-bc63-4425-aace-fc3b00d5f0a7/scratchpad/api-min",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-ee",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-mt",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-rev",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-rp",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/rx",
@@ -17244,30 +18851,30 @@
         "/private/tmp/reussir-sync-pr-api"
       ],
       "path_missing": false,
-      "cost": 95.7208,
+      "cost": 97.9407,
       "tokens": {
-        "input": 1958048,
-        "output": 718637,
-        "cache_read": 260494935,
-        "cache_write": 2259428,
-        "thinking": 309763,
-        "total": 265431048
+        "input": 1958122,
+        "output": 755281,
+        "cache_read": 268125758,
+        "cache_write": 2444237,
+        "thinking": 323402,
+        "total": 273283398
       },
       "sessions": 7,
       "first_active": "2026-10-21",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 74.3197,
+          "cost": 76.5396,
           "tokens": {
-            "input": 4108,
-            "output": 491376,
-            "cache_read": 175764090,
-            "cache_write": 2259428,
-            "thinking": 160025,
-            "total": 178519002
+            "input": 4182,
+            "output": 528020,
+            "cache_read": 183394913,
+            "cache_write": 2444237,
+            "thinking": 173664,
+            "total": 186371352
           },
           "sessions": 5
         },
@@ -17304,14 +18911,14 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 37.7906,
+          "cost": 39.8413,
           "tokens": {
-            "input": 589,
-            "output": 149192,
-            "cache_read": 133321826,
-            "cache_write": 1017512,
-            "thinking": 23684,
-            "total": 134489119
+            "input": 616,
+            "output": 156681,
+            "cache_read": 138586828,
+            "cache_write": 1123479,
+            "thinking": 24939,
+            "total": 139867604
           },
           "estimated": false
         },
@@ -17374,14 +18981,14 @@
         {
           "model": "claude-haiku-5-5",
           "agent": "claude",
-          "cost": 0.6474,
+          "cost": 0.8167,
           "tokens": {
-            "input": 192,
-            "output": 137982,
-            "cache_read": 9834358,
-            "cache_write": 367600,
-            "thinking": 64368,
-            "total": 10340132
+            "input": 239,
+            "output": 167137,
+            "cache_read": 12200180,
+            "cache_write": 446442,
+            "thinking": 76752,
+            "total": 12813998
           },
           "estimated": false
         }
@@ -17389,24 +18996,57 @@
       "by_day": [
         {
           "day": "2026-10-21",
-          "cost": 21.7327,
-          "tokens": 84498275
+          "cost": 22.0023,
+          "tokens": 85446623,
+          "by_agent": {
+            "antigravity": 1.9456,
+            "claude": 20.0567
+          },
+          "by_agent_tokens": {
+            "antigravity": 15317754,
+            "claude": 70128869
+          }
         },
         {
           "day": "2026-10-22",
-          "cost": 60.6133,
-          "tokens": 159364540
+          "cost": 60.9206,
+          "tokens": 160678473,
+          "by_agent": {
+            "claude": 41.4652,
+            "codex": 19.4554
+          },
+          "by_agent_tokens": {
+            "claude": 89084181,
+            "codex": 71594292
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 13.3747,
-          "tokens": 21568232
+          "cost": 13.4343,
+          "tokens": 21742319,
+          "by_agent": {
+            "claude": 13.4343
+          },
+          "by_agent_tokens": {
+            "claude": 21742319
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 1.5834,
+          "tokens": 5415984,
+          "by_agent": {
+            "claude": 1.5834
+          },
+          "by_agent_tokens": {
+            "claude": 5415984
+          }
         }
       ],
       "by_branch": [
         {
           "branch": "codex/google-site-name",
-          "cost": 38.4381,
+          "cost": 40.658,
           "sessions": 2
         },
         {
@@ -17449,7 +19089,7 @@
           "share": 0.448276,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 424 (redacted)"
+          "title": "Session title 426 (redacted)"
         },
         {
           "id": "37235fe6-cd4c-43ae-bf33-199fec048e2a",
@@ -17474,7 +19114,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 425 (redacted)"
+          "title": "Session title 427 (redacted)"
         },
         {
           "id": "fa5cb874-86b5-437e-b472-b04fff92ff8f",
@@ -17499,7 +19139,7 @@
           "share": 0.438596,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 426 (redacted)"
+          "title": "Session title 428 (redacted)"
         },
         {
           "id": "01a16226-eafc-7de1-8566-7bb5aee8f02d",
@@ -17532,26 +19172,26 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-21T18:35:01Z",
-          "ended": "2026-10-23T13:18:14Z",
+          "ended": "2026-10-24T11:51:00Z",
           "cwd": "/Users/alice/Documents/GitHub/tcf-canada",
           "branch": "codex/google-site-name",
           "models": [
             "claude-opus-5-5",
             "claude-haiku-5-5"
           ],
-          "cost": 32.3571,
+          "cost": 34.5769,
           "tokens": {
-            "input": 708,
-            "output": 268798,
-            "cache_read": 122401973,
-            "cache_write": 1189817,
-            "thinking": 85447,
-            "total": 123861296
+            "input": 782,
+            "output": 305442,
+            "cache_read": 130032796,
+            "cache_write": 1374626,
+            "thinking": 99086,
+            "total": 131713646
           },
-          "share": 0.253033,
+          "share": 0.25801,
           "attribution": "split",
-          "subagents": 14,
-          "title": "Session title 427 (redacted)"
+          "subagents": 16,
+          "title": "Session title 429 (redacted)"
         },
         {
           "id": "e0c705d9-aec3-43de-98f6-c661a2df7eb9",
@@ -17576,7 +19216,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 428 (redacted)"
+          "title": "Session title 430 (redacted)"
         },
         {
           "id": "30637786-bc63-4425-aace-fc3b00d5f0a7",
@@ -17601,7 +19241,133 @@
           "share": 0.121827,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 429 (redacted)"
+          "title": "Session title 431 (redacted)"
+        }
+      ]
+    },
+    {
+      "id": "/Users/alice/Documents/GitHub/token-usage",
+      "name": "token-usage",
+      "remote": null,
+      "paths": [
+        "/Users/alice/Documents/GitHub/token-usage"
+      ],
+      "path_missing": false,
+      "cost": 59.052,
+      "tokens": {
+        "input": 3350,
+        "output": 546508,
+        "cache_read": 73906888,
+        "cache_write": 2774125,
+        "thinking": 154387,
+        "total": 77230871
+      },
+      "sessions": 1,
+      "first_active": "2026-10-23",
+      "last_active": "2026-10-24",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 59.052,
+          "tokens": {
+            "input": 3350,
+            "output": 546508,
+            "cache_read": 73906888,
+            "cache_write": 2774125,
+            "thinking": 154387,
+            "total": 77230871
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-fable-5-1",
+          "agent": "claude",
+          "cost": 31.3492,
+          "tokens": {
+            "input": 2638,
+            "output": 114245,
+            "cache_read": 23234373,
+            "cache_write": 990101,
+            "thinking": 27181,
+            "total": 24341357
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 27.7027,
+          "tokens": {
+            "input": 712,
+            "output": 432264,
+            "cache_read": 50672515,
+            "cache_write": 1784024,
+            "thinking": 127206,
+            "total": 52889515
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-23",
+          "cost": 34.3528,
+          "tokens": 52300807,
+          "by_agent": {
+            "claude": 34.3528
+          },
+          "by_agent_tokens": {
+            "claude": 52300807
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 24.6991,
+          "tokens": 24930064,
+          "by_agent": {
+            "claude": 24.6991
+          },
+          "by_agent_tokens": {
+            "claude": 24930064
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "HEAD",
+          "cost": 59.052,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "47daa328-2fe8-46ac-88ae-50bec10a6689",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-23T13:31:42Z",
+          "ended": "2026-10-24T11:51:03Z",
+          "cwd": "/Users/alice/Documents/GitHub/token-usage",
+          "branch": "HEAD",
+          "models": [
+            "claude-fable-5-1",
+            "claude-opus-5-5"
+          ],
+          "cost": 59.052,
+          "tokens": {
+            "input": 3350,
+            "output": 546508,
+            "cache_read": 73906888,
+            "cache_write": 2774125,
+            "thinking": 154387,
+            "total": 77230871
+          },
+          "share": 0.788889,
+          "attribution": "split",
+          "subagents": 13,
+          "title": "Session title 432 (redacted)"
         }
       ]
     },
@@ -17613,18 +19379,18 @@
         "/Users/alice/Documents/GitHub/tokei"
       ],
       "path_missing": false,
-      "cost": 58.565,
+      "cost": 55.3948,
       "tokens": {
-        "input": 14644059,
-        "output": 1176859,
-        "cache_read": 275564757,
-        "cache_write": 1137913,
-        "thinking": 541745,
-        "total": 292523588
+        "input": 14643733,
+        "output": 1038410,
+        "cache_read": 264290534,
+        "cache_write": 1106387,
+        "thinking": 506426,
+        "total": 281079064
       },
       "sessions": 10,
       "first_active": "2026-09-24",
-      "last_active": "2026-10-23",
+      "last_active": "2026-10-24",
       "by_agent": [
         {
           "agent": "antigravity",
@@ -17643,14 +19409,14 @@
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 27.1075,
+          "cost": 23.9374,
           "tokens": {
-            "input": 1508,
-            "output": 374613,
-            "cache_read": 48168023,
-            "cache_write": 1137913,
-            "thinking": 97691,
-            "total": 49682057
+            "input": 1182,
+            "output": 236164,
+            "cache_read": 36893800,
+            "cache_write": 1106387,
+            "thinking": 62372,
+            "total": 38237533
           },
           "sessions": 3
         },
@@ -17671,20 +19437,6 @@
       ],
       "by_model": [
         {
-          "model": "claude-opus-5-5",
-          "agent": "claude",
-          "cost": 21.6849,
-          "tokens": {
-            "input": 594,
-            "output": 329461,
-            "cache_read": 44292160,
-            "cache_write": 1028567,
-            "thinking": 88522,
-            "total": 45650782
-          },
-          "estimated": false
-        },
-        {
           "model": "gemini-3.8-flash",
           "agent": "antigravity",
           "cost": 17.3221,
@@ -17695,6 +19447,20 @@
             "cache_write": 0,
             "thinking": 197308,
             "total": 125420543
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 15.5482,
+          "tokens": {
+            "input": 476,
+            "output": 205591,
+            "cache_read": 30676151,
+            "cache_write": 841430,
+            "thinking": 55098,
+            "total": 31723648
           },
           "estimated": false
         },
@@ -17715,14 +19481,14 @@
         {
           "model": "claude-fable-5-1",
           "agent": "claude",
-          "cost": 5.4226,
+          "cost": 8.3892,
           "tokens": {
-            "input": 914,
-            "output": 45152,
-            "cache_read": 3875863,
-            "cache_write": 109346,
-            "thinking": 9169,
-            "total": 4031275
+            "input": 706,
+            "output": 30572,
+            "cache_read": 6217649,
+            "cache_write": 264957,
+            "thinking": 7274,
+            "total": 6513884
           },
           "estimated": false
         },
@@ -17759,58 +19525,129 @@
         {
           "day": "2026-09-24",
           "cost": 12.7623,
-          "tokens": 93605820
+          "tokens": 93605820,
+          "by_agent": {
+            "antigravity": 12.7623
+          },
+          "by_agent_tokens": {
+            "antigravity": 93605820
+          }
         },
         {
           "day": "2026-09-25",
           "cost": 1.6982,
-          "tokens": 14059676
+          "tokens": 14059676,
+          "by_agent": {
+            "antigravity": 1.6982
+          },
+          "by_agent_tokens": {
+            "antigravity": 14059676
+          }
         },
         {
           "day": "2026-10-04",
           "cost": 2.9077,
-          "tokens": 19877399
+          "tokens": 19877399,
+          "by_agent": {
+            "antigravity": 2.8616,
+            "codex": 0.0461
+          },
+          "by_agent_tokens": {
+            "antigravity": 17755047,
+            "codex": 2122352
+          }
         },
         {
           "day": "2026-10-09",
           "cost": 5.2534,
-          "tokens": 26005957
+          "tokens": 26005957,
+          "by_agent": {
+            "antigravity": 3.127,
+            "claude": 2.1264
+          },
+          "by_agent_tokens": {
+            "antigravity": 23004365,
+            "claude": 3001592
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 0.4802,
-          "tokens": 576850
+          "tokens": 576850,
+          "by_agent": {
+            "claude": 0.4802
+          },
+          "by_agent_tokens": {
+            "claude": 576850
+          }
         },
         {
           "day": "2026-10-19",
           "cost": 9.1168,
-          "tokens": 77163365
+          "tokens": 77163365,
+          "by_agent": {
+            "antigravity": 7.4057,
+            "codex": 1.7111
+          },
+          "by_agent_tokens": {
+            "antigravity": 67365055,
+            "codex": 9798310
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 1.8455,
-          "tokens": 15130906
+          "tokens": 15130906,
+          "by_agent": {
+            "antigravity": 1.8455
+          },
+          "by_agent_tokens": {
+            "antigravity": 15130906
+          }
         },
         {
           "day": "2026-10-22",
           "cost": 5.5281,
-          "tokens": 13991675
+          "tokens": 13991675,
+          "by_agent": {
+            "claude": 5.5281
+          },
+          "by_agent_tokens": {
+            "claude": 13991675
+          }
         },
         {
           "day": "2026-10-23",
-          "cost": 18.9728,
-          "tokens": 32111940
+          "cost": 9.193,
+          "tokens": 13995990,
+          "by_agent": {
+            "claude": 9.193
+          },
+          "by_agent_tokens": {
+            "claude": 13995990
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 6.6096,
+          "tokens": 6671426,
+          "by_agent": {
+            "claude": 6.6096
+          },
+          "by_agent_tokens": {
+            "claude": 6671426
+          }
         }
       ],
       "by_branch": [
         {
-          "branch": "HEAD",
-          "cost": 18.9728,
+          "branch": "feat/i18n-english",
+          "cost": 15.861,
           "sessions": 1
         },
         {
-          "branch": "feat/i18n-english",
-          "cost": 15.861,
+          "branch": "HEAD",
+          "cost": 15.8026,
           "sessions": 1
         },
         {
@@ -17855,26 +19692,26 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-23T13:31:42Z",
-          "ended": "2026-10-23T14:12:18Z",
+          "ended": "2026-10-24T11:51:03Z",
           "cwd": "/Users/alice/Documents/GitHub/token-usage",
           "branch": "HEAD",
           "models": [
-            "claude-opus-5-5",
-            "claude-fable-5-1"
+            "claude-fable-5-1",
+            "claude-opus-5-5"
           ],
-          "cost": 18.9728,
+          "cost": 15.8026,
           "tokens": {
-            "input": 1222,
-            "output": 284698,
-            "cache_read": 31052122,
-            "cache_write": 773898,
-            "thinking": 76634,
-            "total": 32111940
+            "input": 896,
+            "output": 146249,
+            "cache_read": 19777899,
+            "cache_write": 742372,
+            "thinking": 41315,
+            "total": 20667416
           },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 3,
-          "title": "Session title 430 (redacted)"
+          "share": 0.211111,
+          "attribution": "split",
+          "subagents": 13,
+          "title": "Session title 433 (redacted)"
         },
         {
           "id": "01a152e9-70a6-7822-a26d-738491657ee6",
@@ -17924,7 +19761,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 431 (redacted)"
+          "title": "Session title 434 (redacted)"
         },
         {
           "id": "4cca6715-996e-4b32-acf0-004788127390",
@@ -17949,7 +19786,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 432 (redacted)"
+          "title": "Session title 435 (redacted)"
         },
         {
           "id": "4fcd705a-02c1-4004-a12e-1c8c06f8d869",
@@ -17974,7 +19811,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 433 (redacted)"
+          "title": "Session title 436 (redacted)"
         },
         {
           "id": "e6561d93-9243-4336-b2d3-54e5395dbf1e",
@@ -17999,7 +19836,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 434 (redacted)"
+          "title": "Session title 437 (redacted)"
         },
         {
           "id": "daab7480-6d99-4156-8f7c-87a4f84728f5",
@@ -18024,7 +19861,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 435 (redacted)"
+          "title": "Session title 438 (redacted)"
         },
         {
           "id": "b8c3dcc5-1eb3-4dee-bb82-b3712a91b039",
@@ -18049,7 +19886,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 436 (redacted)"
+          "title": "Session title 439 (redacted)"
         },
         {
           "id": "01a105b4-bfef-7651-8013-7d8cb8306874",
@@ -18099,7 +19936,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 437 (redacted)"
+          "title": "Session title 440 (redacted)"
         }
       ]
     },
@@ -18271,67 +20108,145 @@
         {
           "day": "2026-07-30",
           "cost": 0.4689,
-          "tokens": 2106033
+          "tokens": 2106033,
+          "by_agent": {
+            "antigravity": 0.4689
+          },
+          "by_agent_tokens": {
+            "antigravity": 2106033
+          }
         },
         {
           "day": "2026-08-04",
           "cost": 1.2317,
-          "tokens": 7883847
+          "tokens": 7883847,
+          "by_agent": {
+            "antigravity": 1.2317
+          },
+          "by_agent_tokens": {
+            "antigravity": 7883847
+          }
         },
         {
           "day": "2026-08-17",
           "cost": 0.2195,
-          "tokens": 155209
+          "tokens": 155209,
+          "by_agent": {
+            "codex": 0.2195
+          },
+          "by_agent_tokens": {
+            "codex": 155209
+          }
         },
         {
           "day": "2026-08-18",
           "cost": 6.3656,
-          "tokens": 11447634
+          "tokens": 11447634,
+          "by_agent": {
+            "codex": 6.3656
+          },
+          "by_agent_tokens": {
+            "codex": 11447634
+          }
         },
         {
           "day": "2026-08-21",
           "cost": 0.1842,
-          "tokens": 12935947
+          "tokens": 12935947,
+          "by_agent": {
+            "codex": 0.1842
+          },
+          "by_agent_tokens": {
+            "codex": 12935947
+          }
         },
         {
           "day": "2026-08-22",
           "cost": 6.2879,
-          "tokens": 39251789
+          "tokens": 39251789,
+          "by_agent": {
+            "codex": 6.2879
+          },
+          "by_agent_tokens": {
+            "codex": 39251789
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 2.7413,
-          "tokens": 3480940
+          "tokens": 3480940,
+          "by_agent": {
+            "codex": 2.7413
+          },
+          "by_agent_tokens": {
+            "codex": 3480940
+          }
         },
         {
           "day": "2026-08-29",
           "cost": 4.1028,
-          "tokens": 17942735
+          "tokens": 17942735,
+          "by_agent": {
+            "codex": 4.1028
+          },
+          "by_agent_tokens": {
+            "codex": 17942735
+          }
         },
         {
           "day": "2026-08-30",
           "cost": 0.0768,
-          "tokens": 679349
+          "tokens": 679349,
+          "by_agent": {
+            "codex": 0.0768
+          },
+          "by_agent_tokens": {
+            "codex": 679349
+          }
         },
         {
           "day": "2026-09-22",
           "cost": 2.2239,
-          "tokens": 13866935
+          "tokens": 13866935,
+          "by_agent": {
+            "antigravity": 2.2239
+          },
+          "by_agent_tokens": {
+            "antigravity": 13866935
+          }
         },
         {
           "day": "2026-09-24",
           "cost": 3.6913,
-          "tokens": 29037154
+          "tokens": 29037154,
+          "by_agent": {
+            "antigravity": 3.6913
+          },
+          "by_agent_tokens": {
+            "antigravity": 29037154
+          }
         },
         {
           "day": "2026-09-26",
           "cost": 4.8299,
-          "tokens": 11390166
+          "tokens": 11390166,
+          "by_agent": {
+            "claude": 4.8299
+          },
+          "by_agent_tokens": {
+            "claude": 11390166
+          }
         },
         {
           "day": "2026-09-28",
           "cost": 2.6537,
-          "tokens": 4661384
+          "tokens": 4661384,
+          "by_agent": {
+            "claude": 2.6537
+          },
+          "by_agent_tokens": {
+            "claude": 4661384
+          }
         }
       ],
       "by_branch": [
@@ -18365,7 +20280,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 438 (redacted)"
+          "title": "Session title 441 (redacted)"
         },
         {
           "id": "eaf795a2-820f-4ba4-be9a-0ad717e77320",
@@ -18390,7 +20305,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 439 (redacted)"
+          "title": "Session title 442 (redacted)"
         },
         {
           "id": "01a04ec5-bc15-77f2-bc15-9dd67ad1527c",
@@ -18442,7 +20357,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 440 (redacted)"
+          "title": "Session title 443 (redacted)"
         },
         {
           "id": "01a0129b-1b1b-7653-a8a6-75496de27e08",
@@ -18467,7 +20382,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 1,
-          "title": "Session title 441 (redacted)"
+          "title": "Session title 444 (redacted)"
         },
         {
           "id": "37346578-8f9c-49e5-aecf-0770d63f9e05",
@@ -18492,7 +20407,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 442 (redacted)"
+          "title": "Session title 445 (redacted)"
         }
       ]
     },
@@ -18552,7 +20467,13 @@
         {
           "day": "2026-10-22",
           "cost": 25.2744,
-          "tokens": 67070278
+          "tokens": 67070278,
+          "by_agent": {
+            "claude": 25.2744
+          },
+          "by_agent_tokens": {
+            "claude": 67070278
+          }
         }
       ],
       "by_branch": [
@@ -18586,7 +20507,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 443 (redacted)"
+          "title": "Session title 446 (redacted)"
         }
       ]
     },
@@ -18661,27 +20582,57 @@
         {
           "day": "2026-08-27",
           "cost": 4.6603,
-          "tokens": 43344647
+          "tokens": 43344647,
+          "by_agent": {
+            "antigravity": 4.6603
+          },
+          "by_agent_tokens": {
+            "antigravity": 43344647
+          }
         },
         {
           "day": "2026-08-28",
           "cost": 7.356,
-          "tokens": 59831181
+          "tokens": 59831181,
+          "by_agent": {
+            "antigravity": 7.356
+          },
+          "by_agent_tokens": {
+            "antigravity": 59831181
+          }
         },
         {
           "day": "2026-09-05",
           "cost": 10.1282,
-          "tokens": 89726518
+          "tokens": 89726518,
+          "by_agent": {
+            "antigravity": 10.1282
+          },
+          "by_agent_tokens": {
+            "antigravity": 89726518
+          }
         },
         {
           "day": "2026-09-09",
           "cost": 1.8649,
-          "tokens": 15576192
+          "tokens": 15576192,
+          "by_agent": {
+            "antigravity": 1.8649
+          },
+          "by_agent_tokens": {
+            "antigravity": 15576192
+          }
         },
         {
           "day": "2026-09-28",
           "cost": 0.5796,
-          "tokens": 2847106
+          "tokens": 2847106,
+          "by_agent": {
+            "antigravity": 0.5796
+          },
+          "by_agent_tokens": {
+            "antigravity": 2847106
+          }
         }
       ],
       "by_branch": [
@@ -18725,7 +20676,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 444 (redacted)"
+          "title": "Session title 447 (redacted)"
         },
         {
           "id": "b311e261-8494-4fe6-aed8-0f5961c41504",
@@ -18750,7 +20701,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 445 (redacted)"
+          "title": "Session title 448 (redacted)"
         },
         {
           "id": "faf378ce-efbe-4792-9eac-5429f752b87b",
@@ -18775,7 +20726,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 446 (redacted)"
+          "title": "Session title 449 (redacted)"
         },
         {
           "id": "b2e0ef3d-3d9c-47f7-ad34-2a4a434d4057",
@@ -18800,7 +20751,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 447 (redacted)"
+          "title": "Session title 450 (redacted)"
         }
       ]
     },
@@ -18930,27 +20881,59 @@
         {
           "day": "2026-07-12",
           "cost": 4.9107,
-          "tokens": 29231867
+          "tokens": 29231867,
+          "by_agent": {
+            "antigravity": 2.0008,
+            "codex": 2.9099
+          },
+          "by_agent_tokens": {
+            "antigravity": 19444453,
+            "codex": 9787414
+          }
         },
         {
           "day": "2026-07-14",
           "cost": 1.4448,
-          "tokens": 4210758
+          "tokens": 4210758,
+          "by_agent": {
+            "antigravity": 1.4448
+          },
+          "by_agent_tokens": {
+            "antigravity": 4210758
+          }
         },
         {
           "day": "2026-07-15",
           "cost": 0.6045,
-          "tokens": 23029400
+          "tokens": 23029400,
+          "by_agent": {
+            "codex": 0.6045
+          },
+          "by_agent_tokens": {
+            "codex": 23029400
+          }
         },
         {
           "day": "2026-07-16",
           "cost": 0.3641,
-          "tokens": 13680494
+          "tokens": 13680494,
+          "by_agent": {
+            "codex": 0.3641
+          },
+          "by_agent_tokens": {
+            "codex": 13680494
+          }
         },
         {
           "day": "2026-07-20",
           "cost": 4.5849,
-          "tokens": 15817225
+          "tokens": 15817225,
+          "by_agent": {
+            "antigravity": 4.5849
+          },
+          "by_agent_tokens": {
+            "antigravity": 15817225
+          }
         }
       ],
       "by_branch": [
@@ -18984,7 +20967,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 448 (redacted)"
+          "title": "Session title 451 (redacted)"
         },
         {
           "id": "42d70271-03fe-4b93-81af-5013f4075395",
@@ -19010,7 +20993,7 @@
           "share": 0.244898,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 449 (redacted)"
+          "title": "Session title 452 (redacted)"
         },
         {
           "id": "019f57a3-c2b3-7763-88b9-01f0d6807ad2",
@@ -19035,7 +21018,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 450 (redacted)"
+          "title": "Session title 453 (redacted)"
         },
         {
           "id": "4429396b-afdc-4523-9854-c92e2e28623a",
@@ -19060,7 +21043,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 451 (redacted)"
+          "title": "Session title 454 (redacted)"
         }
       ]
     },
@@ -19176,17 +21159,35 @@
         {
           "day": "2026-09-13",
           "cost": 0.5351,
-          "tokens": 19539362
+          "tokens": 19539362,
+          "by_agent": {
+            "codex": 0.5351
+          },
+          "by_agent_tokens": {
+            "codex": 19539362
+          }
         },
         {
           "day": "2026-09-14",
           "cost": 7.8128,
-          "tokens": 40474219
+          "tokens": 40474219,
+          "by_agent": {
+            "antigravity": 7.8128
+          },
+          "by_agent_tokens": {
+            "antigravity": 40474219
+          }
         },
         {
           "day": "2026-10-17",
           "cost": 0.1514,
-          "tokens": 682143
+          "tokens": 682143,
+          "by_agent": {
+            "codex": 0.1514
+          },
+          "by_agent_tokens": {
+            "codex": 682143
+          }
         }
       ],
       "by_branch": [
@@ -19245,7 +21246,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 452 (redacted)"
+          "title": "Session title 455 (redacted)"
         },
         {
           "id": "7c151c51-61c0-47b7-87da-e0524a58bc3a",
@@ -19270,7 +21271,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 453 (redacted)"
+          "title": "Session title 456 (redacted)"
         },
         {
           "id": "c74dd8ea-3ba0-47df-8cf2-fbb8f963b198",
@@ -19295,7 +21296,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 454 (redacted)"
+          "title": "Session title 457 (redacted)"
         },
         {
           "id": "35f71720-6b18-49bf-a06d-00cb43961b0b",
@@ -19320,7 +21321,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 455 (redacted)"
+          "title": "Session title 458 (redacted)"
         },
         {
           "id": "01a09ac9-8d9d-7900-81fc-538a900a3ae0",
@@ -19419,17 +21420,35 @@
         {
           "day": "2026-07-24",
           "cost": 1.0106,
-          "tokens": 34646892
+          "tokens": 34646892,
+          "by_agent": {
+            "codex": 1.0106
+          },
+          "by_agent_tokens": {
+            "codex": 34646892
+          }
         },
         {
           "day": "2026-07-25",
           "cost": 0.6996,
-          "tokens": 22894178
+          "tokens": 22894178,
+          "by_agent": {
+            "codex": 0.6996
+          },
+          "by_agent_tokens": {
+            "codex": 22894178
+          }
         },
         {
           "day": "2026-07-26",
           "cost": 5.8374,
-          "tokens": 24415493
+          "tokens": 24415493,
+          "by_agent": {
+            "codex": 5.8374
+          },
+          "by_agent_tokens": {
+            "codex": 24415493
+          }
         }
       ],
       "by_branch": [
@@ -19463,7 +21482,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 456 (redacted)"
+          "title": "Session title 459 (redacted)"
         },
         {
           "id": "019f929c-3e87-7dd2-b4b2-b6c60f754581",
@@ -19489,7 +21508,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 457 (redacted)"
+          "title": "Session title 460 (redacted)"
         }
       ]
     },
@@ -19605,37 +21624,79 @@
         {
           "day": "2026-07-09",
           "cost": 0.1301,
-          "tokens": 1196322
+          "tokens": 1196322,
+          "by_agent": {
+            "antigravity": 0.1301
+          },
+          "by_agent_tokens": {
+            "antigravity": 1196322
+          }
         },
         {
           "day": "2026-07-10",
           "cost": 0.3338,
-          "tokens": 3809559
+          "tokens": 3809559,
+          "by_agent": {
+            "antigravity": 0.3338
+          },
+          "by_agent_tokens": {
+            "antigravity": 3809559
+          }
         },
         {
           "day": "2026-07-11",
           "cost": 0.1507,
-          "tokens": 1474075
+          "tokens": 1474075,
+          "by_agent": {
+            "antigravity": 0.1507
+          },
+          "by_agent_tokens": {
+            "antigravity": 1474075
+          }
         },
         {
           "day": "2026-07-12",
           "cost": 0.8012,
-          "tokens": 9325076
+          "tokens": 9325076,
+          "by_agent": {
+            "antigravity": 0.8012
+          },
+          "by_agent_tokens": {
+            "antigravity": 9325076
+          }
         },
         {
           "day": "2026-08-23",
           "cost": 0.0314,
-          "tokens": 1645257
+          "tokens": 1645257,
+          "by_agent": {
+            "codex": 0.0314
+          },
+          "by_agent_tokens": {
+            "codex": 1645257
+          }
         },
         {
           "day": "2026-10-13",
           "cost": 5.4241,
-          "tokens": 17632360
+          "tokens": 17632360,
+          "by_agent": {
+            "claude": 5.4241
+          },
+          "by_agent_tokens": {
+            "claude": 17632360
+          }
         },
         {
           "day": "2026-10-14",
           "cost": 0.5897,
-          "tokens": 1154304
+          "tokens": 1154304,
+          "by_agent": {
+            "claude": 0.5897
+          },
+          "by_agent_tokens": {
+            "claude": 1154304
+          }
         }
       ],
       "by_branch": [
@@ -19679,7 +21740,7 @@
           "share": 0.107527,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 458 (redacted)"
+          "title": "Session title 461 (redacted)"
         },
         {
           "id": "01a02ef4-fd32-7ee2-ba0f-1dd5c1d4b8f6",
@@ -19729,7 +21790,7 @@
           "share": 0.137291,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 459 (redacted)"
+          "title": "Session title 462 (redacted)"
         }
       ]
     },
@@ -19845,27 +21906,57 @@
         {
           "day": "2026-06-28",
           "cost": 1.4469,
-          "tokens": 1100776
+          "tokens": 1100776,
+          "by_agent": {
+            "codex": 1.4469
+          },
+          "by_agent_tokens": {
+            "codex": 1100776
+          }
         },
         {
           "day": "2026-07-16",
           "cost": 0.3102,
-          "tokens": 192316
+          "tokens": 192316,
+          "by_agent": {
+            "codex": 0.3102
+          },
+          "by_agent_tokens": {
+            "codex": 192316
+          }
         },
         {
           "day": "2026-08-10",
           "cost": 1.4976,
-          "tokens": 13200311
+          "tokens": 13200311,
+          "by_agent": {
+            "antigravity": 1.4976
+          },
+          "by_agent_tokens": {
+            "antigravity": 13200311
+          }
         },
         {
           "day": "2026-09-04",
           "cost": 0.0406,
-          "tokens": 2875757
+          "tokens": 2875757,
+          "by_agent": {
+            "codex": 0.0406
+          },
+          "by_agent_tokens": {
+            "codex": 2875757
+          }
         },
         {
           "day": "2026-10-20",
           "cost": 3.1029,
-          "tokens": 27245421
+          "tokens": 27245421,
+          "by_agent": {
+            "antigravity": 3.1029
+          },
+          "by_agent_tokens": {
+            "antigravity": 27245421
+          }
         }
       ],
       "by_branch": [
@@ -19909,7 +22000,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 460 (redacted)"
+          "title": "Session title 463 (redacted)"
         },
         {
           "id": "01a06cc7-c7c5-7a40-8579-992942116436",
@@ -19959,7 +22050,7 @@
           "share": 0.290598,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 461 (redacted)"
+          "title": "Session title 464 (redacted)"
         },
         {
           "id": "019f0c84-b849-7501-ab01-d130f2a73e7c",
@@ -19984,151 +22075,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 462 (redacted)"
-        }
-      ]
-    },
-    {
-      "id": "/Users/alice/Documents/GitHub/FocusApp/Packages/FocusKit",
-      "name": "FocusKit",
-      "remote": null,
-      "paths": [
-        "/Users/alice/Documents/GitHub/FocusApp/Packages/FocusKit"
-      ],
-      "path_missing": false,
-      "cost": 1.8748,
-      "tokens": {
-        "input": 539902,
-        "output": 29871,
-        "cache_read": 5296850,
-        "cache_write": 0,
-        "thinking": 16581,
-        "total": 5866623
-      },
-      "sessions": 2,
-      "first_active": "2026-07-14",
-      "last_active": "2026-07-20",
-      "by_agent": [
-        {
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "cost": 1.8748,
-          "tokens": {
-            "input": 539902,
-            "output": 29871,
-            "cache_read": 5296850,
-            "cache_write": 0,
-            "thinking": 16581,
-            "total": 5866623
-          },
-          "sessions": 2
-        }
-      ],
-      "by_model": [
-        {
-          "model": "gemini-default",
-          "agent": "antigravity",
-          "cost": 1.8686,
-          "tokens": {
-            "input": 538477,
-            "output": 29664,
-            "cache_read": 5292606,
-            "cache_write": 0,
-            "thinking": 16395,
-            "total": 5860747
-          },
-          "estimated": true
-        },
-        {
-          "model": "gemini-pro-default",
-          "agent": "antigravity",
-          "cost": 0.0062,
-          "tokens": {
-            "input": 1425,
-            "output": 207,
-            "cache_read": 4245,
-            "cache_write": 0,
-            "thinking": 186,
-            "total": 5877
-          },
-          "estimated": true
-        }
-      ],
-      "by_day": [
-        {
-          "day": "2026-07-14",
-          "cost": 0.1926,
-          "tokens": 561434
-        },
-        {
-          "day": "2026-07-19",
-          "cost": 1.0708,
-          "tokens": 3196225
-        },
-        {
-          "day": "2026-07-20",
-          "cost": 0.6113,
-          "tokens": 2108963
-        }
-      ],
-      "by_branch": [
-        {
-          "branch": "main",
-          "cost": 1.8748,
-          "sessions": 2
-        }
-      ],
-      "sessions_detail": [
-        {
-          "id": "6e447fcd-8fb8-4e46-ab0c-383f5869a96f",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-07-19T05:18:02Z",
-          "ended": "2026-07-19T05:28:46Z",
-          "cwd": "/Users/alice/Documents/GitHub/FocusApp",
-          "branch": "main",
-          "models": [
-            "gemini-default"
-          ],
-          "cost": 1.0708,
-          "tokens": {
-            "input": 315210,
-            "output": 18738,
-            "cache_read": 2862277,
-            "cache_write": 0,
-            "thinking": 11133,
-            "total": 3196225
-          },
-          "share": 0.261905,
-          "attribution": "split",
-          "subagents": 0,
-          "title": "Session title 463 (redacted)"
-        },
-        {
-          "id": "42d70271-03fe-4b93-81af-5013f4075395",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-07-15T03:46:10Z",
-          "ended": "2026-07-20T16:42:22Z",
-          "cwd": "/Users/alice/Documents/GitHub/China easy go",
-          "branch": "main",
-          "models": [
-            "gemini-default",
-            "gemini-pro-default"
-          ],
-          "cost": 0.804,
-          "tokens": {
-            "input": 224692,
-            "output": 11133,
-            "cache_read": 2434573,
-            "cache_write": 0,
-            "thinking": 5448,
-            "total": 2670398
-          },
-          "share": 0.032653,
-          "attribution": "split",
-          "subagents": 0,
-          "title": "Session title 464 (redacted)"
+          "title": "Session title 465 (redacted)"
         }
       ]
     },
@@ -20188,22 +22135,46 @@
         {
           "day": "2026-07-09",
           "cost": 0.0738,
-          "tokens": 678992
+          "tokens": 678992,
+          "by_agent": {
+            "antigravity": 0.0738
+          },
+          "by_agent_tokens": {
+            "antigravity": 678992
+          }
         },
         {
           "day": "2026-07-10",
           "cost": 0.1894,
-          "tokens": 2162182
+          "tokens": 2162182,
+          "by_agent": {
+            "antigravity": 0.1894
+          },
+          "by_agent_tokens": {
+            "antigravity": 2162182
+          }
         },
         {
           "day": "2026-07-11",
           "cost": 0.0856,
-          "tokens": 836637
+          "tokens": 836637,
+          "by_agent": {
+            "antigravity": 0.0856
+          },
+          "by_agent_tokens": {
+            "antigravity": 836637
+          }
         },
         {
           "day": "2026-07-12",
           "cost": 0.4547,
-          "tokens": 5292611
+          "tokens": 5292611,
+          "by_agent": {
+            "antigravity": 0.4547
+          },
+          "by_agent_tokens": {
+            "antigravity": 5292611
+          }
         }
       ],
       "by_branch": [
@@ -20237,7 +22208,7 @@
           "share": 0.077922,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 465 (redacted)"
+          "title": "Session title 466 (redacted)"
         }
       ]
     },
@@ -20297,7 +22268,13 @@
         {
           "day": "2026-07-08",
           "cost": 0.5505,
-          "tokens": 6553179
+          "tokens": 6553179,
+          "by_agent": {
+            "antigravity": 0.5505
+          },
+          "by_agent_tokens": {
+            "antigravity": 6553179
+          }
         }
       ],
       "by_branch": [
@@ -20331,7 +22308,7 @@
           "share": 0.115242,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 466 (redacted)"
+          "title": "Session title 467 (redacted)"
         }
       ]
     },
@@ -20391,7 +22368,13 @@
         {
           "day": "2026-10-11",
           "cost": 0.2608,
-          "tokens": 1269092
+          "tokens": 1269092,
+          "by_agent": {
+            "antigravity": 0.2608
+          },
+          "by_agent_tokens": {
+            "antigravity": 1269092
+          }
         }
       ],
       "by_branch": [
@@ -20425,7 +22408,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 467 (redacted)"
+          "title": "Session title 468 (redacted)"
         }
       ]
     },
@@ -20499,7 +22482,13 @@
         {
           "day": "2026-10-22",
           "cost": 0.1118,
-          "tokens": 411461
+          "tokens": 411461,
+          "by_agent": {
+            "codex": 0.1118
+          },
+          "by_agent_tokens": {
+            "codex": 411461
+          }
         }
       ],
       "by_branch": [
@@ -20594,7 +22583,13 @@
         {
           "day": "2026-07-30",
           "cost": 0.034,
-          "tokens": 73381
+          "tokens": 73381,
+          "by_agent": {
+            "antigravity": 0.034
+          },
+          "by_agent_tokens": {
+            "antigravity": 73381
+          }
         }
       ],
       "by_branch": [
@@ -20628,7 +22623,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 468 (redacted)"
+          "title": "Session title 469 (redacted)"
         }
       ]
     }
@@ -20671,7 +22666,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 469 (redacted)"
+          "title": "Session title 470 (redacted)"
         },
         {
           "id": "1a677e14-4b41-4cf2-934c-9eaa943e4ba4",
@@ -20696,7 +22691,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 470 (redacted)"
+          "title": "Session title 471 (redacted)"
         },
         {
           "id": "91114446-dfd5-4693-8018-cdbe9f90eaca",
@@ -20721,7 +22716,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 471 (redacted)"
+          "title": "Session title 472 (redacted)"
         },
         {
           "id": "16196750-23c1-41f6-acad-5430e5249027",
@@ -20746,7 +22741,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 472 (redacted)"
+          "title": "Session title 473 (redacted)"
         },
         {
           "id": "75f3baed-11b0-48e2-ae59-f1cbf44c752a",
@@ -20771,7 +22766,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 473 (redacted)"
+          "title": "Session title 474 (redacted)"
         },
         {
           "id": "703b84d5-5ea5-411f-96dc-affa2545baa7",
@@ -20796,7 +22791,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 474 (redacted)"
+          "title": "Session title 475 (redacted)"
         },
         {
           "id": "ef4d7fbf-5ea1-438a-a285-ecc3f2e0f9b2",
@@ -20821,7 +22816,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 475 (redacted)"
+          "title": "Session title 476 (redacted)"
         },
         {
           "id": "c7e708ec-6177-431c-a5fe-0cebfcabdb13",
@@ -20846,7 +22841,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 476 (redacted)"
+          "title": "Session title 477 (redacted)"
         },
         {
           "id": "01a136d8-3015-7fc2-a43f-df9aa2f69e00",
@@ -21448,7 +23443,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 477 (redacted)"
+          "title": "Session title 478 (redacted)"
         },
         {
           "id": "01a000fd-204d-7a13-b88b-e0e105952c9c",
@@ -21473,7 +23468,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 478 (redacted)"
+          "title": "Session title 479 (redacted)"
         },
         {
           "id": "019feafd-a790-7b43-9adc-17e72f4a4f58",
@@ -21498,7 +23493,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 479 (redacted)"
+          "title": "Session title 480 (redacted)"
         },
         {
           "id": "019feafa-862b-70f1-81f9-d42e808b28f1",
@@ -21523,7 +23518,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 480 (redacted)"
+          "title": "Session title 481 (redacted)"
         },
         {
           "id": "019feaeb-5d02-7542-9368-e7fa1e29fdf2",
@@ -21548,7 +23543,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 481 (redacted)"
+          "title": "Session title 482 (redacted)"
         },
         {
           "id": "019feac5-06c0-7c30-a8de-d2ca48ce7a38",
@@ -21573,7 +23568,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 482 (redacted)"
+          "title": "Session title 483 (redacted)"
         },
         {
           "id": "019fd59f-4557-7403-81bd-886ecaab1125",
@@ -21598,7 +23593,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 483 (redacted)"
+          "title": "Session title 484 (redacted)"
         },
         {
           "id": "019fcda8-00d9-77b2-a69b-5b252dc059fb",
@@ -21623,7 +23618,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 484 (redacted)"
+          "title": "Session title 485 (redacted)"
         },
         {
           "id": "019fc9c1-cb77-7f13-b503-7371f852965b",
@@ -21648,7 +23643,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 485 (redacted)"
+          "title": "Session title 486 (redacted)"
         },
         {
           "id": "019fc92b-2f9c-7cc1-a288-b0ef74889a41",
@@ -21673,7 +23668,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 486 (redacted)"
+          "title": "Session title 487 (redacted)"
         },
         {
           "id": "019fc12f-86ba-7c23-80e2-c8a07554eed6",
@@ -21723,7 +23718,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 487 (redacted)"
+          "title": "Session title 488 (redacted)"
         },
         {
           "id": "019f54c5-1a00-7922-baa5-fbabb4c02710",
@@ -21748,7 +23743,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 488 (redacted)"
+          "title": "Session title 489 (redacted)"
         }
       ]
     },

@@ -1,0 +1,441 @@
+import SwiftUI
+import KanjoCore
+
+/// 详情页 Locations 一节展开后的路径列表：只列主路径，临时目录（scratchpad / worktree 等）折叠在一个文字按钮后面。
+/// 全部是临时路径时默认展开。
+struct ProjectPathsView: View {
+    let primary: [String]
+    let temporary: [String]
+    let pathMissing: Bool
+    @State private var showTemporary: Bool
+
+    init(paths: [String], pathMissing: Bool) {
+        let split = splitPaths(paths)
+        primary = split.primary
+        temporary = split.temporary
+        self.pathMissing = pathMissing
+        _showTemporary = State(initialValue: split.primary.isEmpty)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(primary, id: \.self) { pathRow($0) }
+            if !temporary.isEmpty {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { showTemporary.toggle() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: showTemporary ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 7.5, weight: .bold))
+                        Text(toggleTitle)
+                    }
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 1)
+                .help("Scratchpads, worktrees and other temporary directories agents worked in.")
+                if showTemporary {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(temporary, id: \.self) { pathRow($0, size: 9.5) }
+                    }
+                    .padding(.leading, 10)
+                }
+            }
+        }
+    }
+
+    private var toggleTitle: String {
+        let noun = temporary.count == 1 ? "temporary path" : "temporary paths"
+        return showTemporary ? "Hide \(temporary.count) \(noun)" : "\(temporary.count) \(noun)"
+    }
+
+    private func pathRow(_ p: String, size: CGFloat = 10) -> some View {
+        Text(p)
+            .font(.system(size: size, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .strikethrough(pathMissing)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+            .help(p)
+    }
+}
+
+/// 详情页 / 桶详情页通用的页面骨架：返回按钮 + 各节，等间距排列。
+struct DetailPage<Content: View>: View {
+    let backTitle: String
+    var scrollTo: String? = nil     // 开发开关 --route 用：出现后滚到这个 id
+    let onBack: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
+                    BackButton(title: backTitle, action: onBack)
+                        .padding(.leading, Metrics.rowInset - 4)
+                        .padding(.bottom, -6)
+                    content()
+                }
+                .padding(.horizontal, Metrics.pagePadding)
+                .padding(.top, 12).padding(.bottom, 10)
+            }
+            .task(id: scrollTo) {
+                guard let a = scrollTo else { return }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                proxy.scrollTo(a, anchor: .bottom)
+            }
+        }
+    }
+}
+
+struct ProjectDetailView: View {
+    static let bottomAnchor = "detail-bottom"
+    static let locationsOpenAnchor = "detail-locations-open"
+
+    let project: Project
+    let report: UsageReport
+    var devAnchor: String? = nil
+    let onBack: () -> Void
+
+    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @State private var showAllModels = false
+    @State private var showAllBranches = false
+    @State private var showLocations = false
+    private let collapsedLimit = 8
+
+    private var cur: String { report.currency }
+    private var devScrollTarget: String? {
+        devAnchor == Self.bottomAnchor || devAnchor == Self.locationsOpenAnchor ? Self.bottomAnchor : nil
+    }
+
+    // 范围下：金额、tokens（只有 total）、By agent、By day、热力条、Sessions 按范围；
+    // By model / By branch 没有按天数据，不过滤，标题旁标「All time」。
+    var body: some View {
+        let ctx = RangeContext(report: report, raw: rangeRaw)
+        let f = ctx.filter(project)
+        let shown = f.projected
+        DetailPage(backTitle: "Projects", scrollTo: devScrollTarget, onBack: onBack) {
+            header(ctx, shown)
+            tokensSection(shown, isAll: ctx.isAll)
+            agentsSection(shown)
+            modelsSection(isAll: ctx.isAll)
+            PanelSection("By day", inset: true) {
+                DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown))
+            }
+            branchesSection(isAll: ctx.isAll)
+            PanelSection("Sessions · \(shown.sessionsDetail.count)", inset: true) {
+                SessionList(sessions: shown.sessionsDetail,
+                            threshold: report.config.dominantThreshold, currency: cur)
+            }
+            locationsSection.id(Self.bottomAnchor)
+        }
+        .id(project.id)
+        .onAppear { if devAnchor == Self.locationsOpenAnchor { showLocations = true } }
+    }
+
+    // hero：项目名 + 范围控件 + 金额；日期、范围说明、cost_note、remote 是小字注脚。本地路径放在页面最底部的 Locations。
+    private func header(_ ctx: RangeContext, _ shown: Project) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(project.name).font(.system(size: 15, weight: .semibold)).lineLimit(2)
+                    .textSelection(.enabled)
+                if project.pathMissing {
+                    Badge(text: "path missing", style: .warn, help: "None of this project's local paths exist any more.")
+                }
+                if project.remote == nil {
+                    Badge(text: "local", help: "No git remote; identified by its absolute path.")
+                }
+            }
+            RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable)
+                .padding(.top, 4).padding(.bottom, 2)
+            HStack(alignment: .bottom, spacing: 10) {
+                HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("Last 8 weeks").font(.system(size: 9.5)).foregroundStyle(.secondary)
+                    HeatStripView(weeks: shown.heatWeeks(endingOn: report.heatEndDate),
+                                  agentLabels: report.agentLabels, currency: cur,
+                                  cell: CGSize(width: 12, height: 20), radius: 3)
+                }
+                .padding(.bottom, 5)
+            }
+            Text("\(shown.sessions) session\(shown.sessions == 1 ? "" : "s") · \(shown.firstActive == nil ? "no usage" : ShortDate.range(shown.firstActive, shown.lastActive))")
+                .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+            if let caption = ctx.caption {
+                RangeCaption(text: caption).padding(.top, 1)
+            }
+            CostNote(text: report.costNote).padding(.top, 2)
+
+            Group {
+                if let r = project.remote {
+                    Label(r, systemImage: "link")
+                } else {
+                    Label("local repository", systemImage: "internaldrive")
+                }
+            }
+            .font(.system(size: 10.5)).foregroundStyle(.secondary)
+            .labelStyle(TightLabelStyle())
+            .lineLimit(1).truncationMode(.middle)
+            .textSelection(.enabled)
+            .padding(.top, 8)
+        }
+        .padding(.horizontal, Metrics.rowInset)
+    }
+
+    /// 最底部的本地路径：默认折叠成一行「7 paths · 16 temporary」+ Show；展开后是主路径和折叠的临时路径。
+    private var locationsSection: some View {
+        let split = splitPaths(project.paths)
+        return VStack(alignment: .leading, spacing: 6) {
+            SectionTitle("Locations")
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(locationsCaption(primary: split.primary.count, temporary: split.temporary.count))
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+                if project.pathMissing {
+                    Badge(text: "path missing", style: .warn, help: "None of this project's local paths exist any more.")
+                }
+                Spacer(minLength: 8)
+                if !project.paths.isEmpty {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { showLocations.toggle() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(showLocations ? "Hide" : "Show")
+                            Image(systemName: showLocations ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 8, weight: .semibold))
+                        }
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.accentColor)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if showLocations {
+                ProjectPathsView(paths: project.paths, pathMissing: project.pathMissing)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, Metrics.rowInset)
+    }
+
+    private func locationsCaption(primary: Int, temporary: Int) -> String {
+        if primary + temporary == 0 { return "No local paths" }
+        if primary == 0 { return "\(temporary) temporary path\(temporary == 1 ? "" : "s")" }
+        let main = "\(primary) path\(primary == 1 ? "" : "s")"
+        return temporary == 0 ? main : "\(main) · \(temporary) temporary"
+    }
+
+    /// 输入 / 输出 / 缓存的拆分只有全量数据：非 All 范围只显示 total。
+    @ViewBuilder private func tokensSection(_ shown: Project, isAll: Bool) -> some View {
+        if isAll {
+            tokensBreakdown(shown.tokens)
+        } else {
+            PanelSection("Tokens", inset: true) {
+                Text("\(Fmt.tokens(shown.tokens.total)) total").font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+            } content: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(Fmt.tokens(shown.tokens.total))
+                        .font(.system(size: 13, weight: .medium, design: .rounded).monospacedDigit())
+                    Text("Breakdown by type (input, output, cache) is only available for All.")
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func tokensBreakdown(_ t: Tokens) -> some View {
+        PanelSection("Tokens", inset: true) {
+            Text("\(Fmt.tokens(t.total)) total").font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+        } content: {
+            tokenBar(t)
+                .padding(.bottom, 2)
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                GridRow {
+                    tok("Input", t.input, AgentPalette.tokenInput, "Non-cached input tokens")
+                    tok("Output", t.output, AgentPalette.tokenOutput, "Output tokens, including thinking")
+                    tok("Thinking", t.thinking, nil, "Subset of output; shown for reference, not added to the total. Some agents report 0.")
+                }
+                GridRow {
+                    tok("Cache read", t.cacheRead, AgentPalette.tokenCacheRead, "Tokens read from prompt cache")
+                    tok("Cache write", t.cacheWrite, AgentPalette.tokenCacheWrite, "Tokens written to prompt cache")
+                    Color.clear.frame(height: 1)
+                }
+            }
+        }
+    }
+
+    private func tok(_ label: String, _ v: Int, _ color: Color?, _ help: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                if let color { Circle().fill(color).frame(width: 6, height: 6) }
+                else { Circle().strokeBorder(Color.secondary, lineWidth: 1).frame(width: 6, height: 6) }
+                Text(label).font(.system(size: 10.5)).foregroundStyle(.secondary)
+            }
+            Text(Fmt.tokens(v)).font(.system(size: 13, weight: .medium, design: .rounded).monospacedDigit())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help(help)
+    }
+
+    /// 四类计费 token 的构成条（thinking 是 output 子集，不单列）。
+    private func tokenBar(_ t: Tokens) -> some View {
+        let parts: [(Int, Color)] = [(t.input, AgentPalette.tokenInput), (t.output, AgentPalette.tokenOutput),
+                                     (t.cacheRead, AgentPalette.tokenCacheRead), (t.cacheWrite, AgentPalette.tokenCacheWrite)]
+        let total = max(parts.reduce(0) { $0 + $1.0 }, 1)
+        return GeometryReader { geo in
+            let visible = parts.filter { $0.0 > 0 }
+            let avail = max(geo.size.width - CGFloat(max(visible.count - 1, 0)), 0)
+            HStack(spacing: 1) {
+                ForEach(Array(visible.enumerated()), id: \.offset) { _, p in
+                    Rectangle().fill(p.1)
+                        .frame(width: max(avail * CGFloat(p.0) / CGFloat(total), 2))
+                }
+            }
+            .clipShape(Capsule())
+        }
+        .frame(height: 4)
+    }
+
+    private func agentsSection(_ shown: Project) -> some View {
+        let maxCost = shown.byAgent.map(\.cost).max() ?? 0
+        return PanelSection("By agent", inset: true) {
+            VStack(spacing: 10) {
+                if shown.byAgent.isEmpty {
+                    Text("No usage in this range.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                ForEach(shown.byAgent) { a in
+                    HBarRow(label: a.label, color: AgentPalette.color(for: a.agent),
+                            fraction: maxCost > 0 ? a.cost / maxCost : 0,
+                            value: Fmt.money(a.cost, currency: cur),
+                            detail: "\(a.sessions) sess · \(Fmt.tokens(a.tokens.total)) tok · \(Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0))")
+                }
+            }
+        }
+    }
+
+    private func modelsSection(isAll: Bool) -> some View {
+        let all = project.byModel
+        let shown = showAllModels ? all : Array(all.prefix(collapsedLimit))
+        return PanelSection("By model", inset: true) {
+            if !isAll { AllTimeBadge(what: "models") }
+        } content: {
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                GridRow {
+                    Text("Model").frame(maxWidth: .infinity, alignment: .leading); Text("Tokens").gridColumnAlignment(.trailing); Text("Cost").gridColumnAlignment(.trailing)
+                }
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                ForEach(shown) { m in
+                    GridRow {
+                        HStack(spacing: 5) {
+                            AgentDot(agent: m.agent, size: 6)
+                            Text(m.model).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                            if m.estimated {
+                                Badge(text: "est.", style: .warn,
+                                      help: "Price unknown for this model; estimated from the most expensive tier of its family.")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help("\(m.model) (\(m.agent))")
+                        Text(Fmt.tokens(m.tokens.total)).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                        Text(Fmt.money(m.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                    }
+                }
+            }
+            if all.count > collapsedLimit {
+                ShowAllButton(expanded: $showAllModels, total: all.count, noun: "models")
+            }
+        }
+    }
+
+    private func branchesSection(isAll: Bool) -> some View {
+        let all = project.byBranch
+        let shown = showAllBranches ? all : Array(all.prefix(collapsedLimit))
+        return PanelSection("By branch", inset: true) {
+            if !isAll { AllTimeBadge(what: "branches") }
+        } content: {
+            if all.isEmpty {
+                Text("No branch information for this project.").font(.system(size: 11)).foregroundStyle(.secondary)
+            } else {
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                    GridRow {
+                        Text("Branch").frame(maxWidth: .infinity, alignment: .leading); Text("Sessions").gridColumnAlignment(.trailing); Text("Cost").gridColumnAlignment(.trailing)
+                    }
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    ForEach(shown) { b in
+                        GridRow {
+                            Text(b.branch).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                                .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .help(b.branch)
+                            Text("\(b.sessions)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                            Text(Fmt.money(b.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                        }
+                    }
+                }
+                if all.count > collapsedLimit {
+                    ShowAllButton(expanded: $showAllBranches, total: all.count, noun: "branches")
+                }
+            }
+        }
+    }
+}
+
+/// 范围下不能按天过滤的一节（By model / By branch）：标题右侧的「All time」小标签。
+struct AllTimeBadge: View {
+    let what: String
+    var body: some View {
+        Badge(text: "All time", help: "The data has no daily breakdown for \(what), so this section ignores the time range.")
+    }
+}
+
+/// 图标与文字间距收紧的 Label（系统默认间距在小字号下太松）。
+struct TightLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            configuration.icon.font(.system(size: 9))
+            configuration.title
+        }
+    }
+}
+
+struct BucketDetailView: View {
+    let kind: BucketKind
+    let report: UsageReport
+    let onBack: () -> Void
+
+    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+
+    // 桶没有 by_day：范围下按会话的 started 过滤，金额是这些会话之和。
+    var body: some View {
+        let ctx = RangeContext(report: report, raw: rangeRaw)
+        let raw = kind == .unattributed ? report.buckets.unattributed : report.buckets.excluded
+        let b = RangeEngine.filter(raw, range: ctx.spec)
+        DetailPage(backTitle: "Overview", onBack: onBack) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(kind == .unattributed ? "Unattributed" : "Excluded").font(.system(size: 15, weight: .semibold))
+                HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
+                Text("\(b.sessions) session\(b.sessions == 1 ? "" : "s") · \(b.firstActive == nil ? "no usage" : ShortDate.range(b.firstActive, b.lastActive))")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                if let caption = ctx.caption {
+                    RangeCaption(text: caption + " · by session start").padding(.top, 1)
+                }
+                CostNote(text: report.costNote).padding(.top, 2)
+                Text(AttributionInfo.explanation(kind == .unattributed ? "none" : "excluded",
+                                                 threshold: report.config.dominantThreshold))
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+            }
+            .padding(.horizontal, Metrics.rowInset)
+            PanelSection("Sessions · \(b.sessionsDetail.count)", inset: true) {
+                SessionList(sessions: b.sessionsDetail, threshold: report.config.dominantThreshold,
+                            currency: report.currency)
+            }
+        }
+    }
+}

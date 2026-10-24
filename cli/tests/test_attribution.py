@@ -3,13 +3,13 @@ import os
 import tempfile
 import unittest
 
-from aicost import attribution as attr
-from aicost.config import Config, ConfigError, from_dict, load, parse_toml_subset
-from aicost.export import ScanResult, build_export
-from aicost.identity import Resolver, ScratchpadDecoder
-from aicost.pricing import PriceBook
-from aicost.sources import claude
-from aicost.sources.base import Message, Session
+from kanjo import attribution as attr
+from kanjo.config import Config, ConfigError, from_dict, load, parse_toml_subset
+from kanjo.export import ScanResult, build_export
+from kanjo.identity import Resolver, ScratchpadDecoder
+from kanjo.pricing import PriceBook
+from kanjo.sources import claude
+from kanjo.sources.base import Message, Session
 
 from tests.support import ALICE, GITHUB, FakeFS
 

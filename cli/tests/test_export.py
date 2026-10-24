@@ -9,21 +9,22 @@ import tempfile
 import unittest
 from unittest import mock
 
-from aicost import cli
-from aicost.config import Config
-from aicost.export import build_export, check_invariants
+from kanjo import cli
+from kanjo.config import Config
+from kanjo.export import _apportion_by_weight, build_export, check_invariants
 
 from tests.support import ALICE, FIXTURE_DIRS, FIXTURES, GITHUB, standard_fs, validate_contract
 
 FOCUS = "github.com/alice/focusapp"
 TCF = GITHUB + "/tcf-canada"
+NO_TOKEI = os.path.join(FIXTURES, "no-tokei")  # does not exist: keeps the real ~/.tokei out of the tests
 
 
 class FixtureExportTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.fs = standard_fs()
-        cls.doc = build_export(dirs=FIXTURE_DIRS, fs_root=cls.fs.root, home=ALICE)
+        cls.doc = build_export(dirs=FIXTURE_DIRS, fs_root=cls.fs.root, home=ALICE, tokei_dir=NO_TOKEI)
         cls.by_id = {p["id"]: p for p in cls.doc["projects"]}
 
     @classmethod
@@ -63,6 +64,72 @@ class FixtureExportTest(unittest.TestCase):
         self.assertEqual(s["attribution"], "dominant")
         self.assertIn("/scratchpad/redesign", s["cwd"])
 
+    def test_by_day_by_agent(self):
+        for p in self.doc["projects"]:
+            agents = {a["agent"] for a in p["by_agent"]}
+            for d in p["by_day"]:
+                self.assertIn("by_agent", d)
+                self.assertTrue(d["by_agent"])
+                self.assertLessEqual(set(d["by_agent"]), agents)
+                self.assertLessEqual(abs(sum(d["by_agent"].values()) - d["cost"]), 0.01)
+            # per-agent day costs add back up to the project-level by_agent costs
+            for a in p["by_agent"]:
+                total = sum(d["by_agent"].get(a["agent"], 0) for d in p["by_day"])
+                self.assertAlmostEqual(total, a["cost"], delta=0.01)
+        # FocusApp uses all three agents, so at least one agent key appears across its days
+        focus_agents = set().union(*(d["by_agent"] for d in self.by_id[FOCUS]["by_day"]))
+        self.assertEqual(focus_agents, {"claude", "antigravity", "codex"})
+        for d in self.doc["buckets"]["unattributed"], self.doc["buckets"]["excluded"]:
+            self.assertNotIn("by_day", d)
+
+    def test_by_day_by_agent_mismatch_is_reported(self):
+        doc = json.loads(json.dumps(self.doc))
+        day = doc["projects"][0]["by_day"][0]
+        key = next(iter(day["by_agent"]))
+        day["by_agent"][key] += 0.5
+        self.assertTrue(any("by_agent sum" in x for x in check_invariants(doc)))
+        del day["by_agent"]
+        self.assertTrue(any("by_agent sum" in x for x in check_invariants(doc)))
+
+    def test_by_day_by_agent_tokens(self):
+        for p in self.doc["projects"]:
+            agents = {a["agent"] for a in p["by_agent"]}
+            for d in p["by_day"]:
+                self.assertIn("by_agent_tokens", d)
+                self.assertEqual(set(d["by_agent_tokens"]), set(d["by_agent"]))
+                self.assertLessEqual(set(d["by_agent_tokens"]), agents)
+                self.assertTrue(all(isinstance(v, int) for v in d["by_agent_tokens"].values()))
+                self.assertEqual(sum(d["by_agent_tokens"].values()), d["tokens"])
+            # per-agent day tokens add back up to the project-level by_agent tokens (rounding: <= 1 per day)
+            for a in p["by_agent"]:
+                total = sum(d["by_agent_tokens"].get(a["agent"], 0) for d in p["by_day"])
+                self.assertLessEqual(abs(total - a["tokens"]["total"]), len(p["by_day"]))
+        focus_agents = set().union(*(d["by_agent_tokens"] for d in self.by_id[FOCUS]["by_day"]))
+        self.assertEqual(focus_agents, {"claude", "antigravity", "codex"})
+
+    def test_by_day_by_agent_tokens_mismatch_is_reported(self):
+        doc = json.loads(json.dumps(self.doc))
+        day = doc["projects"][0]["by_day"][0]
+        key = next(iter(day["by_agent_tokens"]))
+        day["by_agent_tokens"][key] += 1
+        self.assertTrue(any("by_agent_tokens sum" in x for x in check_invariants(doc)))
+        del day["by_agent_tokens"]
+        self.assertTrue(any("by_agent_tokens sum" in x for x in check_invariants(doc)))
+
+    def test_apportion_by_weight_is_exact(self):
+        self.assertEqual(_apportion_by_weight(10, {"a": 1, "b": 1, "c": 1}), {"a": 4, "b": 3, "c": 3})
+        self.assertEqual(_apportion_by_weight(7, {"claude": 2.5, "codex": 0.5}), {"claude": 6, "codex": 1})
+        self.assertEqual(_apportion_by_weight(5, {"claude": 123.4}), {"claude": 5})
+        self.assertEqual(_apportion_by_weight(0, {"a": 0.0, "b": 0.0}), {"a": 0, "b": 0})
+        for total in (0, 1, 999, 123457):
+            parts = _apportion_by_weight(total, {"a": 0.3333, "b": 1e-9, "c": 7.1, "d": 2.25})
+            self.assertEqual(sum(parts.values()), total)
+
+    def test_quota_windows_empty_without_tokei(self):
+        self.assertEqual(self.doc["quota_windows"], {})
+        keys = list(self.doc)
+        self.assertEqual(keys.index("quota_windows"), keys.index("config") + 1)
+
     def test_titles_and_branches(self):
         for p in self.doc["projects"]:
             for s in p["sessions_detail"]:
@@ -83,7 +150,7 @@ class FixtureExportTest(unittest.TestCase):
 
     def test_threshold_is_reported(self):
         doc = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE,
-                           config=Config(dominant_threshold=1.0))
+                           config=Config(dominant_threshold=1.0), tokei_dir=NO_TOKEI)
         self.assertEqual(doc["config"]["dominant_threshold"], 1.0)
         validate_contract(self, doc)
 
@@ -105,7 +172,7 @@ class ParseFailedTest(unittest.TestCase):
                 h.write(b"not a sqlite file at all" * 100)
             dirs = dict(FIXTURE_DIRS, claude=[claude_dir],
                         antigravity=FIXTURE_DIRS["antigravity"] + [os.path.dirname(bad_db)])
-            doc = build_export(dirs=dirs, fs_root=fs.root, home=ALICE)
+            doc = build_export(dirs=dirs, fs_root=fs.root, home=ALICE, tokei_dir=NO_TOKEI)
             validate_contract(self, doc)
             self.assertEqual(doc["buckets"]["parse_failed"], {"sessions": 2, "files": sorted([broken, bad_db])})
             self.assertEqual(doc["totals"]["unique_sessions"], 5)
@@ -121,6 +188,7 @@ class SampleFileTest(unittest.TestCase):
         with open(os.path.join(FIXTURES, "export_sample.json"), encoding="utf-8") as h:
             doc = json.load(h)
         validate_contract(self, doc)
+        self.assertEqual(check_invariants(doc), [])
         self.assertGreater(len(doc["projects"]), 1)
         text = json.dumps(doc)
         self.assertNotIn("/Users/dogecoin", text)
@@ -130,10 +198,11 @@ class CliTest(unittest.TestCase):
     def setUp(self):
         self.cache = tempfile.mkdtemp()
         self.env = mock.patch.dict(os.environ, {
-            "AICOST_CLAUDE_DIR": FIXTURE_DIRS["claude"][0],
-            "AICOST_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
-            "AICOST_CODEX_DIR": FIXTURE_DIRS["codex"][0],
-            "AICOST_CACHE_DIR": self.cache,
+            "KANJO_CLAUDE_DIR": FIXTURE_DIRS["claude"][0],
+            "KANJO_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
+            "KANJO_CODEX_DIR": FIXTURE_DIRS["codex"][0],
+            "KANJO_CACHE_DIR": self.cache,
+            "KANJO_TOKEI_DIR": NO_TOKEI,
         })
         self.env.start()
 

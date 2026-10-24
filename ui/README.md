@@ -1,7 +1,7 @@
-# AICost (macOS menu bar UI)
+# Kanjo (macOS menu bar app)
 
 Menu bar app that answers "how much AI money has this git repo cost?" by rendering
-the JSON produced by `aicost export` (format: [`../CONTRACT.md`](../CONTRACT.md)).
+the JSON produced by `kanjo export` (format: [`../CONTRACT.md`](../CONTRACT.md)).
 
 - Swift 5.9+, macOS 13+, SwiftUI `MenuBarExtra` + Swift Charts. SwiftPM only, no Xcode project, no dependencies, no network.
 
@@ -10,21 +10,88 @@ the JSON produced by `aicost export` (format: [`../CONTRACT.md`](../CONTRACT.md)
 ```bash
 cd ui
 swift build
-swift run AICost                      # menu bar icon + total cost; click it for the panel
+swift run Kanjo                       # menu bar icon + total cost; click it for the panel
 swift test
 ```
 
 Development helpers:
 
 ```bash
-swift run AICost --data /path/to/data.json    # use this file (overrides Settings)
-AICOST_DATA=/path/to/data.json swift run AICost
-swift run AICost --window                     # also show the panel in a normal window (screenshots/debugging)
-swift run AICost --window --route project:0   # open straight on a page (for screenshots)
+swift run Kanjo --data /path/to/data.json     # use this file (overrides Settings)
+KANJO_DATA=/path/to/data.json swift run Kanjo
+swift run Kanjo --window                      # also show the panel in a transparent normal window (screenshots/debugging)
+swift run Kanjo --window --route project:0    # open straight on a page (for screenshots)
+swift run Kanjo --window --route project:0:locations   # project page scrolled to the bottom, Locations expanded
 ```
 
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
-`project:<index>` (0-based, in cost order), `bucket:unattributed`, `bucket:excluded`, `settings`.
+`project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),
+`project:<index>:locations` (bottom, with Locations expanded), `bucket:unattributed`, `bucket:excluded`, `settings`, `settings-bottom` (Settings scrolled to Quota reset).
+
+## Overview: mosaic, heat strips, hide / pin
+
+The overview reads top to bottom as text → graphic → list: the total (with one summary line —
+date range · projects · sessions · tokens — and the cost note), the mosaic, then the project list.
+The panel is 360 pt wide; its background is Liquid Glass on macOS 26+ and `.regularMaterial` on 13–25.
+
+- **Colors** — one color per agent, light / dark (`Views/Components/AgentPalette.swift`): Claude clay
+  `#D97757` / `#E8926F`, Codex blue `#3E79D6` / `#6FA0F0`, Antigravity violet `#7A6AD8` / `#9B8DF0`;
+  "+N more" and unknown agents neutral grey `#9A9A9A` / `#6E6E73`. Mosaic tiles, heat strips,
+  the project page chart and agent dots all use this set.
+- **Mosaic** — under the total, a squarified treemap (`KanjoCore/Treemap.swift`): one tile per project,
+  area = cost, color = the project's dominant agent at full saturation (corner radius 4, 2 pt gaps, no stroke).
+  Projects under 1.5% of the area merge into a grey "+N more" tile. Click a tile to open the project.
+  Labels are never truncated: name + amount only on tiles at least 72 × 40 pt, name alone when the tile is
+  at least 72 pt wide but shorter, nothing on smaller tiles or when the name does not fit; every tile has a
+  tooltip with the full name and amount.
+  On macOS 26+ the tiles are tinted Liquid Glass (`Views/Components/Glass.swift`); older systems get solid fills.
+- **Project list** — rows sit directly on the panel (hairline separators, hover highlight). First line: name,
+  1–3 agent dots (agents the project used, by cost), `local` / `path missing`, amount. Second line:
+  sessions · tokens (`tokens.total`, k / M / B) · last active, and the heat strip.
+- **Heat strip** — the last 8 weeks (Mon–Sun) of spend (`KanjoCore/HeatStrip.swift`), summed per agent from
+  `by_day[].by_agent`. Each cell is split vertically into up to 3 bands by that week's agent cost shares (largest on top,
+  shares under 10% merged into the largest band, no gaps); the whole cell's opacity is one of 5 shades relative to the
+  project's busiest week; empty weeks are a neutral grey. Days without `by_agent` (older CLI output) count fully toward
+  the project's dominant agent. Hover a cell for the week, the amount and one line per agent (by cost).
+  The project page header shows a larger copy.
+- **Project page** — the header holds the name, amount + heat strip, sessions · date range, the cost note and one
+  remote line (`local repository` when there is none). Local paths live in a **Locations** section at the very bottom,
+  collapsed to one line (`7 paths · 16 temporary` · Show); expanded, it lists the main paths (monospaced, middle-truncated,
+  full path on hover, selectable) with temporary ones behind their own toggle, struck through when `path_missing`.
+- **Hide / pin** — hover a row for the pin and hide buttons (next to the heat strip), or right-click (Pin, Hide, Open in Terminal,
+  Show in Finder, Copy path, Copy remote). Pinned projects go first. Hidden projects leave the list and the mosaic;
+  "N hidden · $X · Show" at the bottom of the list brings them back. The total stays the report total.
+  Stored as newline-separated project ids in `@AppStorage` keys `hiddenProjects` / `pinnedProjects`
+  (parsing in `KanjoCore/ProjectPrefs.swift`); Settings has "Unhide all".
+
+## Time range
+
+A compact segmented control — All · 7d · 30d · Last week · Since reset — sits right of "Total cost" on the overview
+and under the name on the project page (one shared choice, `@AppStorage("timeRange")`, default `all`).
+Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` (pure, tested in `TimeRangeTests`):
+
+- **7d / 30d** — `[today − 6 (29) days 00:00, now)`; **Last week** — previous Monday 00:00 to this Monday 00:00;
+  days are cut in the report's `timezone` (falls back to the Mac's).
+- **Since reset** — each agent from the start of its own weekly window in `quota_windows`
+  (`weekly_resets_at − weekly_window_hours`, shifted by whole windows so that start ≤ now < start + window).
+  Agents without a quota window are left out and named in the caption ("Antigravity: no reset info").
+  Without any `quota_windows` the segment is greyed out with the tooltip "No reset info".
+- Project cost / tokens add up `by_day[].by_agent` / `by_agent_tokens` for every day that overlaps the range
+  (per agent for Since reset); days without those fields count fully toward the project's dominant agent.
+  Session counts use `sessions_detail[].started`. Buckets have no daily data, so they are filtered by session start.
+- Outside All: the hero, summary line, mosaic, rows (amount, sessions, tokens, heat strip), buckets and
+  "N hidden · $X" use filtered values; projects with no usage in the range are dropped, with
+  "N projects with no usage in this range" under the list; a caption under the summary explains the range;
+  the reconciliation line is shown only for All; the cost note always. On the project page the token type
+  breakdown is hidden (only the total is known per day), and By model / By branch keep all-time numbers with an "All time" tag.
+- The menu bar amount follows the range too: the filtered total with a tiny prefix — `7d $…`, `30d $…`,
+  `wk $…` (Last week), `rst $…` (Since reset) — and the plain report total for All.
+- Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
+  (`tokei` / `manual` / `none`); reset times can be set by hand in `~/.config/kanjo/attribution.toml`.
+
+Screenshot tip: `-timeRange days7` (or `all`, `days30`, `lastWeek`, `sinceReset`) presets the range for one launch.
+Preferences can be preset for one launch without persisting them, through the
+`NSArgumentDomain`, e.g. `.build/debug/Kanjo --window -hiddenProjects $'github.com/a/b\ngithub.com/c/d'`.
 
 ## Data source
 
@@ -33,9 +100,10 @@ Pick it in the panel's **Settings** (gear icon). Values are stored with `@AppSto
 | Source | What it does |
 |---|---|
 | JSON file (default) | Reads a contract JSON file. Leave the path empty to use `fixtures/sample.json`. |
-| CLI command | Runs a command (default `python3 -m aicost export`) through `/bin/zsh -l -c` in the working directory you set (e.g. the `cli/` folder) and parses stdout. |
+| CLI command | Runs a command (default `python3 -m kanjo export`) through `/bin/zsh -l -c` in the working directory you set and parses stdout. Left empty, the working directory is the repo's `cli/`, then `~/.local/share/kanjo/cli` (where `../install.sh` puts it), then `/usr/local/share/kanjo/cli`. |
 
-Lookup order: `--data` → `AICOST_DATA` → Settings → `fixtures/sample.json`.
+Lookup order: `--data` → `KANJO_DATA` → Settings → `fixtures/sample.json`.
+The default source is the CLI when one of those directories exists, otherwise the JSON file.
 Auto refresh defaults to every 5 minutes. You can also hide the dollar amount in the menu bar.
 
 If loading fails, the panel shows the error: invalid JSON, a missing field with its path (e.g.
@@ -43,13 +111,32 @@ If loading fails, the panel shows the error: invalid JSON, a missing field with 
 successful load, the previous data stays on screen under a red banner.
 If `schema_version` is newer than 1, a warning appears and the app keeps rendering.
 
+## Packaging
+
+```bash
+./package.sh            # version from ../VERSION
+./package.sh 0.2.0      # explicit version
+./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
+```
+
+Builds `swift build -c release` and writes `build/Kanjo.app` (bundle id `com.lanshuagent.kanjo`,
+`LSUIElement`, macOS 13+, ad-hoc signed) and `build/Kanjo-<version>-macos.zip`. The app bundles
+`fixtures/sample.json` as a fallback but not the CLI; install that with `../install.sh`.
+Release builds carry no source paths: the repo-relative defaults (`fixtures/sample.json`, `../cli`) are DEBUG-only;
+a release build reads `sample.json` from the app bundle and looks for the CLI only in `~/.local/share/kanjo/cli`
+and `/usr/local/share/kanjo/cli`.
+The icon is drawn by `Resources/make_icon.swift` (AppKit, offscreen); the PNG and `.icns` are committed.
+
 ## Layout
 
 ```
 Package.swift
-Sources/AICostCore/      contract models (Codable), data sources, formatting, reconciliation (no UI)
-Sources/AICost/          SwiftUI app: AICostApp, Store/ReportStore, Views/…
-Tests/AICostTests/       decoding + invariant tests on fixtures/sample.json, formatting tests
+Sources/KanjoCore/       contract models (Codable), data sources, formatting, reconciliation,
+                          treemap / heat strip / project prefs pure functions (no UI)
+Sources/Kanjo/           SwiftUI app: KanjoApp, Store/ReportStore, Views/…
+Tests/KanjoTests/        decoding + invariant tests on fixtures/sample.json, formatting, treemap, heat strip, prefs tests
 fixtures/sample.json     test data (8 projects, 3 agents, split/cwd sessions, estimated models, buckets)
 fixtures/generate_sample.py   regenerates sample.json deterministically and asserts the invariants
+Resources/                Kanjo.png / Kanjo.icns app icon and make_icon.swift that draws it
+package.sh               release .app + zip
 ```
