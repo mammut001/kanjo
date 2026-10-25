@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-25T10:00:00Z",
+  "total_bytes": 55200000000,
+  "reclaimable_bytes": 31400000000,
+  "agents": [
+    {
+      "agent": "claude",
+      "label": "Claude Code",
+      "bytes": 16400000000,
+      "entries": [
+        {
+          "id": "claude:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.claude/projects",
+          "bytes": 9200000000,
+          "files": 1204,
+          "oldest": "2026-01-12",
+          "newest": "2026-10-25",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Project session logs. Numbers stay in the ledger after deletion."
+        },
+        {
+          "id": "claude:cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Caches/claude-cli",
+          "bytes": 2400000000,
+          "files": 860,
+          "oldest": "2026-08-02",
+          "newest": "2026-10-24",
+          "deletable": "always",
+          "blocked": [],
+          "note": "CLI download cache. Claude recreates it."
+        },
+        {
+          "id": "claude:memory",
+          "kind": "memory",
+          "path": "/Users/alice/.claude/memory",
+          "bytes": 3200000000,
+          "files": 42,
+          "oldest": "2026-03-01",
+          "newest": "2026-10-20",
+          "deletable": "never",
+          "blocked": [],
+          "note": "Cross-session memory. Never deleted."
+        },
+        {
+          "id": "claude:scratch",
+          "kind": "scratch",
+          "path": "/Users/alice/.claude/scratch",
+          "bytes": 1600000000,
+          "files": 17,
+          "oldest": "2026-10-18",
+          "newest": "2026-10-25",
+          "deletable": "when_clean",
+          "blocked": [
+            "active"
+          ],
+          "note": "Scratch files touched in the last day."
+        }
+      ]
+    },
+    {
+      "agent": "codex",
+      "label": "Codex CLI",
+      "bytes": 11800000000,
+      "entries": [
+        {
+          "id": "codex:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.codex/sessions",
+          "bytes": 4600000000,
+          "files": 248,
+          "oldest": "2026-06-30",
+          "newest": "2026-10-25",
+          "deletable": "after_import",
+          "blocked": [
+            "not_imported"
+          ],
+          "note": "Session logs. Numbers are kept in the ledger after deletion."
+        },
+        {
+          "id": "codex:cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Caches/codex",
+          "bytes": 1100000000,
+          "files": 3412,
+          "oldest": "2026-07-14",
+          "newest": "2026-10-22",
+          "deletable": "always",
+          "blocked": [],
+          "note": "Package cache. Safe to remove; Codex recreates it."
+        },
+        {
+          "id": "codex:worktrees",
+          "kind": "worktrees",
+          "path": "/Users/alice/.codex/worktrees",
+          "bytes": 6100000000,
+          "files": 6,
+          "oldest": "2026-09-01",
+          "newest": "2026-10-11",
+          "deletable": "when_clean",
+          "blocked": [],
+          "note": "Git worktrees with a clean tree. Removed with git worktree remove."
+        }
+      ]
+    },
+    {
+      "agent": "gemini",
+      "label": "Gemini CLI",
+      "bytes": 10600000000,
+      "entries": [
+        {
+          "id": "gemini:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.gemini/sessions",
+          "bytes": 4200000000,
+          "files": 510,
+          "oldest": "2026-04-04",
+          "newest": "2026-10-23",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Gemini session logs already copied into the ledger."
+        },
+        {
+          "id": "gemini:scratch",
+          "kind": "scratch",
+          "path": "/Users/alice/.gemini/tmp",
+          "bytes": 2200000000,
+          "files": 88,
+          "oldest": "2026-10-20",
+          "newest": "2026-10-25",
+          "deletable": "when_clean",
+          "blocked": [
+            "active"
+          ],
+          "note": "Temporary files still in use."
+        },
+        {
+          "id": "gemini:memory",
+          "kind": "memory",
+          "path": "/Users/alice/.gemini/memory",
+          "bytes": 4200000000,
+          "files": 15,
+          "oldest": "2026-02-02",
+          "newest": "2026-09-30",
+          "deletable": "never",
+          "blocked": [],
+          "note": "Gemini memory store. Never deleted."
+        }
+      ]
+    },
+    {
+      "agent": "antigravity",
+      "label": "Antigravity CLI",
+      "bytes": 8400000000,
+      "entries": [
+        {
+          "id": "antigravity:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.gemini/antigravity-cli/conversations",
+          "bytes": 2600000000,
+          "files": 73,
+          "oldest": "2026-05-19",
+          "newest": "2026-10-21",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Conversation databases already imported."
+        },
+        {
+          "id": "antigravity:worktrees",
+          "kind": "worktrees",
+          "path": "/Users/alice/.gemini/antigravity-cli/worktrees",
+          "bytes": 3400000000,
+          "files": 4,
+          "oldest": "2026-08-08",
+          "newest": "2026-10-19",
+          "deletable": "when_clean",
+          "blocked": [
+            "uncommitted_changes"
+          ],
+          "note": "Worktrees with uncommitted changes. Left in place."
+        },
+        {
+          "id": "antigravity:cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Caches/antigravity-cli",
+          "bytes": 800000000,
+          "files": 640,
+          "oldest": "2026-06-01",
+          "newest": "2026-10-12",
+          "deletable": "always",
+          "blocked": [],
+          "note": "Antigravity cache. Safe to remove."
+        },
+        {
+          "id": "antigravity:memory",
+          "kind": "memory",
+          "path": "/Users/alice/.gemini/antigravity-cli/brain",
+          "bytes": 1600000000,
+          "files": 9,
+          "oldest": "2026-01-20",
+          "newest": "2026-10-01",
+          "deletable": "never",
+          "blocked": [],
+          "note": "Cross-session memory. Never deleted."
+        }
+      ]
+    },
+    {
+      "agent": "cursor",
+      "label": "Cursor",
+      "bytes": 8000000000,
+      "entries": [
+        {
+          "id": "cursor:cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Application Support/Cursor/Cache",
+          "bytes": 626000000,
+          "files": 4100,
+          "oldest": "2026-09-12",
+          "newest": "2026-10-18",
+          "deletable": "always",
+          "blocked": [],
+          "note": "Editor cache. Cursor recreates it."
+        },
+        {
+          "id": "cursor:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/Library/Application Support/Cursor/User/globalStorage",
+          "bytes": 4374000000,
+          "files": 220,
+          "oldest": "2026-03-15",
+          "newest": "2026-10-24",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Chat transcripts already imported into the ledger."
+        },
+        {
+          "id": "cursor:other",
+          "kind": "other",
+          "path": "/Users/alice/Library/Application Support/Cursor/User/workspaceStorage",
+          "bytes": 3000000000,
+          "files": 96,
+          "oldest": "2026-02-11",
+          "newest": "2026-10-16",
+          "deletable": "never",
+          "blocked": [],
+          "note": "Workspace state the editor still needs."
+        }
+      ]
+    }
+  ]
+}

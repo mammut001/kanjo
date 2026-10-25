@@ -112,24 +112,27 @@ struct RowButtonStyle: ButtonStyle {
     }
 }
 
-/// 底栏里的图标按钮：无底，悬停出现圆形淡底。
+/// 底栏里的图标按钮：无底，悬停出现圆形淡底。`active` 时用强调色，表示当前页。
 struct IconButtonStyle: ButtonStyle {
+    var active = false
+
     func makeBody(configuration: Configuration) -> some View {
-        IconBody(configuration: configuration)
+        IconBody(configuration: configuration, active: active)
     }
 
     private struct IconBody: View {
         let configuration: ButtonStyleConfiguration
+        let active: Bool
         @Environment(\.isEnabled) private var enabled
         @State private var hover = false
 
         var body: some View {
             configuration.label
                 .font(.system(size: 12.5, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(active ? Color.accentColor : Color.secondary)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(configuration.isPressed ? AgentPalette.rowPressed
-                                          : hover && enabled ? AgentPalette.rowHover : Color.clear))
+                                          : (hover && enabled) || active ? AgentPalette.rowHover : Color.clear))
                 .contentShape(Circle())
                 .opacity(enabled ? 1 : 0.45)
                 .onHover { hover = $0 }

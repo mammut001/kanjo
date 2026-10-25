@@ -44,6 +44,25 @@ public enum Fmt {
         return money(v, currency: currency) + "/mo"
     }
 
+    /// 字节：1000 进位，B / KB / MB / GB / TB。一位小数，去掉末尾的 `.0`（`1.1 GB`、`626 MB`）。
+    public static func bytes(_ n: Int) -> String {
+        let sign = n < 0 ? "-" : ""
+        let v = Double(abs(n))
+        if v < 1000 { return sign + String(Int(v.rounded(.towardZero))) + " B" }
+        let units: [(Double, String)] = [(1e3, "KB"), (1e6, "MB"), (1e9, "GB"), (1e12, "TB"), (1e15, "PB")]
+        for (i, (base, suffix)) in units.enumerated() {
+            let scaled = v / base
+            let rounded = (scaled * 10).rounded() / 10
+            if rounded < 1000 || i == units.count - 1 {
+                let body = rounded == rounded.rounded()
+                    ? String(Int(rounded))
+                    : String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                return sign + body + " " + suffix
+            }
+        }
+        return sign + String(Int(v)) + " B"
+    }
+
     /// 用量 ÷ 月费，一位小数：`15.7×`。算不出来（月费为空或不是正数）时为「—」。
     public static func multiple(_ m: Double?) -> String {
         guard let m, m.isFinite else { return "—" }

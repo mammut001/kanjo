@@ -54,6 +54,12 @@ struct SettingsView: View {
                             Button("Choose…") { if let p = chooseFolder() { cliWorkingDirectory = p } }
                         }
                         note("Runs via /bin/zsh -l -c and reads kanjo export JSON from stdout.")
+                        Text("Disk · \(derivedDiskCommand)")
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .help("Derived from the command above by replacing export with disk --json. Cleanup runs disk clean and moves files to the Trash.")
                     } else {
                         HStack(alignment: .bottom) {
                             field("JSON file", text: $filePath, placeholder: DefaultPaths.sampleFixture.path)
@@ -215,6 +221,13 @@ struct SettingsView: View {
         f.timeZone = cal.timeZone
         f.dateFormat = "EEE MMM d HH:mm"
         return f.string(from: d)
+    }
+
+    /// 磁盘页用的命令：导出命令里最后一个 `export` 换成 `disk --json`。
+    private var derivedDiskCommand: String {
+        let trimmed = cliCommand.trimmingCharacters(in: .whitespaces)
+        let base = trimmed.isEmpty ? CLIDataSource.defaultCommand : trimmed
+        return DiskCommand.report(from: base)
     }
 
     private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {

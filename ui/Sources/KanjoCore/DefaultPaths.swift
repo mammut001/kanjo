@@ -56,6 +56,12 @@ public enum DefaultPaths {
         resolvedCLIDirectory() != nil
     }
 
+    /// 开发开关 `--disk-data <path>`：磁盘页读这个 JSON，不跑 `kanjo disk`。
+    public static func diskDataOverride(arguments: [String] = CommandLine.arguments) -> URL? {
+        guard let i = arguments.firstIndex(of: "--disk-data"), i + 1 < arguments.count else { return nil }
+        return URL(fileURLWithPath: (arguments[i + 1] as NSString).expandingTildeInPath)
+    }
+
     /// 命令行覆盖：`--data <path>` 优先，其次环境变量 `KANJO_DATA`。
     public static func dataOverride(arguments: [String] = CommandLine.arguments,
                                     environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
