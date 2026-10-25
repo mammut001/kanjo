@@ -8,7 +8,7 @@ import os
 import sys
 from typing import List, Optional
 
-from . import __version__
+from . import __version__, disk_cache
 from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
@@ -140,6 +140,9 @@ def cmd_doctor(args) -> int:
     except ConfigError as exc:
         print("config: ERROR %s" % exc)
     _print_subscriptions(cfg)
+    age = disk_cache.cache_age()
+    print("disk cache: %s" % disk_cache.cache_path())
+    print("  age: %s" % ("%.1f seconds" % age if age is not None else "not available"))
     result = scan(cache=_cache(args))
     led = result.ledger or {}
     print()
@@ -218,12 +221,20 @@ def cmd_disk(args) -> int:
         doc = disk_clean(args.ids, older_than_days=days, dry_run=bool(args.dry_run), yes=bool(args.yes))
         sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
         return 0
-    doc = disk_report()
+    doc = disk_report(max_age=args.max_age, rescan=args.rescan)
     if args.json:
         sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
     else:
         print(_format_disk(doc))
     return 0
+
+
+def _max_age(text: str) -> float:
+    import math
+    value = float(text)
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("--max-age must be a finite number >= 0")
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -272,6 +283,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("disk", help="show how much disk each AI tool uses")
     p.add_argument("--json", action="store_true", help="print the CONTRACT.md section 10 document")
+    p.add_argument("--max-age", type=_max_age, default=600, metavar="SECONDS",
+                   help="reuse the disk report for this many seconds (default 600; 0 forces a scan)")
+    p.add_argument("--rescan", action="store_true", help="ignore the disk report cache")
     p.set_defaults(func=cmd_disk, disk_cmd=None)
     disk_sub = p.add_subparsers(dest="disk_cmd", required=False)
     c = disk_sub.add_parser("clean", help="move entries into the Trash (nothing moves without --yes)")

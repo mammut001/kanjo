@@ -97,6 +97,19 @@ sessions entry also carries `log_files` and `imported_files`.
 Missing paths are skipped. Sizes are allocated disk usage (`st_blocks * 512`),
 not apparent size.
 
+Entries are sized concurrently with up to 8 threads (capped by the CPU count).
+Claude scratch also splits its first-level subdirectories into separate jobs.
+The complete report is cached atomically in `~/.cache/kanjo/disk-report.json`;
+`KANJO_CACHE_DIR` replaces the cache directory (`XDG_CACHE_HOME` is also honored).
+`kanjo disk` and `kanjo disk --json` reuse it for 600 seconds by default.
+Use `--max-age SECONDS` to change that, or `--max-age 0` / `--rescan` to force a
+fresh scan. Before reuse, each entry root is stat'ed: a missing root or a root
+mtime newer than the scan invalidates the whole report. Changes deeper in a
+tree may remain cached until the age limit; use `--rescan` to see them immediately.
+The JSON includes `cached`, `scanned_at` (UTC scan time), and `scan_seconds`
+(duration of the real scan). `kanjo doctor` shows the disk cache path and age.
+Cleaning always rescans and invalidates the cache after moving anything.
+
 | entry | default path | kind | deletable |
 |---|---|---|---|
 | Claude sessions | `~/.claude/projects` (`KANJO_CLAUDE_DIR`) | sessions | after_import |
