@@ -12,11 +12,23 @@ final class TimeRangeTests: XCTestCase {
     private let now = ReportDates.parseTimestamp("2026-10-24T07:00:00Z")!
 
     func testMenuBarPrefix() {
-        XCTAssertEqual(TimeRange.allCases.map(\.menuBarPrefix), [nil, "7d", "30d", "wk", "rst"])
+        XCTAssertEqual(TimeRange.allCases.map(\.menuBarPrefix), [nil, "7d", "30d", "wk", "rst", "cyc"])
+        XCTAssertEqual(TimeRange.billingCycle.shortLabel, "Cycle")
+        XCTAssertEqual(TimeRange.billingCycle.longLabel, "Billing cycle")
+        XCTAssertEqual(TimeRange.billingCycle.menuBarPrefix, "cyc")
     }
 
-    private func spec(_ r: TimeRange, quota: [String: QuotaWindow]? = nil, now: Date? = nil) -> RangeSpec {
-        RangeEngine.dateInterval(for: r, now: now ?? self.now, timezone: shanghai, quota: quota)
+    private func spec(_ r: TimeRange, quota: [String: QuotaWindow]? = nil,
+                      subscriptions: [String: Subscription]? = nil, now: Date? = nil) -> RangeSpec {
+        RangeEngine.dateInterval(for: r, now: now ?? self.now, timezone: shanghai, quota: quota,
+                                 subscriptions: subscriptions)
+    }
+
+    private func sub(plan: String = "max_5x", label: String = "Claude Max 5x", price: Double? = 100,
+                     start: String, anchor: Int = 25, cycleSource: String = "subscription_date") -> Subscription {
+        Subscription(plan: plan, planLabel: label, monthlyPriceUsd: price, cycleStart: start,
+                     cycleEnd: "2026-11-25T00:00:00Z", anchorDay: anchor, cycleSource: cycleSource,
+                     extraUsageEnabled: false, source: "detected")
     }
 
     // MARK: - 区间
@@ -94,6 +106,58 @@ final class TimeRangeTests: XCTestCase {
         XCTAssertEqual(RangeEngine.windowStart(fiveHour, now: now), ts("2026-10-24T04:00:00Z"))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "garbage"), now: now))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z", weeklyWindowHours: 0), now: now))
+    }
+
+    func testBillingCyclePerAgentStarts() {
+        let subs = ["claude": sub(start: "2026-09-24T16:00:00Z"),
+                    "codex": sub(plan: "plus", label: "ChatGPT Plus", price: 20,
+                                 start: "2026-09-30T16:00:00Z", anchor: 1, cycleSource: "calendar_month")]
+        let s = spec(.billingCycle, subscriptions: subs)
+        XCTAssertEqual(s.agentStarts["claude"], ts("2026-09-24T16:00:00Z"))
+        XCTAssertEqual(s.agentStarts["codex"], ts("2026-09-30T16:00:00Z"))
+        XCTAssertNil(s.window(for: "antigravity"))
+        XCTAssertFalse(s.includes(now, agent: "antigravity"))
+        // 上海 9 月 25 日零点起算 claude；前一天整天不相交。
+        XCTAssertFalse(s.includes(dayStart: day("2026-09-24"), dayEnd: day("2026-09-25"), agent: "claude"))
+        XCTAssertTrue(s.includes(dayStart: day("2026-09-25"), dayEnd: day("2026-09-26"), agent: "claude"))
+        // codex 从上海 10 月 1 日零点起；9 月 30 日整天不相交。
+        XCTAssertFalse(s.includes(dayStart: day("2026-09-30"), dayEnd: day("2026-10-01"), agent: "codex"))
+        XCTAssertTrue(s.includes(dayStart: day("2026-10-01"), dayEnd: day("2026-10-02"), agent: "codex"))
+        XCTAssertTrue(s.includes(ts("2026-09-24T16:00:00Z"), agent: "claude"))
+        XCTAssertFalse(s.includes(ts("2026-09-24T16:00:00Z"), agent: "codex"))
+    }
+
+    func testBillingCycleUsesEachAgentsOwnStart() {
+        let subs = ["claude": sub(start: "2026-10-17T16:00:00Z"),   // 上海 10 月 18 日
+                    "codex": sub(plan: "plus", label: "ChatGPT Plus", price: 20,
+                                 start: "2026-10-21T16:00:00Z", anchor: 1, cycleSource: "calendar_month")]
+        let f = RangeEngine.filter(project(), range: spec(.billingCycle, subscriptions: subs), fallbackAgent: "claude")
+        // claude：Oct 18（2）+ Oct 20（4）；codex：只有 Oct 22（6）；antigravity 无订阅，不计入。
+        XCTAssertEqual(f.cost, 12, accuracy: 1e-9)
+        XCTAssertEqual(f.tokens, 1200)
+        XCTAssertEqual(Set(f.byAgent.map(\.agent)), ["claude", "codex"])
+        XCTAssertEqual(f.byDay.map(\.day), ["2026-10-18", "2026-10-20", "2026-10-22"])
+        XCTAssertEqual(f.byDay.first { $0.day == "2026-10-20" }?.byAgent, ["claude": 4])
+        XCTAssertEqual(f.sessions, 3)
+        XCTAssertEqual(f.byAgent.first { $0.agent == "claude" }?.sessions, 2)
+        XCTAssertEqual(f.byAgent.first { $0.agent == "codex" }?.sessions, 1)
+    }
+
+    func testBillingCycleWithoutSubscriptionIncludesNothing() {
+        for subs in [nil, [String: Subscription]()] {
+            let s = spec(.billingCycle, subscriptions: subs)
+            XCTAssertTrue(s.agentStarts.isEmpty)
+            XCTAssertFalse(s.includes(now, agent: "claude"))
+            let f = RangeEngine.filter(project(), range: s, fallbackAgent: "claude")
+            XCTAssertEqual(f.cost, 0)
+            XCTAssertFalse(f.hasUsage)
+        }
+    }
+
+    func testBillingCycleIgnoresUnparseableStart() {
+        let s = spec(.billingCycle, subscriptions: ["claude": sub(start: "not-a-date")])
+        XCTAssertNil(s.window(for: "claude"))
+        XCTAssertFalse(s.includes(now, agent: "claude"))
     }
 
     func testSinceResetWithoutQuotaIncludesNothing() {
@@ -250,6 +314,8 @@ final class TimeRangeTests: XCTestCase {
         let r = try fixture()
         XCTAssertEqual(r.quotaWindows?["claude"]?.source, "tokei")
         XCTAssertNil(r.quotaWindows?["antigravity"])
+        XCTAssertEqual(r.subscriptions?["claude"]?.plan, "max_5x")
+        XCTAssertNil(r.subscriptions?["antigravity"])
         for range in TimeRange.allCases {
             let f = RangeEngine.filtered(r, range: RangeEngine.spec(range, report: r, now: now), fallbackAgentFor: fallback)
             XCTAssertLessThanOrEqual(f.cost, r.totals.cost + 0.01, range.rawValue)
@@ -259,7 +325,9 @@ final class TimeRangeTests: XCTestCase {
             for p in f.projects {
                 XCTAssertEqual(p.byDay.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
                 XCTAssertEqual(p.byAgent.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
-                if range == .sinceReset { XCTAssertFalse(p.byAgent.contains { $0.agent == "antigravity" }) }
+                if range == .sinceReset || range == .billingCycle {
+                    XCTAssertFalse(p.byAgent.contains { $0.agent == "antigravity" })
+                }
             }
         }
     }

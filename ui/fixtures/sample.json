@@ -22,6 +22,30 @@
       "source": "manual"
     }
   },
+  "subscriptions": {
+    "claude": {
+      "plan": "max_5x",
+      "plan_label": "Claude Max 5x",
+      "monthly_price_usd": 100.0,
+      "cycle_start": "2026-09-24T16:00:00Z",
+      "cycle_end": "2026-10-24T16:00:00Z",
+      "anchor_day": 25,
+      "cycle_source": "subscription_date",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
+    "codex": {
+      "plan": "plus",
+      "plan_label": "ChatGPT Plus",
+      "monthly_price_usd": 20.0,
+      "cycle_start": "2026-09-30T16:00:00Z",
+      "cycle_end": "2026-10-31T16:00:00Z",
+      "anchor_day": 1,
+      "cycle_source": "calendar_month",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    }
+  },
   "totals": {
     "cost": 275.2326,
     "tokens": {

@@ -86,6 +86,7 @@ struct SettingsView: View {
                 }
 
                 quotaSection
+                subscriptionsSection
 
                 VStack(alignment: .trailing, spacing: 8) {
                     Button("Apply & Refresh") { store.applySettings() }
@@ -144,6 +145,51 @@ struct SettingsView: View {
             }
             note("Read from the tokei cache (~/.tokei) when available. To set or override a reset time by hand, add it to ~/.config/kanjo/attribution.toml. Agents without reset info are left out of the Since reset range.")
         }
+    }
+
+    /// 各 agent 的订阅档位（subscriptions），供总览的 Subscription value 卡和 Billing cycle 范围用。
+    private var subscriptionsSection: some View {
+        PanelSection("Subscriptions", inset: true) {
+            if let r = store.report {
+                let ctx = RangeContext(report: r, raw: TimeRange.all.rawValue)
+                let subs = r.subscriptions ?? [:]
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(ctx.agentOrder, id: \.self) { agent in
+                        subscriptionRow(agent, sub: subs[agent], report: r)
+                    }
+                }
+            } else {
+                note("No data loaded yet.")
+            }
+            note("Overrides live in ~/.config/kanjo/attribution.toml under [subscriptions.<agent>]. Agents without a subscription are left out of the Billing cycle range.")
+        }
+    }
+
+    private func subscriptionRow(_ agent: String, sub: Subscription?, report: UsageReport) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                AgentDot(agent: agent, size: 6)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                Text(report.agentLabels[agent] ?? agent)
+                    .font(.system(size: 11.5))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(sub?.source ?? "none")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(sub == nil ? .tertiary : .secondary)
+            }
+            Text(subscriptionDetail(sub, currency: report.currency))
+                .font(.system(size: 10))
+                .foregroundStyle(sub == nil ? .tertiary : .secondary)
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 11)
+        }
+    }
+
+    private func subscriptionDetail(_ sub: Subscription?, currency: String) -> String {
+        guard let sub else { return "No subscription info" }
+        return "\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency)) · anchor \(sub.anchorDay) · \(sub.cycleSource)"
     }
 
     @ViewBuilder private func quotaCell(_ q: QuotaWindow?, cal: Calendar) -> some View {

@@ -35,6 +35,21 @@ public enum Fmt {
         return sign + String(Int(v))
     }
 
+    /// 月费：`$100/mo`。整数美元不带小数；价格未知时为「—」。
+    public static func perMonth(_ v: Double?, currency: String = "USD") -> String {
+        guard let v, v.isFinite else { return "—" }
+        if currency.uppercased() == "USD", v == v.rounded(), abs(v) < 1e12 {
+            return "$\(Int(v.rounded()))/mo"
+        }
+        return money(v, currency: currency) + "/mo"
+    }
+
+    /// 用量 ÷ 月费，一位小数：`15.7×`。算不出来（月费为空或不是正数）时为「—」。
+    public static func multiple(_ m: Double?) -> String {
+        guard let m, m.isFinite else { return "—" }
+        return String(format: "%.1f×", locale: Locale(identifier: "en_US_POSIX"), m)
+    }
+
     public static func percent(_ share: Double) -> String {
         let p = share * 100
         if p >= 99.95 { return "100%" }

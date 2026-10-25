@@ -5,7 +5,7 @@ import Foundation
 // sessions 按 sessions_detail[].started 落在范围内计数。
 
 public enum TimeRange: String, CaseIterable, Identifiable {
-    case all, days7, days30, lastWeek, sinceReset
+    case all, days7, days30, lastWeek, sinceReset, billingCycle
 
     public var id: String { rawValue }
 
@@ -17,6 +17,7 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         case .days30: return "30d"
         case .lastWeek: return "Last week"
         case .sinceReset: return "Since reset"
+        case .billingCycle: return "Cycle"
         }
     }
 
@@ -28,6 +29,7 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         case .days30: return "30d"
         case .lastWeek: return "wk"
         case .sinceReset: return "rst"
+        case .billingCycle: return "cyc"
         }
     }
 
@@ -38,12 +40,13 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         case .days30: return "Last 30 days"
         case .lastWeek: return "Last week"
         case .sinceReset: return "Since reset"
+        case .billingCycle: return "Billing cycle"
         }
     }
 }
 
 /// 一个范围的具体区间。区间一律半开 [start, end)；nil 端表示无界。
-/// `sinceReset` 下每个 agent 有自己的起点（`agentStarts`），不在字典里的 agent 不计入。
+/// `sinceReset` / `billingCycle` 下每个 agent 有自己的起点（`agentStarts`），不在字典里的 agent 不计入。
 public struct RangeSpec: Equatable {
     public var range: TimeRange
     public var calendar: Calendar
@@ -62,11 +65,11 @@ public struct RangeSpec: Equatable {
 
     public var isAll: Bool { range == .all }
 
-    /// 某 agent 的有效区间；nil = 该 agent 在此范围下不计入（只有 sinceReset 会出现）。
+    /// 某 agent 的有效区间；nil = 该 agent 在此范围下不计入（sinceReset / billingCycle 下没有窗口的 agent）。
     public func window(for agent: String) -> (start: Date?, end: Date?)? {
         switch range {
         case .all: return (nil, nil)
-        case .sinceReset: return agentStarts[agent].map { ($0, end) }
+        case .sinceReset, .billingCycle: return agentStarts[agent].map { ($0, end) }
         default: return (start, end)
         }
     }
@@ -160,8 +163,10 @@ public enum RangeEngine {
     /// - all：无界；days7 / days30：[今天往前 6 / 29 天的零点, now)；
     /// - lastWeek：上一个周一零点到本周一零点；
     /// - sinceReset：每个 agent 的起点 = 当前周窗口的开始（见 `windowStart`），没有 quota 的 agent 不计入。
+    /// - billingCycle：每个 agent 的起点 = `subscriptions[agent].cycle_start`，没有订阅（或起点解析不了）的 agent 不计入。
     public static func dateInterval(for range: TimeRange, now: Date, timezone: TimeZone,
-                                    quota: [String: QuotaWindow]?) -> RangeSpec {
+                                    quota: [String: QuotaWindow]?,
+                                    subscriptions: [String: Subscription]? = nil) -> RangeSpec {
         let cal = calendar(timezone: timezone)
         let today = cal.startOfDay(for: now)
         func daysBack(_ n: Int) -> Date { cal.date(byAdding: .day, value: -n, to: today) ?? today }
@@ -182,12 +187,19 @@ public enum RangeEngine {
                 if let s = windowStart(q, now: now) { starts[agent] = s }
             }
             return RangeSpec(range: .sinceReset, calendar: cal, end: now, agentStarts: starts)
+        case .billingCycle:
+            var starts: [String: Date] = [:]
+            for (agent, sub) in subscriptions ?? [:] {
+                if let s = ReportDates.parseTimestamp(sub.cycleStart) { starts[agent] = s }
+            }
+            return RangeSpec(range: .billingCycle, calendar: cal, end: now, agentStarts: starts)
         }
     }
 
-    /// 报告上的便捷入口：时区和 quota 都取自报告。
+    /// 报告上的便捷入口：时区、quota、订阅都取自报告。
     public static func spec(_ range: TimeRange, report: UsageReport, now: Date = Date()) -> RangeSpec {
-        dateInterval(for: range, now: now, timezone: timezone(of: report), quota: report.quotaWindows)
+        dateInterval(for: range, now: now, timezone: timezone(of: report),
+                     quota: report.quotaWindows, subscriptions: report.subscriptions)
     }
 
     /// `day` 所在周的周一零点（day 应已是零点）。

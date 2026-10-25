@@ -16,7 +16,7 @@ enum BucketKind: String {
 /// 开发开关 `--route <value>`：启动后直接打开某一页，便于截图。
 /// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
 /// `project:<index>:bottom`（详情页滚到底部）、`project:<index>:locations`（滚到底部并展开 Locations）、
-/// `bucket:unattributed` / `bucket:excluded`、`settings`、`settings-bottom`（设置页滚到底部）。
+/// `bucket:unattributed` / `bucket:excluded`、`settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）。
 enum DevRoute {
     static let requested: String? = {
         let args = CommandLine.arguments

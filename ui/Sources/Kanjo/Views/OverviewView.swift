@@ -51,6 +51,10 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     VStack(alignment: .leading, spacing: 14) {
                         hero(ctx, f, visible: lists.visible, hiddenCount: lists.hidden.count)
+                        // 订阅价值紧挨 hero（cost note 下面、马赛克上面）。始终按各 agent 自己的账期，不跟当前范围走。
+                        if !(report.subscriptions ?? [:]).isEmpty {
+                            SubscriptionValueCard(report: report)
+                        }
                         if lists.visible.contains(where: { $0.cost > 0 }) {
                             MosaicView(projects: lists.visible, currency: cur) { onSelect(.project($0)) }
                                 .padding(.horizontal, Metrics.listInset - Metrics.flatPagePadding)
@@ -102,7 +106,8 @@ struct OverviewView: View {
             HStack(alignment: .center, spacing: 8) {
                 Text("Total cost").font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
-                RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable)
+                RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
+                            cycleAvailable: ctx.cycleAvailable)
             }
             HeroAmount(value: Fmt.money(f.cost, currency: cur))
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
@@ -231,6 +236,80 @@ struct OverviewView: View {
 /// 第一行 名字 + agent 色点（1–3 个，按该项目用过的 agent）+ local / path missing 标签，右侧金额；
 /// 第二行 sessions · tokens · 最近活跃，右侧 8 周热力条（每格按那周各 agent 份额分色带）。
 /// 悬停时第二行热力条左边出现置顶 / 隐藏两个小按钮；右键菜单有更多动作。
+/// 订阅价值：每个有订阅的 agent 一行。左边是月费，右边是本账期 API 等价用量和倍数。
+/// 没有新的卡片描边，和总览其他节一样直接放在面板上。底部那句说明固定显示。
+private struct SubscriptionValueCard: View {
+    let report: UsageReport
+
+    private var cur: String { report.currency }
+
+    var body: some View {
+        let rows = SubscriptionValue.rows(of: report)
+        return PanelSection("Subscription value", flat: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
+                    line(row)
+                }
+                Text(subscriptionValueExplanation)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.listInset)
+                    .padding(.top, 3)
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    private func line(_ row: SubscriptionRow) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            AgentDot(agent: row.agent, size: 6)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+            Text(row.planLabel)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .layoutPriority(-1)
+            Text("· \(Fmt.perMonth(row.monthlyPriceUsd, currency: cur))")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            if row.extraUsageEnabled {
+                Badge(text: "extra usage on", style: .warn,
+                      help: "Extra usage is enabled, so overage is billed on top of the flat fee.")
+                    .fixedSize()
+            }
+            Spacer(minLength: 8)
+            Text(Fmt.money(row.usage, currency: cur))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .lineLimit(1)
+                .layoutPriority(1)
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            Text(Fmt.multiple(row.multiplier))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .layoutPriority(1)
+                .frame(minWidth: 42, alignment: .trailing)
+        }
+        .monospacedDigit()
+        .padding(.horizontal, Metrics.listInset)
+        .padding(.vertical, 6)
+        .help(help(row))
+    }
+
+    private func help(_ row: SubscriptionRow) -> String {
+        let price = Fmt.perMonth(row.monthlyPriceUsd, currency: cur)
+        let usage = Fmt.money(row.usage, currency: cur)
+        if let m = row.multiplier {
+            return "\(row.planLabel) is \(price) flat. \(usage) is the API-equivalent cost this billing cycle, \(Fmt.multiple(m)) the flat fee. Not an extra charge."
+        }
+        return "\(row.planLabel): monthly price unknown. \(usage) is the API-equivalent cost this billing cycle. Not an extra charge."
+    }
+}
+
 struct ProjectRow: View {
     let project: Project
     let currency: String

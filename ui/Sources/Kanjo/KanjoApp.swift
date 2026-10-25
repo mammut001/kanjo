@@ -82,7 +82,7 @@ struct MenuBarLabel: View {
     }
 
     /// 当前范围过滤后的总额（和总览 hero 同一个数）；All 下就是报告总额，不加前缀。
-    /// 报告没有 quota_windows 时 Since reset 按 All 处理（RangeContext）。
+    /// Since reset / Billing cycle 在报告没有对应数据时按 All 处理（RangeContext）。
     private func amount(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
         guard let prefix = ctx.range.menuBarPrefix else {

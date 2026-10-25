@@ -93,6 +93,52 @@ final class DecodingTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: obj)
     }
 
+    func testSubscriptionsDecode() throws {
+        let r = try loadFixture()
+        let claude = try XCTUnwrap(r.subscriptions?["claude"])
+        XCTAssertEqual(claude.plan, "max_5x")
+        XCTAssertEqual(claude.planLabel, "Claude Max 5x")
+        XCTAssertEqual(claude.monthlyPriceUsd, 100)
+        XCTAssertEqual(claude.cycleStart, "2026-09-24T16:00:00Z")
+        XCTAssertEqual(claude.cycleEnd, "2026-10-24T16:00:00Z")
+        XCTAssertEqual(claude.anchorDay, 25)
+        XCTAssertEqual(claude.cycleSource, "subscription_date")
+        XCTAssertFalse(claude.extraUsageEnabled)
+        XCTAssertEqual(claude.source, "detected")
+        let codex = try XCTUnwrap(r.subscriptions?["codex"])
+        XCTAssertEqual(codex.plan, "plus")
+        XCTAssertEqual(codex.planLabel, "ChatGPT Plus")
+        XCTAssertEqual(codex.monthlyPriceUsd, 20)
+        XCTAssertEqual(codex.anchorDay, 1)
+        XCTAssertEqual(codex.cycleSource, "calendar_month")
+        XCTAssertEqual(codex.source, "detected")
+        XCTAssertNil(r.subscriptions?["antigravity"])
+    }
+
+    func testMissingSubscriptionsDecodesAsNil() throws {
+        let data = try mutatedFixture { $0.removeValue(forKey: "subscriptions") }
+        XCTAssertNil(try ReportDecoder.decode(data).subscriptions)
+    }
+
+    func testNullSubscriptionsDecodesAsNil() throws {
+        let data = try mutatedFixture { $0["subscriptions"] = NSNull() }
+        XCTAssertNil(try ReportDecoder.decode(data).subscriptions)
+    }
+
+    func testNullMonthlyPriceDecodes() throws {
+        let data = try mutatedFixture { obj in
+            var subs = obj["subscriptions"] as! [String: Any]
+            var claude = subs["claude"] as! [String: Any]
+            claude["monthly_price_usd"] = NSNull()
+            subs["claude"] = claude
+            obj["subscriptions"] = subs
+        }
+        let r = try ReportDecoder.decode(data)
+        XCTAssertNil(r.subscriptions?["claude"]?.monthlyPriceUsd)
+        XCTAssertEqual(r.subscriptions?["claude"]?.planLabel, "Claude Max 5x")
+        XCTAssertNil(SubscriptionValue.multiplier(usage: 10, monthlyPriceUsd: r.subscriptions?["claude"]?.monthlyPriceUsd))
+    }
+
     func testDayWithoutByAgentDecodesAsNil() throws {
         let json = #"[{"day": "2026-10-22", "cost": 3.2, "tokens": 120000},"#
             + #"{"day": "2026-10-23", "cost": 1, "tokens": 5, "by_agent": {"claude": 0.75, "codex": 0.25}}]"#

@@ -16,6 +16,8 @@ public struct UsageReport: Codable, Equatable {
     public var config: ReportConfig
     /// 各 agent 的额度窗口（「Since reset」范围用）；旧数据没有这个字段，拿不到的 agent 不出现。
     public var quotaWindows: [String: QuotaWindow]? = nil
+    /// 各 agent 的订阅档位（「Subscription value」卡和「Billing cycle」范围用）；旧数据没有这个字段。
+    public var subscriptions: [String: Subscription]? = nil
     public var totals: Aggregate
     public var projects: [Project]
     public var buckets: Buckets
@@ -29,6 +31,7 @@ public struct UsageReport: Codable, Equatable {
         case costNote = "cost_note"
         case config
         case quotaWindows = "quota_windows"
+        case subscriptions
         case totals, projects, buckets
     }
 
@@ -62,6 +65,44 @@ public struct QuotaWindow: Codable, Equatable {
         self.weeklyResetsAt = weeklyResetsAt
         self.weeklyWindowHours = weeklyWindowHours
         self.fiveHourResetsAt = fiveHourResetsAt
+        self.source = source
+    }
+}
+
+/// 一个 agent 的订阅档位（契约第 2 节 subscriptions）。月费未知时 monthlyPriceUsd 为 nil。
+public struct Subscription: Codable, Equatable {
+    public var plan: String
+    public var planLabel: String
+    public var monthlyPriceUsd: Double?
+    public var cycleStart: String          // 当前账期起点，ISO 8601 UTC
+    public var cycleEnd: String            // 下一账期起点
+    public var anchorDay: Int
+    public var cycleSource: String         // subscription_date | calendar_month | manual
+    public var extraUsageEnabled: Bool
+    public var source: String              // detected | manual
+
+    enum CodingKeys: String, CodingKey {
+        case plan
+        case planLabel = "plan_label"
+        case monthlyPriceUsd = "monthly_price_usd"
+        case cycleStart = "cycle_start"
+        case cycleEnd = "cycle_end"
+        case anchorDay = "anchor_day"
+        case cycleSource = "cycle_source"
+        case extraUsageEnabled = "extra_usage_enabled"
+        case source
+    }
+
+    public init(plan: String, planLabel: String, monthlyPriceUsd: Double?, cycleStart: String, cycleEnd: String,
+                anchorDay: Int, cycleSource: String, extraUsageEnabled: Bool, source: String) {
+        self.plan = plan
+        self.planLabel = planLabel
+        self.monthlyPriceUsd = monthlyPriceUsd
+        self.cycleStart = cycleStart
+        self.cycleEnd = cycleEnd
+        self.anchorDay = anchorDay
+        self.cycleSource = cycleSource
+        self.extraUsageEnabled = extraUsageEnabled
         self.source = source
     }
 }

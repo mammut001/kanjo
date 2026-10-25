@@ -23,6 +23,16 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(Fmt.tokens(2_500_000_000), "2.5B")
     }
 
+    func testPerMonthAndMultiple() {
+        XCTAssertEqual(Fmt.perMonth(100), "$100/mo")
+        XCTAssertEqual(Fmt.perMonth(20), "$20/mo")
+        XCTAssertEqual(Fmt.perMonth(19.5), "$19.50/mo")
+        XCTAssertEqual(Fmt.perMonth(nil), "—")
+        XCTAssertEqual(Fmt.multiple(15.72), "15.7×")
+        XCTAssertEqual(Fmt.multiple(0), "0.0×")
+        XCTAssertEqual(Fmt.multiple(nil), "—")
+    }
+
     func testPercent() {
         XCTAssertEqual(Fmt.percent(1), "100%")
         XCTAssertEqual(Fmt.percent(0.6), "60%")
