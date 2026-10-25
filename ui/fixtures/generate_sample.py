@@ -273,6 +273,7 @@ def cycle_bounds(anchor_day, now=NOW):
     return iso(year, month, anchor_day), iso(end_y, end_m, anchor_day)
 
 # 订阅：claude / codex 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
+# Codex 未知真实续费日，保留 calendar_month，让界面演示 day assumed。
 # 账期按 anchor_day 在 Asia/Shanghai 的 00:00 折算（报告 generated_at 落在 10 月 23 日）。
 claude_start, claude_end = cycle_bounds(25)
 codex_start, codex_end = cycle_bounds(1)

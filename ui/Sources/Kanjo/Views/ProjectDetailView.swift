@@ -321,6 +321,9 @@ struct ProjectDetailView: View {
                         ForEach(shares) { s in
                             Text("This repo: \(Self.shareText(s.share)) of your \(s.planLabel) usage this cycle")
                                 .fixedSize(horizontal: false, vertical: true)
+                                .help(report.subscriptions?[s.agent].map {
+                                    Fmt.cycleCaption($0, timezone: RangeEngine.timezone(of: report))
+                                } ?? "Cycle dates unavailable")
                         }
                     }
                     .font(.system(size: 10.5))
