@@ -35,6 +35,10 @@ public struct CLIDataSource: UsageDataSource {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-l", "-c", command]
+        // 内置 Python 包属于签名资源，运行时不能写入 __pycache__。
+        var environment = ProcessInfo.processInfo.environment
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        p.environment = environment
         if let cwd {
             var isDir: ObjCBool = false
             guard FileManager.default.fileExists(atPath: cwd.path, isDirectory: &isDir), isDir.boolValue else {

@@ -6,6 +6,7 @@ import KanjoCore
 final class ReportStore: ObservableObject {
     static let shared = ReportStore()
 
+    @Published private(set) var needsCommandLineTools = false
     @Published private(set) var report: UsageReport?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
@@ -21,7 +22,7 @@ final class ReportStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     init() {
-        // 默认直接跑 CLI：仓库里 ui/ 旁边有 cli/ 就用它；没有（打包后的 .app）就先显示示例数据。
+        // 默认直接跑 CLI：优先内置 CLI，其次源码和安装目录。
         let defaultKind: SourceKind = DefaultPaths.cliDirectoryExists ? .cli : .file
         defaults.register(defaults: [
             SettingsKeys.sourceKind: defaultKind.rawValue,
@@ -31,8 +32,20 @@ final class ReportStore: ObservableObject {
             SettingsKeys.refreshMinutes: 5,
             SettingsKeys.showAmountInMenuBar: true,
         ])
+        Task { await checkPython() }
         refresh()
         restartTimer()
+    }
+
+    func checkPython() async {
+        needsCommandLineTools = await PythonCheck.check()
+    }
+
+    func installCommandLineTools() {
+        Task {
+            do { try await PythonCheck.installCommandLineTools() }
+            catch { self.error = error.localizedDescription }
+        }
     }
 
     func makeSource() -> (UsageDataSource, String) {
@@ -48,7 +61,7 @@ final class ReportStore: ObservableObject {
             return (FileDataSource(url: url), "File: \(url.path)")
         case .cli:
             let cmd = CLILaunch.command(defaults: defaults)
-            // 工作目录留空 = 仓库里的 cli/，其次 install.sh 装的位置（DefaultPaths.resolvedCLIDirectory）；
+            // 工作目录留空 = 内置 CLI、源码 cli/，其次 install.sh 装的位置；
             // 都没有就继承进程的当前目录。磁盘页用同一套命令和工作目录。
             let url = CLILaunch.workingDirectory(defaults: defaults)
             return (CLIDataSource(command: cmd, workingDirectory: url),
@@ -66,7 +79,8 @@ final class ReportStore: ObservableObject {
         }
         let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
                                       workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
-        try await source.setAnchorDay(agent: agent, day: day)
+        do { try await source.setAnchorDay(agent: agent, day: day) }
+        catch { await checkPython(); throw error }
         refresh()
     }
 
@@ -85,6 +99,8 @@ final class ReportStore: ObservableObject {
                 report = r
                 error = nil
             } catch {
+                guard gen == generation else { return }
+                if source is CLIDataSource { await checkPython() }
                 guard gen == generation else { return }
                 // 刷新失败时保留上一份报告，面板顶部显示错误。
                 self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

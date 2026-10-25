@@ -130,7 +130,7 @@ Pick it in the panel's **Settings** (gear icon). Values are stored with `@AppSto
 | Source | What it does |
 |---|---|
 | JSON file (default) | Reads a contract JSON file. Leave the path empty to use `fixtures/sample.json`. |
-| CLI command | Runs a command (default `python3 -m kanjo export`) through `/bin/zsh -l -c` in the working directory you set and parses stdout. Left empty, the working directory is the repo's `cli/`, then `~/.local/share/kanjo/cli` (where `../install.sh` puts it), then `/usr/local/share/kanjo/cli`. |
+| CLI command | Runs a command (default `python3 -m kanjo export`) through `/bin/zsh -l -c` in the working directory you set and parses stdout. Left empty, the working directory is the bundled CLI, then the repo's `cli/` (DEBUG only), then `~/.local/share/kanjo/cli` (where `../install.sh` puts it), then `/usr/local/share/kanjo/cli`. |
 
 Lookup order: `--data` → `KANJO_DATA` → Settings → `fixtures/sample.json`.
 The default source is the CLI when one of those directories exists, otherwise the JSON file.
@@ -149,12 +149,19 @@ If `schema_version` is newer than 1, a warning appears and the app keeps renderi
 ./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
 ```
 
-Builds `swift build -c release` and writes `build/Kanjo.app` (bundle id `com.lanshuagent.kanjo`,
-`LSUIElement`, macOS 13+, ad-hoc signed) and `build/Kanjo-<version>-macos.zip`. The app bundles
-`fixtures/sample.json` as a fallback but not the CLI; install that with `../install.sh`.
-Release builds carry no source paths: the repo-relative defaults (`fixtures/sample.json`, `../cli`) are DEBUG-only;
-a release build reads `sample.json` from the app bundle and looks for the CLI only in `~/.local/share/kanjo/cli`
-and `/usr/local/share/kanjo/cli`.
+Builds arm64 and x86_64 release slices separately with SwiftPM and merges them with `lipo`.
+Outputs `build/Kanjo.app`, `build/Kanjo-<version>-macos.zip`, and a compressed DMG containing
+Kanjo.app and an Applications link. Use `--no-dmg` to skip the DMG or `--arch arm64` for a quick build.
+Build artifacts stay under `build/`. The bundle targets macOS 13+ and includes the CLI package,
+pricing files, VERSION, and fallback sample JSON.
+
+Signing uses `KANJO_CODESIGN_IDENTITY` when set; otherwise it detects a Developer ID Application
+identity, falling back to ad-hoc (`-`). Developer ID signing uses hardened runtime and timestamps;
+the binary, app, and DMG are signed and verified. No notarization is performed yet.
+
+With an empty CLI working directory, lookup order is bundled CLI → repository cli/ (DEBUG only)
+→ `~/.local/share/kanjo/cli` → `/usr/local/share/kanjo/cli`. Settings shows the selected CLI and bundled
+version. Python 3 via Command Line Tools is required; missing tools show an installer button and Retry.
 The icon is drawn by `Resources/make_icon.swift` (AppKit, offscreen); the PNG and `.icns` are committed.
 
 ## Layout
@@ -169,5 +176,5 @@ fixtures/sample.json     test data (8 projects, 3 agents, split/cwd sessions, es
 fixtures/generate_sample.py   regenerates sample.json deterministically and asserts the invariants
 fixtures/disk-sample.json     disk page sample (5 agents); fixtures/generate_disk_sample.py regenerates it
 Resources/                Kanjo.png / Kanjo.icns app icon and make_icon.swift that draws it
-package.sh               release .app + zip
+package.sh               universal .app + zip + DMG
 ```

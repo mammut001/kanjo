@@ -30,28 +30,46 @@ public enum DefaultPaths {
         packageRoot?.deletingLastPathComponent().appendingPathComponent("cli")
     }
 
-    /// install.sh 安装 CLI 的位置，按顺序查找。打包后的 .app 里没有 cli/，靠这里找到 CLI。
+    public static var bundledCLIDirectory: URL? {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("cli"),
+              isCLIDirectory(url) else { return nil }
+        return url
+    }
+
+    public static func cliDescription(customDirectory: String, customCommand: String) -> String {
+        if !customDirectory.trimmingCharacters(in: .whitespaces).isEmpty
+            || (!customCommand.isEmpty && customCommand != CLIDataSource.defaultCommand) { return "Custom" }
+        guard let url = resolvedCLIDirectory() else { return "CLI unavailable" }
+        if url == bundledCLIDirectory {
+            let version = (try? String(contentsOf: url.appendingPathComponent("VERSION"), encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
+            return "Bundled CLI \(version)"
+        }
+        if url == cliDirectory { return "Repository cli/" }
+        if url == installedCLIDirectories()[0] { return "~/.local/share/kanjo/cli" }
+        return url.path
+    }
+
+    /// install.sh 安装 CLI 的位置，按顺序查找。作为 bundled 和源码 CLI 的后备。
     public static func installedCLIDirectories(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
         [home.appendingPathComponent(".local/share/kanjo/cli"),
          URL(fileURLWithPath: "/usr/local/share/kanjo/cli")]
     }
 
-    /// 目录下有 `kanjo/` 包才算 CLI 目录。
+    /// 目录下有 `kanjo/__init__.py` 才算 CLI 目录。
     public static func isCLIDirectory(_ url: URL, fileManager: FileManager = .default) -> Bool {
-        var isDir: ObjCBool = false
-        return fileManager.fileExists(atPath: url.appendingPathComponent("kanjo").path, isDirectory: &isDir)
-            && isDir.boolValue
+        fileManager.fileExists(atPath: url.appendingPathComponent("kanjo/__init__.py").path)
     }
 
-    /// 设置里工作目录留空时用的 CLI 目录：仓库里的 cli/（仅 DEBUG），其次 `~/.local/share/kanjo/cli`、
+    /// 设置里工作目录留空时用的 CLI 目录：内置 CLI、仓库里的 cli/（仅 DEBUG），其次 `~/.local/share/kanjo/cli`、
     /// `/usr/local/share/kanjo/cli`。都没有就是 nil。
     public static func resolvedCLIDirectory(candidates: [URL]? = nil,
                                             fileManager: FileManager = .default) -> URL? {
-        (candidates ?? [cliDirectory].compactMap { $0 } + installedCLIDirectories())
+        (candidates ?? [bundledCLIDirectory, cliDirectory].compactMap { $0 } + installedCLIDirectories())
             .first { isCLIDirectory($0, fileManager: fileManager) }
     }
 
-    /// 找得到 CLI 就默认走 CLI 取数，找不到（打包后的 .app 且没跑过 install.sh）就退回示例 JSON。
+    /// 找得到 CLI 就默认走 CLI 取数，否则退回示例 JSON。
     public static var cliDirectoryExists: Bool {
         resolvedCLIDirectory() != nil
     }

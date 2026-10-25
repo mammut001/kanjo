@@ -71,16 +71,16 @@ The full rules are in [ATTRIBUTION.md](ATTRIBUTION.md). The code implements them
 
 ### App
 
-Download `Kanjo-<version>-macos.zip` from [Releases](https://github.com/mammut001/kanjo/releases/latest), unzip, drag `Kanjo.app` to Applications. The app is ad-hoc signed; on first launch right-click → Open. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
+Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest), open the DMG, drag `Kanjo.app` to Applications, then open the app. Releases are signed with a Developer ID; notarization is coming, so macOS may still block downloaded builds until then. The CLI is included: no separate CLI installation is needed. Python 3.9+ via Apple’s Xcode Command Line Tools is required; the app offers to open Apple’s installer when the tools are missing. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
 
-### CLI (needed by the app)
+### CLI only / use in a terminal
 
 ```bash
 git clone https://github.com/mammut001/kanjo.git
 cd kanjo && ./install.sh
 ```
 
-This puts `kanjo` on your PATH and installs the CLI where the app looks for it. Python 3.9+ and the standard library only.
+This installs `kanjo` for terminal use; the app already includes its own CLI. Python 3.9+ and the standard library only.
 
 ```bash
 kanjo doctor      # which logs were found
@@ -171,7 +171,9 @@ Claude Code、Codex CLI、Antigravity CLI。全部本地运行，不上传任何
 
 ### 安装
 
-从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.zip`，解压拖进「应用程序」。首次打开右键 → 打开。然后装 CLI：
+从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，打开 DMG，把 `Kanjo.app` 拖进「应用程序」，再打开应用。发布包使用 Developer ID 签名；公证即将加入，在此之前 macOS 仍可能拦截下载的应用。CLI 已内置，无需另外安装。需要 Xcode Command Line Tools 提供的 Python 3.9+；缺少工具时，应用可打开 Apple 安装对话框。首次运行可能请求访问仓库文件夹。
+
+仅需 CLI／在终端中使用：
 
 ```bash
 git clone https://github.com/mammut001/kanjo.git
