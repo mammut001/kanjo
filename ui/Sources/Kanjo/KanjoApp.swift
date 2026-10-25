@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             effect.material = .popover
             effect.blendingMode = .behindWindow
             effect.state = .active
-            let host = NSHostingView(rootView: MenuPanelView().environmentObject(ReportStore.shared))
+            let host = NSHostingView(rootView: MenuPanelView()
+                .environmentObject(ReportStore.shared)
+                .environmentObject(DiskStore.shared))
             host.translatesAutoresizingMaskIntoConstraints = false
             effect.addSubview(host)
             w.contentView = effect
@@ -51,12 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct KanjoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = ReportStore.shared
+    @StateObject private var disk = DiskStore.shared
     @AppStorage(SettingsKeys.showAmountInMenuBar) private var showAmount = true
 
     var body: some Scene {
         MenuBarExtra {
             MenuPanelView()
                 .environmentObject(store)
+                .environmentObject(disk)
         } label: {
             MenuBarLabel(store: store, showAmount: showAmount)
         }

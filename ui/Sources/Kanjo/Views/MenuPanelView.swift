@@ -6,6 +6,7 @@ enum Route: Equatable {
     case overview
     case project(String)
     case bucket(BucketKind)
+    case disk
     case settings
 }
 
@@ -16,7 +17,8 @@ enum BucketKind: String {
 /// 开发开关 `--route <value>`：启动后直接打开某一页，便于截图。
 /// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
 /// `project:<index>:bottom`（详情页滚到底部）、`project:<index>:locations`（滚到底部并展开 Locations）、
-/// `bucket:unattributed` / `bucket:excluded`、`settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）。
+/// `bucket:unattributed` / `bucket:excluded`、`disk`、`disk:expanded`（磁盘页展开每个 agent，仅供截图）、
+/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）。
 enum DevRoute {
     static let requested: String? = {
         let args = CommandLine.arguments
@@ -31,6 +33,8 @@ enum DevRoute {
         case "settings-bottom": return (.settings, SettingsView.bottomAnchor)
         case "overview": return (.overview, nil)
         case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor)
+        case "disk": return (.disk, nil)
+        case "disk:expanded": return (.disk, DiskView.expandedAnchor)
         default: break
         }
         guard let r = report else { return nil }
@@ -58,6 +62,7 @@ struct MenuPanelView: View {
     static let size = CGSize(width: 360, height: 620)
 
     @EnvironmentObject var store: ReportStore
+    @EnvironmentObject var disk: DiskStore
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
@@ -71,12 +76,16 @@ struct MenuPanelView: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .panelBackground()
-        .onReceive(store.$report) { r in
-            guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: r) else { return }
-            pendingDevRoute = nil
-            route = resolved.route
-            overviewAnchor = resolved.anchor
-        }
+        .onAppear { applyDevRoute() }
+        .onReceive(store.$report) { _ in applyDevRoute() }
+    }
+
+    /// `disk` 不依赖用量报告，出现时就能打开；项目页要等报告到了再解析。
+    private func applyDevRoute() {
+        guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: store.report) else { return }
+        pendingDevRoute = nil
+        route = resolved.route
+        overviewAnchor = resolved.anchor
     }
 
     // 只在出问题时出现：schema 版本过新（警告）、刷新失败但还有旧数据（错误）。
@@ -112,6 +121,11 @@ struct MenuPanelView: View {
                 overviewAnchor = nil
                 store.applySettings()
             })
+        case .disk:
+            DiskView(expandAll: overviewAnchor == DiskView.expandedAnchor, onBack: {
+                route = .overview
+                overviewAnchor = nil
+            }, onSettings: { route = .settings })
         default:
             if let r = store.report {
                 switch route {
@@ -151,15 +165,24 @@ struct MenuPanelView: View {
         HStack(spacing: 2) {
             Button {
                 store.refresh()
+                if route == .disk { disk.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle())
             .help("Refresh now")
-            .disabled(store.isLoading)
+            .disabled(route == .disk ? disk.isLoading : store.isLoading)
 
             Group {
-                if store.isLoading {
+                if route == .disk {
+                    if disk.isLoading {
+                        Text("Refreshing…")
+                    } else if let t = disk.lastRefresh {
+                        Text("Updated \(ShortDate.clock(t))")
+                    } else {
+                        Text("Not refreshed yet")
+                    }
+                } else if store.isLoading {
                     Text("Refreshing…")
                 } else if let t = store.lastRefresh {
                     Text("Updated \(ShortDate.clock(t))")
@@ -169,9 +192,20 @@ struct MenuPanelView: View {
             }
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(.secondary)
-            .help(store.sourceDescription)
+            .help(route == .disk ? disk.sourceDescription : store.sourceDescription)
 
             Spacer()
+
+            Button {
+                let wasSettings = route == .settings
+                route = route == .disk ? .overview : .disk
+                overviewAnchor = nil
+                if wasSettings { store.applySettings() }
+            } label: {
+                Image(systemName: "internaldrive")
+            }
+            .buttonStyle(IconButtonStyle(active: route == .disk))
+            .help("Disk")
 
             Button {
                 route = route == .settings ? .overview : .settings

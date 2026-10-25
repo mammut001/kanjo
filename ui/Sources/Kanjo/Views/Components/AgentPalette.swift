@@ -56,6 +56,7 @@ enum AgentPalette {
 
     // 状态色。
     static let good = dynamic(light: 0x2E7D4A, dark: 0x74C98F)
+    static let goodFill = dynamic(light: 0x2E7D4A, dark: 0x74C98F, lightAlpha: 0.14, darkAlpha: 0.20)
     static let bad = dynamic(light: 0xB3261E, dark: 0xFF8A80)
     static let badFill = dynamic(light: 0xE5484D, dark: 0xE5484D, lightAlpha: 0.10, darkAlpha: 0.18)
     static let warnInk = dynamic(light: 0x6E5512, dark: 0xE8CF94)

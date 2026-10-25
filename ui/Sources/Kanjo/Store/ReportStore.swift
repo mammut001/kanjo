@@ -46,14 +46,10 @@ final class ReportStore: ObservableObject {
                                   : URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
             return (FileDataSource(url: url), "File: \(url.path)")
         case .cli:
-            var cmd = (defaults.string(forKey: SettingsKeys.cliCommand) ?? "").trimmingCharacters(in: .whitespaces)
-            if cmd.isEmpty { cmd = CLIDataSource.defaultCommand }
-            let dir = (defaults.string(forKey: SettingsKeys.cliWorkingDirectory) ?? "").trimmingCharacters(in: .whitespaces)
+            let cmd = CLILaunch.command(defaults: defaults)
             // 工作目录留空 = 仓库里的 cli/，其次 install.sh 装的位置（DefaultPaths.resolvedCLIDirectory）；
-            // 都没有就继承进程的当前目录。
-            let url: URL? = dir.isEmpty
-                ? DefaultPaths.resolvedCLIDirectory()
-                : URL(fileURLWithPath: (dir as NSString).expandingTildeInPath)
+            // 都没有就继承进程的当前目录。磁盘页用同一套命令和工作目录。
+            let url = CLILaunch.workingDirectory(defaults: defaults)
             return (CLIDataSource(command: cmd, workingDirectory: url),
                     "Command: \(cmd)" + (url.map { " (in \($0.path))" } ?? ""))
         }
@@ -91,9 +87,24 @@ final class ReportStore: ObservableObject {
         }
     }
 
-    /// 设置改动后调用：重建数据源、重排定时器、立即刷新。
+    /// 设置改动后调用：重建数据源、重排定时器、立即刷新。磁盘页若已打开过，跟着重取。
     func applySettings() {
         restartTimer()
         refresh()
+        DiskStore.shared.applySettings()
+    }
+}
+
+/// 设置里的 CLI 命令和工作目录。用量导出和磁盘报告共用。
+enum CLILaunch {
+    static func command(defaults: UserDefaults = .standard) -> String {
+        let cmd = (defaults.string(forKey: SettingsKeys.cliCommand) ?? "").trimmingCharacters(in: .whitespaces)
+        return cmd.isEmpty ? CLIDataSource.defaultCommand : cmd
+    }
+
+    static func workingDirectory(defaults: UserDefaults = .standard) -> URL? {
+        let dir = (defaults.string(forKey: SettingsKeys.cliWorkingDirectory) ?? "").trimmingCharacters(in: .whitespaces)
+        if dir.isEmpty { return DefaultPaths.resolvedCLIDirectory() }
+        return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath)
     }
 }

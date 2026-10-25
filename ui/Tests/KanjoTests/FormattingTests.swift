@@ -33,6 +33,17 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(Fmt.multiple(nil), "—")
     }
 
+    func testBytes() {
+        XCTAssertEqual(Fmt.bytes(0), "0 B")
+        XCTAssertEqual(Fmt.bytes(999), "999 B")
+        XCTAssertEqual(Fmt.bytes(1_500), "1.5 KB")
+        XCTAssertEqual(Fmt.bytes(626_000_000), "626 MB")
+        XCTAssertEqual(Fmt.bytes(1_100_000_000), "1.1 GB")
+        XCTAssertEqual(Fmt.bytes(11_800_000_000), "11.8 GB")
+        XCTAssertEqual(Fmt.bytes(55_200_000_000), "55.2 GB")
+        XCTAssertEqual(Fmt.bytes(8_000_000_000), "8 GB")
+    }
+
     func testPercent() {
         XCTAssertEqual(Fmt.percent(1), "100%")
         XCTAssertEqual(Fmt.percent(0.6), "60%")

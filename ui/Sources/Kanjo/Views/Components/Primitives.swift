@@ -126,17 +126,18 @@ struct CostNote: View {
 struct HeroAmount: View {
     let value: String
     var size: CGFloat = 34
+    var color: Color = .primary
     var body: some View {
         Text(value)
             .font(.system(size: size, weight: .semibold, design: .rounded).monospacedDigit())
-            .foregroundStyle(.primary)
+            .foregroundStyle(color)
             .lineLimit(1).minimumScaleFactor(0.6)
             .textSelection(.enabled)
     }
 }
 
 struct Badge: View {
-    enum Style { case neutral, warn, bad }
+    enum Style { case neutral, good, warn, bad }
     let text: String
     var style: Style = .neutral
     var help: String? = nil
@@ -153,6 +154,7 @@ struct Badge: View {
     private var fg: Color {
         switch style {
         case .neutral: return .secondary
+        case .good: return AgentPalette.good
         case .warn: return AgentPalette.warnInk
         case .bad: return AgentPalette.bad
         }
@@ -160,6 +162,7 @@ struct Badge: View {
     private var bg: Color {
         switch style {
         case .neutral: return Color.primary.opacity(0.07)
+        case .good: return AgentPalette.goodFill
         case .warn: return AgentPalette.warnFill
         case .bad: return AgentPalette.badFill
         }
