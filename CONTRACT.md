@@ -49,8 +49,8 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "monthly_price_usd": 100.0,             // 档位未知时为 null
       "cycle_start": "2026-10-25T00:00:00Z",  // 当前账期起点，ISO 8601 UTC（按 anchor_day 在报告 timezone 的 00:00 折算）
       "cycle_end": "2026-11-25T00:00:00Z",    // 下一账期起点
-      "anchor_day": 25,                       // 每月几号开新账期
-      "cycle_source": "subscription_date",    // subscription_date（从订阅创建日推出）| calendar_month（不知道订阅日，按自然月）| manual
+      "anchor_day": 25,                       // 每月几号开新账期；rolling_30d 时为 null
+      "cycle_source": "subscription_date",    // subscription_date（从订阅创建日推出）| manual（用户设置）| rolling_30d（不知道续费日：cycle_start = 现在往前 30 天，cycle_end = 现在，anchor_day 为 null；UI 标「day assumed」并引导设置）
       "extra_usage_enabled": false,           // Claude 的 hasExtraUsageEnabled：true 表示超额会真实扣款，UI 要单独标出
       "source": "detected"                    // detected（本机读到）| manual（用户配置）
     }
