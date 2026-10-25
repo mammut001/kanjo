@@ -165,6 +165,11 @@ class DiskTest(unittest.TestCase):
             self.assertEqual(entry["deletable"], deletable, eid)
             self.assertEqual(entry["blocked"], blocked, eid)
             self.assertEqual(entry["files"], files, eid)
+            if kind == "sessions":
+                self.assertEqual(entry["log_files"], files, eid)
+                self.assertEqual(entry["imported_files"], 0, eid)
+            else:
+                self.assertNotIn("log_files", entry, eid)
             self.assertEqual(entry["bytes"], disk.measure(entry["path"], now, exclude=_excludes(entry, doc))["bytes"], eid)
             self.assertGreater(entry["bytes"], 0, eid)
             self.assertEqual(entry["skipped_errors"], 0, eid)
@@ -204,11 +209,101 @@ class DiskTest(unittest.TestCase):
         self.write_claude()
         doc = self.report()
         self.assertEqual(self.entry(doc, "claude:sessions")["blocked"], ["not_imported"])
+        self.assertEqual(self.entry(doc, "claude:sessions")["log_files"], 1)
+        self.assertEqual(self.entry(doc, "claude:sessions")["imported_files"], 0)
         from kanjo.export import scan
         scan(self.scan_dirs(), cache=None)
         doc = self.report()
-        self.assertEqual(self.entry(doc, "claude:sessions")["blocked"], [])
-        self.assertEqual(self.entry(doc, "claude:sessions")["deletable"], "after_import")
+        entry = self.entry(doc, "claude:sessions")
+        self.assertEqual(entry["blocked"], [])
+        self.assertEqual(entry["deletable"], "after_import")
+        self.assertEqual(entry["log_files"], 1)
+        self.assertEqual(entry["imported_files"], 1)
+
+    def test_changed_signature_still_counts_as_imported(self):
+        path = self.write_claude()
+        from kanjo.cache import _signature
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        stored = next(iter(Ledger(directory=self.data).entries.values()))
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write('{"type":"user","message":{"content":"later"}}\n')
+        self.assertNotEqual(stored["file_sig"], _signature(path))
+        self.assertEqual(stored["source_path"], path)
+        doc = self.report()
+        entry = self.entry(doc, "claude:sessions")
+        self.assertEqual(entry["blocked"], [])
+        self.assertEqual(entry["log_files"], 1)
+        self.assertEqual(entry["imported_files"], 1)
+        now = time.time()
+        os.utime(path, (now - 10 * DAY, now - 10 * DAY))
+        done = self.clean(["claude:sessions"], older_than_days=5, yes=True, now=now)
+        self.assertEqual(done["moved"], [path])
+        self.assertEqual(done["skipped"], [])
+        self.assertFalse(os.path.exists(path))
+
+    def test_missing_ledger_entry_blocks_and_older_than_skips_that_file(self):
+        now = time.time()
+        imported = self.write_claude()
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        slug = os.path.join(self.projects, "slug")
+        extra = self.write(os.path.join(slug, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jsonl"), "{}\n")
+        image = self.write(os.path.join(slug, "shot.png"), "img")
+        meta = self.write(os.path.join(slug, "meta.json"), "{}")
+        packed = self.write(os.path.join(slug, "old.zst"), "z")
+        store = self.write(os.path.join(slug, ".DS_Store"), "ds")
+        recent = self.write(os.path.join(slug, "recent.png"), "new")
+        for path in (imported, extra, image, meta, packed, store):
+            os.utime(path, (now - 10 * DAY, now - 10 * DAY))
+
+        doc = self.report(now)
+        entry = self.entry(doc, "claude:sessions")
+        self.assertEqual(entry["log_files"], 2)
+        self.assertEqual(entry["imported_files"], 1)
+        self.assertEqual(entry["blocked"], ["not_imported"])
+        self.assertGreater(entry["files"], entry["log_files"])
+
+        code, out, _ = self.cli("disk", "--json")
+        self.assertEqual(code, 0)
+        listed = self.entry(json.loads(out), "claude:sessions")
+        self.assertEqual(listed["log_files"], 2)
+        self.assertEqual(listed["imported_files"], 1)
+        code, table, _ = self.cli("disk")
+        self.assertEqual(code, 0)
+        self.assertIn("1/2", table)
+        self.assertIn("claude:sessions", table)
+
+        refused = self.clean(["claude:sessions"], yes=True, now=now)
+        self.assertEqual(refused["moved"], [])
+        self.assertEqual(refused["skipped"], [{"id": "claude:sessions", "reason": "not_imported"}])
+        self.assertTrue(os.path.exists(imported))
+        self.assertTrue(os.path.exists(extra))
+
+        expect = {}
+        for path in (imported, image, meta, packed, store):
+            expect[path] = os.lstat(path).st_blocks * 512
+        done = self.clean(["claude:sessions"], older_than_days=5, yes=True, now=now)
+        self.assertEqual(set(done["moved"]), set(expect))
+        self.assertEqual(done["freed_bytes"], sum(expect.values()))
+        self.assertEqual(done["skipped"], [{"id": extra, "reason": "not_imported"}])
+        self.assertFalse(any(os.path.exists(path) for path in expect))
+        self.assertTrue(os.path.exists(extra))
+        self.assertTrue(os.path.exists(recent))
+        self.assertTrue(os.path.isdir(self.projects))
+
+    def test_grok_sessions_stay_blocked_for_older_than(self):
+        now = time.time()
+        path = self.write(os.path.join(self.grok, "sessions", "g.jsonl"), "g")
+        os.utime(path, (now - 10 * DAY, now - 10 * DAY))
+        entry = self.entry(self.report(now), "grok:sessions")
+        self.assertEqual(entry["blocked"], ["not_imported"])
+        self.assertEqual(entry["imported_files"], 0)
+        self.assertEqual(entry["log_files"], 1)
+        done = self.clean(["grok:sessions"], older_than_days=5, yes=True, now=now)
+        self.assertTrue(os.path.exists(path))
+        self.assertEqual(done["moved"], [])
+        self.assertEqual(done["skipped"], [{"id": "grok:sessions", "reason": "not_imported"}])
 
     def test_active_detection(self):
         path = self.write(os.path.join(self.scratch, "enc", "sess", "scratchpad", "f.txt"), "f")

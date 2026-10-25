@@ -181,9 +181,12 @@ def _format_disk(doc: dict) -> str:
             state = entry["deletable"]
             if entry["blocked"]:
                 state = "%s (%s)" % (state, ",".join(entry["blocked"]))
+            files = str(entry["files"])
+            if entry["kind"] == "sessions" and "log_files" in entry:
+                files = "%d/%d" % (entry["imported_files"], entry["log_files"])
             rows.append([
                 agent["label"], entry["id"], _human_bytes(entry["bytes"]),
-                str(entry["files"]), entry["newest"] or "-", state,
+                files, entry["newest"] or "-", state,
             ])
             errors += entry.get("skipped_errors") or 0
     if len(rows) == 1:

@@ -17,7 +17,6 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from .cache import _signature
 from .ledger import Ledger
 from .sources import antigravity, claude, codex
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
@@ -152,7 +151,7 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
     now = time.time() if now is None else now
     roots = default_roots() if roots is None else roots
     ledger = ledger or Ledger()
-    grouped = _collect(roots, now, ledger.signatures_by_path())
+    grouped = _collect(roots, now, _imported_index(ledger))
     agents = []
     total = 0
     reclaim = 0
@@ -191,10 +190,20 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
 
     ``older_than_days`` keeps files newer than that many days. Worktrees are removed
     as a whole (only when every file is old enough) via ``git worktree remove``.
+    On a sessions entry, a log file with no ledger row is skipped even when the
+    entry itself is allowed; ``--older-than`` still moves the other files when
+    ``not_imported`` is the only block.
     """
     now = time.time() if now is None else now
+    ledger = ledger or Ledger()
     doc = report(roots=roots, now=now, ledger=ledger)
-    by_id = {entry["id"]: entry for agent in doc["agents"] for entry in agent["entries"]}
+    imported = _imported_index(ledger)
+    by_id = {}
+    owners = {}
+    for agent in doc["agents"]:
+        for entry in agent["entries"]:
+            by_id[entry["id"]] = entry
+            owners[entry["id"]] = agent["agent"]
     do_it = bool(yes) and not dry_run
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     trash_root = os.path.join(trash_dir or trash_base(), "kanjo-" + stamp)
@@ -212,27 +221,33 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         if entry["deletable"] == "never":
             skipped.append({"id": eid, "reason": "never"})
             continue
-        if entry["blocked"]:
+        agent = owners.get(eid, "")
+        partial = _partial_session_clean(entry, agent, older_than_days)
+        if entry["blocked"] and not partial:
             skipped.append({"id": eid, "reason": ",".join(entry["blocked"])})
             continue
         try:
             if entry["kind"] == "worktrees":
                 part_moved, part_freed, reason = _clean_worktree(entry, older_than_days, now, do_it)
+                file_skips: List[dict] = []
             else:
-                part_moved, part_freed, reason = _clean_tree(entry, older_than_days, now, do_it, trash_root)
+                part_moved, part_freed, reason, file_skips = _clean_tree(
+                    entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported)
         except OSError:
             skipped.append({"id": eid, "reason": "move_failed"})
             continue
         if reason:
             skipped.append({"id": eid, "reason": reason})
+            skipped.extend(file_skips)
             continue
         moved.extend(part_moved)
         freed += part_freed
+        skipped.extend(file_skips)
     return {"moved": moved, "freed_bytes": freed, "skipped": skipped}
 
 
 # ---- scanning targets -----------------------------------------------------------------
-def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[dict]]:
+def _collect(roots: dict, now: float, imported: Dict[str, set]) -> Dict[str, List[dict]]:
     grouped: Dict[str, List[dict]] = {}
     used = set()
 
@@ -252,7 +267,7 @@ def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[d
     for path in projects:
         if not _isdir(path):
             continue
-        add("claude", _sessions_entry("claude", path, now, sigs, used))
+        add("claude", _sessions_entry("claude", path, now, imported, used))
     for parent in _parents(projects):
         for name, eid in (("shell-snapshots", "claude:shell-snapshots"), ("debug", "claude:debug")):
             path = os.path.join(parent, name)
@@ -268,7 +283,7 @@ def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[d
     for path in codex_dirs:
         if not _isdir(path):
             continue
-        add("codex", _sessions_entry("codex", path, now, sigs, used))
+        add("codex", _sessions_entry("codex", path, now, imported, used))
     for parent in _parents(codex_dirs):
         wt_root = os.path.join(parent, "worktrees")
         if _isdir(wt_root):
@@ -288,7 +303,7 @@ def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[d
     for path in agy_dirs:
         if not _isdir(path):
             continue
-        add("antigravity", _sessions_entry("antigravity", path, now, sigs, used))
+        add("antigravity", _sessions_entry("antigravity", path, now, imported, used))
     for parent in _parents(agy_dirs):
         brain = os.path.join(parent, "brain")
         if _isdir(brain):
@@ -308,8 +323,13 @@ def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[d
         sessions = os.path.join(grok, "sessions")
         if _isdir(sessions):
             note = "Grok sessions. Kanjo does not parse Grok yet, so this stays not_imported."
-            add("grok", _plain_entry("grok", take_id("grok:sessions"), "sessions", sessions, now,
-                                     ["not_imported"], note=note))
+            entry = _plain_entry("grok", take_id("grok:sessions"), "sessions", sessions, now,
+                                 ["not_imported"], note=note)
+            # No parser, so discover() yields nothing. Count the files on disk and
+            # leave imported_files at 0; the block above does not depend on that.
+            entry["log_files"] = entry["files"]
+            entry["imported_files"] = 0
+            add("grok", entry)
         bundled = os.path.join(grok, "bundled")
         if _isdir(bundled):
             add("grok", _plain_entry("grok", take_id("grok:bundled"), "other", bundled, now, []))
@@ -327,10 +347,12 @@ def _collect(roots: dict, now: float, sigs: Dict[str, list]) -> Dict[str, List[d
     return grouped
 
 
-def _sessions_entry(agent: str, path: str, now: float, sigs: Dict[str, list], used: set) -> dict:
+def _sessions_entry(agent: str, path: str, now: float, imported: Dict[str, set], used: set) -> dict:
     measured = measure(path, now)
-    blocked = [] if _logs_imported(agent, path, sigs) else ["not_imported"]
-    return _make(_session_id(agent, path, used), "sessions", path, measured, blocked)
+    log_files, imported_files = _import_counts(agent, path, imported)
+    blocked = ["not_imported"] if imported_files < log_files else []
+    return _make(_session_id(agent, path, used), "sessions", path, measured, blocked,
+                 log_files=log_files, imported_files=imported_files)
 
 
 def _plain_entry(agent: str, eid: str, kind: str, path: str, now: float, blocked: List[str],
@@ -338,8 +360,9 @@ def _plain_entry(agent: str, eid: str, kind: str, path: str, now: float, blocked
     return _make(eid, kind, path, measure(path, now), blocked, note=note)
 
 
-def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], note: Optional[str] = None) -> dict:
-    return {
+def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], note: Optional[str] = None,
+         log_files: Optional[int] = None, imported_files: Optional[int] = None) -> dict:
+    entry = {
         "id": eid,
         "kind": kind,
         "path": path,
@@ -352,6 +375,10 @@ def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], no
         "note": note or NOTES[kind],
         "skipped_errors": measured["errors"],
     }
+    if log_files is not None:
+        entry["log_files"] = log_files
+        entry["imported_files"] = 0 if imported_files is None else imported_files
+    return entry
 
 
 def _session_id(agent: str, path: str, used: set) -> str:
@@ -375,16 +402,68 @@ def _session_id(agent: str, path: str, used: set) -> str:
     return eid
 
 
-def _logs_imported(agent: str, root: str, sigs: Dict[str, list]) -> bool:
+def _imported_index(ledger: Ledger) -> Dict[str, set]:
+    """``agent -> source paths`` that have any ledger row. Signature is ignored.
+
+    A later export re-imports a file whose size or mtime changed. Matching the
+    signature here kept live session logs ``not_imported`` forever.
+    """
+    found: Dict[str, set] = {}
+    for key, entry in ledger.entries.items():
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("source_path")
+        if not isinstance(path, str) or not path:
+            continue
+        agent = _entry_agent(key, entry)
+        if not agent:
+            continue
+        bucket = found.setdefault(agent, set())
+        bucket.add(path)
+        bucket.add(os.path.normpath(path))
+    return found
+
+
+def _entry_agent(key: object, entry: dict) -> Optional[str]:
+    session = entry.get("session")
+    if isinstance(session, dict):
+        agent = session.get("agent")
+        if isinstance(agent, str) and agent:
+            return agent
+    if isinstance(key, str) and "\0" in key:
+        return key.split("\0", 1)[0]
+    return None
+
+
+def _import_counts(agent: str, root: str, imported: Dict[str, set]) -> Tuple[int, int]:
+    """``(log_files, imported_files)`` from ``discover()`` under ``root``."""
+    logs = _log_paths(agent, root)
+    if logs is None:
+        return 0, 0
+    known = imported.get(agent) or set()
+    imported_files = sum(1 for path in logs if path in known or os.path.normpath(path) in known)
+    return len(logs), imported_files
+
+
+def _log_paths(agent: str, root: str) -> Optional[List[str]]:
     module = _PARSERS.get(agent)
     if module is None:
-        return False
-    for path, _parent in module.discover([root]):
-        sig = _signature(path)
-        known = sigs.get(path) or []
-        if sig not in known:
-            return False
-    return True
+        return None
+    return [path for path, _parent in module.discover([root])]
+
+
+def _partial_session_clean(entry: dict, agent: str, days: Optional[int]) -> bool:
+    """Per-file clean when ``--older-than`` is set and ``not_imported`` is the only block.
+
+    Grok has no parser, so it stays blocked as a whole: every file would
+    otherwise look like a non-log and be moved.
+    """
+    return (
+        days is not None
+        and entry.get("kind") == "sessions"
+        and entry.get("blocked") == ["not_imported"]
+        and agent in _PARSERS
+    )
 
 
 def _find_worktrees(root: str) -> List[Tuple[str, str]]:
@@ -478,26 +557,40 @@ def _main_repo(path: str) -> Optional[str]:
 
 
 # ---- clean ----------------------------------------------------------------------------
-def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash_root: str):
+def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash_root: str,
+                agent: str = "", imported: Optional[Dict[str, set]] = None):
     root = entry["path"]
     if not os.path.exists(root):
-        return [], 0, "not_found"
+        return [], 0, "not_found", []
     if days is None:
         if do_it:
             dest = os.path.join(trash_root, entry["id"], os.path.basename(os.path.normpath(root)))
             _relocate(root, dest)
-        return [root], entry["bytes"], None
+        return [root], entry["bytes"], None, []
+    logs = None
+    if entry.get("kind") == "sessions":
+        logs = _log_paths(agent, root)
+    log_set = set(os.path.normpath(path) for path in logs) if logs is not None else None
+    known = (imported or {}).get(agent) or set()
     files = _files_older_than(root, now, days)
-    if not files:
-        return [], 0, "newer_than_cutoff"
+    movable = []
+    file_skips = []
+    for path, nbytes, rel in files:
+        norm = os.path.normpath(path)
+        if log_set is not None and norm in log_set and path not in known and norm not in known:
+            file_skips.append({"id": path, "reason": "not_imported"})
+            continue
+        movable.append((path, nbytes, rel))
+    if not movable and not file_skips:
+        return [], 0, "newer_than_cutoff", []
     moved = []
     freed = 0
-    for path, nbytes, rel in files:
+    for path, nbytes, rel in movable:
         if do_it:
             _relocate(path, os.path.join(trash_root, entry["id"], rel))
         moved.append(path)
         freed += nbytes
-    return moved, freed, None
+    return moved, freed, None, file_skips
 
 
 def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
