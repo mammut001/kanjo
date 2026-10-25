@@ -20,7 +20,7 @@ quoted or bare keys, strings, numbers, booleans and string arrays).
     weekly_window_hours = 168
     five_hour_resets_at = "2026-10-24T09:30:00Z"   # optional
 
-    [subscriptions.claude]          # manual plan, replaces detection for this agent
+    [subscriptions.claude]          # manual fields override detection for this agent
     plan = "max_20x"
     monthly_price_usd = 200         # optional; known plans fill it in
     anchor_day = 25                 # optional, 1-28; sets cycle_source = "manual"
@@ -57,8 +57,9 @@ class Config:
     dominant_threshold: float = DEFAULT_THRESHOLD
     # agent -> {"weekly_resets_at": epoch s, "weekly_window_hours": int, "five_hour_resets_at": epoch s | None}
     quota_windows: Dict[str, dict] = field(default_factory=dict)
-    # agent -> {"plan", "monthly_price_usd" or None, "anchor_day" or None, "extra_usage_enabled"}
+    # agent -> explicitly configured subscription fields
     subscriptions: Dict[str, dict] = field(default_factory=dict)
+    subscription_origins: Dict[str, dict] = field(default_factory=dict)
     source: Optional[str] = None
 
     def match_override(self, path: Optional[str]):
@@ -221,6 +222,9 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         cfg.quota_windows = _quota_windows(flat["quota_windows"])
     if flat.get("subscriptions"):
         cfg.subscriptions = _subscriptions(flat["subscriptions"])
+        cfg.subscription_origins = {
+            agent: {key: "toml" for key in spec} for agent, spec in cfg.subscriptions.items()
+        }
     return cfg
 
 
@@ -266,7 +270,7 @@ def _quota_windows(raw) -> Dict[str, dict]:
 
 
 def _subscriptions(raw) -> Dict[str, dict]:
-    """Manual plans. A known ``plan`` fills in the list price; an unknown one needs ``monthly_price_usd``."""
+    """Validate manual fields, keeping absent fields absent for detection to fill."""
     if not isinstance(raw, dict):
         raise ConfigError("[subscriptions] must be a table")
     out = {}
@@ -274,47 +278,99 @@ def _subscriptions(raw) -> Dict[str, dict]:
         where = "subscriptions.%s" % agent
         if not isinstance(spec, dict):
             raise ConfigError("[%s] must be a table" % where)
-        plan = spec.get("plan")
-        if not isinstance(plan, str) or not plan.strip():
-            raise ConfigError("[%s] needs plan" % where)
-        plan = plan.strip()
+        fields = {}
+        if "plan" in spec:
+            plan = spec["plan"]
+            if not isinstance(plan, str) or not plan.strip():
+                raise ConfigError("%s.plan must be a non-empty string" % where)
+            fields["plan"] = plan.strip()
         if "monthly_price_usd" in spec and spec["monthly_price_usd"] is not None:
             price = spec["monthly_price_usd"]
             if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or price < 0:
                 raise ConfigError("%s.monthly_price_usd must be a non-negative number" % where)
-            price = float(price)
-        else:
-            price = None
-        if price is None and known_monthly_price(str(agent), plan) is None:
-            raise ConfigError("[%s] plan %r is unknown; set monthly_price_usd" % (where, plan))
+            fields["monthly_price_usd"] = float(price)
+        if ("plan" in fields and "monthly_price_usd" not in fields
+                and known_monthly_price(str(agent), fields["plan"]) is None):
+            raise ConfigError("[%s] plan %r is unknown; set monthly_price_usd" % (where, fields["plan"]))
         anchor = spec.get("anchor_day", None)
         if anchor is not None:
             if isinstance(anchor, bool) or not isinstance(anchor, int) or not 1 <= anchor <= 28:
                 raise ConfigError("%s.anchor_day must be an integer from 1 to 28" % where)
-        extra = spec.get("extra_usage_enabled", False)
-        if not isinstance(extra, bool):
-            raise ConfigError("%s.extra_usage_enabled must be true or false" % where)
-        out[str(agent)] = {
-            "plan": plan,
-            "monthly_price_usd": price,
-            "anchor_day": anchor,
-            "extra_usage_enabled": extra,
-        }
+            fields["anchor_day"] = anchor
+        if "extra_usage_enabled" in spec:
+            extra = spec["extra_usage_enabled"]
+            if not isinstance(extra, bool):
+                raise ConfigError("%s.extra_usage_enabled must be true or false" % where)
+            fields["extra_usage_enabled"] = extra
+        out[str(agent)] = fields
     return out
 
 
 def default_paths() -> List[str]:
-    base = os.path.expanduser(DEFAULT_DIR)
+    base = os.path.expanduser(os.environ.get("KANJO_CONFIG_DIR") or DEFAULT_DIR)
     return [os.path.join(base, "attribution.toml"), os.path.join(base, "attribution.json")]
 
 
-def load(path: Optional[str] = None) -> Config:
-    """Explicit ``path`` must exist; otherwise the default locations are optional."""
+def config_paths(path: Optional[str] = None):
+    """Primary config (existing JSON fallback included), and its sibling overrides."""
     candidates = [os.path.expanduser(path)] if path else default_paths()
-    for candidate in candidates:
-        if os.path.isfile(candidate):
-            with open(candidate, "r", encoding="utf-8") as handle:
-                return from_dict(_parse_text(handle.read(), candidate), source=candidate)
-    if path:
+    primary = next((p for p in candidates if os.path.isfile(p)), candidates[0])
+    return primary, os.path.join(os.path.dirname(primary), "overrides.json")
+
+
+def read_overrides(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = _parse_text(handle.read(), path)
+    except FileNotFoundError:
+        return {}
+    except OSError as exc:
+        raise ConfigError("cannot read %s: %s" % (path, exc))
+    if not isinstance(data, dict):
+        raise ConfigError("%s must be an object" % path)
+    return data
+
+
+def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config:
+    """Explicit ``path`` must exist; otherwise the default locations are optional."""
+    primary, override_path = config_paths(path)
+    if os.path.isfile(primary):
+        with open(primary, "r", encoding="utf-8") as handle:
+            cfg = from_dict(_parse_text(handle.read(), primary), source=primary)
+    elif path:
         raise ConfigError("config file not found: %s" % path)
-    return Config()
+    else:
+        cfg = Config()
+    data = read_overrides(override_path) if overrides is None else overrides
+    raw = data.get("subscriptions", {})
+    if not isinstance(raw, dict):
+        raise ConfigError("overrides subscriptions must be an object")
+    merged = {agent: dict(spec) for agent, spec in cfg.subscriptions.items()}
+    for agent, spec in raw.items():
+        if not isinstance(spec, dict):
+            raise ConfigError("overrides subscriptions.%s must be an object" % agent)
+        merged.setdefault(agent, {}).update(spec)
+    cfg.subscriptions = _subscriptions(merged)
+    for agent, spec in raw.items():
+        origins = cfg.subscription_origins.setdefault(agent, {})
+        for key in spec:
+            if key in cfg.subscriptions[agent]:
+                origins[key] = "overrides"
+    return cfg
+
+
+def subscription_value(cfg: Config, agent: str, key: str, found: dict):
+    """Effective field and its origin, including prices derived from a manual plan."""
+    spec = cfg.subscriptions.get(agent, {})
+    origins = cfg.subscription_origins.get(agent, {})
+    if key in spec:
+        return spec[key], origins.get(key, "toml")
+    if key == "monthly_price_usd" and "plan" in spec:
+        return known_monthly_price(agent, spec["plan"]), origins.get("plan", "toml")
+    sub = found.get(agent, {})
+    if key == "anchor_day":
+        origin = "detected" if sub.get("cycle_source") == "subscription_date" else "default"
+        return sub.get(key, 1), origin
+    if key in sub:
+        return sub[key], "detected"
+    return None, "default"

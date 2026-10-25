@@ -192,7 +192,45 @@ when nothing is found. A bad manual entry is a config error (exit code 2), like 
 These monthly prices are public list prices. They may change, and a manual
 `monthly_price_usd` overrides them. They are not the API-equivalent cost in `cost_note`.
 
-A manual table replaces detection for that agent. Sources, per agent:
+Manual settings merge per field. Precedence is `overrides.json` > `attribution.toml`
+(or `attribution.json`) > detected values > defaults. Fields you leave out keep
+their detected values. Setting any field makes `source` `"manual"`; setting
+`anchor_day` also makes `cycle_source` `"manual"`.
+
+Use `kanjo config` to change subscription settings without editing TOML:
+
+```sh
+kanjo config set subscriptions.codex.anchor_day 8
+kanjo config get subscriptions.codex.anchor_day
+# subscriptions.codex.anchor_day = 8 (overrides)
+kanjo config set subscriptions.codex.plan plus
+kanjo config set subscriptions.codex.monthly_price_usd 20
+kanjo config unset subscriptions.codex.anchor_day
+kanjo config path
+```
+
+`get`, `set` and `unset` print the effective value and its origin: `overrides`,
+`toml`, `detected`, or `default`. `unset` removes only the JSON override and falls
+back to the next source. Supported agents are `claude`, `codex`, and `antigravity`;
+editable fields are `anchor_day` (integer 1–28), `plan` (a known key, or a custom
+key with a configured price), and `monthly_price_usd` (a finite number ≥ 0).
+Validation errors exit with code 2 and a one-line message.
+
+The command atomically writes `~/.config/kanjo/overrides.json`, preserving other
+keys and leaving the attribution file untouched. For example:
+
+```json
+{"subscriptions": {"codex": {"anchor_day": 8}}}
+```
+
+Every command loads this file. `KANJO_CONFIG_DIR` changes the config directory;
+`--config PATH` selects an attribution file and takes precedence over that env
+variable, with `overrides.json` beside the selected file. For example,
+`kanjo config get subscriptions.codex.anchor_day --config /tmp/kanjo/attribution.toml`.
+`config path` prints both file paths. `doctor` shows each subscription's anchor
+and origin, such as `anchor day 8 (overrides.json)`.
+
+Sources, per agent:
 
 1. **Manual**, from the attribution config (`"source": "manual"`):
 
@@ -201,15 +239,18 @@ A manual table replaces detection for that agent. Sources, per agent:
    plan = "max_20x"            # a known key, or any string
    monthly_price_usd = 200     # optional; known plans fill it in, unknown plans need it
    anchor_day = 25             # optional, 1-28; sets cycle_source = "manual"
-   extra_usage_enabled = false # optional, default false
+   extra_usage_enabled = false # optional; otherwise keeps detection, or defaults false
 
    [subscriptions.antigravity]
    plan = "google_ai_pro"
    ```
 
    In `attribution.json` this is `{"subscriptions": {"claude": {...}}}`.
-   `plan` alone is enough for a known key. Without `anchor_day` the cycle is the
-   calendar month (the 1st, `"cycle_source": "calendar_month"`).
+   `plan` alone is enough for a known key and fills its label and list price;
+   an explicit `monthly_price_usd` takes precedence over the list price.
+   Without `anchor_day` the detected cycle is kept, falling back to the calendar
+   month (the 1st, `"cycle_source": "calendar_month"`). An anchor or price alone
+   updates a detected subscription; without a detected plan, configure `plan` too.
 
 2. **Claude**, detected from `~/.claude.json` (`"source": "detected"`).
    `KANJO_CLAUDE_CONFIG` replaces that path. `oauthAccount.billingType` must be a

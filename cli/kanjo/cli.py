@@ -1,4 +1,4 @@
-"""Command line interface: ``kanjo export | projects | doctor | ledger | disk``."""
+"""Command line interface: ``kanjo export | projects | doctor | ledger | disk | config``."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ import sys
 from typing import List, Optional
 
 from . import __version__
-from .config import Config, ConfigError, load as load_config
+from .config import Config, ConfigError, load as load_config, subscription_value
+from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import COST_NOTE, SOURCES, build_export, check_invariants, scan
 from .ledger import Ledger
@@ -109,8 +110,9 @@ def cmd_projects(args) -> int:
     return 0
 
 
-def _print_subscriptions(manual) -> None:
-    found = load_subscriptions(manual)
+def _print_subscriptions(cfg) -> None:
+    cfg = cfg or Config()
+    found = load_subscriptions(cfg.subscriptions)
     print("subscriptions:")
     if not found:
         print("  none")
@@ -120,8 +122,11 @@ def _print_subscriptions(manual) -> None:
             price = "unknown price"
         else:
             price = "$%.2f" % sub["monthly_price_usd"]
-        print("  %s: %s, %s, anchor day %d, source %s"
-              % (agent, sub["plan_label"], price, sub["anchor_day"], sub["source"]))
+        _, origin = subscription_value(cfg, agent, "anchor_day", found)
+        if origin == "overrides":
+            origin = "overrides.json"
+        print("  %s: %s, %s, anchor day %d (%s), source %s"
+              % (agent, sub["plan_label"], price, sub["anchor_day"], origin, sub["source"]))
 
 
 def cmd_doctor(args) -> int:
@@ -134,7 +139,7 @@ def cmd_doctor(args) -> int:
               % (cfg.dominant_threshold, len(cfg.aliases), len(cfg.overrides), len(cfg.exclude)))
     except ConfigError as exc:
         print("config: ERROR %s" % exc)
-    _print_subscriptions(cfg.subscriptions if cfg is not None else None)
+    _print_subscriptions(cfg)
     result = scan(cache=_cache(args))
     led = result.ledger or {}
     print()
@@ -252,6 +257,13 @@ def build_parser() -> argparse.ArgumentParser:
     common(p, threshold=False)
     p.set_defaults(func=cmd_doctor)
 
+    p = sub.add_parser("config", help="get, set or unset subscription overrides")
+    p.add_argument("config_cmd", choices=("get", "set", "unset", "path"))
+    p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field>")
+    p.add_argument("value", nargs="?", help="override value (set only)")
+    p.add_argument("--config", metavar="PATH", help="attribution config; overrides.json is stored beside it")
+    p.set_defaults(func=cmd_config)
+
     p = sub.add_parser("ledger", help="show the permanent session ledger")
     p.add_argument("--forget-orphans", action="store_true",
                    help="remove entries whose log file is gone (requires --yes)")
@@ -280,7 +292,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         return args.func(args)
     except ConfigError as exc:
-        print("kanjo: config error: %s" % exc, file=sys.stderr)
+        print("kanjo: config error: %s" % " ".join(str(exc).splitlines()), file=sys.stderr)
         return 2
     except BrokenPipeError:
         return 0

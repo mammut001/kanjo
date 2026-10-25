@@ -203,7 +203,7 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(claude["anchor_day"], 8)
         self.assertEqual(claude["cycle_source"], "manual")
         self.assertEqual(claude["source"], "manual")
-        self.assertFalse(claude["extra_usage_enabled"])
+        self.assertTrue(claude["extra_usage_enabled"])
         self.assertEqual(claude["cycle_start"], "2026-10-08T00:00:00Z")
         self.assertEqual(claude["cycle_end"], "2026-11-08T00:00:00Z")
         self.assertEqual(found["codex"]["source"], "detected")
@@ -245,8 +245,8 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(cfg.subscriptions["claude"]["monthly_price_usd"], 180.0)
         self.assertEqual(cfg.subscriptions["claude"]["anchor_day"], 25)
         self.assertTrue(cfg.subscriptions["claude"]["extra_usage_enabled"])
-        self.assertIsNone(cfg.subscriptions["antigravity"]["monthly_price_usd"])
-        self.assertIsNone(cfg.subscriptions["antigravity"]["anchor_day"])
+        self.assertNotIn("monthly_price_usd", cfg.subscriptions["antigravity"])
+        self.assertNotIn("anchor_day", cfg.subscriptions["antigravity"])
         found = self.collect(cfg.subscriptions)
         self.assertEqual(found["claude"]["cycle_source"], "manual")
         self.assertTrue(found["claude"]["extra_usage_enabled"])
@@ -270,7 +270,6 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("monthly_price_usd", err.getvalue())
         bad = (
-            {"claude": {"monthly_price_usd": 10}},
             {"claude": {"plan": "pro", "anchor_day": 29}},
             {"claude": {"plan": "pro", "anchor_day": 0}},
             {"claude": {"plan": "pro", "anchor_day": True}},
@@ -291,6 +290,20 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(sub["plan_label"], "Claude (plus)")
         self.assertEqual(sub["monthly_price_usd"], 15.0)
         self.assertEqual(sub["anchor_day"], 28)
+
+    def test_manual_fields_preserve_detection(self):
+        self.write_claude(extra=True)
+        for spec in ({"anchor_day": 8}, {"monthly_price_usd": 75}, {"plan": "pro"}):
+            manual = config.from_dict({"subscriptions": {"claude": spec}}).subscriptions
+            sub = self.collect(manual)["claude"]
+            self.assertEqual(sub["source"], "manual")
+            self.assertTrue(sub["extra_usage_enabled"])
+            self.assertEqual(sub["plan"], spec.get("plan", "max_5x"))
+            self.assertEqual(sub["anchor_day"], spec.get("anchor_day", 25))
+            self.assertEqual(sub["cycle_source"], "manual" if "anchor_day" in spec else "subscription_date")
+            expected_price = 20.0 if "plan" in spec else spec.get("monthly_price_usd", 100.0)
+            self.assertEqual(sub["monthly_price_usd"], expected_price)
+            check_subscriptions(self, {"claude": sub})
 
     def test_cycle_crosses_month_boundary(self):
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 15}}}).subscriptions
