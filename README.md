@@ -35,14 +35,16 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 
 - **A treemap of your repos by cost.** One glance tells you where the money went.
 - **An 8-week burn strip per repo**, colored by agent, so you can see which weeks were Claude and which were Codex.
-- **Time ranges**: all time, 7 days, 30 days, last week, or *since your last quota reset* (read from Tokei's cache, or set by hand).
-- **Per-repo detail**: by agent, by model, by day, by branch, and every session with how it was attributed.
+- **Subscription value.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. The number subscription users actually want.
+- **Time ranges**: all time, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
+- **Per-repo detail**: by agent, by model, by day, by branch, every session with how it was attributed, and the repo's share of each plan's cycle.
+- **Disk.** How much space each agent's logs, scratch worktrees and caches take, what is safe to reclaim, and a cleanup that goes through the Trash. Your statistics stay in a permanent ledger, so deleting logs never deletes history.
 - **Hide and pin** repos you don't care about or care about most.
 - **Liquid Glass** on macOS 26, a plain material on 13–25.
 
 <p align="center">
   <img src="docs/screenshots/detail-light.png" width="360" alt="Project detail">
-  <img src="docs/screenshots/since-reset-dark.png" width="360" alt="Since reset range">
+  <img src="docs/screenshots/disk-light.png" width="360" alt="Disk page">
 </p>
 
 Every number is an **API-equivalent cost**: tokens × public API price. It is what the same work would have cost on pay-as-you-go billing. If you pay a subscription, it is not what you paid. The app says so on every screen and does not let you hide the note.
@@ -150,8 +152,10 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 
 - **按花费的 treemap**：一眼看出钱去哪了。
 - **每个 repo 一条 8 周燃烧热力条**，按 agent 分色，哪周是 Claude、哪周是 Codex 看得出来。
-- **时间范围**：全部、7 天、30 天、上周、或**自上次额度重置以来**（从 Tokei 缓存读，也可手动设置）。
-- **项目详情**：按 agent、按模型、按天、按分支，以及每个会话是怎么归属的。
+- **订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。订阅用户真正关心的数。
+- **时间范围**：全部、7 天、30 天、上周、自上次额度重置以来、或本账期。
+- **项目详情**：按 agent、按模型、按天、按分支，每个会话是怎么归属的，以及这个 repo 占了你各订阅本账期的多少。
+- **Disk**：每个工具的日志、临时 worktree、缓存各占多少空间，哪些能安全回收，清理走废纸篓。统计数据存在永久账本里，删日志不丢历史。
 - **隐藏与置顶**。
 - macOS 26 用 **Liquid Glass**，13 到 25 用普通材质。
 

@@ -6,6 +6,34 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
+### Added
+
+- **Subscription value.** Detects your plan (Claude Max/Pro from `~/.claude.json`, ChatGPT plan
+  from Tokei's cache) and shows, per plan, the flat fee next to the API-equivalent usage of the
+  current billing cycle and the multiplier between them. Billing cycle dates and "renews in N days"
+  on every row; `Billing cycle` time range; per-repo share of each plan's cycle usage.
+- **Renewal day you can set.** Renewal days cannot be detected locally, so the app no longer assumes
+  the 1st: unknown days use a rolling 30-day window labelled "set renewal day", one click leads to
+  the Settings row, an "Open billing page" button opens the vendor's billing page, and
+  `kanjo config set subscriptions.<agent>.anchor_day N` stores the day in `~/.config/kanjo/overrides.json`.
+- **Permanent ledger.** Every parsed session is kept in `~/.local/share/kanjo/ledger.json`, so
+  deleting log files no longer deletes your history. `kanjo ledger` reports counts.
+- **Disk.** `kanjo disk` reports how much space each agent's sessions, scratch worktrees, caches
+  and memory take, which entries are reclaimable and why others are blocked (not yet imported,
+  uncommitted changes, active in the last 24 h). `kanjo disk clean` moves files to the Trash
+  (`~/.Trash/kanjo-<timestamp>/`) and removes git worktrees properly. The app's Disk page
+  (hard-drive icon in the bottom bar) previews the plan before anything moves. Reports are cached
+  for 10 minutes and prefetched in the background, so the page opens instantly.
+- Menu bar amount follows the selected time range (`7d $…`, `cyc $…`).
+
+### Changed
+
+- `by_day` entries carry `by_agent` and `by_agent_tokens`; `quota_windows` is read from Tokei's
+  cache or set by hand; heat strip cells are split by agent share.
+- Nested repositories without a remote fold into the enclosing project.
+
 ## [0.1.0] - 2026-10-24
 
 First public release. Before publishing, the project went by the working name `aicost`.
@@ -39,5 +67,6 @@ First public release. Before publishing, the project went by the working name `a
 - `ui/package.sh` builds an ad-hoc signed `Kanjo.app` and a zip for release.
 - GitHub Actions CI for the CLI (Python 3.9 and 3.12) and the app (`swift build`, `swift test`).
 
-[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mammut001/kanjo/releases/tag/v0.2.0
 [0.1.0]: https://github.com/mammut001/kanjo/releases/tag/v0.1.0
