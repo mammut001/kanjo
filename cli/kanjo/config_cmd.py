@@ -89,5 +89,8 @@ def cmd_config(args):
         cfg = load(args.config, overrides=data)
         _write(path, data)
     value, origin = subscription_value(cfg, agent, key, subscriptions(cfg.subscriptions))
-    print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
+    if key == "anchor_day" and value is None:
+        print("%s = unset (rolling 30 days)" % args.key)
+    else:
+        print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
     return 0

@@ -125,8 +125,12 @@ def _print_subscriptions(cfg) -> None:
         _, origin = subscription_value(cfg, agent, "anchor_day", found)
         if origin == "overrides":
             origin = "overrides.json"
-        print("  %s: %s, %s, anchor day %d (%s), source %s"
-              % (agent, sub["plan_label"], price, sub["anchor_day"], origin, sub["source"]))
+        if sub["anchor_day"] is None:
+            anchor = "anchor day: unknown (rolling 30 days)"
+        else:
+            anchor = "anchor day %d (%s)" % (sub["anchor_day"], origin)
+        print("  %s: %s, %s, %s, source %s"
+              % (agent, sub["plan_label"], price, anchor, sub["source"]))
 
 
 def cmd_doctor(args) -> int:

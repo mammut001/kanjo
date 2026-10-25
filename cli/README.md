@@ -241,7 +241,9 @@ Every command loads this file. `KANJO_CONFIG_DIR` changes the config directory;
 variable, with `overrides.json` beside the selected file. For example,
 `kanjo config get subscriptions.codex.anchor_day --config /tmp/kanjo/attribution.toml`.
 `config path` prints both file paths. `doctor` shows each subscription's anchor
-and origin, such as `anchor day 8 (overrides.json)`.
+and origin, such as `anchor day 8 (overrides.json)`, or
+`anchor day: unknown (rolling 30 days)` when the renewal day is unknown.
+`config get subscriptions.<agent>.anchor_day` then prints `unset (rolling 30 days)`.
 
 Sources, per agent:
 
@@ -261,9 +263,9 @@ Sources, per agent:
    In `attribution.json` this is `{"subscriptions": {"claude": {...}}}`.
    `plan` alone is enough for a known key and fills its label and list price;
    an explicit `monthly_price_usd` takes precedence over the list price.
-   Without `anchor_day` the detected cycle is kept, falling back to the calendar
-   month (the 1st, `"cycle_source": "calendar_month"`). An anchor or price alone
-   updates a detected subscription; without a detected plan, configure `plan` too.
+   Without `anchor_day` the detected cycle is kept, falling back to a rolling
+   30-day window (`"cycle_source": "rolling_30d"`, `"anchor_day": null`).
+   An anchor or price alone updates a detected subscription; without a detected plan, configure `plan` too.
 
 2. **Claude**, detected from `~/.claude.json` (`"source": "detected"`).
    `KANJO_CLAUDE_CONFIG` replaces that path. `oauthAccount.billingType` must be a
@@ -279,15 +281,17 @@ Sources, per agent:
    | anything else | the raw tier | `Claude (<tier>)` | null |
 
    `subscriptionCreatedAt` sets `anchor_day` to that timestamp's own day of the month
-   (`"cycle_source": "subscription_date"`). If it is missing, the anchor is the 1st
-   (`"calendar_month"`). `hasExtraUsageEnabled` is copied to `extra_usage_enabled`
+   (`"cycle_source": "subscription_date"`). If it is missing or invalid, the cycle
+   uses a rolling 30-day window (`"rolling_30d"`) with a null anchor.
+   `hasExtraUsageEnabled` is copied to `extra_usage_enabled`
    (false when it is absent or not a boolean).
 
 3. **Codex**, detected from Tokei's `~/.tokei/codex_quota_cache.json`
    (`plan`, or else `limits.plan_type`). The same 14-day staleness rule as quota
    windows applies (`fetched_at`, or the file mtime when that is missing).
    `KANJO_TOKEI_DIR` replaces `~/.tokei`. No subscription date is known, so the
-   anchor is the 1st (`"calendar_month"`) and `extra_usage_enabled` is false.
+   cycle uses a rolling 30-day window (`"rolling_30d"`) with a null anchor, and
+   `extra_usage_enabled` is false.
 
    | plan | label | USD/month |
    |---|---|---|
@@ -306,8 +310,14 @@ Sources, per agent:
    | `google_ai_pro` | Google AI Pro | 19.99 |
    | `google_ai_ultra` | Google AI Ultra | 249.99 |
 
-The billing cycle starts at the most recent `anchor_day` at 00:00 in the report
-`timezone` that is still at or before now. `cycle_end` is the anchor day of the
+When the renewal day is unknown, `cycle_start` is now minus 30 days and
+`cycle_end` is now, preserving the current time of day in UTC. The app can use
+`"cycle_source": "rolling_30d"` to prompt you to set the real renewal day.
+Setting `anchor_day` switches to a monthly billing cycle; unsetting its override
+returns to the next configured or detected day, or to the rolling window.
+
+With a known anchor, the billing cycle starts at the most recent `anchor_day`
+at 00:00 in the report `timezone` that is still at or before now. `cycle_end` is the anchor day of the
 next month at 00:00 in that timezone. A short month clamps the anchor to its last
 day, and the next month clamps on its own (anchor 31 in February is the 28th, or
 the 29th in a leap year, and March is the 31st again). `cycle_start` and
