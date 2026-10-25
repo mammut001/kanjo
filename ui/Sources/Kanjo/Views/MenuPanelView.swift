@@ -18,7 +18,7 @@ enum BucketKind: String {
 /// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
 /// `project:<index>:bottom`（详情页滚到底部）、`project:<index>:locations`（滚到底部并展开 Locations）、
 /// `bucket:unattributed` / `bucket:excluded`、`disk`、`disk:expanded`（磁盘页展开每个 agent，仅供截图）、
-/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）。
+/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`。
 enum DevRoute {
     static let requested: String? = {
         let args = CommandLine.arguments
@@ -36,6 +36,10 @@ enum DevRoute {
         case "disk": return (.disk, nil)
         case "disk:expanded": return (.disk, DiskView.expandedAnchor)
         default: break
+        }
+        if let agent = SubscriptionSettingsRoute.agent(from: raw) {
+            guard report != nil else { return nil }
+            return (.settings, SubscriptionSettingsRoute.anchor(for: agent))
         }
         guard let r = report else { return nil }
         if raw.hasPrefix("project:") {
@@ -76,13 +80,13 @@ struct MenuPanelView: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .panelBackground()
-        .onAppear { applyDevRoute() }
-        .onReceive(store.$report) { _ in applyDevRoute() }
+        .onAppear { applyDevRoute(report: store.report) }
+        .onReceive(store.$report) { applyDevRoute(report: $0) }
     }
 
     /// `disk` 不依赖用量报告，出现时就能打开；项目页要等报告到了再解析。
-    private func applyDevRoute() {
-        guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: store.report) else { return }
+    private func applyDevRoute(report: UsageReport?) {
+        guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: report) else { return }
         pendingDevRoute = nil
         route = resolved.route
         overviewAnchor = resolved.anchor
@@ -139,7 +143,11 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    OverviewView(report: r, scrollAnchor: overviewAnchor, onSelect: { route = $0 })
+                    OverviewView(report: r, scrollAnchor: overviewAnchor, onSelect: { route = $0 },
+                                 onSetRenewalDay: { agent in
+                        overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
+                        route = .settings
+                    })
                 }
             } else if let err = store.error {
                 ErrorStateView(message: err, source: store.sourceDescription,
@@ -211,6 +219,7 @@ struct MenuPanelView: View {
             .help("Disk")
 
             Button {
+                overviewAnchor = nil
                 route = route == .settings ? .overview : .settings
                 if route == .overview { store.applySettings() }
             } label: {

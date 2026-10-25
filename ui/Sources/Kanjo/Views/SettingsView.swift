@@ -6,7 +6,7 @@ struct SettingsView: View {
     static let bottomAnchor = "settings-bottom"
 
     @EnvironmentObject var store: ReportStore
-    var scrollTo: String? = nil     // 开发开关 --route settings-bottom 用
+    var scrollTo: String? = nil     // 支持底部或具体订阅行
     let onBack: () -> Void
 
     @AppStorage(SettingsKeys.sourceKind) private var sourceKind =
@@ -110,10 +110,10 @@ struct SettingsView: View {
             .padding(.horizontal, Metrics.pagePadding)
             .padding(.top, 12).padding(.bottom, 10)
         }
-        .task(id: scrollTo) {
+        .task(id: store.report == nil ? nil : scrollTo) {
             guard let a = scrollTo else { return }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            proxy.scrollTo(a, anchor: .bottom)
+            proxy.scrollTo(a, anchor: a == Self.bottomAnchor ? .bottom : .top)
         }
         }
         .onChange(of: refreshMinutes) { _ in store.restartTimer() }
@@ -160,9 +160,13 @@ struct SettingsView: View {
                 let ctx = RangeContext(report: r, raw: TimeRange.all.rawValue)
                 let subs = r.subscriptions ?? [:]
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(ctx.agentOrder, id: \.self) { agent in
+                    // ForEach 的标识也用滚动 anchor，确保 ScrollViewReader 能找到嵌套的行。
+                    ForEach(ctx.agentOrder.map { (agent: $0, anchor: SubscriptionSettingsRoute.anchor(for: $0)) },
+                            id: \.anchor) { item in
+                        let agent = item.agent
                         SubscriptionSettingsRow(agent: agent, sub: subs[agent],
                                                 label: r.agentLabels[agent] ?? agent, currency: r.currency)
+                            .id(item.anchor)
                     }
                 }
             } else {
@@ -281,6 +285,16 @@ private struct SubscriptionSettingsRow: View {
                 Text(saving ? "Saving…" : SubscriptionValue.anchorSource(sub))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .padding(.leading, 11)
+                if let url = SubscriptionValue.billingPage(for: agent) {
+                    Button("Open billing page") { NSWorkspace.shared.open(url) }
+                        .buttonStyle(.link)
+                        .font(.system(size: 11))
+                        .padding(.leading, 11)
+                    Text("Look for \"renews on\" and enter that day above")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 11)
+                }
             } else {
                 Text("No subscription info").font(.system(size: 10)).foregroundStyle(.tertiary)
                     .padding(.leading, 11)

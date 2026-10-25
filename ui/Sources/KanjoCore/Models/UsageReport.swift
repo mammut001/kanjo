@@ -76,8 +76,8 @@ public struct Subscription: Codable, Equatable {
     public var monthlyPriceUsd: Double?
     public var cycleStart: String          // 当前账期起点，ISO 8601 UTC
     public var cycleEnd: String            // 下一账期起点
-    public var anchorDay: Int
-    public var cycleSource: String         // subscription_date | calendar_month | manual
+    public var anchorDay: Int?             // rolling_30d 时未知
+    public var cycleSource: String         // subscription_date | manual | rolling_30d；容忍未知值
     public var extraUsageEnabled: Bool
     public var source: String              // detected | manual
 
@@ -94,7 +94,7 @@ public struct Subscription: Codable, Equatable {
     }
 
     public init(plan: String, planLabel: String, monthlyPriceUsd: Double?, cycleStart: String, cycleEnd: String,
-                anchorDay: Int, cycleSource: String, extraUsageEnabled: Bool, source: String) {
+                anchorDay: Int?, cycleSource: String, extraUsageEnabled: Bool, source: String) {
         self.plan = plan
         self.planLabel = planLabel
         self.monthlyPriceUsd = monthlyPriceUsd

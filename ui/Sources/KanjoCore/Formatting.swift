@@ -101,8 +101,23 @@ public enum Fmt {
     }
 
     public static func cycleCaption(_ sub: Subscription, timezone: TimeZone, now: Date = Date()) -> String {
-        cycleDates(sub, timezone: timezone) + " · " + renewal(sub.cycleEnd, timezone: timezone, now: now)
-            + (sub.cycleSource == "calendar_month" ? " · day assumed" : "")
+        if SubscriptionValue.needsRenewalDay(sub) {
+            return "Last 30 days · set renewal day for exact cycle"
+        }
+        return cycleDates(sub, timezone: timezone) + " · " + renewal(sub.cycleEnd, timezone: timezone, now: now)
+    }
+
+    public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone) -> String {
+        if SubscriptionValue.needsRenewalDay(sub) {
+            return "\(sub.planLabel) · last 30 days (day not set)"
+        }
+        guard let start = ReportDates.parseTimestamp(sub.cycleStart) else { return sub.planLabel }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = timezone
+        f.dateFormat = "MMM d"
+        return "\(sub.planLabel) since \(f.string(from: start))"
     }
 
     private static let shortDay: DateFormatter = {

@@ -25,7 +25,7 @@ final class TimeRangeTests: XCTestCase {
     }
 
     private func sub(plan: String = "max_5x", label: String = "Claude Max 5x", price: Double? = 100,
-                     start: String, anchor: Int = 25, cycleSource: String = "subscription_date") -> Subscription {
+                     start: String, anchor: Int? = 25, cycleSource: String = "subscription_date") -> Subscription {
         Subscription(plan: plan, planLabel: label, monthlyPriceUsd: price, cycleStart: start,
                      cycleEnd: "2026-11-25T00:00:00Z", anchorDay: anchor, cycleSource: cycleSource,
                      extraUsageEnabled: false, source: "detected")
@@ -111,7 +111,7 @@ final class TimeRangeTests: XCTestCase {
     func testBillingCyclePerAgentStarts() {
         let subs = ["claude": sub(start: "2026-09-24T16:00:00Z"),
                     "codex": sub(plan: "plus", label: "ChatGPT Plus", price: 20,
-                                 start: "2026-09-30T16:00:00Z", anchor: 1, cycleSource: "calendar_month")]
+                                 start: "2026-09-30T16:00:00Z", anchor: nil, cycleSource: "rolling_30d")]
         let s = spec(.billingCycle, subscriptions: subs)
         XCTAssertEqual(s.agentStarts["claude"], ts("2026-09-24T16:00:00Z"))
         XCTAssertEqual(s.agentStarts["codex"], ts("2026-09-30T16:00:00Z"))
@@ -130,7 +130,7 @@ final class TimeRangeTests: XCTestCase {
     func testBillingCycleUsesEachAgentsOwnStart() {
         let subs = ["claude": sub(start: "2026-10-17T16:00:00Z"),   // 上海 10 月 18 日
                     "codex": sub(plan: "plus", label: "ChatGPT Plus", price: 20,
-                                 start: "2026-10-21T16:00:00Z", anchor: 1, cycleSource: "calendar_month")]
+                                 start: "2026-10-21T16:00:00Z", anchor: nil, cycleSource: "rolling_30d")]
         let f = RangeEngine.filter(project(), range: spec(.billingCycle, subscriptions: subs), fallbackAgent: "claude")
         // claude：Oct 18（2）+ Oct 20（4）；codex：只有 Oct 22（6）；antigravity 无订阅，不计入。
         XCTAssertEqual(f.cost, 12, accuracy: 1e-9)

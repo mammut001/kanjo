@@ -14,8 +14,13 @@ final class SubscriptionTests: XCTestCase {
         let now = ReportDates.parseTimestamp("2026-10-25T10:00:00Z")!
         XCTAssertEqual(Fmt.cycleCaption(subscription(), timezone: zone, now: now),
                        "Oct 25 – Nov 25 · renews in 31 days")
-        XCTAssertEqual(Fmt.cycleCaption(subscription(cycleSource: "calendar_month"), timezone: zone, now: now),
-                       "Oct 25 – Nov 25 · renews in 31 days · day assumed")
+        XCTAssertEqual(Fmt.cycleCaption(subscription(cycleSource: "rolling_30d"), timezone: zone, now: now),
+                       "Last 30 days · set renewal day for exact cycle")
+        XCTAssertEqual(Fmt.cycleCaption(subscription(cycleSource: "unknown"), timezone: zone, now: now),
+                       "Oct 25 – Nov 25 · renews in 31 days")
+        XCTAssertEqual(Fmt.cycleRangeCaption(subscription(cycleSource: "rolling_30d"), timezone: zone),
+                       "Claude Max 5x · last 30 days (day not set)")
+        XCTAssertEqual(Fmt.cycleRangeCaption(subscription(), timezone: zone), "Claude Max 5x since Oct 25")
         XCTAssertEqual(Fmt.cycleDates(subscription(), timezone: TimeZone(secondsFromGMT: 0)!), "Oct 24 – Nov 24")
         XCTAssertEqual(SubscriptionValue.assumedDayHelp, "Renewal day unknown; set it in Settings")
     }
@@ -46,8 +51,41 @@ final class SubscriptionTests: XCTestCase {
     func testAnchorSource() {
         XCTAssertEqual(SubscriptionValue.anchorSource(subscription()), "detected")
         XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "manual")), "manual")
-        XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "calendar_month", source: "manual")), "assumed")
+        XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "rolling_30d", source: "manual")),
+                       "not set · using last 30 days")
         XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "unknown", source: "manual")), "manual")
+    }
+
+    func testBillingPages() {
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "claude")?.absoluteString, "https://claude.ai/settings/billing")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "codex")?.absoluteString, "https://chatgpt.com/settings/billing")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "antigravity")?.absoluteString, "https://one.google.com/subscriptions")
+        XCTAssertNil(SubscriptionValue.billingPage(for: "future-agent"))
+    }
+
+    func testNudgeDismissalAndNewRollingAgent() {
+        let rolling = subscription(cycleSource: "rolling_30d")
+        let subs = ["codex": rolling, "claude": subscription(), "future-agent": rolling]
+        XCTAssertEqual(RenewalNudge.pendingAgents(subscriptions: subs, dismissed: []), ["codex", "future-agent"])
+        let dismissed = RenewalNudge.parseDismissed(" codex, ,codex,old-agent ")
+        XCTAssertEqual(dismissed, ["codex", "old-agent"])
+        XCTAssertEqual(RenewalNudge.pendingAgents(subscriptions: subs, dismissed: dismissed), ["future-agent"])
+        let allDismissed = dismissed.union(["future-agent"])
+        XCTAssertTrue(RenewalNudge.pendingAgents(subscriptions: subs, dismissed: allDismissed).isEmpty)
+        XCTAssertEqual(RenewalNudge.parseDismissed(RenewalNudge.serializeDismissed(allDismissed)), allDismissed)
+        XCTAssertTrue(RenewalNudge.pendingAgents(subscriptions: [:], dismissed: []).isEmpty)
+        XCTAssertTrue(RenewalNudge.pendingAgents(subscriptions: ["codex": subscription()], dismissed: []).isEmpty)
+        XCTAssertTrue(RenewalNudge.pendingAgents(subscriptions: ["codex": subscription(cycleSource: "unknown")], dismissed: []).isEmpty)
+    }
+
+    func testSubscriptionSettingsRoute() {
+        XCTAssertEqual(SubscriptionSettingsRoute.agent(from: "settings:subscriptions:codex"), "codex")
+        XCTAssertEqual(SubscriptionSettingsRoute.anchor(for: "codex"), "settings:subscriptions:codex")
+        XCTAssertEqual(SubscriptionSettingsRoute.agent(from: "settings:subscriptions:future-agent"), "future-agent")
+        for raw in ["settings", "settings-bottom", "settings:subscriptions:", "settings:subscriptions:codex:extra",
+                    "overview:subscriptions:codex"] {
+            XCTAssertNil(SubscriptionSettingsRoute.agent(from: raw), raw)
+        }
     }
 
     func testMultiplierAndShare() {
@@ -66,7 +104,7 @@ final class SubscriptionTests: XCTestCase {
 
     func testFixtureCycleUsageMatchesFilterAndSkipsUnsubscribed() throws {
         let r = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
-        XCTAssertEqual(r.subscriptions?["codex"]?.cycleSource, "calendar_month")
+        XCTAssertEqual(r.subscriptions?["codex"]?.cycleSource, "rolling_30d")
         let now = ReportDates.parseTimestamp(r.generatedAt)!
         let usage = SubscriptionValue.cycleUsage(of: r, now: now)
         let filtered = RangeEngine.filtered(r, range: RangeEngine.spec(.billingCycle, report: r, now: now)) {
