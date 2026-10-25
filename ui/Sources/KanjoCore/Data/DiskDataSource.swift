@@ -3,8 +3,9 @@ import Foundation
 /// 从设置里的导出命令推出磁盘命令。只替换最后一个独立的 `export`，
 /// 这样前面的 `export PATH=...` 不会被改掉。
 public enum DiskCommand {
-    public static func report(from cliCommand: String) -> String {
-        replacingExport(in: cliCommand, with: "disk --json").trimmingCharacters(in: .whitespaces)
+    public static func report(from cliCommand: String, rescan: Bool = false) -> String {
+        replacingExport(in: cliCommand, with: rescan ? "disk --json --rescan" : "disk --json")
+            .trimmingCharacters(in: .whitespaces)
     }
 
     /// `disk clean <id>... [--older-than Nd] --dry-run|--yes`
@@ -62,14 +63,16 @@ public struct DiskDataSource: DiskSource {
     public let cliCommand: String
     public let workingDirectory: URL?
     public let timeout: TimeInterval
+    public let rescan: Bool
 
-    public init(cliCommand: String, workingDirectory: URL? = nil, timeout: TimeInterval = 300) {
+    public init(cliCommand: String, workingDirectory: URL? = nil, timeout: TimeInterval = 300, rescan: Bool = false) {
         self.cliCommand = cliCommand
         self.workingDirectory = workingDirectory
         self.timeout = timeout
+        self.rescan = rescan
     }
 
-    public var reportCommand: String { DiskCommand.report(from: cliCommand) }
+    public var reportCommand: String { DiskCommand.report(from: cliCommand, rescan: rescan) }
 
     public func load() async throws -> DiskReport {
         try DiskDecoder.decode(try await run(reportCommand))

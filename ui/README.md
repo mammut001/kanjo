@@ -109,6 +109,9 @@ Under the total (above the mosaic) when `subscriptions` is non-empty: one row pe
 
 The disk page (internal-drive icon in the bottom bar, or `--route disk`) shows how much space each AI tool's data takes and what can be moved to the Trash. It reads a separate document from usage: `kanjo disk --json` ([`../CONTRACT.md`](../CONTRACT.md) §10).
 
+Disk reports are prefetched in the background about 15 seconds after the first usage refresh finishes, then after each usage refresh tick; opening Disk shows the latest report while manual refresh and cleanup force a rescan.
+The last report is atomically cached at `~/Library/Caches/com.lanshuagent.kanjo/disk-report.json` and restored at launch; missing or corrupt caches are ignored.
+
 - **Hero** — `Total` and `Reclaimable` (the reclaimable number in the accent color). Reclaimable is every entry whose `deletable` is not `never` and whose `blocked` list is empty. The caption is "Numbers stay in the ledger after cleanup".
 - **By agent** — one quiet bar per agent, same style as By agent on the project page, width proportional to bytes (`Codex CLI · 11.8 GB`). Expand an agent for its entries: kind badge, middle-truncated path (full path on hover), size, file count, newest date, and a state pill. `Reclaimable` is green. `Blocked: not imported`, `Blocked: uncommitted changes`, and `Blocked: active` are amber, each with a one-sentence tooltip. `Kept` is for `never`.
 - **Cleanup** — check the reclaimable entries. `Older than` is Any / 7d / 30d / 90d and is passed as `--older-than` (Any omits the flag). `Clean N items · …` runs `kanjo disk clean <ids> [--older-than Nd] --dry-run`, then a confirmation sheet lists the paths grouped by entry with count and size. **Move to Trash** runs the same command with `--yes`. The CLI moves files into the Trash; the app never deletes files itself. The result shows `freed_bytes` and anything skipped (with the reason), then the report reloads.

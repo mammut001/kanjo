@@ -17,6 +17,7 @@ final class ReportStore: ObservableObject {
 
     private var timer: Timer?
     private var generation = 0
+    private var didScheduleDiskPrefetch = false
     private let defaults = UserDefaults.standard
 
     init() {
@@ -70,6 +71,8 @@ final class ReportStore: ObservableObject {
     }
 
     func refresh() {
+        // 先初始化磁盘缓存，并暂停尚未开始的预取，避免与用量导出同时启动。
+        DiskStore.shared.cancelPrefetch()
         generation += 1
         let gen = generation
         let (source, desc) = makeSource()
@@ -88,6 +91,8 @@ final class ReportStore: ObservableObject {
             }
             lastRefresh = Date()
             isLoading = false
+            DiskStore.shared.schedulePrefetch(delay: didScheduleDiskPrefetch ? 0 : 15)
+            didScheduleDiskPrefetch = true
         }
     }
 
@@ -101,11 +106,11 @@ final class ReportStore: ObservableObject {
         }
     }
 
-    /// 设置改动后调用：重建数据源、重排定时器、立即刷新。磁盘页若已打开过，跟着重取。
+    /// 设置改动后调用：重建数据源、重排定时器，用量刷新完成后预取磁盘报告。
     func applySettings() {
         restartTimer()
-        refresh()
         DiskStore.shared.applySettings()
+        refresh()
     }
 }
 

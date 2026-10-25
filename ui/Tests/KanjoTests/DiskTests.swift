@@ -16,6 +16,9 @@ final class DiskTests: XCTestCase {
         XCTAssertEqual(r.schemaVersion, 1)
         XCTAssertFalse(r.isNewerSchema)
         XCTAssertEqual(r.agents.count, 5)
+        XCTAssertNil(r.cached)
+        XCTAssertNil(r.scannedAt)
+        XCTAssertNil(r.scanSeconds)
         XCTAssertEqual(Fmt.bytes(r.totalBytes), "55.2 GB")
         XCTAssertEqual(Fmt.bytes(r.reclaimableBytes), "31.4 GB")
         let codex = try XCTUnwrap(r.agents.first { $0.agent == "codex" })
@@ -80,6 +83,98 @@ final class DiskTests: XCTestCase {
         XCTAssertEqual(
             DiskCommand.report(from: "python3 /opt/exporter/bin/python3 -m kanjo export"),
             "python3 /opt/exporter/bin/python3 -m kanjo disk --json")
+    }
+
+    func testRescanCommandDerivation() {
+        XCTAssertEqual(DiskCommand.report(from: "python3 -m kanjo export", rescan: true),
+                       "python3 -m kanjo disk --json --rescan")
+        XCTAssertEqual(DiskCommand.report(from: "export PATH=bin; kanjo export", rescan: true),
+                       "export PATH=bin; kanjo disk --json --rescan")
+        XCTAssertEqual(DiskDataSource(cliCommand: "kanjo export").reportCommand, "kanjo disk --json")
+        XCTAssertEqual(DiskDataSource(cliCommand: "kanjo export", rescan: true).reportCommand,
+                       "kanjo disk --json --rescan")
+    }
+
+    func testCacheMetadataDecodes() throws {
+        let json = """
+        {"schema_version":1,"generated_at":"2026-10-25T10:00:00Z","total_bytes":0,"reclaimable_bytes":0,
+         "agents":[],"cached":true,"scanned_at":"2026-10-25T09:57:00Z","scan_seconds":22.5}
+        """
+        let report = try DiskDecoder.decode(Data(json.utf8))
+        XCTAssertEqual(report.cached, true)
+        XCTAssertEqual(report.scannedAt, "2026-10-25T09:57:00Z")
+        XCTAssertEqual(report.scanSeconds, 22.5)
+    }
+
+    func testScanCaption() throws {
+        let now = try XCTUnwrap(ReportDates.parseTimestamp("2026-10-25T10:00:00Z"))
+        var report = try loadFixture()
+        let cases: [(String, String)] = [
+            ("2026-10-25T10:00:05Z", "Scanned just now"),
+            ("2026-10-25T09:59:01Z", "Scanned just now"),
+            ("2026-10-25T09:59:00Z", "Scanned 1 min ago"),
+            ("2026-10-25T09:57:00.000Z", "Scanned 3 min ago"),
+            ("2026-10-25T09:00:00+00:00", "Scanned 1 hr ago"),
+            ("2026-10-24T10:00:00Z", "Scanned 1 day ago"),
+            ("2026-10-23T10:00:00Z", "Scanned 2 days ago"),
+        ]
+        for (timestamp, expected) in cases {
+            report.scannedAt = timestamp
+            XCTAssertEqual(DiskScanCaption.text(for: report, now: now), expected)
+        }
+        report.scannedAt = nil
+        report.generatedAt = "2026-10-25T09:57:00Z"
+        XCTAssertEqual(DiskScanCaption.text(for: report, now: now), "Scanned 3 min ago")
+        report.generatedAt = "invalid"
+        XCTAssertEqual(DiskScanCaption.text(for: report, now: now), "Scan time unknown")
+    }
+
+    func testPersistedCacheRoundTrip() throws {
+        let root = try XCTUnwrap(DefaultPaths.packageRoot)
+        let directory = root.appendingPathComponent(".build/disk-cache-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = DiskReportCache(directory: directory)
+        XCTAssertNil(cache.load())
+        var report = try loadFixture()
+        report.cached = false
+        report.scannedAt = "2026-10-25T09:57:00Z"
+        report.scanSeconds = 23.1
+        cache.save(report)
+        XCTAssertEqual(DiskReportCache(directory: directory).load(), report)
+        XCTAssertEqual(cache.fileURL?.lastPathComponent, "disk-report.json")
+        report.totalBytes = 42
+        cache.save(report)
+        XCTAssertEqual(cache.load(), report)
+        try Data("corrupt".utf8).write(to: XCTUnwrap(cache.fileURL))
+        XCTAssertNil(cache.load())
+    }
+
+    func testReportStateKeepsReportWhileRescanning() throws {
+        let report = try loadFixture()
+        var state = DiskReportState()
+        XCTAssertFalse(state.hasReport)
+        XCTAssertFalse(state.isRescanning)
+        XCTAssertTrue(state.beginRefresh())
+        XCTAssertTrue(state.isLoading)
+        XCTAssertFalse(state.isRescanning)
+        XCTAssertFalse(state.beginRefresh())
+        state.finishRefresh(report: report)
+        XCTAssertTrue(state.hasReport)
+        XCTAssertFalse(state.isLoading)
+        XCTAssertFalse(state.isRescanning)
+        XCTAssertTrue(state.beginRefresh())
+        XCTAssertTrue(state.hasReport)
+        XCTAssertTrue(state.isRescanning)
+        XCTAssertEqual(state.report, report)
+        state.finishRefresh() // 失败时仍保留上一份。
+        XCTAssertEqual(state.report, report)
+        XCTAssertFalse(state.isRescanning)
+        var newer = report
+        newer.totalBytes = 10
+        XCTAssertTrue(state.beginRefresh())
+        state.finishRefresh(report: newer)
+        XCTAssertEqual(state.report, newer)
+        XCTAssertTrue(DiskReportState(report: report).hasReport)
     }
 
     func testCleanCommandAssembly() {
