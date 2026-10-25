@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import tempfile
+from datetime import datetime, timedelta
 
 
 def ensure_test_data_dir():
@@ -145,7 +146,7 @@ def _check_session(tc, s, where, kinds, share_one=False):
 QUOTA_KEYS = {"weekly_resets_at", "weekly_window_hours", "five_hour_resets_at", "source"}
 SUBSCRIPTION_KEYS = {"plan", "plan_label", "monthly_price_usd", "cycle_start", "cycle_end",
                      "anchor_day", "cycle_source", "extra_usage_enabled", "source"}
-CYCLE_SOURCES = {"subscription_date", "calendar_month", "manual"}
+CYCLE_SOURCES = {"subscription_date", "rolling_30d", "manual"}
 SUBSCRIPTION_SOURCES = {"detected", "manual"}
 
 
@@ -179,11 +180,17 @@ def check_subscriptions(tc, subs):
         tc.assertRegex(sub["cycle_start"], ISO_UTC, where)
         tc.assertRegex(sub["cycle_end"], ISO_UTC, where)
         tc.assertLess(sub["cycle_start"], sub["cycle_end"], where)
-        tc.assertIsInstance(sub["anchor_day"], int, where)
-        tc.assertNotIsInstance(sub["anchor_day"], bool, where)
-        tc.assertGreaterEqual(sub["anchor_day"], 1, where)
-        tc.assertLessEqual(sub["anchor_day"], 31, where)
         tc.assertIn(sub["cycle_source"], CYCLE_SOURCES, where)
+        if sub["cycle_source"] == "rolling_30d":
+            tc.assertIsNone(sub["anchor_day"], where)
+            start = datetime.fromisoformat(sub["cycle_start"].replace("Z", "+00:00"))
+            end = datetime.fromisoformat(sub["cycle_end"].replace("Z", "+00:00"))
+            tc.assertEqual(end - start, timedelta(days=30), where)
+        else:
+            tc.assertIsInstance(sub["anchor_day"], int, where)
+            tc.assertNotIsInstance(sub["anchor_day"], bool, where)
+            tc.assertGreaterEqual(sub["anchor_day"], 1, where)
+            tc.assertLessEqual(sub["anchor_day"], 31, where)
         tc.assertIsInstance(sub["extra_usage_enabled"], bool, where)
         tc.assertIn(sub["source"], SUBSCRIPTION_SOURCES, where)
 

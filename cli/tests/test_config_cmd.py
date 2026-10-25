@@ -67,7 +67,7 @@ class ConfigCommandTest(unittest.TestCase):
 
     def test_set_get_unset_round_trip_all_fields(self):
         for field, value, effective, fallback, origin in (
-                ("anchor_day", "8", "8", "1", "default"),
+                ("anchor_day", "8", "8", "unset", "rolling 30 days"),
                 ("plan", "pro", '"pro"', '"plus"', "detected"),
                 ("monthly_price_usd", "0", "0.0", "20.0", "detected")):
             key = "subscriptions.codex." + field
@@ -88,7 +88,7 @@ class ConfigCommandTest(unittest.TestCase):
         os.unlink(self.toml)
         self.assert_line(("get", key), key + " = 25 (detected)")
         os.unlink(self.claude)
-        self.assert_line(("get", key), key + " = 1 (default)")
+        self.assert_line(("get", key), key + " = unset (rolling 30 days)")
 
     def test_anchor_only_keeps_detected_plan_price_and_extra(self):
         self.run_cli("config", "set", "subscriptions.claude.anchor_day", "8")
@@ -99,6 +99,22 @@ class ConfigCommandTest(unittest.TestCase):
         self.assertTrue(sub["extra_usage_enabled"])
         self.assertEqual((sub["anchor_day"], sub["source"], sub["cycle_source"]), (8, "manual", "manual"))
         check_subscriptions(self, found)
+
+    def test_unset_anchor_returns_to_rolling_window(self):
+        key = "subscriptions.codex.anchor_day"
+        self.assert_line(("get", key), key + " = unset (rolling 30 days)")
+        self.assert_line(("set", key, "8"), key + " = 8 (overrides)")
+        self.assert_line(("unset", key), key + " = unset (rolling 30 days)")
+        code, out, err = self.run_cli("export", "--no-cache")
+        self.assertEqual(code, 0, err)
+        found = json.loads(out)["subscriptions"]
+        self.assertIsNone(found["codex"]["anchor_day"])
+        self.assertEqual(found["codex"]["cycle_source"], "rolling_30d")
+        self.assertEqual(found["codex"]["source"], "detected")
+        check_subscriptions(self, found)
+        code, out, err = self.run_cli("doctor", "--no-cache")
+        self.assertEqual(code, 0, err)
+        self.assertIn("codex: ChatGPT Plus, $20.00, anchor day: unknown (rolling 30 days)", out)
 
     def test_precedence_merges_each_field_across_files(self):
         self.write_toml('[subscriptions.codex]\nplan = "team"\nmonthly_price_usd = 25\nanchor_day = 12\n')

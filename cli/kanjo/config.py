@@ -370,7 +370,7 @@ def subscription_value(cfg: Config, agent: str, key: str, found: dict):
     sub = found.get(agent, {})
     if key == "anchor_day":
         origin = "detected" if sub.get("cycle_source") == "subscription_date" else "default"
-        return sub.get(key, 1), origin
+        return sub.get(key), origin
     if key in sub:
         return sub[key], "detected"
     return None, "default"

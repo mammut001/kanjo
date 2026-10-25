@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from kanjo import cli, config, quota
 from kanjo.config import ConfigError
@@ -109,19 +110,50 @@ class SubscriptionTest(unittest.TestCase):
         self.assertIsNone(sub["monthly_price_usd"])
         check_subscriptions(self, {"claude": sub})
 
-    def test_missing_subscription_date_uses_calendar_month(self):
+    def test_missing_subscription_date_uses_rolling_30d(self):
         self.write_claude(drop_created=True, drop_extra=True)
         sub = self.collect()["claude"]
-        self.assertEqual(sub["anchor_day"], 1)
-        self.assertEqual(sub["cycle_source"], "calendar_month")
+        self.assertIsNone(sub["anchor_day"])
+        self.assertEqual(sub["cycle_source"], "rolling_30d")
         self.assertFalse(sub["extra_usage_enabled"])
-        self.assertEqual(sub["cycle_start"], "2026-10-01T00:00:00Z")
-        self.assertEqual(sub["cycle_end"], "2026-11-01T00:00:00Z")
+        self.assertEqual(sub["cycle_start"], "2026-09-24T12:00:00Z")
+        self.assertEqual(sub["cycle_end"], "2026-10-24T12:00:00Z")
+        check_subscriptions(self, {"claude": sub})
         # day-of-month is the timestamp's own calendar, not the UTC day
         self.write_claude(created="2026-08-31T23:30:00-04:00")
         sub = self.collect()["claude"]
         self.assertEqual(sub["anchor_day"], 31)
         self.assertEqual(sub["cycle_source"], "subscription_date")
+
+    def test_invalid_subscription_date_uses_rolling_30d(self):
+        for created in (None, "", "not a date", "2026-02-30T00:00:00Z", 123):
+            with self.subTest(created=created):
+                self.write_claude(created=created)
+                sub = self.collect()["claude"]
+                self.assertIsNone(sub["anchor_day"])
+                self.assertEqual(sub["cycle_source"], "rolling_30d")
+                self.assertEqual(sub["cycle_start"], "2026-09-24T12:00:00Z")
+                self.assertEqual(sub["cycle_end"], "2026-10-24T12:00:00Z")
+                check_subscriptions(self, {"claude": sub})
+
+    def test_rolling_window_preserves_time_across_dst_and_month_boundaries(self):
+        self.write_claude(drop_created=True)
+        for now, start, end in (
+                (datetime(2026, 11, 15, 12, 34, 56, tzinfo=ZoneInfo("America/Montreal")),
+                 "2026-10-16T17:34:56Z", "2026-11-15T17:34:56Z"),
+                (datetime(2024, 3, 1, 9, 15, 42, tzinfo=timezone.utc),
+                 "2024-01-31T09:15:42Z", "2024-03-01T09:15:42Z"),
+                (datetime(2026, 1, 10, 23, 59, 59),
+                 "2025-12-11T23:59:59Z", "2026-01-10T23:59:59Z")):
+            for tz in ("UTC", "Asia/Shanghai", "America/Montreal"):
+                with self.subTest(now=now, tz=tz):
+                    self.write_codex(fetched=now.timestamp())
+                    for sub in self.collect(now=now, tz=tz).values():
+                        self.assertIsNone(sub["anchor_day"])
+                        self.assertEqual(sub["cycle_source"], "rolling_30d")
+                        self.assertEqual(sub["cycle_start"], start)
+                        self.assertEqual(sub["cycle_end"], end)
+                        check_subscriptions(self, {"agent": sub})
 
     def test_claude_absent_without_a_subscription(self):
         self.assertEqual(self.collect(), {})
@@ -141,11 +173,11 @@ class SubscriptionTest(unittest.TestCase):
         sub = self.collect()["codex"]
         self.assertEqual((sub["plan"], sub["plan_label"], sub["monthly_price_usd"]),
                          ("plus", "ChatGPT Plus", 20.0))
-        self.assertEqual(sub["anchor_day"], 1)
-        self.assertEqual(sub["cycle_source"], "calendar_month")
+        self.assertIsNone(sub["anchor_day"])
+        self.assertEqual(sub["cycle_source"], "rolling_30d")
         self.assertFalse(sub["extra_usage_enabled"])
         self.assertEqual(sub["source"], "detected")
-        self.assertEqual(sub["cycle_start"], "2026-10-01T00:00:00Z")
+        self.assertEqual(sub["cycle_start"], "2026-09-24T12:00:00Z")
         # top-level plan wins over limits.plan_type; plan_type is the fallback
         self.write_codex(plan="plus", plan_type="team")
         self.assertEqual(self.collect()["codex"]["plan"], "plus")
@@ -184,9 +216,10 @@ class SubscriptionTest(unittest.TestCase):
             sub = found[agent]
             self.assertEqual((sub["plan"], sub["plan_label"], sub["monthly_price_usd"], sub["source"]),
                              (plan, label, price, "manual"))
-            self.assertEqual(sub["cycle_source"], "calendar_month")
-            self.assertEqual(sub["anchor_day"], 1)
+            self.assertEqual(sub["cycle_source"], "rolling_30d")
+            self.assertIsNone(sub["anchor_day"])
             self.assertFalse(sub["extra_usage_enabled"])
+            check_subscriptions(self, found)
 
     def test_manual_overrides_detection(self):
         self.write_claude(extra=True)
@@ -219,8 +252,8 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(sub["plan_label"], "Google AI Pro")
         self.assertEqual(sub["monthly_price_usd"], 19.99)
         self.assertEqual(sub["source"], "manual")
-        self.assertEqual(sub["cycle_source"], "calendar_month")
-        self.assertEqual(sub["anchor_day"], 1)
+        self.assertEqual(sub["cycle_source"], "rolling_30d")
+        self.assertIsNone(sub["anchor_day"])
 
     def test_manual_toml_and_json(self):
         text = (
@@ -254,7 +287,7 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(found["antigravity"]["plan_label"], "Google AI Ultra")
         self.assertEqual(found["codex"]["plan_label"], "ChatGPT (friends)")
         self.assertEqual(found["codex"]["monthly_price_usd"], 12.5)
-        self.assertEqual(found["codex"]["cycle_source"], "calendar_month")
+        self.assertEqual(found["codex"]["cycle_source"], "rolling_30d")
         raw = json.dumps({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 4}}})
         cfg = config.from_dict(config._parse_text(raw, "attribution.json"))
         self.assertEqual(cfg.subscriptions["claude"]["anchor_day"], 4)
@@ -305,6 +338,21 @@ class SubscriptionTest(unittest.TestCase):
             self.assertEqual(sub["monthly_price_usd"], expected_price)
             check_subscriptions(self, {"claude": sub})
 
+    def test_manual_plan_or_price_preserves_rolling_window(self):
+        self.write_claude(drop_created=True)
+        self.write_codex()
+        for agent, plan in (("claude", "pro"), ("codex", "team")):
+            for spec in ({"plan": plan}, {"monthly_price_usd": 75}):
+                with self.subTest(agent=agent, spec=spec):
+                    manual = config.from_dict({"subscriptions": {agent: spec}}).subscriptions
+                    sub = self.collect(manual)[agent]
+                    self.assertEqual(sub["source"], "manual")
+                    self.assertEqual(sub["cycle_source"], "rolling_30d")
+                    self.assertIsNone(sub["anchor_day"])
+                    self.assertEqual(sub["cycle_start"], "2026-09-24T12:00:00Z")
+                    self.assertEqual(sub["cycle_end"], "2026-10-24T12:00:00Z")
+                    check_subscriptions(self, {agent: sub})
+
     def test_cycle_crosses_month_boundary(self):
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 15}}}).subscriptions
         before = self.collect(manual, now=datetime(2026, 5, 14, 23, 59, 59, tzinfo=timezone.utc))["claude"]
@@ -351,7 +399,7 @@ class SubscriptionTest(unittest.TestCase):
         bad = {
             "plan": "plus", "plan_label": "ChatGPT Plus", "monthly_price_usd": 20.0,
             "cycle_start": "2026-05-01T00:00:00Z", "cycle_end": "2026-04-01T00:00:00Z",
-            "anchor_day": 1, "cycle_source": "calendar_month",
+            "anchor_day": 1, "cycle_source": "manual",
             "extra_usage_enabled": False, "source": "detected",
         }
         with self.assertRaises(AssertionError):
@@ -360,6 +408,17 @@ class SubscriptionTest(unittest.TestCase):
         bad["cycle_end"] = "2026-06-01T00:00:00Z"
         with self.assertRaises(AssertionError):
             check_subscriptions(self, {"codex": bad})
+
+    def test_contract_requires_null_anchor_only_for_rolling_and_exactly_30_days(self):
+        self.write_codex()
+        sub = self.collect()["codex"]
+        check_subscriptions(self, {"codex": sub})
+        for changes in ({"anchor_day": 1}, {"cycle_source": "manual"},
+                        {"cycle_source": "subscription_date"}, {"cycle_source": "calendar_month"},
+                        {"cycle_start": "2026-09-25T12:00:00Z"},
+                        {"cycle_end": "2026-10-24T12:00:01Z"}):
+            with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                check_subscriptions(self, {"codex": dict(sub, **changes)})
 
     def _doctor(self, env, *argv):
         out = io.StringIO()
@@ -374,6 +433,7 @@ class SubscriptionTest(unittest.TestCase):
             "KANJO_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
             "KANJO_CODEX_DIR": FIXTURE_DIRS["codex"][0],
             "KANJO_CACHE_DIR": cache,
+            "KANJO_CONFIG_DIR": self.dir,
             "KANJO_TOKEI_DIR": self.dir,
             "KANJO_CLAUDE_CONFIG": self.claude_path,
         }
@@ -396,7 +456,7 @@ class SubscriptionTest(unittest.TestCase):
         self.assertIn("source detected", text)
         self.assertIn("ChatGPT Plus", text)
         self.assertIn("$20.00", text)
-        self.assertIn("anchor day 1", text)
+        self.assertEqual(text.count("anchor day: unknown (rolling 30 days)"), 2)
         self.assertIn("Google AI Pro", text)
         self.assertIn("$19.99", text)
         self.assertIn("source manual", text)
@@ -434,8 +494,8 @@ class SubscriptionTest(unittest.TestCase):
             self.assertEqual(claude["cycle_end"], "2026-05-09T16:00:00Z")
             codex = doc["subscriptions"]["codex"]
             self.assertEqual(codex["plan"], "plus")
-            self.assertEqual(codex["cycle_start"], "2026-03-31T16:00:00Z")
-            self.assertEqual(codex["cycle_end"], "2026-04-30T16:00:00Z")
+            self.assertEqual(codex["cycle_start"], "2026-03-10T17:00:00Z")
+            self.assertEqual(codex["cycle_end"], "2026-04-09T17:00:00Z")
             self.assertNotIn("antigravity", doc["subscriptions"])
         finally:
             fs.cleanup()

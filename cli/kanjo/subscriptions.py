@@ -8,18 +8,19 @@ Sources, per agent. Manual fields override detection for that agent
   when that value is not null, otherwise ``organizationRateLimitTier``. Substring
   match, longer keys first: ``max_20x``, ``max_5x``, ``pro``. Anything else keeps
   the raw tier and a null price. ``subscriptionCreatedAt`` sets ``anchor_day``
-  (``cycle_source: "subscription_date"``); without it the anchor is the 1st
-  (``calendar_month``). ``hasExtraUsageEnabled`` maps to ``extra_usage_enabled``.
+  (``cycle_source: "subscription_date"``); without it the anchor is unknown
+  (``rolling_30d``). ``hasExtraUsageEnabled`` maps to ``extra_usage_enabled``.
 * Codex: Tokei's ``codex_quota_cache.json`` in ``~/.tokei`` (``$KANJO_TOKEI_DIR``),
   with the same 14-day staleness rule as :mod:`kanjo.quota` (``fetched_at``, else
   the file mtime). Plan is ``plan`` or ``limits.plan_type``. No subscription date
-  is known, so the anchor is the 1st and ``extra_usage_enabled`` is false.
+  is known, so the anchor is unknown and ``extra_usage_enabled`` is false.
 * Antigravity: nothing is detectable. Only a manual table adds it.
 
 The billing cycle is the latest ``anchor_day`` at 00:00 in the report timezone
 that is still <= now, through the next month's anchor at 00:00. Each month clamps
 on its own: anchor 31 is the 28th in February (the 29th in a leap year) and the
-31st again in March.
+31st again in March. Without an anchor, the window is the 30 days ending now,
+with a null ``anchor_day`` and ``cycle_source: "rolling_30d"``.
 
 List prices are public monthly prices. They can change, and ``monthly_price_usd``
 in the manual table overrides them. Detection never raises.
@@ -30,7 +31,7 @@ from __future__ import annotations
 import calendar
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -172,14 +173,19 @@ def _cycle_bounds(anchor: int, now: datetime, tz_name: str) -> Tuple[str, str]:
 def _finish(plan, label, price, anchor, cycle_source, extra, source, now, tz_name) -> dict:
     # Only a real JSON true counts. Missing, null and non-bool values stay off.
     extra_on = extra is True
-    start, end = _cycle_bounds(anchor, now, tz_name)
+    if anchor is None:
+        end_dt = now.astimezone(timezone.utc)
+        start = iso_utc((end_dt - timedelta(days=30)).timestamp())
+        end = iso_utc(end_dt.timestamp())
+    else:
+        start, end = _cycle_bounds(anchor, now, tz_name)
     return {
         "plan": plan,
         "plan_label": label,
         "monthly_price_usd": None if price is None else float(price),
         "cycle_start": start,
         "cycle_end": end,
-        "anchor_day": int(anchor),
+        "anchor_day": None if anchor is None else int(anchor),
         "cycle_source": cycle_source,
         "extra_usage_enabled": extra_on,
         "source": source,
@@ -202,7 +208,7 @@ def _detect_claude(explicit: Optional[str], now: datetime, tz_name: str) -> Opti
     plan, label, price = _map_claude(chosen.strip())
     created = _parse_dt(oauth.get("subscriptionCreatedAt"))
     if created is None:
-        anchor, cycle_source = 1, "calendar_month"
+        anchor, cycle_source = None, "rolling_30d"
     else:
         anchor, cycle_source = created.day, "subscription_date"
     return _finish(plan, label, price, anchor, cycle_source, oauth.get("hasExtraUsageEnabled"),
@@ -232,7 +238,7 @@ def _detect_codex(directory: str, now: datetime, tz_name: str) -> Optional[dict]
     if raw is None:
         return None
     plan, label, price = _resolve("codex", raw, None)
-    return _finish(plan, label, price, 1, "calendar_month", False, "detected", now, tz_name)
+    return _finish(plan, label, price, None, "rolling_30d", False, "detected", now, tz_name)
 
 
 def _from_manual(agent: str, spec, now: datetime, tz_name: str,
@@ -247,8 +253,8 @@ def _from_manual(agent: str, spec, now: datetime, tz_name: str,
         return None
     if "monthly_price_usd" in spec:
         entry["monthly_price_usd"] = spec["monthly_price_usd"]
-    anchor = spec.get("anchor_day", entry.get("anchor_day", 1))
-    cycle_source = "manual" if "anchor_day" in spec else entry.get("cycle_source", "calendar_month")
+    anchor = spec.get("anchor_day", entry.get("anchor_day"))
+    cycle_source = "manual" if "anchor_day" in spec else entry.get("cycle_source", "rolling_30d")
     extra = spec.get("extra_usage_enabled", entry.get("extra_usage_enabled", False))
     return _finish(entry["plan"], entry["plan_label"], entry["monthly_price_usd"], anchor, cycle_source, extra,
                    "manual", now, tz_name)

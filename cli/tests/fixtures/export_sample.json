@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-25T04:59:07Z",
+  "generated_at": "2026-10-25T14:54:29Z",
   "generated_by": "kanjo 0.1.0",
   "timezone": "America/Montreal",
   "currency": "USD",
@@ -10,15 +10,15 @@
   },
   "quota_windows": {
     "claude": {
-      "weekly_resets_at": "2026-10-27T13:59:59Z",
+      "weekly_resets_at": "2026-10-27T14:00:00Z",
       "weekly_window_hours": 168,
-      "five_hour_resets_at": "2026-10-25T08:09:59Z",
+      "five_hour_resets_at": "2026-10-25T18:20:00Z",
       "source": "tokei"
     },
     "codex": {
-      "weekly_resets_at": "2026-10-31T04:53:24Z",
+      "weekly_resets_at": "2026-11-01T06:15:31Z",
       "weekly_window_hours": 168,
-      "five_hour_resets_at": "2026-10-25T09:58:42Z",
+      "five_hour_resets_at": "2026-10-25T19:01:59Z",
       "source": "tokei"
     }
   },
@@ -38,28 +38,28 @@
       "plan": "plus",
       "plan_label": "ChatGPT Plus",
       "monthly_price_usd": 20.0,
-      "cycle_start": "2026-10-01T04:00:00Z",
-      "cycle_end": "2026-11-01T04:00:00Z",
-      "anchor_day": 1,
-      "cycle_source": "calendar_month",
+      "cycle_start": "2026-09-25T14:54:29Z",
+      "cycle_end": "2026-10-25T14:54:29Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
       "extra_usage_enabled": false,
       "source": "detected"
     }
   },
   "totals": {
-    "cost": 4157.3472,
+    "cost": 4438.3049,
     "tokens": {
-      "input": 625667372,
-      "output": 81645693,
-      "cache_read": 21594452025,
-      "cache_write": 87765076,
-      "thinking": 42633016,
-      "total": 22389530166
+      "input": 626602632,
+      "output": 83125377,
+      "cache_read": 22453648279,
+      "cache_write": 95397979,
+      "thinking": 42966440,
+      "total": 23258774267
     },
-    "sessions": 610,
+    "sessions": 629,
     "first_active": "2026-06-28",
     "last_active": "2026-10-25",
-    "unique_sessions": 587
+    "unique_sessions": 599
   },
   "projects": [
     {
@@ -92,14 +92,14 @@
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-FocusApp/928ec0a9-8451-40d6-9f13-8bc49461b9b5/scratchpad/widgetgoals"
       ],
       "path_missing": false,
-      "cost": 1228.3001,
+      "cost": 1244.1933,
       "tokens": {
-        "input": 246139708,
-        "output": 19146051,
-        "cache_read": 7230004919,
-        "cache_write": 18435329,
-        "thinking": 8865396,
-        "total": 7513726007
+        "input": 246139734,
+        "output": 19160211,
+        "cache_read": 7239906945,
+        "cache_write": 20139014,
+        "thinking": 8868114,
+        "total": 7525345904
       },
       "sessions": 153,
       "first_active": "2026-06-30",
@@ -108,14 +108,14 @@
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 450.3337,
+          "cost": 466.2269,
           "tokens": {
-            "input": 11176,
-            "output": 2182925,
-            "cache_read": 1200492711,
-            "cache_write": 18435329,
-            "thinking": 541371,
-            "total": 1221122141
+            "input": 11202,
+            "output": 2197085,
+            "cache_read": 1210394737,
+            "cache_write": 20139014,
+            "thinking": 544089,
+            "total": 1232742038
           },
           "sessions": 10
         },
@@ -152,14 +152,14 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 400.4244,
+          "cost": 416.3176,
           "tokens": {
-            "input": 5804,
-            "output": 1872756,
-            "cache_read": 1106752462,
-            "cache_write": 17699451,
-            "thinking": 440993,
-            "total": 1126330473
+            "input": 5830,
+            "output": 1886916,
+            "cache_read": 1116654488,
+            "cache_write": 19403136,
+            "thinking": 443711,
+            "total": 1137950370
           },
           "estimated": false
         },
@@ -1557,13 +1557,13 @@
         },
         {
           "day": "2026-10-25",
-          "cost": 0.0162,
-          "tokens": 8105,
+          "cost": 15.9094,
+          "tokens": 11628002,
           "by_agent": {
-            "claude": 0.0162
+            "claude": 15.9094
           },
           "by_agent_tokens": {
-            "claude": 8105
+            "claude": 11628002
           }
         }
       ],
@@ -1575,7 +1575,7 @@
         },
         {
           "branch": "feat/watch-moment-ui",
-          "cost": 136.3019,
+          "cost": 152.1951,
           "sessions": 4
         },
         {
@@ -2228,20 +2228,20 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-05T07:13:54Z",
-          "ended": "2026-10-24T06:58:33Z",
+          "ended": "2026-10-25T14:42:12Z",
           "cwd": "/Users/alice/Documents/GitHub/FocusApp",
           "branch": "feat/watch-moment-ui",
           "models": [
             "claude-opus-5-5"
           ],
-          "cost": 148.7041,
+          "cost": 164.5973,
           "tokens": {
-            "input": 2182,
-            "output": 684301,
-            "cache_read": 471180560,
-            "cache_write": 5096654,
-            "thinking": 148327,
-            "total": 476963697
+            "input": 2208,
+            "output": 698461,
+            "cache_read": 481082586,
+            "cache_write": 6800339,
+            "thinking": 151045,
+            "total": 488583594
           },
           "share": 1.0,
           "attribution": "dominant",
@@ -11532,6 +11532,674 @@
       ]
     },
     {
+      "id": "github.com/alice/gaokao",
+      "name": "gaokao",
+      "remote": "github.com/alice/gaokao",
+      "paths": [
+        "/Users/alice/Documents/GitHub/gaokao",
+        "/Users/alice/Documents/GitHub/gaokao/tmp/compat3_worktree"
+      ],
+      "path_missing": false,
+      "cost": 542.5289,
+      "tokens": {
+        "input": 19165797,
+        "output": 4508516,
+        "cache_read": 1936838442,
+        "cache_write": 12215497,
+        "thinking": 1566635,
+        "total": 1972728252
+      },
+      "sessions": 12,
+      "first_active": "2026-09-02",
+      "last_active": "2026-10-25",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 463.5488,
+          "tokens": {
+            "input": 6542,
+            "output": 2749003,
+            "cache_read": 1554092861,
+            "cache_write": 12215497,
+            "thinking": 684459,
+            "total": 1569063903
+          },
+          "sessions": 3
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 45.8486,
+          "tokens": {
+            "input": 5178377,
+            "output": 529601,
+            "cache_read": 142296492,
+            "cache_write": 0,
+            "thinking": 343917,
+            "total": 148004470
+          },
+          "sessions": 5
+        },
+        {
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "cost": 33.1315,
+          "tokens": {
+            "input": 13980878,
+            "output": 1229912,
+            "cache_read": 240449089,
+            "cache_write": 0,
+            "thinking": 538259,
+            "total": 255659879
+          },
+          "sessions": 4
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 463.5488,
+          "tokens": {
+            "input": 6542,
+            "output": 2749003,
+            "cache_read": 1554092861,
+            "cache_write": 12215497,
+            "thinking": 684459,
+            "total": 1569063903
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-reserve",
+          "agent": "codex",
+          "cost": 34.2949,
+          "tokens": {
+            "input": 474222,
+            "output": 60247,
+            "cache_read": 26540288,
+            "cache_write": 0,
+            "thinking": 35472,
+            "total": 27074757
+          },
+          "estimated": true
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "agent": "antigravity",
+          "cost": 31.1434,
+          "tokens": {
+            "input": 12724159,
+            "output": 1191413,
+            "cache_read": 228432813,
+            "cache_write": 0,
+            "thinking": 519526,
+            "total": 242348385
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.6-sol",
+          "agent": "codex",
+          "cost": 8.9333,
+          "tokens": {
+            "input": 661250,
+            "output": 35423,
+            "cache_read": 13949696,
+            "cache_write": 0,
+            "thinking": 17052,
+            "total": 14646369
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "agent": "codex",
+          "cost": 2.311,
+          "tokens": {
+            "input": 1711321,
+            "output": 215690,
+            "cache_read": 85496448,
+            "cache_write": 0,
+            "thinking": 109076,
+            "total": 87423459
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3.7-flash",
+          "agent": "antigravity",
+          "cost": 1.9881,
+          "tokens": {
+            "input": 1256719,
+            "output": 38499,
+            "cache_read": 12016276,
+            "cache_write": 0,
+            "thinking": 18733,
+            "total": 13311494
+          },
+          "estimated": false
+        },
+        {
+          "model": "vercel/meta/muse-spark-1.3-contributor",
+          "agent": "codex",
+          "cost": 0.3094,
+          "tokens": {
+            "input": 2331584,
+            "output": 218241,
+            "cache_read": 16310060,
+            "cache_write": 0,
+            "thinking": 182317,
+            "total": 18859885
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-09-02",
+          "cost": 2.5658,
+          "tokens": 4921312,
+          "by_agent": {
+            "codex": 2.5658
+          },
+          "by_agent_tokens": {
+            "codex": 4921312
+          }
+        },
+        {
+          "day": "2026-09-03",
+          "cost": 0.7431,
+          "tokens": 4790180,
+          "by_agent": {
+            "antigravity": 0.7431
+          },
+          "by_agent_tokens": {
+            "antigravity": 4790180
+          }
+        },
+        {
+          "day": "2026-09-04",
+          "cost": 1.5545,
+          "tokens": 27381199,
+          "by_agent": {
+            "antigravity": 1.2451,
+            "codex": 0.3094
+          },
+          "by_agent_tokens": {
+            "antigravity": 8521314,
+            "codex": 18859885
+          }
+        },
+        {
+          "day": "2026-09-05",
+          "cost": 0.6583,
+          "tokens": 4566006,
+          "by_agent": {
+            "antigravity": 0.6583
+          },
+          "by_agent_tokens": {
+            "antigravity": 4566006
+          }
+        },
+        {
+          "day": "2026-09-06",
+          "cost": 3.7593,
+          "tokens": 28585051,
+          "by_agent": {
+            "antigravity": 3.7593
+          },
+          "by_agent_tokens": {
+            "antigravity": 28585051
+          }
+        },
+        {
+          "day": "2026-09-07",
+          "cost": 12.7098,
+          "tokens": 104760193,
+          "by_agent": {
+            "antigravity": 12.7098
+          },
+          "by_agent_tokens": {
+            "antigravity": 104760193
+          }
+        },
+        {
+          "day": "2026-09-08",
+          "cost": 14.0159,
+          "tokens": 104437135,
+          "by_agent": {
+            "antigravity": 14.0159
+          },
+          "by_agent_tokens": {
+            "antigravity": 104437135
+          }
+        },
+        {
+          "day": "2026-09-14",
+          "cost": 0.6959,
+          "tokens": 27639711,
+          "by_agent": {
+            "codex": 0.6959
+          },
+          "by_agent_tokens": {
+            "codex": 27639711
+          }
+        },
+        {
+          "day": "2026-09-15",
+          "cost": 0.6563,
+          "tokens": 24712858,
+          "by_agent": {
+            "codex": 0.6563
+          },
+          "by_agent_tokens": {
+            "codex": 24712858
+          }
+        },
+        {
+          "day": "2026-09-16",
+          "cost": 36.5261,
+          "tokens": 62215259,
+          "by_agent": {
+            "codex": 36.5261
+          },
+          "by_agent_tokens": {
+            "codex": 62215259
+          }
+        },
+        {
+          "day": "2026-09-17",
+          "cost": 5.0952,
+          "tokens": 9655445,
+          "by_agent": {
+            "codex": 5.0952
+          },
+          "by_agent_tokens": {
+            "codex": 9655445
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 98.5239,
+          "tokens": 341261171,
+          "by_agent": {
+            "claude": 98.5239
+          },
+          "by_agent_tokens": {
+            "claude": 341261171
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "cost": 104.5357,
+          "tokens": 351081065,
+          "by_agent": {
+            "claude": 104.5357
+          },
+          "by_agent_tokens": {
+            "claude": 351081065
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 70.4304,
+          "tokens": 175007093,
+          "by_agent": {
+            "claude": 70.4304
+          },
+          "by_agent_tokens": {
+            "claude": 175007093
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 190.0587,
+          "tokens": 701714573,
+          "by_agent": {
+            "claude": 190.0587
+          },
+          "by_agent_tokens": {
+            "claude": 701714573
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "cost": 462.9882,
+          "sessions": 3
+        },
+        {
+          "branch": "product/math-rendering-v1",
+          "cost": 41.6212,
+          "sessions": 2
+        },
+        {
+          "branch": "main",
+          "cost": 36.0067,
+          "sessions": 6
+        },
+        {
+          "branch": "product/mvp-core-loop",
+          "cost": 1.3522,
+          "sessions": 1
+        },
+        {
+          "branch": "product/interactive-graphing-v1",
+          "cost": 0.5605,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-24T06:53:35Z",
+          "ended": "2026-10-25T07:35:33Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.2591,
+          "tokens": {
+            "input": 70,
+            "output": 20967,
+            "cache_read": 10991470,
+            "cache_write": 80149,
+            "thinking": 3565,
+            "total": 11092656
+          },
+          "share": 0.114286,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 305 (redacted)"
+        },
+        {
+          "id": "cd82e2f4-2fde-415d-a20d-88037791d5c4",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-23T21:16:24Z",
+          "ended": "2026-10-24T03:07:20Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.6174,
+          "tokens": {
+            "input": 42,
+            "output": 7045,
+            "cache_read": 1013643,
+            "cache_write": 159195,
+            "thinking": 525,
+            "total": 1179925
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 306 (redacted)"
+        },
+        {
+          "id": "3c624039-606a-438c-b2a2-95fc84bedd62",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-22T18:55:41Z",
+          "ended": "2026-10-25T14:50:57Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 458.6723,
+          "tokens": {
+            "input": 6430,
+            "output": 2720991,
+            "cache_read": 1542087748,
+            "cache_write": 11976153,
+            "thinking": 680369,
+            "total": 1556791322
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 307 (redacted)"
+        },
+        {
+          "id": "01a0acd5-ce21-77d1-930a-ffc349d41f86",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-17T00:49:09Z",
+          "ended": "2026-09-17T14:02:38Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "product/math-rendering-v1",
+          "models": [
+            "gpt-5.6-sol",
+            "gpt-5.6-luna"
+          ],
+          "cost": 6.7553,
+          "tokens": {
+            "input": 599706,
+            "output": 55493,
+            "cache_read": 23251584,
+            "cache_write": 0,
+            "thinking": 37418,
+            "total": 23906783
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a0ab8a-ec0d-7f33-a234-a999811aaa32",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-16T18:46:51Z",
+          "ended": "2026-09-16T23:47:10Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "product/math-rendering-v1",
+          "models": [
+            "gpt-reserve",
+            "gpt-5.6-luna"
+          ],
+          "cost": 34.8659,
+          "tokens": {
+            "input": 1109022,
+            "output": 93299,
+            "cache_read": 46761600,
+            "cache_write": 0,
+            "thinking": 46307,
+            "total": 47963921
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a0a244-6727-7823-8055-a29e0becf1df",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-14T23:33:21Z",
+          "ended": "2026-09-15T19:49:24Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "product/mvp-core-loop",
+          "models": [
+            "gpt-5.6-luna"
+          ],
+          "cost": 1.3522,
+          "tokens": {
+            "input": 769546,
+            "output": 141231,
+            "cache_read": 51441792,
+            "cache_write": 0,
+            "thinking": 69609,
+            "total": 52352569
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "1aba67c3-a995-4341-9e29-319c710d0a2f",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-07T20:23:28Z",
+          "ended": "2026-09-08T17:20:29Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "gemini-3.8-flash"
+          ],
+          "cost": 24.7892,
+          "tokens": {
+            "input": 9632505,
+            "output": 998077,
+            "cache_read": 184294325,
+            "cache_write": 0,
+            "thinking": 409758,
+            "total": 194924907
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 308 (redacted)"
+        },
+        {
+          "id": "8e4d43bb-2c5a-4771-94b1-2f94beb88942",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-07T06:44:14Z",
+          "ended": "2026-09-07T07:30:15Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "gemini-3.8-flash"
+          ],
+          "cost": 1.9365,
+          "tokens": {
+            "input": 764618,
+            "output": 95216,
+            "cache_read": 13412587,
+            "cache_write": 0,
+            "thinking": 55185,
+            "total": 14272421
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 309 (redacted)"
+        },
+        {
+          "id": "d42677b8-e98b-4604-a9d0-512a94d35680",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-07T01:18:20Z",
+          "ended": "2026-09-07T01:22:01Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "gemini-3.8-flash"
+          ],
+          "cost": 0.271,
+          "tokens": {
+            "input": 160551,
+            "output": 18885,
+            "cache_read": 1063108,
+            "cache_write": 0,
+            "thinking": 13840,
+            "total": 1242544
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 310 (redacted)"
+        },
+        {
+          "id": "01a06b2a-190f-7342-8858-c5e08a6797bf",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-04T06:45:29Z",
+          "ended": "2026-09-04T09:53:23Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "vercel/meta/muse-spark-1.3-contributor"
+          ],
+          "cost": 0.3094,
+          "tokens": {
+            "input": 2331584,
+            "output": 218241,
+            "cache_read": 16310060,
+            "cache_write": 0,
+            "thinking": 182317,
+            "total": 18859885
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "3344370d-ded2-473d-84d9-7b1647b6eb38",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-03T14:57:14Z",
+          "ended": "2026-09-07T01:22:29Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "gemini-3.8-flash",
+            "gemini-3.7-flash"
+          ],
+          "cost": 6.1348,
+          "tokens": {
+            "input": 3423204,
+            "output": 117734,
+            "cache_read": 41679069,
+            "cache_write": 0,
+            "thinking": 59476,
+            "total": 45220007
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 311 (redacted)"
+        },
+        {
+          "id": "01a062c9-5a3c-7f42-87bc-c7b6ac398b8e",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-02T15:43:35Z",
+          "ended": "2026-09-02T16:17:44Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "main",
+          "models": [
+            "gpt-5.6-sol",
+            "gpt-5.6-luna"
+          ],
+          "cost": 2.5658,
+          "tokens": {
+            "input": 368519,
+            "output": 21337,
+            "cache_read": 4531456,
+            "cache_write": 0,
+            "thinking": 8266,
+            "total": 4921312
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        }
+      ]
+    },
+    {
       "id": "github.com/alice/conveyor",
       "name": "Conveyor",
       "remote": "github.com/alice/conveyor",
@@ -12426,7 +13094,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 305 (redacted)"
+          "title": "Session title 312 (redacted)"
         },
         {
           "id": "97bd38e3-484e-46fd-83a9-c495309770c2",
@@ -12451,7 +13119,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 306 (redacted)"
+          "title": "Session title 313 (redacted)"
         },
         {
           "id": "c44f536b-cdca-418c-a80b-bcccbe2701c8",
@@ -12476,7 +13144,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 307 (redacted)"
+          "title": "Session title 314 (redacted)"
         },
         {
           "id": "6e1c397c-4b56-4d4e-8b5e-0634ba03c4ce",
@@ -12501,7 +13169,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 308 (redacted)"
+          "title": "Session title 315 (redacted)"
         },
         {
           "id": "7e034495-7385-4678-968a-a114d71d5797",
@@ -12526,7 +13194,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 309 (redacted)"
+          "title": "Session title 316 (redacted)"
         },
         {
           "id": "8ae95286-97f3-4781-9fc1-0110c2b84eec",
@@ -12551,7 +13219,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 310 (redacted)"
+          "title": "Session title 317 (redacted)"
         },
         {
           "id": "477dd164-9395-456e-8c5b-1591fdefe228",
@@ -12576,7 +13244,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 311 (redacted)"
+          "title": "Session title 318 (redacted)"
         },
         {
           "id": "01a1461c-6f58-7090-85a3-4af8c6684eb1",
@@ -12653,7 +13321,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 312 (redacted)"
+          "title": "Session title 319 (redacted)"
         },
         {
           "id": "01a124c5-37e9-7bf0-b9db-546a3441fad1",
@@ -12729,7 +13397,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 313 (redacted)"
+          "title": "Session title 320 (redacted)"
         },
         {
           "id": "01a11bba-1ad8-7bd2-906c-75ab7da85017",
@@ -12831,7 +13499,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 314 (redacted)"
+          "title": "Session title 321 (redacted)"
         },
         {
           "id": "09e0b594-c1df-45a3-a273-da9f492964e9",
@@ -12857,7 +13525,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 315 (redacted)"
+          "title": "Session title 322 (redacted)"
         },
         {
           "id": "038494ba-959b-4f7c-b4c5-a528855db773",
@@ -12882,7 +13550,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 316 (redacted)"
+          "title": "Session title 323 (redacted)"
         },
         {
           "id": "01a05d86-2bf2-7400-935f-c2f4a7086be8",
@@ -12986,7 +13654,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 317 (redacted)"
+          "title": "Session title 324 (redacted)"
         },
         {
           "id": "019f575d-770a-7af1-b036-0e8368be52f6",
@@ -13012,7 +13680,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 318 (redacted)"
+          "title": "Session title 325 (redacted)"
         },
         {
           "id": "f0d60275-ab10-4449-817c-0e6de9cdaabf",
@@ -13037,7 +13705,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 319 (redacted)"
+          "title": "Session title 326 (redacted)"
         },
         {
           "id": "019f4541-5646-7d00-bf14-0d088e485e4a",
@@ -13062,7 +13730,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 320 (redacted)"
+          "title": "Session title 327 (redacted)"
         },
         {
           "id": "019f4541-20cc-7b73-b5bc-e38e038b68bb",
@@ -13087,7 +13755,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 321 (redacted)"
+          "title": "Session title 328 (redacted)"
         },
         {
           "id": "019f4540-f294-7783-8284-4662ac131305",
@@ -13112,7 +13780,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 322 (redacted)"
+          "title": "Session title 329 (redacted)"
         },
         {
           "id": "019f4540-dd48-7720-9892-4f79ac6da5b5",
@@ -13137,7 +13805,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 323 (redacted)"
+          "title": "Session title 330 (redacted)"
         },
         {
           "id": "019f4537-1c06-78c1-9b09-0d5c7bcaa5a5",
@@ -13162,7 +13830,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 324 (redacted)"
+          "title": "Session title 331 (redacted)"
         },
         {
           "id": "372770b8-1652-4370-9e8e-7eacd2704ba8",
@@ -13187,7 +13855,7 @@
           "share": 0.546468,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 325 (redacted)"
+          "title": "Session title 332 (redacted)"
         },
         {
           "id": "019f404f-eec6-7f10-9ae8-e6231c9d8b0c",
@@ -13215,7 +13883,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 2,
-          "title": "Session title 326 (redacted)"
+          "title": "Session title 333 (redacted)"
         },
         {
           "id": "95bab59e-c940-4a65-b652-0c3975748f23",
@@ -13240,7 +13908,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 327 (redacted)"
+          "title": "Session title 334 (redacted)"
         },
         {
           "id": "fe38ae71-6755-4776-a1f4-96d638194bef",
@@ -13265,7 +13933,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 328 (redacted)"
+          "title": "Session title 335 (redacted)"
         },
         {
           "id": "d8022aee-6757-4248-b1e5-a6c556ca9314",
@@ -13293,7 +13961,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 329 (redacted)"
+          "title": "Session title 336 (redacted)"
         },
         {
           "id": "6c4fa744-b955-4841-9896-459e203684a4",
@@ -13318,7 +13986,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 330 (redacted)"
+          "title": "Session title 337 (redacted)"
         },
         {
           "id": "839d09b9-5750-4f9b-953f-9b0853e06571",
@@ -13343,7 +14011,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 331 (redacted)"
+          "title": "Session title 338 (redacted)"
         },
         {
           "id": "53c32d60-7739-439e-b9d3-c0f038142cd3",
@@ -13368,7 +14036,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 332 (redacted)"
+          "title": "Session title 339 (redacted)"
         },
         {
           "id": "628c18fa-d6d1-4b81-aaea-cc1e4868a91b",
@@ -13393,675 +14061,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 333 (redacted)"
-        }
-      ]
-    },
-    {
-      "id": "github.com/alice/gaokao",
-      "name": "gaokao",
-      "remote": "github.com/alice/gaokao",
-      "paths": [
-        "/Users/alice/Documents/GitHub/gaokao",
-        "/Users/alice/Documents/GitHub/gaokao/tmp/compat3_worktree"
-      ],
-      "path_missing": false,
-      "cost": 361.5262,
-      "tokens": {
-        "input": 19163201,
-        "output": 3468753,
-        "cache_read": 1271125967,
-        "cache_write": 8833677,
-        "thinking": 1318802,
-        "total": 1302591598
-      },
-      "sessions": 12,
-      "first_active": "2026-09-02",
-      "last_active": "2026-10-25",
-      "by_agent": [
-        {
-          "agent": "claude",
-          "label": "Claude Code",
-          "cost": 282.5461,
-          "tokens": {
-            "input": 3946,
-            "output": 1709240,
-            "cache_read": 888380386,
-            "cache_write": 8833677,
-            "thinking": 436626,
-            "total": 898927249
-          },
-          "sessions": 3
-        },
-        {
-          "agent": "codex",
-          "label": "Codex CLI",
-          "cost": 45.8486,
-          "tokens": {
-            "input": 5178377,
-            "output": 529601,
-            "cache_read": 142296492,
-            "cache_write": 0,
-            "thinking": 343917,
-            "total": 148004470
-          },
-          "sessions": 5
-        },
-        {
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "cost": 33.1315,
-          "tokens": {
-            "input": 13980878,
-            "output": 1229912,
-            "cache_read": 240449089,
-            "cache_write": 0,
-            "thinking": 538259,
-            "total": 255659879
-          },
-          "sessions": 4
-        }
-      ],
-      "by_model": [
-        {
-          "model": "claude-opus-5-5",
-          "agent": "claude",
-          "cost": 282.5461,
-          "tokens": {
-            "input": 3946,
-            "output": 1709240,
-            "cache_read": 888380386,
-            "cache_write": 8833677,
-            "thinking": 436626,
-            "total": 898927249
-          },
-          "estimated": false
-        },
-        {
-          "model": "gpt-reserve",
-          "agent": "codex",
-          "cost": 34.2949,
-          "tokens": {
-            "input": 474222,
-            "output": 60247,
-            "cache_read": 26540288,
-            "cache_write": 0,
-            "thinking": 35472,
-            "total": 27074757
-          },
-          "estimated": true
-        },
-        {
-          "model": "gemini-3.8-flash",
-          "agent": "antigravity",
-          "cost": 31.1434,
-          "tokens": {
-            "input": 12724159,
-            "output": 1191413,
-            "cache_read": 228432813,
-            "cache_write": 0,
-            "thinking": 519526,
-            "total": 242348385
-          },
-          "estimated": false
-        },
-        {
-          "model": "gpt-5.6-sol",
-          "agent": "codex",
-          "cost": 8.9333,
-          "tokens": {
-            "input": 661250,
-            "output": 35423,
-            "cache_read": 13949696,
-            "cache_write": 0,
-            "thinking": 17052,
-            "total": 14646369
-          },
-          "estimated": false
-        },
-        {
-          "model": "gpt-5.6-luna",
-          "agent": "codex",
-          "cost": 2.311,
-          "tokens": {
-            "input": 1711321,
-            "output": 215690,
-            "cache_read": 85496448,
-            "cache_write": 0,
-            "thinking": 109076,
-            "total": 87423459
-          },
-          "estimated": false
-        },
-        {
-          "model": "gemini-3.7-flash",
-          "agent": "antigravity",
-          "cost": 1.9881,
-          "tokens": {
-            "input": 1256719,
-            "output": 38499,
-            "cache_read": 12016276,
-            "cache_write": 0,
-            "thinking": 18733,
-            "total": 13311494
-          },
-          "estimated": false
-        },
-        {
-          "model": "vercel/meta/muse-spark-1.3-contributor",
-          "agent": "codex",
-          "cost": 0.3094,
-          "tokens": {
-            "input": 2331584,
-            "output": 218241,
-            "cache_read": 16310060,
-            "cache_write": 0,
-            "thinking": 182317,
-            "total": 18859885
-          },
-          "estimated": false
-        }
-      ],
-      "by_day": [
-        {
-          "day": "2026-09-02",
-          "cost": 2.5658,
-          "tokens": 4921312,
-          "by_agent": {
-            "codex": 2.5658
-          },
-          "by_agent_tokens": {
-            "codex": 4921312
-          }
-        },
-        {
-          "day": "2026-09-03",
-          "cost": 0.7431,
-          "tokens": 4790180,
-          "by_agent": {
-            "antigravity": 0.7431
-          },
-          "by_agent_tokens": {
-            "antigravity": 4790180
-          }
-        },
-        {
-          "day": "2026-09-04",
-          "cost": 1.5545,
-          "tokens": 27381199,
-          "by_agent": {
-            "antigravity": 1.2451,
-            "codex": 0.3094
-          },
-          "by_agent_tokens": {
-            "antigravity": 8521314,
-            "codex": 18859885
-          }
-        },
-        {
-          "day": "2026-09-05",
-          "cost": 0.6583,
-          "tokens": 4566006,
-          "by_agent": {
-            "antigravity": 0.6583
-          },
-          "by_agent_tokens": {
-            "antigravity": 4566006
-          }
-        },
-        {
-          "day": "2026-09-06",
-          "cost": 3.7593,
-          "tokens": 28585051,
-          "by_agent": {
-            "antigravity": 3.7593
-          },
-          "by_agent_tokens": {
-            "antigravity": 28585051
-          }
-        },
-        {
-          "day": "2026-09-07",
-          "cost": 12.7098,
-          "tokens": 104760193,
-          "by_agent": {
-            "antigravity": 12.7098
-          },
-          "by_agent_tokens": {
-            "antigravity": 104760193
-          }
-        },
-        {
-          "day": "2026-09-08",
-          "cost": 14.0159,
-          "tokens": 104437135,
-          "by_agent": {
-            "antigravity": 14.0159
-          },
-          "by_agent_tokens": {
-            "antigravity": 104437135
-          }
-        },
-        {
-          "day": "2026-09-14",
-          "cost": 0.6959,
-          "tokens": 27639711,
-          "by_agent": {
-            "codex": 0.6959
-          },
-          "by_agent_tokens": {
-            "codex": 27639711
-          }
-        },
-        {
-          "day": "2026-09-15",
-          "cost": 0.6563,
-          "tokens": 24712858,
-          "by_agent": {
-            "codex": 0.6563
-          },
-          "by_agent_tokens": {
-            "codex": 24712858
-          }
-        },
-        {
-          "day": "2026-09-16",
-          "cost": 36.5261,
-          "tokens": 62215259,
-          "by_agent": {
-            "codex": 36.5261
-          },
-          "by_agent_tokens": {
-            "codex": 62215259
-          }
-        },
-        {
-          "day": "2026-09-17",
-          "cost": 5.0952,
-          "tokens": 9655445,
-          "by_agent": {
-            "codex": 5.0952
-          },
-          "by_agent_tokens": {
-            "codex": 9655445
-          }
-        },
-        {
-          "day": "2026-10-22",
-          "cost": 98.5239,
-          "tokens": 341261171,
-          "by_agent": {
-            "claude": 98.5239
-          },
-          "by_agent_tokens": {
-            "claude": 341261171
-          }
-        },
-        {
-          "day": "2026-10-23",
-          "cost": 104.5357,
-          "tokens": 351081065,
-          "by_agent": {
-            "claude": 104.5357
-          },
-          "by_agent_tokens": {
-            "claude": 351081065
-          }
-        },
-        {
-          "day": "2026-10-24",
-          "cost": 74.8979,
-          "tokens": 186858321,
-          "by_agent": {
-            "claude": 74.8979
-          },
-          "by_agent_tokens": {
-            "claude": 186858321
-          }
-        },
-        {
-          "day": "2026-10-25",
-          "cost": 4.5885,
-          "tokens": 19726692,
-          "by_agent": {
-            "claude": 4.5885
-          },
-          "by_agent_tokens": {
-            "claude": 19726692
-          }
-        }
-      ],
-      "by_branch": [
-        {
-          "branch": "chore/cleanup-and-geometry-fixes",
-          "cost": 281.9855,
-          "sessions": 3
-        },
-        {
-          "branch": "product/math-rendering-v1",
-          "cost": 41.6212,
-          "sessions": 2
-        },
-        {
-          "branch": "main",
-          "cost": 36.0067,
-          "sessions": 6
-        },
-        {
-          "branch": "product/mvp-core-loop",
-          "cost": 1.3522,
-          "sessions": 1
-        },
-        {
-          "branch": "product/interactive-graphing-v1",
-          "cost": 0.5605,
-          "sessions": 1
-        }
-      ],
-      "sessions_detail": [
-        {
-          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
-          "agent": "claude",
-          "label": "Claude Code",
-          "started": "2026-10-24T06:53:35Z",
-          "ended": "2026-10-24T07:12:46Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "chore/cleanup-and-geometry-fixes",
-          "models": [
-            "claude-opus-5-5"
-          ],
-          "cost": 5.0439,
-          "tokens": {
-            "input": 184,
-            "output": 42570,
-            "cache_read": 13142248,
-            "cache_write": 195416,
-            "thinking": 7906,
-            "total": 13380418
-          },
-          "share": 1.0,
-          "attribution": "cwd",
-          "subagents": 0,
-          "title": "Session title 334 (redacted)"
-        },
-        {
-          "id": "cd82e2f4-2fde-415d-a20d-88037791d5c4",
-          "agent": "claude",
-          "label": "Claude Code",
-          "started": "2026-10-23T21:16:24Z",
-          "ended": "2026-10-24T03:07:20Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "chore/cleanup-and-geometry-fixes",
-          "models": [
-            "claude-opus-5-5"
-          ],
-          "cost": 1.6174,
-          "tokens": {
-            "input": 42,
-            "output": 7045,
-            "cache_read": 1013643,
-            "cache_write": 159195,
-            "thinking": 525,
-            "total": 1179925
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 335 (redacted)"
-        },
-        {
-          "id": "3c624039-606a-438c-b2a2-95fc84bedd62",
-          "agent": "claude",
-          "label": "Claude Code",
-          "started": "2026-10-22T18:55:41Z",
-          "ended": "2026-10-25T04:39:44Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "chore/cleanup-and-geometry-fixes",
-          "models": [
-            "claude-opus-5-5"
-          ],
-          "cost": 275.8848,
-          "tokens": {
-            "input": 3720,
-            "output": 1659625,
-            "cache_read": 874224495,
-            "cache_write": 8479066,
-            "thinking": 428195,
-            "total": 884366906
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 336 (redacted)"
-        },
-        {
-          "id": "01a0acd5-ce21-77d1-930a-ffc349d41f86",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-09-17T00:49:09Z",
-          "ended": "2026-09-17T14:02:38Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "product/math-rendering-v1",
-          "models": [
-            "gpt-5.6-sol",
-            "gpt-5.6-luna"
-          ],
-          "cost": 6.7553,
-          "tokens": {
-            "input": 599706,
-            "output": 55493,
-            "cache_read": 23251584,
-            "cache_write": 0,
-            "thinking": 37418,
-            "total": 23906783
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": null
-        },
-        {
-          "id": "01a0ab8a-ec0d-7f33-a234-a999811aaa32",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-09-16T18:46:51Z",
-          "ended": "2026-09-16T23:47:10Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "product/math-rendering-v1",
-          "models": [
-            "gpt-reserve",
-            "gpt-5.6-luna"
-          ],
-          "cost": 34.8659,
-          "tokens": {
-            "input": 1109022,
-            "output": 93299,
-            "cache_read": 46761600,
-            "cache_write": 0,
-            "thinking": 46307,
-            "total": 47963921
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": null
-        },
-        {
-          "id": "01a0a244-6727-7823-8055-a29e0becf1df",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-09-14T23:33:21Z",
-          "ended": "2026-09-15T19:49:24Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "product/mvp-core-loop",
-          "models": [
-            "gpt-5.6-luna"
-          ],
-          "cost": 1.3522,
-          "tokens": {
-            "input": 769546,
-            "output": 141231,
-            "cache_read": 51441792,
-            "cache_write": 0,
-            "thinking": 69609,
-            "total": 52352569
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": null
-        },
-        {
-          "id": "1aba67c3-a995-4341-9e29-319c710d0a2f",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-09-07T20:23:28Z",
-          "ended": "2026-09-08T17:20:29Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "gemini-3.8-flash"
-          ],
-          "cost": 24.7892,
-          "tokens": {
-            "input": 9632505,
-            "output": 998077,
-            "cache_read": 184294325,
-            "cache_write": 0,
-            "thinking": 409758,
-            "total": 194924907
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 337 (redacted)"
-        },
-        {
-          "id": "8e4d43bb-2c5a-4771-94b1-2f94beb88942",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-09-07T06:44:14Z",
-          "ended": "2026-09-07T07:30:15Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "gemini-3.8-flash"
-          ],
-          "cost": 1.9365,
-          "tokens": {
-            "input": 764618,
-            "output": 95216,
-            "cache_read": 13412587,
-            "cache_write": 0,
-            "thinking": 55185,
-            "total": 14272421
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 338 (redacted)"
-        },
-        {
-          "id": "d42677b8-e98b-4604-a9d0-512a94d35680",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-09-07T01:18:20Z",
-          "ended": "2026-09-07T01:22:01Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "gemini-3.8-flash"
-          ],
-          "cost": 0.271,
-          "tokens": {
-            "input": 160551,
-            "output": 18885,
-            "cache_read": 1063108,
-            "cache_write": 0,
-            "thinking": 13840,
-            "total": 1242544
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 339 (redacted)"
-        },
-        {
-          "id": "01a06b2a-190f-7342-8858-c5e08a6797bf",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-09-04T06:45:29Z",
-          "ended": "2026-09-04T09:53:23Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "vercel/meta/muse-spark-1.3-contributor"
-          ],
-          "cost": 0.3094,
-          "tokens": {
-            "input": 2331584,
-            "output": 218241,
-            "cache_read": 16310060,
-            "cache_write": 0,
-            "thinking": 182317,
-            "total": 18859885
-          },
-          "share": 1.0,
-          "attribution": "cwd",
-          "subagents": 0,
-          "title": null
-        },
-        {
-          "id": "3344370d-ded2-473d-84d9-7b1647b6eb38",
-          "agent": "antigravity",
-          "label": "Antigravity CLI",
-          "started": "2026-09-03T14:57:14Z",
-          "ended": "2026-09-07T01:22:29Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "gemini-3.8-flash",
-            "gemini-3.7-flash"
-          ],
-          "cost": 6.1348,
-          "tokens": {
-            "input": 3423204,
-            "output": 117734,
-            "cache_read": 41679069,
-            "cache_write": 0,
-            "thinking": 59476,
-            "total": 45220007
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
           "title": "Session title 340 (redacted)"
-        },
-        {
-          "id": "01a062c9-5a3c-7f42-87bc-c7b6ac398b8e",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-09-02T15:43:35Z",
-          "ended": "2026-09-02T16:17:44Z",
-          "cwd": "/Users/alice/Documents/GitHub/gaokao",
-          "branch": "main",
-          "models": [
-            "gpt-5.6-sol",
-            "gpt-5.6-luna"
-          ],
-          "cost": 2.5658,
-          "tokens": {
-            "input": 368519,
-            "output": 21337,
-            "cache_read": 4531456,
-            "cache_write": 0,
-            "thinking": 8266,
-            "total": 4921312
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": null
         }
       ]
     },
@@ -14073,6 +14073,7 @@
         "/Users/alice/.codex/worktrees/cozy-cat-theme/reussir-en-francais",
         "/Users/alice/.codex/worktrees/learning-trust-pr/reussir-en-francais",
         "/Users/alice/Documents/GitHub/reussir-en-francais",
+        "/Users/alice/Documents/GitHub/reussir-seo-wt",
         "/Users/alice/Documents/GitHub/scratch/reussir-en-francais-reading",
         "/Users/alice/Documents/GitHub/scratch/reussir-ui-controls",
         "/private/tmp/camion-member-card",
@@ -14098,46 +14099,46 @@
         "/private/tmp/reussir-sync-pr-web"
       ],
       "path_missing": false,
-      "cost": 250.0949,
+      "cost": 257.488,
       "tokens": {
-        "input": 18069347,
-        "output": 3401949,
-        "cache_read": 1025450683,
-        "cache_write": 5592876,
-        "thinking": 1656797,
-        "total": 1052514855
+        "input": 18512476,
+        "output": 3460863,
+        "cache_read": 1051557519,
+        "cache_write": 5805966,
+        "thinking": 1667027,
+        "total": 1079336824
       },
-      "sessions": 37,
+      "sessions": 41,
       "first_active": "2026-10-20",
       "last_active": "2026-10-25",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 165.4923,
+          "cost": 170.4017,
           "tokens": {
-            "input": 8448,
-            "output": 839441,
-            "cache_read": 346221154,
-            "cache_write": 5592876,
-            "thinking": 259928,
-            "total": 352661919
+            "input": 8610,
+            "output": 882162,
+            "cache_read": 357968950,
+            "cache_write": 5805966,
+            "thinking": 269440,
+            "total": 364665688
           },
-          "sessions": 6
+          "sessions": 8
         },
         {
           "agent": "codex",
           "label": "Codex CLI",
-          "cost": 50.4036,
+          "cost": 52.8873,
           "tokens": {
-            "input": 7094887,
-            "output": 898001,
-            "cache_read": 416128164,
+            "input": 7537854,
+            "output": 914194,
+            "cache_read": 430487204,
             "cache_write": 0,
-            "thinking": 502214,
-            "total": 424121052
+            "thinking": 502932,
+            "total": 438939252
           },
-          "sessions": 7
+          "sessions": 9
         },
         {
           "agent": "antigravity",
@@ -14172,28 +14173,28 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 71.4862,
+          "cost": 76.3955,
           "tokens": {
-            "input": 1067,
-            "output": 270216,
-            "cache_read": 242625230,
-            "cache_write": 2194065,
-            "thinking": 42249,
-            "total": 245090578
+            "input": 1229,
+            "output": 312937,
+            "cache_read": 254373025,
+            "cache_write": 2407155,
+            "thinking": 51761,
+            "total": 257094346
           },
           "estimated": false
         },
         {
           "model": "gpt-6.1-sol",
           "agent": "codex",
-          "cost": 37.0676,
+          "cost": 39.5514,
           "tokens": {
-            "input": 3293564,
-            "output": 418726,
-            "cache_read": 262932510,
+            "input": 3736531,
+            "output": 434919,
+            "cache_read": 277291550,
             "cache_write": 0,
-            "thinking": 161990,
-            "total": 266644800
+            "thinking": 162708,
+            "total": 281463000
           },
           "estimated": false
         },
@@ -14324,21 +14325,23 @@
         },
         {
           "day": "2026-10-25",
-          "cost": 1.2353,
-          "tokens": 618657,
+          "cost": 8.6284,
+          "tokens": 27440626,
           "by_agent": {
-            "claude": 1.2353
+            "claude": 6.1446,
+            "codex": 2.4838
           },
           "by_agent_tokens": {
-            "claude": 618657
+            "claude": 12622426,
+            "codex": 14818200
           }
         }
       ],
       "by_branch": [
         {
           "branch": "feat/listening-ambience",
-          "cost": 84.8598,
-          "sessions": 3
+          "cost": 89.7692,
+          "sessions": 5
         },
         {
           "branch": "codex/google-site-name",
@@ -14347,7 +14350,7 @@
         },
         {
           "branch": "main",
-          "cost": 51.5213,
+          "cost": 53.5836,
           "sessions": 10
         },
         {
@@ -14416,12 +14419,117 @@
           "sessions": 1
         },
         {
+          "branch": "codex/seo-crawl-signals",
+          "cost": 0.4215,
+          "sessions": 2
+        },
+        {
           "branch": "fix/audio-layout",
           "cost": 0.2974,
           "sessions": 1
         }
       ],
       "sessions_detail": [
+        {
+          "id": "ac4dc787-b0d0-49ac-8b60-6ecc56cfe6a8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-25T13:03:15Z",
+          "ended": "2026-10-25T13:04:01Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "feat/listening-ambience",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 0.3616,
+          "tokens": {
+            "input": 12,
+            "output": 2959,
+            "cache_read": 370015,
+            "cache_write": 28548,
+            "thinking": 210,
+            "total": 401534
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17205-7ecf-7e93-9c09-a09df04f77e6",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T07:45:29Z",
+          "ended": "2026-10-25T07:47:49Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-seo-wt",
+          "branch": "codex/seo-crawl-signals",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.2187,
+          "tokens": {
+            "input": 41922,
+            "output": 5204,
+            "cache_read": 827904,
+            "cache_write": 0,
+            "thinking": 218,
+            "total": 875030
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17200-0914-7612-84a5-c76605d93dae",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T07:39:36Z",
+          "ended": "2026-10-25T07:41:46Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-seo-wt",
+          "branch": "codex/seo-crawl-signals",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.2028,
+          "tokens": {
+            "input": 37456,
+            "output": 5801,
+            "cache_read": 699008,
+            "cache_write": 0,
+            "thinking": 137,
+            "total": 742265
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "3a078f84-d7d1-4da6-9f85-9082fcd91f29",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-25T07:37:24Z",
+          "ended": "2026-10-25T14:14:50Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "feat/listening-ambience",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.5477,
+          "tokens": {
+            "input": 150,
+            "output": 39762,
+            "cache_read": 11377781,
+            "cache_write": 184542,
+            "thinking": 9302,
+            "total": 11602235
+          },
+          "share": 0.605263,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 341 (redacted)"
+        },
         {
           "id": "01a1673d-0f96-7361-9f55-1b01e0b10c12",
           "agent": "codex",
@@ -14470,7 +14578,7 @@
           "share": 0.551724,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 341 (redacted)"
+          "title": "Session title 342 (redacted)"
         },
         {
           "id": "fa5cb874-86b5-437e-b472-b04fff92ff8f",
@@ -14495,7 +14603,7 @@
           "share": 0.561404,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 342 (redacted)"
+          "title": "Session title 343 (redacted)"
         },
         {
           "id": "9cae970e-c52c-4c6d-9df0-ee0b3080ad46",
@@ -14520,7 +14628,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 343 (redacted)"
+          "title": "Session title 344 (redacted)"
         },
         {
           "id": "01a1642e-1655-71c0-8899-e24717a63a3c",
@@ -14578,20 +14686,20 @@
           "agent": "codex",
           "label": "Codex CLI",
           "started": "2026-10-22T05:07:12Z",
-          "ended": "2026-10-22T05:42:29Z",
+          "ended": "2026-10-25T14:50:06Z",
           "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
           "branch": "main",
           "models": [
             "gpt-6.1-sol"
           ],
-          "cost": 0.6007,
+          "cost": 2.663,
           "tokens": {
-            "input": 106199,
-            "output": 5210,
-            "cache_read": 3362432,
+            "input": 469788,
+            "output": 10398,
+            "cache_read": 16194560,
             "cache_write": 0,
-            "thinking": 235,
-            "total": 3473841
+            "thinking": 598,
+            "total": 16674746
           },
           "share": 1.0,
           "attribution": "dominant",
@@ -14621,7 +14729,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 344 (redacted)"
+          "title": "Session title 345 (redacted)"
         },
         {
           "id": "b63a8705-7eb0-43bf-b583-7088db3f8f0c",
@@ -14646,7 +14754,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 345 (redacted)"
+          "title": "Session title 346 (redacted)"
         },
         {
           "id": "198992bf-c787-4c46-abb4-82cf2d257ea1",
@@ -14671,7 +14779,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 346 (redacted)"
+          "title": "Session title 347 (redacted)"
         },
         {
           "id": "f399c749-08d3-4b0e-9846-a7291c53288e",
@@ -14697,7 +14805,7 @@
           "share": 0.37541,
           "attribution": "split",
           "subagents": 16,
-          "title": "Session title 347 (redacted)"
+          "title": "Session title 348 (redacted)"
         },
         {
           "id": "ba035811-f1a8-4c8a-975e-649fbfe22680",
@@ -14722,7 +14830,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 348 (redacted)"
+          "title": "Session title 349 (redacted)"
         },
         {
           "id": "a8a3c87f-f334-4d70-803d-6c9338fca660",
@@ -14747,7 +14855,7 @@
           "share": 0.308642,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 349 (redacted)"
+          "title": "Session title 350 (redacted)"
         },
         {
           "id": "859a3d1f-54c3-456b-9658-2361ff920346",
@@ -14772,7 +14880,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 350 (redacted)"
+          "title": "Session title 351 (redacted)"
         },
         {
           "id": "8bfa563f-281c-4aca-bd7c-a244cae88190",
@@ -14797,7 +14905,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 351 (redacted)"
+          "title": "Session title 352 (redacted)"
         },
         {
           "id": "baf92a74-c509-4537-8b8c-9e09f6f6367c",
@@ -14822,7 +14930,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 352 (redacted)"
+          "title": "Session title 353 (redacted)"
         },
         {
           "id": "cfb650e7-9088-41fe-9cfe-2ab4e251863c",
@@ -14847,7 +14955,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 353 (redacted)"
+          "title": "Session title 354 (redacted)"
         },
         {
           "id": "9dcb2adf-48b1-424a-afb4-75a29b347d8a",
@@ -14872,7 +14980,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 354 (redacted)"
+          "title": "Session title 355 (redacted)"
         },
         {
           "id": "5bd504bf-7672-4267-8f3c-1b47efc3752a",
@@ -14897,7 +15005,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 355 (redacted)"
+          "title": "Session title 356 (redacted)"
         },
         {
           "id": "3869d52f-73ea-4560-b785-a285716cda6d",
@@ -14922,7 +15030,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 356 (redacted)"
+          "title": "Session title 357 (redacted)"
         },
         {
           "id": "01a15d67-90a0-7633-ad48-eac12ae9b5f7",
@@ -14997,7 +15105,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 357 (redacted)"
+          "title": "Session title 358 (redacted)"
         },
         {
           "id": "7f071cc3-8e64-4d26-a766-803e7924d8e8",
@@ -15022,7 +15130,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 358 (redacted)"
+          "title": "Session title 359 (redacted)"
         },
         {
           "id": "40f0b70a-e1c7-4899-a278-0d1d3637231e",
@@ -15047,7 +15155,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 359 (redacted)"
+          "title": "Session title 360 (redacted)"
         },
         {
           "id": "1a63f7c0-d9c6-491a-aaf6-8ec2251263ba",
@@ -15072,7 +15180,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 360 (redacted)"
+          "title": "Session title 361 (redacted)"
         },
         {
           "id": "ffb0ee19-7f18-4ff4-8c74-245236bf59d9",
@@ -15097,7 +15205,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 361 (redacted)"
+          "title": "Session title 362 (redacted)"
         },
         {
           "id": "30637786-bc63-4425-aace-fc3b00d5f0a7",
@@ -15122,7 +15230,7 @@
           "share": 0.340102,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 362 (redacted)"
+          "title": "Session title 363 (redacted)"
         },
         {
           "id": "bccc3fa0-f03f-477a-baab-253f741f64c6",
@@ -15147,7 +15255,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 363 (redacted)"
+          "title": "Session title 364 (redacted)"
         },
         {
           "id": "8387d1a5-dde0-482a-abe9-c862b9f55322",
@@ -15172,7 +15280,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 364 (redacted)"
+          "title": "Session title 365 (redacted)"
         },
         {
           "id": "80228c36-85c8-41d1-837e-4c47486721a2",
@@ -15197,7 +15305,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 365 (redacted)"
+          "title": "Session title 366 (redacted)"
         },
         {
           "id": "fcf2aa3d-eb62-49c5-a5ff-50d53c0c9888",
@@ -15222,7 +15330,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 366 (redacted)"
+          "title": "Session title 367 (redacted)"
         },
         {
           "id": "a6e7a675-83f6-4ad9-b92f-d12b398f0996",
@@ -15247,7 +15355,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 367 (redacted)"
+          "title": "Session title 368 (redacted)"
         },
         {
           "id": "641e71d9-15fd-4c85-97f0-0deff4c47f2b",
@@ -15272,7 +15380,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 368 (redacted)"
+          "title": "Session title 369 (redacted)"
         },
         {
           "id": "01a15c53-f920-7cc1-aedb-88d9acbe3367",
@@ -15322,7 +15430,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 369 (redacted)"
+          "title": "Session title 370 (redacted)"
         },
         {
           "id": "d796bdd2-bfc1-457c-b1e8-f3c86472c575",
@@ -15347,7 +15455,7 @@
           "share": 0.333333,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 370 (redacted)"
+          "title": "Session title 371 (redacted)"
         }
       ]
     },
@@ -15929,7 +16037,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 371 (redacted)"
+          "title": "Session title 372 (redacted)"
         },
         {
           "id": "01a10026-4819-7cc3-83f4-6d5f6c9fc5c2",
@@ -16055,7 +16163,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 372 (redacted)"
+          "title": "Session title 373 (redacted)"
         },
         {
           "id": "910beadc-cd1c-468b-8fdc-aa767b6c1af9",
@@ -16080,7 +16188,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 373 (redacted)"
+          "title": "Session title 374 (redacted)"
         },
         {
           "id": "b71bfa54-63b6-41e6-a77b-3b72d5d36047",
@@ -16105,7 +16213,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 374 (redacted)"
+          "title": "Session title 375 (redacted)"
         },
         {
           "id": "01a0f09b-72e3-7e30-a357-2fe0b149f646",
@@ -16155,7 +16263,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 375 (redacted)"
+          "title": "Session title 376 (redacted)"
         },
         {
           "id": "15818664-09a7-4c3e-b048-4c77cab91efe",
@@ -16180,7 +16288,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 376 (redacted)"
+          "title": "Session title 377 (redacted)"
         },
         {
           "id": "d698c88e-4a2e-4c14-9ca8-6d43702b6b9b",
@@ -16205,7 +16313,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 377 (redacted)"
+          "title": "Session title 378 (redacted)"
         },
         {
           "id": "01a0a4cb-ce56-71c2-b023-7898da77cb9f",
@@ -16431,7 +16539,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 378 (redacted)"
+          "title": "Session title 379 (redacted)"
         },
         {
           "id": "01a015af-3169-76e0-8af8-70eed2158117",
@@ -16457,7 +16565,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 379 (redacted)"
+          "title": "Session title 380 (redacted)"
         },
         {
           "id": "01a01285-104a-7311-8b93-d5fc07a7f8ef",
@@ -16482,7 +16590,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 380 (redacted)"
+          "title": "Session title 381 (redacted)"
         },
         {
           "id": "01a005e7-0e19-7600-8b7c-30c57a04a2b1",
@@ -16507,7 +16615,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 381 (redacted)"
+          "title": "Session title 382 (redacted)"
         },
         {
           "id": "019fea21-d61d-7b11-8181-e218e1e5941b",
@@ -16532,7 +16640,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 382 (redacted)"
+          "title": "Session title 383 (redacted)"
         },
         {
           "id": "ab68cf4f-6e08-4615-84fc-ebfecc8e638b",
@@ -16557,7 +16665,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 383 (redacted)"
+          "title": "Session title 384 (redacted)"
         },
         {
           "id": "019fd9db-bc2c-7390-a6e5-3b3afa4dabeb",
@@ -16583,7 +16691,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 384 (redacted)"
+          "title": "Session title 385 (redacted)"
         },
         {
           "id": "019fd844-90c4-79b0-9937-260cd39e243c",
@@ -16608,7 +16716,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 385 (redacted)"
+          "title": "Session title 386 (redacted)"
         },
         {
           "id": "019fd589-fa79-7b11-bb8c-cb3098cf7d19",
@@ -16633,7 +16741,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 386 (redacted)"
+          "title": "Session title 387 (redacted)"
         },
         {
           "id": "0beac012-156e-45c5-8a07-bc0c9ed7a4ad",
@@ -16658,7 +16766,390 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 387 (redacted)"
+          "title": "Session title 388 (redacted)"
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/kanjo",
+      "name": "kanjo",
+      "remote": "github.com/alice/kanjo",
+      "paths": [
+        "/Users/alice/Documents/GitHub/token-usage",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-anchor-cli",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-anchor-ui",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-rolling-cli",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-rolling-ui",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-speed-cli",
+        "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-speed-ui"
+      ],
+      "path_missing": false,
+      "cost": 158.867,
+      "tokens": {
+        "input": 357255,
+        "output": 1032812,
+        "cache_read": 205637551,
+        "cache_write": 6114933,
+        "thinking": 276718,
+        "total": 213142551
+      },
+      "sessions": 8,
+      "first_active": "2026-10-23",
+      "last_active": "2026-10-25",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 156.7261,
+          "tokens": {
+            "input": 8745,
+            "output": 955340,
+            "cache_read": 198946351,
+            "cache_write": 6114933,
+            "thinking": 257951,
+            "total": 206025369
+          },
+          "sessions": 2
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 2.1409,
+          "tokens": {
+            "input": 348510,
+            "output": 77472,
+            "cache_read": 6691200,
+            "cache_write": 0,
+            "thinking": 18767,
+            "total": 7117182
+          },
+          "sessions": 6
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-fable-5-1",
+          "agent": "claude",
+          "cost": 113.5592,
+          "tokens": {
+            "input": 7596,
+            "output": 289634,
+            "cache_read": 115531750,
+            "cache_write": 3505931,
+            "thinking": 66500,
+            "total": 119334911
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 43.1669,
+          "tokens": {
+            "input": 1149,
+            "output": 665706,
+            "cache_read": 83414601,
+            "cache_write": 2609002,
+            "thinking": 191451,
+            "total": 86690458
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-6.1-sol",
+          "agent": "codex",
+          "cost": 2.1409,
+          "tokens": {
+            "input": 348510,
+            "output": 77472,
+            "cache_read": 6691200,
+            "cache_write": 0,
+            "thinking": 18767,
+            "total": 7117182
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-23",
+          "cost": 43.5458,
+          "tokens": 66296797,
+          "by_agent": {
+            "claude": 43.5458
+          },
+          "by_agent_tokens": {
+            "claude": 66296797
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 51.8881,
+          "tokens": 61287423,
+          "by_agent": {
+            "claude": 51.8881
+          },
+          "by_agent_tokens": {
+            "claude": 61287423
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 63.433,
+          "tokens": 85558332,
+          "by_agent": {
+            "claude": 61.2922,
+            "codex": 2.1409
+          },
+          "by_agent_tokens": {
+            "claude": 78441150,
+            "codex": 7117182
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "HEAD",
+          "cost": 155.0965,
+          "sessions": 1
+        },
+        {
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "cost": 1.6295,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/disk-speed-cli",
+          "cost": 0.6604,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/anchor-ui",
+          "cost": 0.3723,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/disk-speed-ui",
+          "cost": 0.3171,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/anchor-cli",
+          "cost": 0.3092,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/rolling-ui",
+          "cost": 0.2737,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/rolling-cli",
+          "cost": 0.2081,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "01a1738b-6d3f-7470-a98a-8eed407924d4",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:51:30Z",
+          "ended": "2026-10-25T14:54:17Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-rolling-ui",
+          "branch": "codex/rolling-ui",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.2737,
+          "tokens": {
+            "input": 58816,
+            "output": 9122,
+            "cache_read": 648832,
+            "cache_write": 0,
+            "thinking": 812,
+            "total": 716770
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a1738b-6012-7701-9d70-0e4a02d47512",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:51:24Z",
+          "ended": "2026-10-25T14:54:10Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-rolling-cli",
+          "branch": "codex/rolling-cli",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.2081,
+          "tokens": {
+            "input": 49023,
+            "output": 6926,
+            "cache_read": 407808,
+            "cache_write": 0,
+            "thinking": 720,
+            "total": 463757
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17371-b922-7d50-bafe-ac4e087faaac",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:23:44Z",
+          "ended": "2026-10-25T14:28:27Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-speed-ui",
+          "branch": "codex/disk-speed-ui",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.3171,
+          "tokens": {
+            "input": 58407,
+            "output": 9958,
+            "cache_read": 1007360,
+            "cache_write": 0,
+            "thinking": 2335,
+            "total": 1075725
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17371-abb7-7a92-b995-aa210aa8a2de",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:23:18Z",
+          "ended": "2026-10-25T14:33:56Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-speed-cli",
+          "branch": "codex/disk-speed-cli",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.6604,
+          "tokens": {
+            "input": 72280,
+            "output": 24783,
+            "cache_read": 2679680,
+            "cache_write": 0,
+            "thinking": 9118,
+            "total": 2776743
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17208-7c0a-7350-80d4-342fb64fba71",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T07:48:48Z",
+          "ended": "2026-10-25T07:53:44Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-anchor-ui",
+          "branch": "codex/anchor-ui",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.3723,
+          "tokens": {
+            "input": 60452,
+            "output": 12884,
+            "cache_read": 1225984,
+            "cache_write": 0,
+            "thinking": 3889,
+            "total": 1299320
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "01a17208-6cf7-7372-a8e8-d2fc675194a3",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T07:48:44Z",
+          "ended": "2026-10-25T07:53:05Z",
+          "cwd": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-anchor-cli",
+          "branch": "codex/anchor-cli",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.3092,
+          "tokens": {
+            "input": 49532,
+            "output": 13799,
+            "cache_read": 721536,
+            "cache_write": 0,
+            "thinking": 1893,
+            "total": 784867
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-24T06:53:35Z",
+          "ended": "2026-10-25T07:35:33Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.6295,
+          "tokens": {
+            "input": 35,
+            "output": 10483,
+            "cache_read": 5495735,
+            "cache_write": 40075,
+            "thinking": 1783,
+            "total": 5546328
+          },
+          "share": 0.057143,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 389 (redacted)"
+        },
+        {
+          "id": "47daa328-2fe8-46ac-88ae-50bec10a6689",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-23T13:31:42Z",
+          "ended": "2026-10-25T14:52:23Z",
+          "cwd": "/Users/alice/Documents/GitHub/token-usage",
+          "branch": "HEAD",
+          "models": [
+            "claude-fable-5-1",
+            "claude-opus-5-5"
+          ],
+          "cost": 155.0965,
+          "tokens": {
+            "input": 8710,
+            "output": 944857,
+            "cache_read": 193450616,
+            "cache_write": 6074858,
+            "thinking": 256168,
+            "total": 200479041
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 15,
+          "title": "Session title 390 (redacted)"
         }
       ]
     },
@@ -17146,7 +17637,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 388 (redacted)"
+          "title": "Session title 391 (redacted)"
         },
         {
           "id": "5f9e35ac-9112-48f3-b6a0-85d36833ce01",
@@ -17171,7 +17662,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 389 (redacted)"
+          "title": "Session title 392 (redacted)"
         },
         {
           "id": "01a09137-fdd0-7911-b7ee-b2e3b092d07f",
@@ -17252,7 +17743,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 390 (redacted)"
+          "title": "Session title 393 (redacted)"
         },
         {
           "id": "019ffde4-30e7-7513-857c-d01bb164c9b5",
@@ -17277,7 +17768,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 391 (redacted)"
+          "title": "Session title 394 (redacted)"
         },
         {
           "id": "019fe383-6c87-7d43-8dd6-d248986b0603",
@@ -17303,7 +17794,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 392 (redacted)"
+          "title": "Session title 395 (redacted)"
         },
         {
           "id": "019fd89b-d0bf-7093-81c6-2cf4e63d71c6",
@@ -17328,7 +17819,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 393 (redacted)"
+          "title": "Session title 396 (redacted)"
         },
         {
           "id": "1b51767d-ad97-4570-b403-1bc386115b97",
@@ -17353,7 +17844,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 394 (redacted)"
+          "title": "Session title 397 (redacted)"
         },
         {
           "id": "2976cad3-7d97-430b-9af3-0267c2e6fe4f",
@@ -17378,7 +17869,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 395 (redacted)"
+          "title": "Session title 398 (redacted)"
         },
         {
           "id": "1c7f599a-ffac-4aca-bf6d-31c979d9fd06",
@@ -17403,7 +17894,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 396 (redacted)"
+          "title": "Session title 399 (redacted)"
         },
         {
           "id": "d4b115ec-fadd-4cfa-ac99-3b1203a5fad0",
@@ -17428,7 +17919,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 397 (redacted)"
+          "title": "Session title 400 (redacted)"
         },
         {
           "id": "fb97c393-dd65-47b5-bc70-d4d293fde22c",
@@ -17453,7 +17944,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 398 (redacted)"
+          "title": "Session title 401 (redacted)"
         },
         {
           "id": "37db7800-7769-4520-923a-c25574c338f9",
@@ -17478,7 +17969,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 399 (redacted)"
+          "title": "Session title 402 (redacted)"
         },
         {
           "id": "0dda18ca-1a9a-4a0b-8f0b-fc72f5506d2f",
@@ -17503,7 +17994,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 400 (redacted)"
+          "title": "Session title 403 (redacted)"
         },
         {
           "id": "92481194-88f9-4a8a-ab5d-5f28e8b0df89",
@@ -17528,7 +18019,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 401 (redacted)"
+          "title": "Session title 404 (redacted)"
         },
         {
           "id": "15650efa-fb9a-46eb-8350-43fef8c247b2",
@@ -17553,7 +18044,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 402 (redacted)"
+          "title": "Session title 405 (redacted)"
         },
         {
           "id": "29949f44-5229-4949-9ee1-4e6e6a8b0c7a",
@@ -17578,7 +18069,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 403 (redacted)"
+          "title": "Session title 406 (redacted)"
         },
         {
           "id": "7dcb0f36-7cf3-4f5c-bb5c-2b5820844bb2",
@@ -17603,7 +18094,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 404 (redacted)"
+          "title": "Session title 407 (redacted)"
         },
         {
           "id": "c850f4d1-0371-47cd-95bc-46ce2d28f192",
@@ -17628,7 +18119,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 405 (redacted)"
+          "title": "Session title 408 (redacted)"
         },
         {
           "id": "019f9d43-a2b5-7ab3-b208-39402b1f38b0",
@@ -17655,7 +18146,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 406 (redacted)"
+          "title": "Session title 409 (redacted)"
         }
       ]
     },
@@ -18262,7 +18753,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 407 (redacted)"
+          "title": "Session title 410 (redacted)"
         },
         {
           "id": "01a0ce81-cffb-7290-b684-a06d0f90dabb",
@@ -18314,7 +18805,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 408 (redacted)"
+          "title": "Session title 411 (redacted)"
         },
         {
           "id": "01a0a742-212c-73b3-9419-1c1c7482cc0f",
@@ -18364,7 +18855,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 409 (redacted)"
+          "title": "Session title 412 (redacted)"
         },
         {
           "id": "19320798-c949-475a-a69e-9a81b14614d6",
@@ -18389,7 +18880,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 410 (redacted)"
+          "title": "Session title 413 (redacted)"
         },
         {
           "id": "74cfaa5b-8a31-4936-b434-f618048b0d27",
@@ -18414,7 +18905,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 411 (redacted)"
+          "title": "Session title 414 (redacted)"
         },
         {
           "id": "e534049b-3293-431d-a346-2be98afacf3f",
@@ -18439,7 +18930,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 412 (redacted)"
+          "title": "Session title 415 (redacted)"
         },
         {
           "id": "b3d18618-50be-4414-9bf9-3b2c1f5dcfcb",
@@ -18464,7 +18955,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 413 (redacted)"
+          "title": "Session title 416 (redacted)"
         },
         {
           "id": "01a067c1-d0fe-7353-9ba9-1626ee0e897e",
@@ -18542,7 +19033,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 414 (redacted)"
+          "title": "Session title 417 (redacted)"
         },
         {
           "id": "01a03295-7cf1-7982-a181-a849f20da163",
@@ -18618,7 +19109,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 415 (redacted)"
+          "title": "Session title 418 (redacted)"
         },
         {
           "id": "01a02e96-4e66-7852-8803-5210b6ccb761",
@@ -18668,7 +19159,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 416 (redacted)"
+          "title": "Session title 419 (redacted)"
         },
         {
           "id": "01a01586-a55d-7e51-a1d0-b7fb4b9d424b",
@@ -18693,7 +19184,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 417 (redacted)"
+          "title": "Session title 420 (redacted)"
         },
         {
           "id": "01a00b87-97d5-7263-84e6-deb12b6f6568",
@@ -18719,7 +19210,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 418 (redacted)"
+          "title": "Session title 421 (redacted)"
         },
         {
           "id": "019feb2a-1a00-7f90-a3d5-aa1f03b88e59",
@@ -18744,7 +19235,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 419 (redacted)"
+          "title": "Session title 422 (redacted)"
         },
         {
           "id": "019feb27-56a0-72d1-8fcb-adeaa8c91145",
@@ -18769,7 +19260,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 420 (redacted)"
+          "title": "Session title 423 (redacted)"
         },
         {
           "id": "019feb18-656e-73d2-807e-b245668198b0",
@@ -18794,7 +19285,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 421 (redacted)"
+          "title": "Session title 424 (redacted)"
         },
         {
           "id": "019fead5-09fd-7f91-92ee-e884336b0c09",
@@ -18819,7 +19310,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 422 (redacted)"
+          "title": "Session title 425 (redacted)"
         },
         {
           "id": "019fead3-7724-78b1-9a02-485ba7ce79ad",
@@ -18844,7 +19335,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 423 (redacted)"
+          "title": "Session title 426 (redacted)"
         },
         {
           "id": "019fea80-715c-76f2-82b2-47ff4370f0d8",
@@ -18869,7 +19360,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 424 (redacted)"
+          "title": "Session title 427 (redacted)"
         },
         {
           "id": "019fe458-643f-7fe2-b5db-7ec80185d9b0",
@@ -18895,144 +19386,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 425 (redacted)"
-        }
-      ]
-    },
-    {
-      "id": "github.com/alice/kanjo",
-      "name": "kanjo",
-      "remote": "github.com/alice/kanjo",
-      "paths": [
-        "/Users/alice/Documents/GitHub/token-usage"
-      ],
-      "path_missing": false,
-      "cost": 114.3251,
-      "tokens": {
-        "input": 6832,
-        "output": 879011,
-        "cache_read": 147520923,
-        "cache_write": 4775963,
-        "thinking": 243288,
-        "total": 153182729
-      },
-      "sessions": 1,
-      "first_active": "2026-10-23",
-      "last_active": "2026-10-25",
-      "by_agent": [
-        {
-          "agent": "claude",
-          "label": "Claude Code",
-          "cost": 114.3251,
-          "tokens": {
-            "input": 6832,
-            "output": 879011,
-            "cache_read": 147520923,
-            "cache_write": 4775963,
-            "thinking": 243288,
-            "total": 153182729
-          },
-          "sessions": 1
-        }
-      ],
-      "by_model": [
-        {
-          "model": "claude-fable-5-1",
-          "agent": "claude",
-          "cost": 72.7878,
-          "tokens": {
-            "input": 5718,
-            "output": 223788,
-            "cache_read": 69602057,
-            "cache_write": 2207036,
-            "thinking": 53620,
-            "total": 72038599
-          },
-          "estimated": false
-        },
-        {
-          "model": "claude-opus-5-5",
-          "agent": "claude",
-          "cost": 41.5373,
-          "tokens": {
-            "input": 1114,
-            "output": 655223,
-            "cache_read": 77918866,
-            "cache_write": 2568927,
-            "thinking": 189668,
-            "total": 81144130
-          },
-          "estimated": false
-        }
-      ],
-      "by_day": [
-        {
-          "day": "2026-10-23",
-          "cost": 43.5458,
-          "tokens": 66296797,
-          "by_agent": {
-            "claude": 43.5458
-          },
-          "by_agent_tokens": {
-            "claude": 66296797
-          }
-        },
-        {
-          "day": "2026-10-24",
-          "cost": 51.5998,
-          "tokens": 60522826,
-          "by_agent": {
-            "claude": 51.5998
-          },
-          "by_agent_tokens": {
-            "claude": 60522826
-          }
-        },
-        {
-          "day": "2026-10-25",
-          "cost": 19.1795,
-          "tokens": 26363106,
-          "by_agent": {
-            "claude": 19.1795
-          },
-          "by_agent_tokens": {
-            "claude": 26363106
-          }
-        }
-      ],
-      "by_branch": [
-        {
-          "branch": "HEAD",
-          "cost": 114.3251,
-          "sessions": 1
-        }
-      ],
-      "sessions_detail": [
-        {
-          "id": "47daa328-2fe8-46ac-88ae-50bec10a6689",
-          "agent": "claude",
-          "label": "Claude Code",
-          "started": "2026-10-23T13:31:42Z",
-          "ended": "2026-10-25T04:57:58Z",
-          "cwd": "/Users/alice/Documents/GitHub/token-usage",
-          "branch": "HEAD",
-          "models": [
-            "claude-fable-5-1",
-            "claude-opus-5-5"
-          ],
-          "cost": 114.3251,
-          "tokens": {
-            "input": 6832,
-            "output": 879011,
-            "cache_read": 147520923,
-            "cache_write": 4775963,
-            "thinking": 243288,
-            "total": 153182729
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 15,
-          "title": "Session title 426 (redacted)"
+          "title": "Session title 428 (redacted)"
         }
       ]
     },
@@ -19042,6 +19396,7 @@
       "remote": "github.com/alice/reussir-api",
       "paths": [
         "/Users/alice/Documents/GitHub/reussir-api",
+        "/Users/alice/Documents/GitHub/reussir-api-brand-wt",
         "/Users/alice/Documents/GitHub/scratch/reussir-api-reading",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/30637786-bc63-4425-aace-fc3b00d5f0a7/scratchpad/api-min",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-ee",
@@ -19050,52 +19405,53 @@
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/api-rp",
         "/private/tmp/claude-501/-Users-alice-Documents-GitHub-tcf-canada/f399c749-08d3-4b0e-9846-a7291c53288e/scratchpad/rx",
         "/private/tmp/gift-api-base",
+        "/private/tmp/parlemiao-origin-main",
         "/private/tmp/reussir-api-reading-review-pr",
         "/private/tmp/reussir-api-release-validation",
         "/private/tmp/reussir-error-sync-api",
         "/private/tmp/reussir-sync-pr-api"
       ],
       "path_missing": false,
-      "cost": 98.2198,
+      "cost": 102.5642,
       "tokens": {
-        "input": 1958111,
-        "output": 749580,
-        "cache_read": 266520342,
-        "cache_write": 2503780,
-        "thinking": 321131,
-        "total": 271731813
+        "input": 2005492,
+        "output": 784350,
+        "cache_read": 278764334,
+        "cache_write": 2648160,
+        "thinking": 328253,
+        "total": 284202336
       },
-      "sessions": 7,
+      "sessions": 10,
       "first_active": "2026-10-21",
       "last_active": "2026-10-25",
       "by_agent": [
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 76.8188,
+          "cost": 81.0188,
           "tokens": {
-            "input": 4171,
-            "output": 522319,
-            "cache_read": 181789497,
-            "cache_write": 2503780,
-            "thinking": 171393,
-            "total": 184819767
+            "input": 4291,
+            "output": 555276,
+            "cache_read": 193716151,
+            "cache_write": 2648160,
+            "thinking": 178434,
+            "total": 196923878
           },
-          "sessions": 5
+          "sessions": 7
         },
         {
           "agent": "codex",
           "label": "Codex CLI",
-          "cost": 19.4554,
+          "cost": 19.5998,
           "tokens": {
-            "input": 1446975,
-            "output": 103567,
-            "cache_read": 70043750,
+            "input": 1494236,
+            "output": 105380,
+            "cache_read": 70361088,
             "cache_write": 0,
-            "thinking": 45445,
-            "total": 71594292
+            "thinking": 45526,
+            "total": 71960704
           },
-          "sessions": 1
+          "sessions": 2
         },
         {
           "agent": "antigravity",
@@ -19116,14 +19472,14 @@
         {
           "model": "claude-opus-5-5",
           "agent": "claude",
-          "cost": 40.1432,
+          "cost": 44.3432,
           "tokens": {
-            "input": 611,
-            "output": 155638,
-            "cache_read": 137321416,
-            "cache_write": 1195464,
-            "thinking": 24808,
-            "total": 138673129
+            "input": 731,
+            "output": 188596,
+            "cache_read": 149248070,
+            "cache_write": 1339844,
+            "thinking": 31848,
+            "total": 150777241
           },
           "estimated": false
         },
@@ -19158,14 +19514,14 @@
         {
           "model": "gpt-6.1-sol",
           "agent": "codex",
-          "cost": 9.3229,
+          "cost": 9.4673,
           "tokens": {
-            "input": 876021,
-            "output": 98196,
-            "cache_read": 65889328,
+            "input": 923282,
+            "output": 100008,
+            "cache_read": 66206665,
             "cache_write": 0,
-            "thinking": 43816,
-            "total": 66863545
+            "thinking": 43897,
+            "total": 67229955
           },
           "estimated": false
         },
@@ -19238,24 +19594,26 @@
         },
         {
           "day": "2026-10-24",
-          "cost": 1.9567,
-          "tokens": 6970830,
+          "cost": 2.245,
+          "tokens": 7735426,
           "by_agent": {
-            "claude": 1.9567
+            "claude": 2.245
           },
           "by_agent_tokens": {
-            "claude": 6970830
+            "claude": 7735426
           }
         },
         {
           "day": "2026-10-25",
-          "cost": 0.8253,
-          "tokens": 413339,
+          "cost": 4.8815,
+          "tokens": 12119267,
           "by_agent": {
-            "claude": 0.8253
+            "claude": 4.7371,
+            "codex": 0.1444
           },
           "by_agent_tokens": {
-            "claude": 413339
+            "claude": 11752856,
+            "codex": 366411
           }
         }
       ],
@@ -19267,8 +19625,8 @@
         },
         {
           "branch": "feat/listening-ambience",
-          "cost": 35.8817,
-          "sessions": 3
+          "cost": 38.4521,
+          "sessions": 4
         },
         {
           "branch": "main",
@@ -19279,9 +19637,94 @@
           "branch": "fix/report-period-minutes",
           "cost": 1.9456,
           "sessions": 1
+        },
+        {
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "cost": 1.6295,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/brand-parlemiao",
+          "cost": 0.1444,
+          "sessions": 1
         }
       ],
       "sessions_detail": [
+        {
+          "id": "01a1735d-dca1-7a22-83b8-1024b26f739a",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:01:59Z",
+          "ended": "2026-10-25T14:03:57Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-api-brand-wt",
+          "branch": "codex/brand-parlemiao",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.1444,
+          "tokens": {
+            "input": 47261,
+            "output": 1813,
+            "cache_read": 317338,
+            "cache_write": 0,
+            "thinking": 81,
+            "total": 366412
+          },
+          "share": 0.6,
+          "attribution": "split",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "3a078f84-d7d1-4da6-9f85-9082fcd91f29",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-25T07:37:24Z",
+          "ended": "2026-10-25T14:14:50Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "feat/listening-ambience",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 2.5705,
+          "tokens": {
+            "input": 85,
+            "output": 22474,
+            "cache_read": 6430919,
+            "cache_write": 104306,
+            "thinking": 5258,
+            "total": 6557784
+          },
+          "share": 0.342105,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 429 (redacted)"
+        },
+        {
+          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-24T06:53:35Z",
+          "ended": "2026-10-25T07:35:33Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.6295,
+          "tokens": {
+            "input": 35,
+            "output": 10483,
+            "cache_read": 5495735,
+            "cache_write": 40074,
+            "thinking": 1783,
+            "total": 5546327
+          },
+          "share": 0.057143,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 430 (redacted)"
+        },
         {
           "id": "615205fe-52ea-4954-af89-47a6e6487ee1",
           "agent": "claude",
@@ -19305,7 +19748,7 @@
           "share": 0.448276,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 427 (redacted)"
+          "title": "Session title 431 (redacted)"
         },
         {
           "id": "37235fe6-cd4c-43ae-bf33-199fec048e2a",
@@ -19330,7 +19773,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 428 (redacted)"
+          "title": "Session title 432 (redacted)"
         },
         {
           "id": "fa5cb874-86b5-437e-b472-b04fff92ff8f",
@@ -19355,7 +19798,7 @@
           "share": 0.438596,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 429 (redacted)"
+          "title": "Session title 433 (redacted)"
         },
         {
           "id": "01a16226-eafc-7de1-8566-7bb5aee8f02d",
@@ -19407,7 +19850,7 @@
           "share": 0.25082,
           "attribution": "split",
           "subagents": 16,
-          "title": "Session title 430 (redacted)"
+          "title": "Session title 434 (redacted)"
         },
         {
           "id": "e0c705d9-aec3-43de-98f6-c661a2df7eb9",
@@ -19432,7 +19875,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 431 (redacted)"
+          "title": "Session title 435 (redacted)"
         },
         {
           "id": "30637786-bc63-4425-aace-fc3b00d5f0a7",
@@ -19457,7 +19900,7 @@
           "share": 0.121827,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 432 (redacted)"
+          "title": "Session title 436 (redacted)"
         }
       ]
     },
@@ -19466,21 +19909,22 @@
       "name": "tokei",
       "remote": "github.com/cclank/tokei",
       "paths": [
-        "/Users/alice/Documents/GitHub/tokei"
+        "/Users/alice/Documents/GitHub/tokei",
+        "/Users/alice/Documents/GitHub/tokei-monthly"
       ],
       "path_missing": false,
-      "cost": 39.5922,
+      "cost": 44.8841,
       "tokens": {
-        "input": 14642837,
-        "output": 892161,
-        "cache_read": 244512635,
-        "cache_write": 364015,
-        "thinking": 465111,
-        "total": 260411648
+        "input": 14702550,
+        "output": 924247,
+        "cache_read": 256233580,
+        "cache_write": 657919,
+        "thinking": 472275,
+        "total": 272518296
       },
-      "sessions": 9,
+      "sessions": 10,
       "first_active": "2026-09-24",
-      "last_active": "2026-10-22",
+      "last_active": "2026-10-25",
       "by_agent": [
         {
           "agent": "antigravity",
@@ -19499,30 +19943,30 @@
         {
           "agent": "claude",
           "label": "Claude Code",
-          "cost": 8.1347,
+          "cost": 13.1425,
           "tokens": {
-            "input": 286,
-            "output": 89915,
-            "cache_read": 17115901,
-            "cache_write": 364015,
-            "thinking": 21057,
-            "total": 17570117
+            "input": 364,
+            "output": 111809,
+            "cache_read": 28207726,
+            "cache_write": 657919,
+            "thinking": 26963,
+            "total": 28977818
           },
           "sessions": 2
         },
         {
           "agent": "codex",
           "label": "Codex CLI",
-          "cost": 1.7572,
+          "cost": 2.0413,
           "tokens": {
-            "input": 362961,
-            "output": 56005,
-            "cache_read": 11501696,
+            "input": 422596,
+            "output": 66197,
+            "cache_read": 12130816,
             "cache_write": 0,
-            "thinking": 34736,
-            "total": 11920662
+            "thinking": 35994,
+            "total": 12619609
           },
-          "sessions": 2
+          "sessions": 3
         }
       ],
       "by_model": [
@@ -19541,6 +19985,20 @@
           "estimated": false
         },
         {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 13.1425,
+          "tokens": {
+            "input": 364,
+            "output": 111809,
+            "cache_read": 28207726,
+            "cache_write": 657919,
+            "thinking": 26963,
+            "total": 28977818
+          },
+          "estimated": false
+        },
+        {
           "model": "gemini-3.8-flash-n",
           "agent": "antigravity",
           "cost": 12.3781,
@@ -19555,30 +20013,16 @@
           "estimated": true
         },
         {
-          "model": "claude-opus-5-5",
-          "agent": "claude",
-          "cost": 8.1347,
-          "tokens": {
-            "input": 286,
-            "output": 89915,
-            "cache_read": 17115901,
-            "cache_write": 364015,
-            "thinking": 21057,
-            "total": 17570117
-          },
-          "estimated": false
-        },
-        {
           "model": "gpt-6.1-sol",
           "agent": "codex",
-          "cost": 1.7111,
+          "cost": 1.9952,
           "tokens": {
-            "input": 243496,
-            "output": 27134,
-            "cache_read": 9527680,
+            "input": 303131,
+            "output": 37326,
+            "cache_read": 10156800,
             "cache_write": 0,
-            "thinking": 11163,
-            "total": 9798310
+            "thinking": 12421,
+            "total": 10497257
           },
           "estimated": false
         },
@@ -19691,6 +20135,19 @@
           "by_agent_tokens": {
             "claude": 13991675
           }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 5.2919,
+          "tokens": 12106648,
+          "by_agent": {
+            "claude": 5.0078,
+            "codex": 0.2841
+          },
+          "by_agent_tokens": {
+            "claude": 11407701,
+            "codex": 698947
+          }
         }
       ],
       "by_branch": [
@@ -19706,13 +20163,13 @@
         },
         {
           "branch": "feat/cycle-spend",
-          "cost": 4.8988,
+          "cost": 7.4467,
           "sessions": 1
         },
         {
           "branch": "main",
-          "cost": 2.0262,
-          "sessions": 1
+          "cost": 4.1863,
+          "sessions": 2
         },
         {
           "branch": "fix/codex-reset-cards-local-time",
@@ -19730,12 +20187,42 @@
           "sessions": 1
         },
         {
+          "branch": "feat/monthly-cycle-spend",
+          "cost": 0.5838,
+          "sessions": 2
+        },
+        {
           "branch": "feat/copilot-usage",
           "cost": 0.4802,
           "sessions": 1
         }
       ],
       "sessions_detail": [
+        {
+          "id": "01a17202-ee00-7042-bbf6-9e8e703beace",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T07:42:47Z",
+          "ended": "2026-10-25T07:51:27Z",
+          "cwd": "/Users/alice/Documents/GitHub/tokei-monthly",
+          "branch": "feat/monthly-cycle-spend",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.2841,
+          "tokens": {
+            "input": 59635,
+            "output": 10192,
+            "cache_read": 629120,
+            "cache_write": 0,
+            "thinking": 1258,
+            "total": 698947
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
         {
           "id": "01a152e9-70a6-7822-a26d-738491657ee6",
           "agent": "codex",
@@ -19766,25 +20253,25 @@
           "agent": "claude",
           "label": "Claude Code",
           "started": "2026-10-17T20:22:01Z",
-          "ended": "2026-10-22T20:14:32Z",
+          "ended": "2026-10-25T07:55:05Z",
           "cwd": "/Users/alice/Documents/GitHub/tokei",
           "branch": "feat/cycle-spend",
           "models": [
             "claude-opus-5-5"
           ],
-          "cost": 6.0083,
+          "cost": 11.0161,
           "tokens": {
-            "input": 206,
-            "output": 50308,
-            "cache_read": 14249067,
-            "cache_write": 268944,
-            "thinking": 12877,
-            "total": 14568525
+            "input": 284,
+            "output": 72202,
+            "cache_read": 25340892,
+            "cache_write": 562848,
+            "thinking": 18783,
+            "total": 25976226
           },
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 433 (redacted)"
+          "title": "Session title 437 (redacted)"
         },
         {
           "id": "4cca6715-996e-4b32-acf0-004788127390",
@@ -19809,7 +20296,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 434 (redacted)"
+          "title": "Session title 438 (redacted)"
         },
         {
           "id": "4fcd705a-02c1-4004-a12e-1c8c06f8d869",
@@ -19834,7 +20321,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 435 (redacted)"
+          "title": "Session title 439 (redacted)"
         },
         {
           "id": "e6561d93-9243-4336-b2d3-54e5395dbf1e",
@@ -19859,7 +20346,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 436 (redacted)"
+          "title": "Session title 440 (redacted)"
         },
         {
           "id": "daab7480-6d99-4156-8f7c-87a4f84728f5",
@@ -19884,7 +20371,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 437 (redacted)"
+          "title": "Session title 441 (redacted)"
         },
         {
           "id": "b8c3dcc5-1eb3-4dee-bb82-b3712a91b039",
@@ -19909,7 +20396,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 438 (redacted)"
+          "title": "Session title 442 (redacted)"
         },
         {
           "id": "01a105b4-bfef-7651-8013-7d8cb8306874",
@@ -19959,7 +20446,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 439 (redacted)"
+          "title": "Session title 443 (redacted)"
         }
       ]
     },
@@ -20303,7 +20790,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 440 (redacted)"
+          "title": "Session title 444 (redacted)"
         },
         {
           "id": "eaf795a2-820f-4ba4-be9a-0ad717e77320",
@@ -20328,7 +20815,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 441 (redacted)"
+          "title": "Session title 445 (redacted)"
         },
         {
           "id": "01a04ec5-bc15-77f2-bc15-9dd67ad1527c",
@@ -20380,7 +20867,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 442 (redacted)"
+          "title": "Session title 446 (redacted)"
         },
         {
           "id": "01a0129b-1b1b-7653-a8a6-75496de27e08",
@@ -20405,7 +20892,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 1,
-          "title": "Session title 443 (redacted)"
+          "title": "Session title 447 (redacted)"
         },
         {
           "id": "37346578-8f9c-49e5-aecf-0770d63f9e05",
@@ -20430,7 +20917,249 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 444 (redacted)"
+          "title": "Session title 448 (redacted)"
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/resume",
+      "name": "resume",
+      "remote": "github.com/alice/resume",
+      "paths": [
+        "/Users/alice/Documents/GitHub/resume"
+      ],
+      "path_missing": false,
+      "cost": 29.5465,
+      "tokens": {
+        "input": 3956126,
+        "output": 312545,
+        "cache_read": 152022310,
+        "cache_write": 541007,
+        "thinking": 80164,
+        "total": 156831988
+      },
+      "sessions": 3,
+      "first_active": "2026-07-24",
+      "last_active": "2026-10-25",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 21.9989,
+          "tokens": {
+            "input": 472,
+            "output": 141524,
+            "cache_read": 74192422,
+            "cache_write": 541007,
+            "thinking": 24065,
+            "total": 74875425
+          },
+          "sessions": 1
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 7.5476,
+          "tokens": {
+            "input": 3955654,
+            "output": 171021,
+            "cache_read": 77829888,
+            "cache_write": 0,
+            "thinking": 56099,
+            "total": 81956563
+          },
+          "sessions": 2
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 21.9989,
+          "tokens": {
+            "input": 472,
+            "output": 141524,
+            "cache_read": 74192422,
+            "cache_write": 541007,
+            "thinking": 24065,
+            "total": 74875425
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "agent": "codex",
+          "cost": 5.5496,
+          "tokens": {
+            "input": 970552,
+            "output": 56159,
+            "cache_read": 14672896,
+            "cache_write": 0,
+            "thinking": 14698,
+            "total": 15699607
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.6-luna",
+          "agent": "codex",
+          "cost": 1.998,
+          "tokens": {
+            "input": 2985102,
+            "output": 114862,
+            "cache_read": 63156992,
+            "cache_write": 0,
+            "thinking": 41401,
+            "total": 66256956
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-07-24",
+          "cost": 1.0106,
+          "tokens": 34646892,
+          "by_agent": {
+            "codex": 1.0106
+          },
+          "by_agent_tokens": {
+            "codex": 34646892
+          }
+        },
+        {
+          "day": "2026-07-25",
+          "cost": 0.6996,
+          "tokens": 22894178,
+          "by_agent": {
+            "codex": 0.6996
+          },
+          "by_agent_tokens": {
+            "codex": 22894178
+          }
+        },
+        {
+          "day": "2026-07-26",
+          "cost": 5.8374,
+          "tokens": 24415493,
+          "by_agent": {
+            "codex": 5.8374
+          },
+          "by_agent_tokens": {
+            "codex": 24415493
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "cost": 3.891,
+          "tokens": 10322037,
+          "by_agent": {
+            "claude": 3.891
+          },
+          "by_agent_tokens": {
+            "claude": 10322037
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 18.1079,
+          "tokens": 64553388,
+          "by_agent": {
+            "claude": 18.1079
+          },
+          "by_agent_tokens": {
+            "claude": 64553388
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "cost": 21.9989,
+          "sessions": 1
+        },
+        {
+          "branch": "main",
+          "cost": 7.5476,
+          "sessions": 2
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "5c6f5e97-b5c9-41d3-8ee8-2a48ffa13b88",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-24T06:53:35Z",
+          "ended": "2026-10-25T07:35:33Z",
+          "cwd": "/Users/alice/Documents/GitHub/gaokao",
+          "branch": "chore/cleanup-and-geometry-fixes",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 21.9989,
+          "tokens": {
+            "input": 472,
+            "output": 141524,
+            "cache_read": 74192422,
+            "cache_write": 541007,
+            "thinking": 24065,
+            "total": 74875425
+          },
+          "share": 0.771429,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 449 (redacted)"
+        },
+        {
+          "id": "019f92fa-3921-73e0-a2f0-70a7fe7e4771",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-07-24T07:15:11Z",
+          "ended": "2026-07-25T06:28:33Z",
+          "cwd": "/Users/alice/Documents/GitHub/resume",
+          "branch": "main",
+          "models": [
+            "gpt-5.6-luna"
+          ],
+          "cost": 1.3763,
+          "tokens": {
+            "input": 2043674,
+            "output": 57162,
+            "cache_read": 44947712,
+            "cache_write": 0,
+            "thinking": 21007,
+            "total": 47048548
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 450 (redacted)"
+        },
+        {
+          "id": "019f929c-3e87-7dd2-b4b2-b6c60f754581",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-07-24T05:32:55Z",
+          "ended": "2026-07-26T06:53:06Z",
+          "cwd": "/Users/alice/Documents/GitHub/resume",
+          "branch": "main",
+          "models": [
+            "gpt-5.6-terra",
+            "gpt-5.6-luna"
+          ],
+          "cost": 6.1713,
+          "tokens": {
+            "input": 1911980,
+            "output": 113859,
+            "cache_read": 32882176,
+            "cache_write": 0,
+            "thinking": 35092,
+            "total": 34908015
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "Session title 451 (redacted)"
         }
       ]
     },
@@ -20530,7 +21259,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 445 (redacted)"
+          "title": "Session title 452 (redacted)"
         }
       ]
     },
@@ -20699,7 +21428,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 446 (redacted)"
+          "title": "Session title 453 (redacted)"
         },
         {
           "id": "b311e261-8494-4fe6-aed8-0f5961c41504",
@@ -20724,7 +21453,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 447 (redacted)"
+          "title": "Session title 454 (redacted)"
         },
         {
           "id": "faf378ce-efbe-4792-9eac-5429f752b87b",
@@ -20749,7 +21478,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 448 (redacted)"
+          "title": "Session title 455 (redacted)"
         },
         {
           "id": "b2e0ef3d-3d9c-47f7-ad34-2a4a434d4057",
@@ -20774,7 +21503,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 449 (redacted)"
+          "title": "Session title 456 (redacted)"
         }
       ]
     },
@@ -20990,7 +21719,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 450 (redacted)"
+          "title": "Session title 457 (redacted)"
         },
         {
           "id": "42d70271-03fe-4b93-81af-5013f4075395",
@@ -21016,7 +21745,7 @@
           "share": 0.244898,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 451 (redacted)"
+          "title": "Session title 458 (redacted)"
         },
         {
           "id": "019f57a3-c2b3-7763-88b9-01f0d6807ad2",
@@ -21041,7 +21770,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 452 (redacted)"
+          "title": "Session title 459 (redacted)"
         },
         {
           "id": "4429396b-afdc-4523-9854-c92e2e28623a",
@@ -21066,7 +21795,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 453 (redacted)"
+          "title": "Session title 460 (redacted)"
         }
       ]
     },
@@ -21269,7 +21998,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 454 (redacted)"
+          "title": "Session title 461 (redacted)"
         },
         {
           "id": "7c151c51-61c0-47b7-87da-e0524a58bc3a",
@@ -21294,7 +22023,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 455 (redacted)"
+          "title": "Session title 462 (redacted)"
         },
         {
           "id": "c74dd8ea-3ba0-47df-8cf2-fbb8f963b198",
@@ -21319,7 +22048,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 456 (redacted)"
+          "title": "Session title 463 (redacted)"
         },
         {
           "id": "35f71720-6b18-49bf-a06d-00cb43961b0b",
@@ -21344,7 +22073,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 457 (redacted)"
+          "title": "Session title 464 (redacted)"
         },
         {
           "id": "01a09ac9-8d9d-7900-81fc-538a900a3ae0",
@@ -21370,168 +22099,6 @@
           "attribution": "dominant",
           "subagents": 0,
           "title": null
-        }
-      ]
-    },
-    {
-      "id": "github.com/alice/resume",
-      "name": "resume",
-      "remote": "github.com/alice/resume",
-      "paths": [
-        "/Users/alice/Documents/GitHub/resume"
-      ],
-      "path_missing": false,
-      "cost": 7.5476,
-      "tokens": {
-        "input": 3955654,
-        "output": 171021,
-        "cache_read": 77829888,
-        "cache_write": 0,
-        "thinking": 56099,
-        "total": 81956563
-      },
-      "sessions": 2,
-      "first_active": "2026-07-24",
-      "last_active": "2026-07-26",
-      "by_agent": [
-        {
-          "agent": "codex",
-          "label": "Codex CLI",
-          "cost": 7.5476,
-          "tokens": {
-            "input": 3955654,
-            "output": 171021,
-            "cache_read": 77829888,
-            "cache_write": 0,
-            "thinking": 56099,
-            "total": 81956563
-          },
-          "sessions": 2
-        }
-      ],
-      "by_model": [
-        {
-          "model": "gpt-5.6-terra",
-          "agent": "codex",
-          "cost": 5.5496,
-          "tokens": {
-            "input": 970552,
-            "output": 56159,
-            "cache_read": 14672896,
-            "cache_write": 0,
-            "thinking": 14698,
-            "total": 15699607
-          },
-          "estimated": false
-        },
-        {
-          "model": "gpt-5.6-luna",
-          "agent": "codex",
-          "cost": 1.998,
-          "tokens": {
-            "input": 2985102,
-            "output": 114862,
-            "cache_read": 63156992,
-            "cache_write": 0,
-            "thinking": 41401,
-            "total": 66256956
-          },
-          "estimated": false
-        }
-      ],
-      "by_day": [
-        {
-          "day": "2026-07-24",
-          "cost": 1.0106,
-          "tokens": 34646892,
-          "by_agent": {
-            "codex": 1.0106
-          },
-          "by_agent_tokens": {
-            "codex": 34646892
-          }
-        },
-        {
-          "day": "2026-07-25",
-          "cost": 0.6996,
-          "tokens": 22894178,
-          "by_agent": {
-            "codex": 0.6996
-          },
-          "by_agent_tokens": {
-            "codex": 22894178
-          }
-        },
-        {
-          "day": "2026-07-26",
-          "cost": 5.8374,
-          "tokens": 24415493,
-          "by_agent": {
-            "codex": 5.8374
-          },
-          "by_agent_tokens": {
-            "codex": 24415493
-          }
-        }
-      ],
-      "by_branch": [
-        {
-          "branch": "main",
-          "cost": 7.5476,
-          "sessions": 2
-        }
-      ],
-      "sessions_detail": [
-        {
-          "id": "019f92fa-3921-73e0-a2f0-70a7fe7e4771",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-07-24T07:15:11Z",
-          "ended": "2026-07-25T06:28:33Z",
-          "cwd": "/Users/alice/Documents/GitHub/resume",
-          "branch": "main",
-          "models": [
-            "gpt-5.6-luna"
-          ],
-          "cost": 1.3763,
-          "tokens": {
-            "input": 2043674,
-            "output": 57162,
-            "cache_read": 44947712,
-            "cache_write": 0,
-            "thinking": 21007,
-            "total": 47048548
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 458 (redacted)"
-        },
-        {
-          "id": "019f929c-3e87-7dd2-b4b2-b6c60f754581",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-07-24T05:32:55Z",
-          "ended": "2026-07-26T06:53:06Z",
-          "cwd": "/Users/alice/Documents/GitHub/resume",
-          "branch": "main",
-          "models": [
-            "gpt-5.6-terra",
-            "gpt-5.6-luna"
-          ],
-          "cost": 6.1713,
-          "tokens": {
-            "input": 1911980,
-            "output": 113859,
-            "cache_read": 32882176,
-            "cache_write": 0,
-            "thinking": 35092,
-            "total": 34908015
-          },
-          "share": 1.0,
-          "attribution": "dominant",
-          "subagents": 0,
-          "title": "Session title 459 (redacted)"
         }
       ]
     },
@@ -21763,7 +22330,7 @@
           "share": 0.107527,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 460 (redacted)"
+          "title": "Session title 465 (redacted)"
         },
         {
           "id": "01a02ef4-fd32-7ee2-ba0f-1dd5c1d4b8f6",
@@ -21813,7 +22380,7 @@
           "share": 0.137291,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 461 (redacted)"
+          "title": "Session title 466 (redacted)"
         }
       ]
     },
@@ -21825,18 +22392,18 @@
         "/opt/homebrew"
       ],
       "path_missing": false,
-      "cost": 6.3982,
+      "cost": 6.6922,
       "tokens": {
-        "input": 1922202,
-        "output": 218935,
-        "cache_read": 42473444,
-        "cache_write": 0,
-        "thinking": 129640,
-        "total": 44614581
+        "input": 1953716,
+        "output": 221872,
+        "cache_read": 43179688,
+        "cache_write": 8024,
+        "thinking": 130098,
+        "total": 45363300
       },
-      "sessions": 4,
+      "sessions": 6,
       "first_active": "2026-06-28",
-      "last_active": "2026-10-20",
+      "last_active": "2026-10-25",
       "by_agent": [
         {
           "agent": "antigravity",
@@ -21855,16 +22422,30 @@
         {
           "agent": "codex",
           "label": "Codex CLI",
-          "cost": 1.7978,
+          "cost": 1.894,
           "tokens": {
-            "input": 409542,
-            "output": 70368,
-            "cache_read": 3688939,
+            "input": 441049,
+            "output": 71576,
+            "cache_read": 3900497,
             "cache_write": 0,
-            "thinking": 54576,
-            "total": 4168849
+            "thinking": 54630,
+            "total": 4413122
           },
-          "sessions": 2
+          "sessions": 3
+        },
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 0.1977,
+          "tokens": {
+            "input": 7,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8024,
+            "thinking": 404,
+            "total": 504446
+          },
+          "sessions": 1
         }
       ],
       "by_model": [
@@ -21907,6 +22488,34 @@
             "cache_write": 0,
             "thinking": 0,
             "total": 13200311
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 0.1977,
+          "tokens": {
+            "input": 7,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8024,
+            "thinking": 404,
+            "total": 504446
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-6.1-sol",
+          "agent": "codex",
+          "cost": 0.0963,
+          "tokens": {
+            "input": 31507,
+            "output": 1208,
+            "cache_read": 211558,
+            "cache_write": 0,
+            "thinking": 54,
+            "total": 244273
           },
           "estimated": false
         },
@@ -21980,6 +22589,19 @@
           "by_agent_tokens": {
             "antigravity": 27245421
           }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 0.294,
+          "tokens": 748720,
+          "by_agent": {
+            "claude": 0.1977,
+            "codex": 0.0963
+          },
+          "by_agent_tokens": {
+            "claude": 504446,
+            "codex": 244274
+          }
         }
       ],
       "by_branch": [
@@ -21997,9 +22619,69 @@
           "branch": "main",
           "cost": 1.5382,
           "sessions": 2
+        },
+        {
+          "branch": "feat/listening-ambience",
+          "cost": 0.1977,
+          "sessions": 1
+        },
+        {
+          "branch": "codex/brand-parlemiao",
+          "cost": 0.0963,
+          "sessions": 1
         }
       ],
       "sessions_detail": [
+        {
+          "id": "01a1735d-dca1-7a22-83b8-1024b26f739a",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-25T14:01:59Z",
+          "ended": "2026-10-25T14:03:57Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-api-brand-wt",
+          "branch": "codex/brand-parlemiao",
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.0963,
+          "tokens": {
+            "input": 31507,
+            "output": 1208,
+            "cache_read": 211558,
+            "cache_write": 0,
+            "thinking": 54,
+            "total": 244273
+          },
+          "share": 0.4,
+          "attribution": "split",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "3a078f84-d7d1-4da6-9f85-9082fcd91f29",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-25T07:37:24Z",
+          "ended": "2026-10-25T14:14:50Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "feat/listening-ambience",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 0.1977,
+          "tokens": {
+            "input": 7,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8024,
+            "thinking": 404,
+            "total": 504446
+          },
+          "share": 0.026316,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 467 (redacted)"
+        },
         {
           "id": "fc507b06-4879-4bac-869b-6116c04cff86",
           "agent": "antigravity",
@@ -22023,7 +22705,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 462 (redacted)"
+          "title": "Session title 468 (redacted)"
         },
         {
           "id": "01a06cc7-c7c5-7a40-8579-992942116436",
@@ -22073,7 +22755,7 @@
           "share": 0.290598,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 463 (redacted)"
+          "title": "Session title 469 (redacted)"
         },
         {
           "id": "019f0c84-b849-7501-ab01-d130f2a73e7c",
@@ -22098,7 +22780,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 464 (redacted)"
+          "title": "Session title 470 (redacted)"
         }
       ]
     },
@@ -22231,7 +22913,7 @@
           "share": 0.077922,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 465 (redacted)"
+          "title": "Session title 471 (redacted)"
         }
       ]
     },
@@ -22331,7 +23013,191 @@
           "share": 0.115242,
           "attribution": "split",
           "subagents": 0,
-          "title": "Session title 466 (redacted)"
+          "title": "Session title 472 (redacted)"
+        }
+      ]
+    },
+    {
+      "id": "github.com/nvm-sh/nvm",
+      "name": "nvm",
+      "remote": "github.com/nvm-sh/nvm",
+      "paths": [
+        "/Users/alice/.nvm"
+      ],
+      "path_missing": false,
+      "cost": 0.3095,
+      "tokens": {
+        "input": 8322,
+        "output": 2324,
+        "cache_read": 897236,
+        "cache_write": 8023,
+        "thinking": 665,
+        "total": 915905
+      },
+      "sessions": 2,
+      "first_active": "2026-10-22",
+      "last_active": "2026-10-25",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 0.1977,
+          "tokens": {
+            "input": 6,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8023,
+            "thinking": 404,
+            "total": 504444
+          },
+          "sessions": 1
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 0.1118,
+          "tokens": {
+            "input": 8316,
+            "output": 595,
+            "cache_read": 402550,
+            "cache_write": 0,
+            "thinking": 261,
+            "total": 411461
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 0.1977,
+          "tokens": {
+            "input": 7,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8024,
+            "thinking": 404,
+            "total": 504446
+          },
+          "estimated": false
+        },
+        {
+          "model": "codex-auto-review",
+          "agent": "codex",
+          "cost": 0.0582,
+          "tokens": {
+            "input": 3281,
+            "output": 31,
+            "cache_read": 23876,
+            "cache_write": 0,
+            "thinking": 9,
+            "total": 27188
+          },
+          "estimated": true
+        },
+        {
+          "model": "gpt-6.1-sol",
+          "agent": "codex",
+          "cost": 0.0536,
+          "tokens": {
+            "input": 5035,
+            "output": 564,
+            "cache_read": 378674,
+            "cache_write": 0,
+            "thinking": 252,
+            "total": 384273
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-22",
+          "cost": 0.1118,
+          "tokens": 411461,
+          "by_agent": {
+            "codex": 0.1118
+          },
+          "by_agent_tokens": {
+            "codex": 411461
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "cost": 0.1977,
+          "tokens": 504446,
+          "by_agent": {
+            "claude": 0.1977
+          },
+          "by_agent_tokens": {
+            "claude": 504446
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "feat/listening-ambience",
+          "cost": 0.1977,
+          "sessions": 1
+        },
+        {
+          "branch": "main",
+          "cost": 0.1118,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "3a078f84-d7d1-4da6-9f85-9082fcd91f29",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-25T07:37:24Z",
+          "ended": "2026-10-25T14:14:50Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "feat/listening-ambience",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 0.1977,
+          "tokens": {
+            "input": 6,
+            "output": 1729,
+            "cache_read": 494686,
+            "cache_write": 8023,
+            "thinking": 404,
+            "total": 504444
+          },
+          "share": 0.026316,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "Session title 473 (redacted)"
+        },
+        {
+          "id": "01a16226-eafc-7de1-8566-7bb5aee8f02d",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-22T05:48:54Z",
+          "ended": "2026-10-22T16:11:01Z",
+          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
+          "branch": "main",
+          "models": [
+            "codex-auto-review",
+            "gpt-6.1-sol"
+          ],
+          "cost": 0.1118,
+          "tokens": {
+            "input": 8316,
+            "output": 595,
+            "cache_read": 402550,
+            "cache_write": 0,
+            "thinking": 261,
+            "total": 411461
+          },
+          "share": 0.00271,
+          "attribution": "split",
+          "subagents": 4,
+          "title": null
         }
       ]
     },
@@ -22431,122 +23297,7 @@
           "share": 1.0,
           "attribution": "dominant",
           "subagents": 0,
-          "title": "Session title 467 (redacted)"
-        }
-      ]
-    },
-    {
-      "id": "github.com/nvm-sh/nvm",
-      "name": "nvm",
-      "remote": "github.com/nvm-sh/nvm",
-      "paths": [
-        "/Users/alice/.nvm"
-      ],
-      "path_missing": false,
-      "cost": 0.1118,
-      "tokens": {
-        "input": 8316,
-        "output": 595,
-        "cache_read": 402550,
-        "cache_write": 0,
-        "thinking": 261,
-        "total": 411461
-      },
-      "sessions": 1,
-      "first_active": "2026-10-22",
-      "last_active": "2026-10-22",
-      "by_agent": [
-        {
-          "agent": "codex",
-          "label": "Codex CLI",
-          "cost": 0.1118,
-          "tokens": {
-            "input": 8316,
-            "output": 595,
-            "cache_read": 402550,
-            "cache_write": 0,
-            "thinking": 261,
-            "total": 411461
-          },
-          "sessions": 1
-        }
-      ],
-      "by_model": [
-        {
-          "model": "codex-auto-review",
-          "agent": "codex",
-          "cost": 0.0582,
-          "tokens": {
-            "input": 3281,
-            "output": 31,
-            "cache_read": 23876,
-            "cache_write": 0,
-            "thinking": 9,
-            "total": 27188
-          },
-          "estimated": true
-        },
-        {
-          "model": "gpt-6.1-sol",
-          "agent": "codex",
-          "cost": 0.0536,
-          "tokens": {
-            "input": 5035,
-            "output": 564,
-            "cache_read": 378674,
-            "cache_write": 0,
-            "thinking": 252,
-            "total": 384273
-          },
-          "estimated": false
-        }
-      ],
-      "by_day": [
-        {
-          "day": "2026-10-22",
-          "cost": 0.1118,
-          "tokens": 411461,
-          "by_agent": {
-            "codex": 0.1118
-          },
-          "by_agent_tokens": {
-            "codex": 411461
-          }
-        }
-      ],
-      "by_branch": [
-        {
-          "branch": "main",
-          "cost": 0.1118,
-          "sessions": 1
-        }
-      ],
-      "sessions_detail": [
-        {
-          "id": "01a16226-eafc-7de1-8566-7bb5aee8f02d",
-          "agent": "codex",
-          "label": "Codex CLI",
-          "started": "2026-10-22T05:48:54Z",
-          "ended": "2026-10-22T16:11:01Z",
-          "cwd": "/Users/alice/Documents/GitHub/reussir-en-francais",
-          "branch": "main",
-          "models": [
-            "codex-auto-review",
-            "gpt-6.1-sol"
-          ],
-          "cost": 0.1118,
-          "tokens": {
-            "input": 8316,
-            "output": 595,
-            "cache_read": 402550,
-            "cache_write": 0,
-            "thinking": 261,
-            "total": 411461
-          },
-          "share": 0.00271,
-          "attribution": "split",
-          "subagents": 4,
-          "title": null
+          "title": "Session title 474 (redacted)"
         }
       ]
     },
@@ -22646,7 +23397,7 @@
           "share": 1.0,
           "attribution": "cwd",
           "subagents": 0,
-          "title": "Session title 468 (redacted)"
+          "title": "Session title 475 (redacted)"
         }
       ]
     }
@@ -22689,7 +23440,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 469 (redacted)"
+          "title": "Session title 476 (redacted)"
         },
         {
           "id": "1a677e14-4b41-4cf2-934c-9eaa943e4ba4",
@@ -22714,7 +23465,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 470 (redacted)"
+          "title": "Session title 477 (redacted)"
         },
         {
           "id": "91114446-dfd5-4693-8018-cdbe9f90eaca",
@@ -22739,7 +23490,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 471 (redacted)"
+          "title": "Session title 478 (redacted)"
         },
         {
           "id": "16196750-23c1-41f6-acad-5430e5249027",
@@ -22764,7 +23515,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 472 (redacted)"
+          "title": "Session title 479 (redacted)"
         },
         {
           "id": "75f3baed-11b0-48e2-ae59-f1cbf44c752a",
@@ -22789,7 +23540,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 473 (redacted)"
+          "title": "Session title 480 (redacted)"
         },
         {
           "id": "703b84d5-5ea5-411f-96dc-affa2545baa7",
@@ -22814,7 +23565,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 474 (redacted)"
+          "title": "Session title 481 (redacted)"
         },
         {
           "id": "ef4d7fbf-5ea1-438a-a285-ecc3f2e0f9b2",
@@ -22839,7 +23590,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 475 (redacted)"
+          "title": "Session title 482 (redacted)"
         },
         {
           "id": "c7e708ec-6177-431c-a5fe-0cebfcabdb13",
@@ -22864,7 +23615,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 476 (redacted)"
+          "title": "Session title 483 (redacted)"
         },
         {
           "id": "01a136d8-3015-7fc2-a43f-df9aa2f69e00",
@@ -23466,7 +24217,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 477 (redacted)"
+          "title": "Session title 484 (redacted)"
         },
         {
           "id": "01a000fd-204d-7a13-b88b-e0e105952c9c",
@@ -23491,7 +24242,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 478 (redacted)"
+          "title": "Session title 485 (redacted)"
         },
         {
           "id": "019feafd-a790-7b43-9adc-17e72f4a4f58",
@@ -23516,7 +24267,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 479 (redacted)"
+          "title": "Session title 486 (redacted)"
         },
         {
           "id": "019feafa-862b-70f1-81f9-d42e808b28f1",
@@ -23541,7 +24292,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 480 (redacted)"
+          "title": "Session title 487 (redacted)"
         },
         {
           "id": "019feaeb-5d02-7542-9368-e7fa1e29fdf2",
@@ -23566,7 +24317,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 481 (redacted)"
+          "title": "Session title 488 (redacted)"
         },
         {
           "id": "019feac5-06c0-7c30-a8de-d2ca48ce7a38",
@@ -23591,7 +24342,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 482 (redacted)"
+          "title": "Session title 489 (redacted)"
         },
         {
           "id": "019fd59f-4557-7403-81bd-886ecaab1125",
@@ -23616,7 +24367,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 483 (redacted)"
+          "title": "Session title 490 (redacted)"
         },
         {
           "id": "019fcda8-00d9-77b2-a69b-5b252dc059fb",
@@ -23641,7 +24392,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 484 (redacted)"
+          "title": "Session title 491 (redacted)"
         },
         {
           "id": "019fc9c1-cb77-7f13-b503-7371f852965b",
@@ -23666,7 +24417,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 485 (redacted)"
+          "title": "Session title 492 (redacted)"
         },
         {
           "id": "019fc92b-2f9c-7cc1-a288-b0ef74889a41",
@@ -23691,7 +24442,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 486 (redacted)"
+          "title": "Session title 493 (redacted)"
         },
         {
           "id": "019fc12f-86ba-7c23-80e2-c8a07554eed6",
@@ -23741,7 +24492,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 487 (redacted)"
+          "title": "Session title 494 (redacted)"
         },
         {
           "id": "019f54c5-1a00-7922-baa5-fbabb4c02710",
@@ -23766,7 +24517,7 @@
           "share": 1.0,
           "attribution": "none",
           "subagents": 0,
-          "title": "Session title 488 (redacted)"
+          "title": "Session title 495 (redacted)"
         }
       ]
     },
@@ -23789,5 +24540,13 @@
       "sessions": 0,
       "files": []
     }
+  },
+  "ledger": {
+    "path": "/private/tmp/claude-501/-Users-alice-Documents-GitHub-token-usage/47daa328-2fe8-46ac-88ae-50bec10a6689/scratchpad/kanjo-rolling-cli/cli/.rolling-verification/data/ledger.json",
+    "sessions": 832,
+    "orphaned": 0,
+    "empty": 27,
+    "errors": 0,
+    "updated_at": "2026-10-25T14:54:22Z"
   }
 }
