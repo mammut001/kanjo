@@ -12,11 +12,14 @@ import errno
 import os
 import re
 import shutil
+import stat
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from . import disk_cache
 from .ledger import Ledger, paths_of
 from .sources import antigravity, claude, codex
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
@@ -80,12 +83,15 @@ def default_roots() -> dict:
     }
 
 
-def measure(path: str, now: float, exclude: Optional[List[str]] = None) -> dict:
+def measure(path: str, now: float, exclude: Optional[List[str]] = None,
+            _root_stat=None, _submit=None) -> dict:
     """Allocated bytes (``st_blocks * 512``) and file count under ``path``.
 
     Directories count toward bytes, not ``files``. Symlinks are not followed.
     Permission errors are skipped and counted in ``errors``. ``active`` is true
     when any file or directory inside was modified in the last 24 hours.
+    Internally, ``_submit`` delegates first-level directories to the report pool;
+    ``_root_stat`` reuses their stat result so each directory is counted once.
     """
     excluded = set(_norm(p) for p in (exclude or []))
     total = 0
@@ -106,7 +112,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None) -> dict:
             newest = ts
 
     try:
-        note(os.lstat(path), False)
+        note(os.lstat(path) if _root_stat is None else _root_stat, False)
     except OSError:
         errors += 1
         return {"bytes": 0, "files": 0, "oldest": None, "newest": None, "errors": errors, "active": False}
@@ -126,32 +132,39 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None) -> dict:
             continue
         with iterator:
             for ent in iterator:
-                ep = _norm(ent.path)
-                if ep in excluded:
+                if excluded and _norm(ent.path) in excluded:
                     continue
                 try:
                     st = ent.stat(follow_symlinks=False)
                 except OSError:
                     errors += 1
                     continue
-                if ent.is_symlink():
-                    note(st, True)
-                    continue
-                if ent.is_dir(follow_symlinks=False):
-                    note(st, False)
-                    stack.append(ent.path)
+                # lstat already tells us the type, including symlinks. Reuse it.
+                if stat.S_ISDIR(st.st_mode):
+                    if _submit is not None:
+                        _submit(ent.path, st)
+                    else:
+                        note(st, False)
+                        stack.append(ent.path)
                     continue
                 note(st, True)
     active = newest is not None and (now - newest) < ACTIVE_SECONDS
     return {"bytes": total, "files": files, "oldest": oldest, "newest": newest, "errors": errors, "active": active}
 
 
-def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Optional[Ledger] = None) -> dict:
-    """CONTRACT.md section 10 document. Reads the ledger; does not write it."""
+def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Optional[Ledger] = None,
+           max_age: float = 600, rescan: bool = False) -> dict:
+    """CONTRACT.md section 10 document. Reads the ledger; caches the report."""
+    started = time.monotonic()
     now = time.time() if now is None else now
     roots = default_roots() if roots is None else roots
+    if not rescan:
+        cached = disk_cache.load(roots, now, max_age)
+        if cached is not None:
+            return cached
     ledger = ledger or Ledger()
-    grouped = _collect(roots, now, _imported_index(ledger))
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
+        grouped = _collect(roots, now, _imported_index(ledger), executor)
     agents = []
     total = 0
     reclaim = 0
@@ -174,13 +187,18 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
             "bytes": abytes,
             "entries": entries,
         })
-    return {
+    doc = {
         "schema_version": 1,
         "generated_at": iso_utc(now),
         "total_bytes": total,
         "reclaimable_bytes": reclaim,
         "agents": agents,
+        "scan_seconds": time.monotonic() - started,
+        "cached": False,
+        "scanned_at": datetime.fromtimestamp(now, timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+    disk_cache.save(doc, roots)
+    return doc
 
 
 def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool = False, yes: bool = False,
@@ -196,7 +214,7 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     """
     now = time.time() if now is None else now
     ledger = ledger or Ledger()
-    doc = report(roots=roots, now=now, ledger=ledger)
+    doc = report(roots=roots, now=now, ledger=ledger, rescan=True)
     imported = _imported_index(ledger)
     by_id = {}
     owners = {}
@@ -234,6 +252,9 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported)
         except OSError:
+            # A partial per-file clean may already have moved files before failing.
+            if do_it:
+                disk_cache.invalidate()
             skipped.append({"id": eid, "reason": "move_failed"})
             continue
         if reason:
@@ -243,17 +264,17 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         moved.extend(part_moved)
         freed += part_freed
         skipped.extend(file_skips)
+    if do_it and moved:
+        disk_cache.invalidate()
     return {"moved": moved, "freed_bytes": freed, "skipped": skipped}
 
 
 # ---- scanning targets -----------------------------------------------------------------
-def _collect(roots: dict, now: float, imported: Dict[str, set]) -> Dict[str, List[dict]]:
+def _collect(roots: dict, now: float, imported: Dict[str, set],
+             executor: ThreadPoolExecutor) -> Dict[str, List[dict]]:
     grouped: Dict[str, List[dict]] = {}
     used = set()
-
-    def add(agent: str, entry: dict) -> None:
-        grouped.setdefault(agent, []).append(entry)
-        used.add(entry["id"])
+    pending = []
 
     def take_id(eid: str) -> str:
         if eid not in used:
@@ -263,76 +284,73 @@ def _collect(roots: dict, now: float, imported: Dict[str, set]) -> Dict[str, Lis
             n += 1
         return "%s:%d" % (eid, n)
 
+    def add(agent: str, eid: str, kind: str, path: str, blocked=None, note=None, exclude=None) -> None:
+        used.add(eid)
+        counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
+        dirty = executor.submit(_worktree_dirty, path) if kind == "worktrees" else None
+        parts = []
+        shallow = None
+        if eid == "claude:scratch":
+            # Submit each first-level directory into the SAME pool as other entries.
+            # The caller scans root files; workers never wait for other workers.
+            def submit(child, st):
+                parts.append(executor.submit(measure, child, now, _root_stat=st))
+            shallow = measure(path, now, _submit=submit)
+        else:
+            parts.append(executor.submit(measure, path, now, exclude))
+        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts))
+
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
-        if not _isdir(path):
-            continue
-        add("claude", _sessions_entry("claude", path, now, imported, used))
+        if _isdir(path):
+            add("claude", _session_id("claude", path, used), "sessions", path)
     for parent in _parents(projects):
         for name, eid in (("shell-snapshots", "claude:shell-snapshots"), ("debug", "claude:debug")):
             path = os.path.join(parent, name)
             if _isdir(path):
-                add("claude", _plain_entry("claude", take_id(eid), "cache", path, now, []))
+                add("claude", take_id(eid), "cache", path)
     scratch = roots.get("scratch")
     if scratch and _isdir(scratch):
-        measured = measure(scratch, now)
-        blocked = ["active"] if measured["active"] else []
-        add("claude", _make("claude:scratch", "scratch", scratch, measured, blocked))
+        add("claude", "claude:scratch", "scratch", scratch)
 
     codex_dirs = list(roots.get("codex_dirs") or [])
     for path in codex_dirs:
-        if not _isdir(path):
-            continue
-        add("codex", _sessions_entry("codex", path, now, imported, used))
+        if _isdir(path):
+            add("codex", _session_id("codex", path, used), "sessions", path)
     for parent in _parents(codex_dirs):
         wt_root = os.path.join(parent, "worktrees")
         if _isdir(wt_root):
             for rel, wpath in _find_worktrees(wt_root):
-                measured = measure(wpath, now)
-                blocked = []
-                if _worktree_dirty(wpath):
-                    blocked.append("uncommitted_changes")
-                if measured["active"]:
-                    blocked.append("active")
-                add("codex", _make(take_id("codex:worktree:" + rel), "worktrees", wpath, measured, blocked))
+                add("codex", take_id("codex:worktree:" + rel), "worktrees", wpath)
         logs = os.path.join(parent, "logs")
         if _isdir(logs):
-            add("codex", _plain_entry("codex", take_id("codex:logs"), "cache", logs, now, []))
+            add("codex", take_id("codex:logs"), "cache", logs)
 
     agy_dirs = list(roots.get("antigravity_dirs") or [])
     for path in agy_dirs:
-        if not _isdir(path):
-            continue
-        add("antigravity", _sessions_entry("antigravity", path, now, imported, used))
+        if _isdir(path):
+            add("antigravity", _session_id("antigravity", path, used), "sessions", path)
     for parent in _parents(agy_dirs):
         brain = os.path.join(parent, "brain")
         if _isdir(brain):
             scratches = _brain_scratches(brain)
             for brain_id, spath in scratches:
-                measured = measure(spath, now)
-                blocked = ["active"] if measured["active"] else []
-                add("antigravity", _make(take_id("antigravity:scratch:" + brain_id), "scratch", spath, measured, blocked))
-            measured = measure(brain, now, exclude=[p for _bid, p in scratches])
-            add("antigravity", _make(take_id("antigravity:memory"), "memory", brain, measured, []))
+                add("antigravity", take_id("antigravity:scratch:" + brain_id), "scratch", spath)
+            add("antigravity", take_id("antigravity:memory"), "memory", brain,
+                exclude=[p for _bid, p in scratches])
         cache = os.path.join(parent, "cache")
         if _isdir(cache):
-            add("antigravity", _plain_entry("antigravity", take_id("antigravity:cache"), "cache", cache, now, []))
+            add("antigravity", take_id("antigravity:cache"), "cache", cache)
 
     grok = roots.get("grok")
     if grok:
         sessions = os.path.join(grok, "sessions")
         if _isdir(sessions):
-            note = "Grok sessions. Kanjo does not parse Grok yet, so this stays not_imported."
-            entry = _plain_entry("grok", take_id("grok:sessions"), "sessions", sessions, now,
-                                 ["not_imported"], note=note)
-            # No parser, so discover() yields nothing. Count the files on disk and
-            # leave imported_files at 0; the block above does not depend on that.
-            entry["log_files"] = entry["files"]
-            entry["imported_files"] = 0
-            add("grok", entry)
+            add("grok", take_id("grok:sessions"), "sessions", sessions, ["not_imported"],
+                note="Grok sessions. Kanjo does not parse Grok yet, so this stays not_imported.")
         bundled = os.path.join(grok, "bundled")
         if _isdir(bundled):
-            add("grok", _plain_entry("grok", take_id("grok:bundled"), "other", bundled, now, []))
+            add("grok", take_id("grok:bundled"), "other", bundled)
 
     app = roots.get("claude_app")
     if app:
@@ -343,21 +361,41 @@ def _collect(roots: dict, now: float, imported: Dict[str, set]) -> Dict[str, Lis
         ):
             path = os.path.join(app, name)
             if _isdir(path):
-                add("claude-desktop", _plain_entry("claude-desktop", take_id(eid), "cache", path, now, [], note=note))
+                add("claude-desktop", take_id(eid), "cache", path, note=note)
+
+    # Resolve in discovery order so scheduling never changes ids or JSON ordering.
+    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts in pending:
+        measured = _sum_measurements(([shallow] if shallow is not None else [])
+                                     + [part.result() for part in parts], now)
+        if dirty is not None and dirty.result():
+            blocked.append("uncommitted_changes")
+        if kind in ("scratch", "worktrees") and measured["active"]:
+            blocked.append("active")
+        log_files = imported_files = None
+        if counts is not None:
+            log_files, imported_files = counts.result()
+            if agent == "grok":
+                log_files = measured["files"]
+            elif imported_files < log_files:
+                blocked.append("not_imported")
+        entry = _make(eid, kind, path, measured, blocked, note=note,
+                      log_files=log_files, imported_files=imported_files)
+        grouped.setdefault(agent, []).append(entry)
     return grouped
 
 
-def _sessions_entry(agent: str, path: str, now: float, imported: Dict[str, set], used: set) -> dict:
-    measured = measure(path, now)
-    log_files, imported_files = _import_counts(agent, path, imported)
-    blocked = ["not_imported"] if imported_files < log_files else []
-    return _make(_session_id(agent, path, used), "sessions", path, measured, blocked,
-                 log_files=log_files, imported_files=imported_files)
-
-
-def _plain_entry(agent: str, eid: str, kind: str, path: str, now: float, blocked: List[str],
-                 note: Optional[str] = None) -> dict:
-    return _make(eid, kind, path, measure(path, now), blocked, note=note)
+def _sum_measurements(parts: List[dict], now: float) -> dict:
+    oldest = [part["oldest"] for part in parts if part["oldest"] is not None]
+    newest = [part["newest"] for part in parts if part["newest"] is not None]
+    last = max(newest) if newest else None
+    return {
+        "bytes": sum(part["bytes"] for part in parts),
+        "files": sum(part["files"] for part in parts),
+        "oldest": min(oldest) if oldest else None,
+        "newest": last,
+        "errors": sum(part["errors"] for part in parts),
+        "active": last is not None and (now - last) < ACTIVE_SECONDS,
+    }
 
 
 def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], note: Optional[str] = None,

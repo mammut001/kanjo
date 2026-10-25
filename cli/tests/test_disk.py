@@ -8,12 +8,14 @@ import shutil
 import subprocess
 import tempfile
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from datetime import datetime
 from unittest import mock
 
 from kanjo import cli
-from kanjo import disk
+from kanjo import disk, disk_cache
 from kanjo.export import build_export
 from kanjo.ledger import Ledger
 
@@ -92,7 +94,7 @@ class DiskTest(unittest.TestCase):
         return path
 
     def report(self, now=None):
-        return disk.report(roots=self.roots, now=time.time() if now is None else now)
+        return disk.report(roots=self.roots, now=time.time() if now is None else now, rescan=True)
 
     def entry(self, doc, eid):
         for agent in doc["agents"]:
@@ -460,6 +462,169 @@ class DiskTest(unittest.TestCase):
         self.assertTrue(os.path.exists(path))
         self.assertEqual(os.listdir(self.trash), [])
 
+    def test_parallel_scratch_matches_sequential_reference(self):
+        for name in ("a", "b", "c", "empty"):
+            os.makedirs(os.path.join(self.scratch, name))
+        self.write(os.path.join(self.scratch, "root-file"), "root")
+        for name in ("a", "b", "c"):
+            for i in range(5):
+                self.write(os.path.join(self.scratch, name, "nested", str(i)), "x" * (i + 4096))
+        os.symlink("a", os.path.join(self.scratch, "linked-dir"))
+        os.symlink("missing", os.path.join(self.scratch, "dangling"))
+        os.symlink("../root-file", os.path.join(self.scratch, "b", "linked-file"))
+        old = time.time() - 3 * DAY
+        set_tree_mtime(self.scratch, old)
+        now = time.time()
+        expected = sequential_measure(self.scratch, now)
+        # A single-worker pool also checks that splitting cannot deadlock.
+        for workers in (1, 4):
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                parts = []
+                def submit(path, st):
+                    parts.append(executor.submit(disk.measure, path, now, _root_stat=st))
+                shallow = disk.measure(self.scratch, now, _submit=submit)
+                actual = disk._sum_measurements([shallow] + [part.result() for part in parts], now)
+            self.assertEqual(actual, expected)
+        doc = self.report(now)
+        entry = self.entry(doc, "claude:scratch")
+        for key in ("bytes", "files"):
+            self.assertEqual(entry[key], expected[key])
+        self.assertEqual(entry["skipped_errors"], expected["errors"])
+        self.assertEqual(entry["oldest"], datetime.fromtimestamp(expected["oldest"]).strftime("%Y-%m-%d"))
+        self.assertEqual(entry["newest"], datetime.fromtimestamp(expected["newest"]).strftime("%Y-%m-%d"))
+        self.assertEqual(entry["blocked"], [])
+
+    def test_entries_and_scratch_children_run_concurrently(self):
+        self.write(os.path.join(self.scratch, "a", "f"))
+        self.write(os.path.join(self.scratch, "b", "f"))
+        self.write(os.path.join(self.logs, "f"))
+        paths = {os.path.join(self.scratch, "a"), os.path.join(self.scratch, "b"), self.logs}
+        barrier = threading.Barrier(len(paths))
+        measure = disk.measure
+        def synchronized(path, *args, **kwargs):
+            if path in paths:
+                barrier.wait(timeout=5)
+            return measure(path, *args, **kwargs)
+        with mock.patch.object(disk.os, "cpu_count", return_value=8), \
+                mock.patch.object(disk, "measure", side_effect=synchronized):
+            doc = self.report()
+        self.assertEqual(self.entry(doc, "claude:scratch")["files"], 2)
+        self.assertEqual(self.entry(doc, "codex:logs")["files"], 1)
+
+    def test_cache_written_reused_and_expired(self):
+        self.write(os.path.join(self.shell, "f"))
+        now = time.time()
+        fresh = disk.report(roots=self.roots, now=now)
+        self.assertIs(fresh["cached"], False)
+        self.assertIsInstance(fresh["scan_seconds"], float)
+        self.assertGreaterEqual(fresh["scan_seconds"], 0)
+        self.assertAlmostEqual(datetime.fromisoformat(fresh["scanned_at"].replace("Z", "+00:00")).timestamp(),
+                               now, places=5)
+        with open(disk_cache.cache_path(), encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["report"], fresh)
+        with mock.patch.object(disk, "_collect", side_effect=AssertionError("cache should skip scan")), \
+                mock.patch.object(disk, "Ledger", side_effect=AssertionError("cache should skip ledger")):
+            warm = disk.report(roots=self.roots, now=now + 599)
+        self.assertEqual(warm, dict(fresh, cached=True))
+        self.assertAlmostEqual(disk_cache.cache_age(now + 10), 10, places=5)
+        scanned = datetime.fromisoformat(fresh["scanned_at"].replace("Z", "+00:00")).timestamp()
+        expired = disk.report(roots=self.roots, now=scanned + 600)
+        self.assertIs(expired["cached"], False)
+        self.assertNotEqual(expired["scanned_at"], fresh["scanned_at"])
+
+    def test_cli_rescan_and_zero_max_age_ignore_cache(self):
+        self.write(os.path.join(self.shell, "f"))
+        for flags, expected in (((), False), ((), True), (("--rescan",), False),
+                                (("--max-age", "0"), False), (("--max-age", "600"), True)):
+            code, out, err = self.cli("disk", "--json", *flags)
+            self.assertEqual((code, err), (0, ""))
+            self.assertIs(json.loads(out)["cached"], expected)
+
+    def test_root_newer_or_missing_invalidates_whole_cache(self):
+        self.write(os.path.join(self.shell, "f"))
+        self.write(os.path.join(self.logs, "f"))
+        now = time.time()
+        disk.report(roots=self.roots, now=now)
+        os.utime(self.shell, (now + 1, now + 1))
+        with mock.patch.object(disk, "_collect", wraps=disk._collect) as collect:
+            fresh = disk.report(roots=self.roots, now=now + 2)
+        self.assertIs(fresh["cached"], False)
+        collect.assert_called_once()
+        shutil.rmtree(self.logs)
+        missing = disk.report(roots=self.roots, now=now + 3)
+        self.assertIs(missing["cached"], False)
+        self.assertNotIn("codex:logs", [e["id"] for a in missing["agents"] for e in a["entries"]])
+
+    def test_changed_roots_and_bad_cache_are_ignored(self):
+        self.write(os.path.join(self.shell, "f"))
+        self.report()
+        other_roots = dict(self.roots, claude_projects=[])
+        changed = disk.report(roots=other_roots)
+        self.assertIs(changed["cached"], False)
+        with open(disk_cache.cache_path(), "w", encoding="utf-8") as handle:
+            handle.write('{"report":')
+        self.assertIs(disk.report(roots=self.roots)["cached"], False)
+        self.assertEqual(os.listdir(self.cache_dir), ["disk-report.json"])
+
+    def test_clean_rescans_active_descendants_and_invalidates_after_move(self):
+        path = self.write(os.path.join(self.scratch, "nested", "f"))
+        now = time.time()
+        set_tree_mtime(self.scratch, now - 3 * DAY)
+        doc = self.report(now)
+        self.assertEqual(self.entry(doc, "claude:scratch")["blocked"], [])
+        # The root's mtime stays old, so the reporting cache is still usable.
+        os.utime(path, (now, now))
+        self.assertIs(disk.report(roots=self.roots, now=now)["cached"], True)
+        with mock.patch.object(disk, "measure", wraps=disk.measure) as measured:
+            result = self.clean(["claude:scratch"], now=now, yes=True)
+        self.assertTrue(measured.called)
+        self.assertEqual(result["skipped"], [{"id": "claude:scratch", "reason": "active"}])
+        self.assertTrue(os.path.exists(path))
+        self.write(os.path.join(self.shell, "f"))
+        self.report()
+        self.clean(["claude:shell-snapshots"], dry_run=True, yes=True)
+        self.assertTrue(os.path.isfile(disk_cache.cache_path()))
+        self.clean(["claude:shell-snapshots"], yes=True)
+        self.assertFalse(os.path.exists(disk_cache.cache_path()))
+        self.assertFalse(os.path.exists(self.shell))
+
+    def test_failed_cache_replace_preserves_previous_report_and_removes_temp(self):
+        self.write(os.path.join(self.shell, "f"))
+        fresh = self.report()
+        with mock.patch.object(disk_cache.os, "replace", side_effect=OSError("read only")):
+            disk_cache.save(dict(fresh, total_bytes=0), self.roots)
+        with open(disk_cache.cache_path(), encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["report"], fresh)
+        self.assertEqual(os.listdir(self.cache_dir), ["disk-report.json"])
+
+    def test_partial_clean_failure_invalidates_cache(self):
+        now = time.time()
+        for name in ("a.log", "b.log"):
+            path = self.write(os.path.join(self.debug, name))
+            os.utime(path, (now - 10 * DAY, now - 10 * DAY))
+        self.report(now)
+        relocate = disk._relocate
+        calls = []
+        def fail_second(src, dest):
+            calls.append(src)
+            if len(calls) == 2:
+                raise OSError("move failed")
+            relocate(src, dest)
+        with mock.patch.object(disk, "_relocate", side_effect=fail_second):
+            result = self.clean(["claude:debug"], older_than_days=5, yes=True, now=now)
+        self.assertEqual(len(calls), 2)
+        self.assertFalse(os.path.exists(calls[0]))
+        self.assertTrue(os.path.exists(calls[1]))
+        self.assertEqual(result["skipped"], [{"id": "claude:debug", "reason": "move_failed"}])
+        self.assertFalse(os.path.exists(disk_cache.cache_path()))
+
+    def test_doctor_prints_disk_cache_path_and_age(self):
+        self.report()
+        code, out, err = self.cli("doctor", "--no-cache")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("disk cache: " + disk_cache.cache_path(), out)
+        self.assertRegex(out, r"age: [0-9.]+ seconds")
+
     def scan_dirs(self):
         return {"claude": [self.projects], "codex": [self.sessions], "antigravity": [self.conversations]}
 
@@ -491,10 +656,26 @@ class DiskTest(unittest.TestCase):
         return path
 
 
+def sequential_measure(root, now):
+    stats = [os.lstat(root)]
+    files = 0
+    for path, dirs, names in os.walk(root, followlinks=False):
+        for name in dirs + names:
+            full = os.path.join(path, name)
+            stats.append(os.lstat(full))
+            if name in names or os.path.islink(full):
+                files += 1
+        dirs[:] = [name for name in dirs if not os.path.islink(os.path.join(path, name))]
+    newest = max(st.st_mtime for st in stats)
+    return {"bytes": sum(st.st_blocks * 512 for st in stats), "files": files,
+            "oldest": min(st.st_mtime for st in stats), "newest": newest,
+            "errors": 0, "active": now - newest < disk.ACTIVE_SECONDS}
+
+
 def set_tree_mtime(path, ts):
     for dirpath, dirnames, filenames in os.walk(path):
         for name in filenames + dirnames:
-            os.utime(os.path.join(dirpath, name), (ts, ts))
+            os.utime(os.path.join(dirpath, name), (ts, ts), follow_symlinks=False)
     os.utime(path, (ts, ts))
 
 
