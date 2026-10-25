@@ -129,6 +129,10 @@ def _check_session(tc, s, where, kinds, share_one=False):
 
 
 QUOTA_KEYS = {"weekly_resets_at", "weekly_window_hours", "five_hour_resets_at", "source"}
+SUBSCRIPTION_KEYS = {"plan", "plan_label", "monthly_price_usd", "cycle_start", "cycle_end",
+                     "anchor_day", "cycle_source", "extra_usage_enabled", "source"}
+CYCLE_SOURCES = {"subscription_date", "calendar_month", "manual"}
+SUBSCRIPTION_SOURCES = {"detected", "manual"}
 
 
 def check_quota_windows(tc, qw):
@@ -144,6 +148,32 @@ def check_quota_windows(tc, qw):
         tc.assertIn(w["source"], {"tokei", "manual"}, where)
 
 
+def check_subscriptions(tc, subs):
+    tc.assertIsInstance(subs, dict, "subscriptions")
+    for agent, sub in subs.items():
+        where = "subscriptions.%s" % agent
+        tc.assertIsInstance(sub, dict, where)
+        tc.assertEqual(set(sub), SUBSCRIPTION_KEYS, where)
+        tc.assertIsInstance(sub["plan"], str, where)
+        tc.assertTrue(sub["plan"], where + " plan")
+        tc.assertIsInstance(sub["plan_label"], str, where)
+        tc.assertTrue(sub["plan_label"], where + " plan_label")
+        price = sub["monthly_price_usd"]
+        if price is not None:
+            tc.assertIsInstance(price, (int, float), where + " monthly_price_usd")
+            tc.assertNotIsInstance(price, bool, where + " monthly_price_usd")
+        tc.assertRegex(sub["cycle_start"], ISO_UTC, where)
+        tc.assertRegex(sub["cycle_end"], ISO_UTC, where)
+        tc.assertLess(sub["cycle_start"], sub["cycle_end"], where)
+        tc.assertIsInstance(sub["anchor_day"], int, where)
+        tc.assertNotIsInstance(sub["anchor_day"], bool, where)
+        tc.assertGreaterEqual(sub["anchor_day"], 1, where)
+        tc.assertLessEqual(sub["anchor_day"], 31, where)
+        tc.assertIn(sub["cycle_source"], CYCLE_SOURCES, where)
+        tc.assertIsInstance(sub["extra_usage_enabled"], bool, where)
+        tc.assertIn(sub["source"], SUBSCRIPTION_SOURCES, where)
+
+
 def _desc(seq):
     return all(a >= b for a, b in zip(seq, seq[1:]))
 
@@ -151,7 +181,7 @@ def _desc(seq):
 def validate_contract(tc, doc):
     """Assert that ``doc`` follows CONTRACT.md (structure, ordering, invariants)."""
     for k in ("schema_version", "generated_at", "generated_by", "timezone", "currency", "cost_note",
-              "config", "quota_windows", "totals", "projects", "buckets"):
+              "config", "quota_windows", "subscriptions", "totals", "projects", "buckets"):
         tc.assertIn(k, doc)
     tc.assertEqual(doc["schema_version"], 1)
     tc.assertRegex(doc["generated_at"], ISO_UTC)
@@ -161,6 +191,7 @@ def validate_contract(tc, doc):
     tc.assertEqual(doc["cost_note"], COST_NOTE)
     tc.assertIsInstance(doc["config"]["dominant_threshold"], (int, float))
     check_quota_windows(tc, doc["quota_windows"])
+    check_subscriptions(tc, doc["subscriptions"])
 
     _check_agg(tc, doc["totals"], "totals")
     tc.assertIn("unique_sessions", doc["totals"])

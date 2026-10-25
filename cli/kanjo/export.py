@@ -12,6 +12,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from . import attribution as attr
 from . import quota
 from .config import Config
+from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
 from .sources import antigravity, claude, codex
@@ -406,15 +407,18 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     totals_json["unique_sessions"] = unique_sessions  # each session once, incl. buckets, excl. parse_failed
 
     now = now or datetime.now(timezone.utc)
+    tz_name = local_timezone_name()
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "generated_by": "kanjo " + __version__,
-        "timezone": local_timezone_name(),
+        "timezone": tz_name,
         "currency": "USD",
         "cost_note": COST_NOTE,
         "config": {"dominant_threshold": config.dominant_threshold},
         "quota_windows": quota.quota_windows(config.quota_windows, tokei_dir, now.timestamp()),
+        "subscriptions": load_subscriptions(config.subscriptions, directory=tokei_dir, now=now,
+                                            timezone_name=tz_name),
         "totals": totals_json,
         "projects": project_list,
         "buckets": {

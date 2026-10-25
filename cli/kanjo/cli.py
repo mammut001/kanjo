@@ -12,6 +12,7 @@ from . import __version__
 from .config import Config, ConfigError, load as load_config
 from .export import COST_NOTE, SOURCES, build_export, check_invariants, scan
 from .sources.base import AGENT_LABELS
+from .subscriptions import subscriptions as load_subscriptions
 
 
 def _config(args) -> Config:
@@ -95,8 +96,24 @@ def cmd_projects(args) -> int:
     return 0
 
 
+def _print_subscriptions(manual) -> None:
+    found = load_subscriptions(manual)
+    print("subscriptions:")
+    if not found:
+        print("  none")
+        return
+    for agent, sub in found.items():
+        if sub["monthly_price_usd"] is None:
+            price = "unknown price"
+        else:
+            price = "$%.2f" % sub["monthly_price_usd"]
+        print("  %s: %s, %s, anchor day %d, source %s"
+              % (agent, sub["plan_label"], price, sub["anchor_day"], sub["source"]))
+
+
 def cmd_doctor(args) -> int:
     print("kanjo %s, Python %s" % (__version__, sys.version.split()[0]))
+    cfg = None
     try:
         cfg = load_config(args.config)
         print("config: %s" % (cfg.source or "none (defaults; looked in ~/.config/kanjo/attribution.toml|json)"))
@@ -104,6 +121,7 @@ def cmd_doctor(args) -> int:
               % (cfg.dominant_threshold, len(cfg.aliases), len(cfg.overrides), len(cfg.exclude)))
     except ConfigError as exc:
         print("config: ERROR %s" % exc)
+    _print_subscriptions(cfg.subscriptions if cfg is not None else None)
     result = scan(cache=_cache(args))
     print()
     rows = [["Agent", "Files", "Sessions", "Subagents", "Failed", "Messages", "Log directories"]]
@@ -148,7 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
     common(p)
     p.set_defaults(func=cmd_projects)
 
-    p = sub.add_parser("doctor", help="list the log directories found and their session counts")
+    p = sub.add_parser("doctor", help="list log directories, session counts and subscriptions")
     common(p, threshold=False)
     p.set_defaults(func=cmd_doctor)
     return parser
