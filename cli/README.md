@@ -9,7 +9,8 @@ project rather than by day or by agent.
 - Output format: [`../CONTRACT.md`](../CONTRACT.md). This is the only interface to the UI.
 
 It needs Python 3.9+ and uses only the standard library. It never touches the
-network and only reads the logs.
+network. `export`, `projects` and `doctor` only read logs. `disk clean` moves
+files into the Trash; it does not delete them.
 
 ## Install
 
@@ -31,10 +32,15 @@ kanjo export                 # CONTRACT.md JSON on stdout
 kanjo export -o data.json    # ... or to a file (written atomically)
 kanjo export --compact       # no indentation
 kanjo projects               # readable table, top 25 projects (--all, --limit N)
-kanjo doctor                 # log directories, session counts, detected subscriptions
+kanjo doctor                 # log directories, session counts, ledger, subscriptions
+kanjo ledger                 # permanent ledger: path, session count, orphaned count, size
+kanjo ledger --forget-orphans --yes
+kanjo disk                   # disk usage table
+kanjo disk --json            # CONTRACT.md section 10
+kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]
 ```
 
-These options work with every command:
+These options work with `export`, `projects` and `doctor`:
 
 | option | meaning |
 |---|---|
@@ -61,6 +67,77 @@ size and mtime (plus the `-wal` file for SQLite). You can move it with
 `KANJO_CACHE_DIR` or `XDG_CACHE_HOME`. The cache stores derived numbers and paths,
 plus the 80-character session title. It never stores conversation text.
 A cold scan of about 10 GB of logs takes about 30 s; a warm one takes about 5 s.
+
+### Ledger
+
+Parsed sessions are also stored permanently in `~/.local/share/kanjo/ledger.json`.
+`KANJO_DATA_DIR` replaces that directory. The parse cache drops a file when its
+log disappears; the ledger does not. After a log is deleted, `kanjo export` still
+counts that session. The top-level `ledger` object says where the file is, how
+many sessions it holds, how many of those are orphaned (the original file is
+gone) and when it was last written.
+
+The ledger is loaded once per run and rewritten only when a file's size or mtime
+changed. `--no-cache` still updates it. `kanjo ledger` prints the path, the
+session count, the orphaned count and the file size. `kanjo ledger
+--forget-orphans` removes orphaned entries, and only when `--yes` is passed.
+Nothing else mutates the ledger.
+
+`kanjo doctor` prints the ledger path and the orphan count.
+
+### Disk
+
+`kanjo disk` prints a table (agent, entry, size, files, newest, deletable or
+blocked). `kanjo disk --json` prints the document in CONTRACT.md section 10.
+Missing paths are skipped. Sizes are allocated disk usage (`st_blocks * 512`),
+not apparent size.
+
+| entry | default path | kind | deletable |
+|---|---|---|---|
+| Claude sessions | `~/.claude/projects` (`KANJO_CLAUDE_DIR`) | sessions | after_import |
+| Claude shell snapshots | `~/.claude/shell-snapshots` | cache | always |
+| Claude debug | `~/.claude/debug` | cache | always |
+| Claude scratch | `/tmp/claude-<uid>` (`KANJO_SCRATCH_DIR`) | scratch | when_clean |
+| Codex sessions | `~/.codex/sessions` | sessions | after_import |
+| Codex archived sessions | `~/.codex/archived_sessions` | sessions | after_import |
+| Codex worktrees | each git worktree under `~/.codex/worktrees` | worktrees | when_clean |
+| Codex logs | `~/.codex/logs` | cache | always |
+| Antigravity sessions | `~/.gemini/antigravity-cli/conversations` (`KANJO_ANTIGRAVITY_DIR`) | sessions | after_import |
+| Antigravity scratch | `brain/<id>/scratch`, one entry per brain id | scratch | when_clean |
+| Antigravity memory | the rest of `brain/` | memory | never |
+| Antigravity cache | `~/.gemini/antigravity-cli/cache` | cache | always |
+| Grok sessions | `~/.grok/sessions` (`KANJO_GROK_DIR`) | sessions | after_import |
+| Grok bundled | `~/.grok/bundled` | other | never |
+| Claude desktop | `~/Library/Application Support/Claude/{Cache,Code Cache,GPUCache}` (`KANJO_CLAUDE_APP_CACHE`) | cache | always |
+
+`KANJO_CODEX_DIR` replaces the Codex session directories the parser reads.
+Shell snapshots, debug logs, Codex worktrees and logs, and the Antigravity
+brain and cache are siblings of those directories, so the defaults above stay
+put when the variables are unset. Claude scratch is one entry for the whole
+`/tmp/claude-<uid>` tree (each `<encoded-cwd>/<session>/scratchpad` is a unit;
+the report sums them). It is `active` when any file changed in the last 24
+hours. A worktree is `active` on the same rule, and `uncommitted_changes` when
+`git -C <wt> status --porcelain` is not empty.
+
+Deletable classes: `cache` → `always`; `sessions` → `after_import`; `scratch`
+and `worktrees` → `when_clean`; `memory` and `other` → `never`. An
+`after_import` entry is blocked with `not_imported` until every log file under
+it has a ledger entry with the same signature. Grok is not parsed yet, so its
+sessions stay `not_imported`. `when_clean` entries are blocked with `active`,
+and worktrees also with `uncommitted_changes`.
+
+`kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]` only touches
+entries whose `blocked` list is empty. Files move into
+`~/.Trash/kanjo-<timestamp>/<id>/` (`KANJO_TRASH_DIR` replaces `~/.Trash`).
+Across volumes, a failed rename falls back to a move. Git worktrees are removed
+with `git worktree remove` from the main repo named by the worktree's `.git`
+file, not by unlinking the directory. `--older-than 30d` keeps files newer than
+30 days; a worktree is removed only when every file in it is old enough.
+Without `--yes` the command prints the plan and moves nothing. Cleaning
+session logs does not remove their numbers from the ledger.
+
+The UI never deletes files itself. It only calls `kanjo disk clean`, first with
+`--dry-run`, then with `--yes` after the user confirms.
 
 ### Quota windows (`quota_windows`)
 
@@ -275,7 +352,7 @@ git repos in a temp directory, which `Resolver(fs_root=...)` treats as `/`.
 
 ```
 kanjo/
-  cli.py          argparse: export / projects / doctor
+  cli.py          argparse: export / projects / doctor / ledger / disk
   config.py       attribution.toml / .json
   quota.py        quota_windows from the config or Tokei's ~/.tokei caches
   subscriptions.py  subscription plans and billing cycles (Claude config, Tokei, manual)
@@ -284,5 +361,7 @@ kanjo/
   pricing.py      price lookup, family fallback, estimated flag
   export.py       scan, de-duplicate, aggregate, CONTRACT.md JSON, invariant check
   cache.py        per-file parse cache
+  ledger.py       permanent session ledger (survives log deletion)
+  disk.py         disk usage report and Trash-only clean
   sources/        base.py (Session/Message), claude.py, antigravity.py, codex.py
 ```

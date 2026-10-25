@@ -5,6 +5,20 @@ import re
 import shutil
 import tempfile
 
+
+def ensure_test_data_dir():
+    """Keep the permanent ledger off the real home directory during tests."""
+    current = os.environ.get("KANJO_DATA_DIR", "")
+    home = os.path.abspath(os.path.expanduser("~"))
+    if current:
+        absolute = os.path.abspath(os.path.expanduser(current))
+        if absolute != home and not absolute.startswith(home + os.sep):
+            return
+    os.environ["KANJO_DATA_DIR"] = tempfile.mkdtemp(prefix="kanjo-test-data-")
+
+
+ensure_test_data_dir()
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(HERE, "fixtures")
 FIXTURE_DIRS = {
@@ -178,6 +192,25 @@ def _desc(seq):
     return all(a >= b for a, b in zip(seq, seq[1:]))
 
 
+LEDGER_KEYS = {"path", "sessions", "orphaned", "updated_at"}
+
+
+def check_ledger(tc, ledger):
+    """CONTRACT.md section 9. The field is optional so older sample files still pass."""
+    tc.assertIsInstance(ledger, dict, "ledger")
+    tc.assertTrue(LEDGER_KEYS <= set(ledger), "ledger missing %s" % (LEDGER_KEYS - set(ledger)))
+    tc.assertIsInstance(ledger["path"], str)
+    tc.assertTrue(ledger["path"].endswith("ledger.json"), ledger["path"])
+    tc.assertIsInstance(ledger["sessions"], int)
+    tc.assertNotIsInstance(ledger["sessions"], bool)
+    tc.assertGreaterEqual(ledger["sessions"], 0)
+    tc.assertIsInstance(ledger["orphaned"], int)
+    tc.assertNotIsInstance(ledger["orphaned"], bool)
+    tc.assertGreaterEqual(ledger["orphaned"], 0)
+    tc.assertLessEqual(ledger["orphaned"], ledger["sessions"])
+    tc.assertRegex(ledger["updated_at"], ISO_UTC)
+
+
 def validate_contract(tc, doc):
     """Assert that ``doc`` follows CONTRACT.md (structure, ordering, invariants)."""
     for k in ("schema_version", "generated_at", "generated_by", "timezone", "currency", "cost_note",
@@ -263,3 +296,5 @@ def validate_contract(tc, doc):
         tc.assertEqual(doc["totals"]["tokens"][k], sum(x["tokens"][k] for x in parts), "tokens." + k)
     tc.assertEqual(doc["totals"]["sessions"], sum(x["sessions"] for x in parts))
     tc.assertLessEqual(doc["totals"]["unique_sessions"], doc["totals"]["sessions"])
+    if "ledger" in doc:
+        check_ledger(tc, doc["ledger"])
