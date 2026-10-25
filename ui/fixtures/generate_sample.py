@@ -273,10 +273,12 @@ def cycle_bounds(anchor_day, now=NOW):
     return iso(year, month, anchor_day), iso(end_y, end_m, anchor_day)
 
 # 订阅：claude / codex 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
-# Codex 未知真实续费日，保留 calendar_month，让界面演示 day assumed。
+# Codex 未知真实续费日，用 generated_at 结束的滚动 30 天演示设置引导。
 # 账期按 anchor_day 在 Asia/Shanghai 的 00:00 折算（报告 generated_at 落在 10 月 23 日）。
 claude_start, claude_end = cycle_bounds(25)
-codex_start, codex_end = cycle_bounds(1)
+generated_at = datetime(2026, 10, 23, 2, tzinfo=timezone.utc)
+codex_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+codex_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 subscriptions = {
     "claude": {
         "plan": "max_5x", "plan_label": "Claude Max 5x", "monthly_price_usd": 100.0,
@@ -285,11 +287,11 @@ subscriptions = {
     },
     "codex": {
         "plan": "plus", "plan_label": "ChatGPT Plus", "monthly_price_usd": 20.0,
-        "cycle_start": codex_start, "cycle_end": codex_end, "anchor_day": 1,
-        "cycle_source": "calendar_month", "extra_usage_enabled": False, "source": "detected",
+        "cycle_start": codex_start, "cycle_end": codex_end, "anchor_day": None,
+        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
     },
 }
-out = {"schema_version": 1, "generated_at": "2026-10-23T02:00:00Z", "generated_by": "generate_sample.py",
+out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "generated_by": "generate_sample.py",
        "timezone": "Asia/Shanghai", "currency": "USD",
        "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
        "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
@@ -324,11 +326,12 @@ assert subscriptions["claude"]["cycle_start"] == "2026-09-24T16:00:00Z"
 assert subscriptions["claude"]["cycle_end"] == "2026-10-24T16:00:00Z"
 assert subscriptions["codex"]["plan"] == "plus"
 assert subscriptions["codex"]["monthly_price_usd"] == 20.0
-assert subscriptions["codex"]["anchor_day"] == 1
-assert subscriptions["codex"]["cycle_source"] == "calendar_month"
+assert subscriptions["codex"]["anchor_day"] is None
+assert subscriptions["codex"]["cycle_source"] == "rolling_30d"
 assert subscriptions["codex"]["source"] == "detected"
-assert subscriptions["codex"]["cycle_start"] == "2026-09-30T16:00:00Z"
-assert subscriptions["codex"]["cycle_end"] == "2026-10-31T16:00:00Z"
+assert subscriptions["codex"]["cycle_start"] == "2026-09-23T02:00:00Z"
+assert subscriptions["codex"]["cycle_end"] == out["generated_at"]
+assert generated_at - datetime.fromisoformat(codex_start.replace("Z", "+00:00")) == timedelta(days=30)
 print("ok", round(totals["cost"], 2), totals["sessions"])
 for p in projects: print(f'{p["name"]:16} {p["cost"]:10.4f} {p["sessions"]:3} {[a["agent"] for a in p["by_agent"]]} branches={len(p["by_branch"])}')
 print("buckets", buckets["unattributed"]["cost"], buckets["excluded"]["cost"])

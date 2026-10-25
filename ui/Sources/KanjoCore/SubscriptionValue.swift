@@ -10,10 +10,23 @@ public let subscriptionValueExplanation =
 public enum SubscriptionValue {
     public static let assumedDayHelp = "Renewal day unknown; set it in Settings"
 
+    public static func needsRenewalDay(_ sub: Subscription) -> Bool {
+        sub.cycleSource == "rolling_30d"
+    }
+
+    public static func billingPage(for agent: String) -> URL? {
+        switch agent {
+        case "claude": return URL(string: "https://claude.ai/settings/billing")
+        case "codex": return URL(string: "https://chatgpt.com/settings/billing")
+        case "antigravity": return URL(string: "https://one.google.com/subscriptions")
+        default: return nil
+        }
+    }
+
     /// cycle_source 优先：手填档位也可能仍然不知道续费日。
     public static func anchorSource(_ sub: Subscription) -> String {
         switch sub.cycleSource {
-        case "calendar_month": return "assumed"
+        case "rolling_30d": return "not set · using last 30 days"
         case "manual": return "manual"
         case "subscription_date": return "detected"
         default: return sub.source == "manual" ? "manual" : "detected"
@@ -91,6 +104,34 @@ public enum SubscriptionValue {
     /// 和总览 RangeContext 一样：缺 by_agent 时记到项目的主力 agent。
     private static func fallbackAgent(_ p: Project) -> String {
         dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown"
+    }
+}
+
+/// 提醒按 agent 记住关闭状态；新出现的未知续费日仍会提醒。
+public enum RenewalNudge {
+    public static func parseDismissed(_ raw: String) -> Set<String> {
+        Set(raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })
+    }
+
+    public static func serializeDismissed(_ agents: Set<String>) -> String {
+        agents.sorted().joined(separator: ",")
+    }
+
+    public static func pendingAgents(subscriptions: [String: Subscription], dismissed: Set<String>) -> [String] {
+        subscriptions.filter { SubscriptionValue.needsRenewalDay($0.value) && !dismissed.contains($0.key) }
+            .map(\.key).sorted()
+    }
+}
+
+/// 设置行的导航字符串同时作为 ScrollViewReader 的 anchor，不依赖报告是否加载。
+public enum SubscriptionSettingsRoute {
+    public static func anchor(for agent: String) -> String { "settings:subscriptions:\(agent)" }
+
+    public static func agent(from raw: String) -> String? {
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "settings", parts[1] == "subscriptions", !parts[2].isEmpty else { return nil }
+        return String(parts[2])
     }
 }
 

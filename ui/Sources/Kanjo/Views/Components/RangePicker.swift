@@ -67,8 +67,8 @@ struct RangeContext {
             let withCycle = agentOrder.filter { spec.agentStarts[$0] != nil }
             let without = agentOrder.filter { spec.agentStarts[$0] == nil }
             let parts = withCycle.map { agent -> String in
-                let label = report.subscriptions?[agent]?.planLabel ?? shortName(agent)
-                return "\(label) since \(md.string(from: spec.agentStarts[agent]!))"
+                guard let sub = report.subscriptions?[agent] else { return shortName(agent) }
+                return Fmt.cycleRangeCaption(sub, timezone: cal.timeZone)
             }
             let missing = without.map { "\(shortName($0)): no subscription" }
             return (["Billing cycle"] + parts + missing).joined(separator: " · ")

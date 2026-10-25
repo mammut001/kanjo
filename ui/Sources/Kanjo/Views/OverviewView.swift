@@ -7,6 +7,7 @@ struct OverviewView: View {
     let report: UsageReport
     var scrollAnchor: String? = nil
     let onSelect: (Route) -> Void
+    let onSetRenewalDay: (String) -> Void
 
     @AppStorage(SettingsKeys.hiddenProjects) private var hiddenRaw = ""
     @AppStorage(SettingsKeys.pinnedProjects) private var pinnedRaw = ""
@@ -53,7 +54,7 @@ struct OverviewView: View {
                         hero(ctx, f, visible: lists.visible, hiddenCount: lists.hidden.count)
                         // 订阅价值紧挨 hero（cost note 下面、马赛克上面）。始终按各 agent 自己的账期，不跟当前范围走。
                         if !(report.subscriptions ?? [:]).isEmpty {
-                            SubscriptionValueCard(report: report)
+                            SubscriptionValueCard(report: report, onSetRenewalDay: onSetRenewalDay)
                         }
                         if lists.visible.contains(where: { $0.cost > 0 }) {
                             MosaicView(projects: lists.visible, currency: cur) { onSelect(.project($0)) }
@@ -240,6 +241,8 @@ struct OverviewView: View {
 /// 没有新的卡片描边，和总览其他节一样直接放在面板上。底部那句说明固定显示。
 private struct SubscriptionValueCard: View {
     let report: UsageReport
+    let onSetRenewalDay: (String) -> Void
+    @AppStorage("renewalNudgeDismissed") private var dismissedRaw = ""
 
     private var cur: String { report.currency }
 
@@ -258,7 +261,37 @@ private struct SubscriptionValueCard: View {
                     .padding(.horizontal, Metrics.listInset)
                     .padding(.top, 3)
                     .padding(.bottom, 6)
+                renewalNudge
             }
+        }
+    }
+
+    @ViewBuilder private var renewalNudge: some View {
+        let subs = report.subscriptions ?? [:]
+        let dismissed = RenewalNudge.parseDismissed(dismissedRaw)
+        let pending = RenewalNudge.pendingAgents(subscriptions: subs, dismissed: dismissed)
+        if let agent = pending.first {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Button { onSetRenewalDay(agent) } label: {
+                    (Text("Renewal days not set for \(pending.map { subs[$0]?.planLabel ?? $0 }.joined(separator: ", ")) · ")
+                        .foregroundColor(.secondary)
+                     + Text("Set now").foregroundColor(.accentColor))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                        .contentShape(Rectangle())
+                }
+                Spacer(minLength: 0)
+                Button("×") {
+                    dismissedRaw = RenewalNudge.serializeDismissed(dismissed.union(pending))
+                }
+                .foregroundStyle(.secondary)
+                .help("Dismiss renewal day reminder")
+                .accessibilityLabel("Dismiss renewal day reminder")
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10.5))
+            .padding(.horizontal, Metrics.listInset)
+            .padding(.bottom, 6)
         }
     }
 
@@ -297,13 +330,24 @@ private struct SubscriptionValueCard: View {
             }
             .help(help(row))
             if let sub = report.subscriptions?[row.agent] {
-                Text(Fmt.cycleCaption(sub, timezone: RangeEngine.timezone(of: report)))
+                Group {
+                    if SubscriptionValue.needsRenewalDay(sub) {
+                        Button { onSetRenewalDay(row.agent) } label: {
+                            Text(Fmt.cycleCaption(sub, timezone: RangeEngine.timezone(of: report)))
+                                .multilineTextAlignment(.leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(SubscriptionValue.assumedDayHelp)
+                    } else {
+                        Text(Fmt.cycleCaption(sub, timezone: RangeEngine.timezone(of: report)))
+                            .help(Fmt.cycleDates(sub, timezone: RangeEngine.timezone(of: report)))
+                    }
+                }
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 11)
-                    .help(sub.cycleSource == "calendar_month" ? SubscriptionValue.assumedDayHelp
-                          : Fmt.cycleDates(sub, timezone: RangeEngine.timezone(of: report)))
             }
         }
         .monospacedDigit()
