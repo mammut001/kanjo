@@ -55,6 +55,20 @@ final class ReportStore: ObservableObject {
         }
     }
 
+    var canEditSubscriptions: Bool {
+        dataOverride == nil && defaults.string(forKey: SettingsKeys.sourceKind) == SourceKind.cli.rawValue
+    }
+
+    func setAnchorDay(agent: String, day: Int?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        try await source.setAnchorDay(agent: agent, day: day)
+        refresh()
+    }
+
     func refresh() {
         generation += 1
         let gen = generation

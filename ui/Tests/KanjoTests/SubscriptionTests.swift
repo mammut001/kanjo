@@ -2,6 +2,54 @@ import XCTest
 @testable import KanjoCore
 
 final class SubscriptionTests: XCTestCase {
+    private func subscription(start: String = "2026-10-24T16:00:00Z", end: String = "2026-11-24T16:00:00Z",
+                              cycleSource: String = "subscription_date", source: String = "detected") -> Subscription {
+        Subscription(plan: "max_5x", planLabel: "Claude Max 5x", monthlyPriceUsd: 100,
+                     cycleStart: start, cycleEnd: end, anchorDay: 25, cycleSource: cycleSource,
+                     extraUsageEnabled: false, source: source)
+    }
+
+    func testCycleCaptionInReportTimezone() {
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = ReportDates.parseTimestamp("2026-10-25T10:00:00Z")!
+        XCTAssertEqual(Fmt.cycleCaption(subscription(), timezone: zone, now: now),
+                       "Oct 25 – Nov 25 · renews in 31 days")
+        XCTAssertEqual(Fmt.cycleCaption(subscription(cycleSource: "calendar_month"), timezone: zone, now: now),
+                       "Oct 25 – Nov 25 · renews in 31 days · day assumed")
+        XCTAssertEqual(Fmt.cycleDates(subscription(), timezone: TimeZone(secondsFromGMT: 0)!), "Oct 24 – Nov 24")
+        XCTAssertEqual(SubscriptionValue.assumedDayHelp, "Renewal day unknown; set it in Settings")
+    }
+
+    func testRenewalTodayTomorrowAndExpired() {
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        let end = "2026-11-24T16:00:00Z"
+        XCTAssertEqual(Fmt.renewal(end, timezone: zone, now: ReportDates.parseTimestamp("2026-11-24T15:59:00Z")!),
+                       "renews tomorrow")
+        XCTAssertEqual(Fmt.renewal(end, timezone: zone, now: ReportDates.parseTimestamp("2026-11-25T10:00:00Z")!),
+                       "renews today")
+        XCTAssertEqual(Fmt.renewal(end, timezone: zone, now: ReportDates.parseTimestamp("2026-11-25T16:00:00Z")!),
+                       "renewal date passed")
+        XCTAssertEqual(Fmt.renewal("invalid", timezone: zone), "Renewal date unavailable")
+        XCTAssertEqual(Fmt.cycleDates(subscription(start: "invalid"), timezone: zone), "Cycle dates unavailable")
+    }
+
+    func testRenewalAcrossDSTAndYearBoundary() {
+        let zone = TimeZone(identifier: "America/New_York")!
+        // 跨春季夏令时只有 47 小时，但仍是两个自然日。
+        XCTAssertEqual(Fmt.renewal("2026-03-09T04:00:00Z", timezone: zone,
+                                   now: ReportDates.parseTimestamp("2026-03-07T05:00:00Z")!), "renews in 2 days")
+        let sub = subscription(start: "2026-12-25T05:00:00Z", end: "2027-01-25T05:00:00Z")
+        XCTAssertEqual(Fmt.cycleCaption(sub, timezone: zone, now: ReportDates.parseTimestamp("2026-12-25T23:00:00Z")!),
+                       "Dec 25 – Jan 25 · renews in 31 days")
+    }
+
+    func testAnchorSource() {
+        XCTAssertEqual(SubscriptionValue.anchorSource(subscription()), "detected")
+        XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "manual")), "manual")
+        XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "calendar_month", source: "manual")), "assumed")
+        XCTAssertEqual(SubscriptionValue.anchorSource(subscription(cycleSource: "unknown", source: "manual")), "manual")
+    }
+
     func testMultiplierAndShare() {
         XCTAssertEqual(SubscriptionValue.multiplier(usage: 1572, monthlyPriceUsd: 100)!, 15.72, accuracy: 1e-9)
         XCTAssertEqual(SubscriptionValue.multiplier(usage: 0, monthlyPriceUsd: 20), 0)
@@ -18,6 +66,7 @@ final class SubscriptionTests: XCTestCase {
 
     func testFixtureCycleUsageMatchesFilterAndSkipsUnsubscribed() throws {
         let r = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
+        XCTAssertEqual(r.subscriptions?["codex"]?.cycleSource, "calendar_month")
         let now = ReportDates.parseTimestamp(r.generatedAt)!
         let usage = SubscriptionValue.cycleUsage(of: r, now: now)
         let filtered = RangeEngine.filtered(r, range: RangeEngine.spec(.billingCycle, report: r, now: now)) {

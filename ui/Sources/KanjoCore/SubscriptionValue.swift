@@ -8,6 +8,18 @@ public let subscriptionValueExplanation =
     "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing."
 
 public enum SubscriptionValue {
+    public static let assumedDayHelp = "Renewal day unknown; set it in Settings"
+
+    /// cycle_source 优先：手填档位也可能仍然不知道续费日。
+    public static func anchorSource(_ sub: Subscription) -> String {
+        switch sub.cycleSource {
+        case "calendar_month": return "assumed"
+        case "manual": return "manual"
+        case "subscription_date": return "detected"
+        default: return sub.source == "manual" ? "manual" : "detected"
+        }
+    }
+
     /// 用量 ÷ 月费。月费为空或不是正数时为 nil（界面显示「—」，不显示倍数）。
     public static func multiplier(usage: Double, monthlyPriceUsd: Double?) -> Double? {
         guard let price = monthlyPriceUsd, price > 0, usage.isFinite else { return nil }

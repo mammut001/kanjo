@@ -263,41 +263,52 @@ private struct SubscriptionValueCard: View {
     }
 
     private func line(_ row: SubscriptionRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            AgentDot(agent: row.agent, size: 6)
-                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-            Text(row.planLabel)
-                .font(.system(size: 12))
-                .lineLimit(1)
-                .layoutPriority(-1)
-            Text("· \(Fmt.perMonth(row.monthlyPriceUsd, currency: cur))")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if row.extraUsageEnabled {
-                Badge(text: "extra usage on", style: .warn,
-                      help: "Extra usage is enabled, so overage is billed on top of the flat fee.")
-                    .fixedSize()
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                AgentDot(agent: row.agent, size: 6)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                Text(row.planLabel)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .layoutPriority(-1)
+                Text("· \(Fmt.perMonth(row.monthlyPriceUsd, currency: cur))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if row.extraUsageEnabled {
+                    Badge(text: "extra usage on", style: .warn,
+                          help: "Extra usage is enabled, so overage is billed on top of the flat fee.")
+                        .fixedSize()
+                }
+                Spacer(minLength: 8)
+                Text(Fmt.money(row.usage, currency: cur))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Text("·")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                Text(Fmt.multiple(row.multiplier))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                    .frame(minWidth: 42, alignment: .trailing)
             }
-            Spacer(minLength: 8)
-            Text(Fmt.money(row.usage, currency: cur))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .lineLimit(1)
-                .layoutPriority(1)
-            Text("·")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-            Text(Fmt.multiple(row.multiplier))
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .layoutPriority(1)
-                .frame(minWidth: 42, alignment: .trailing)
+            .help(help(row))
+            if let sub = report.subscriptions?[row.agent] {
+                Text(Fmt.cycleCaption(sub, timezone: RangeEngine.timezone(of: report)))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 11)
+                    .help(sub.cycleSource == "calendar_month" ? SubscriptionValue.assumedDayHelp
+                          : Fmt.cycleDates(sub, timezone: RangeEngine.timezone(of: report)))
+            }
         }
         .monospacedDigit()
         .padding(.horizontal, Metrics.listInset)
         .padding(.vertical, 6)
-        .help(help(row))
     }
 
     private func help(_ row: SubscriptionRow) -> String {

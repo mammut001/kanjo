@@ -161,41 +161,15 @@ struct SettingsView: View {
                 let subs = r.subscriptions ?? [:]
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(ctx.agentOrder, id: \.self) { agent in
-                        subscriptionRow(agent, sub: subs[agent], report: r)
+                        SubscriptionSettingsRow(agent: agent, sub: subs[agent],
+                                                label: r.agentLabels[agent] ?? agent, currency: r.currency)
                     }
                 }
             } else {
                 note("No data loaded yet.")
             }
-            note("Overrides live in ~/.config/kanjo/attribution.toml under [subscriptions.<agent>]. Agents without a subscription are left out of the Billing cycle range.")
+            note("Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.")
         }
-    }
-
-    private func subscriptionRow(_ agent: String, sub: Subscription?, report: UsageReport) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                AgentDot(agent: agent, size: 6)
-                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-                Text(report.agentLabels[agent] ?? agent)
-                    .font(.system(size: 11.5))
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text(sub?.source ?? "none")
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(sub == nil ? .tertiary : .secondary)
-            }
-            Text(subscriptionDetail(sub, currency: report.currency))
-                .font(.system(size: 10))
-                .foregroundStyle(sub == nil ? .tertiary : .secondary)
-                .monospacedDigit()
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 11)
-        }
-    }
-
-    private func subscriptionDetail(_ sub: Subscription?, currency: String) -> String {
-        guard let sub else { return "No subscription info" }
-        return "\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency)) · anchor \(sub.anchorDay) · \(sub.cycleSource)"
     }
 
     @ViewBuilder private func quotaCell(_ q: QuotaWindow?, cal: Calendar) -> some View {
@@ -260,5 +234,79 @@ struct SettingsView: View {
         p.allowsMultipleSelection = false
         NSApp.activate(ignoringOtherApps: true)
         return p.runModal() == .OK ? p.url?.path : nil
+    }
+}
+
+private struct SubscriptionSettingsRow: View {
+    @EnvironmentObject var store: ReportStore
+    let agent: String
+    let sub: Subscription?
+    let label: String
+    let currency: String
+    @State private var day: Int
+    @State private var saving = false
+    @State private var actionError: String?
+
+    init(agent: String, sub: Subscription?, label: String, currency: String) {
+        self.agent = agent
+        self.sub = sub
+        self.label = label
+        self.currency = currency
+        _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                AgentDot(agent: agent, size: 6)
+                Text(label).font(.system(size: 11.5)).lineLimit(1)
+                Spacer(minLength: 8)
+            }
+            if let sub {
+                Text("\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency))")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .padding(.leading, 11)
+                HStack(spacing: 8) {
+                    Stepper("Renews on day \(day)", value: $day, in: 1...28)
+                        .font(.system(size: 11)).monospacedDigit()
+                        .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                        .help(store.canEditSubscriptions ? "Day of the month (1–28)" : "Editing needs the CLI data source")
+                    Button("Apply") { save(day) }
+                    Button("Reset") { save(nil) }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                .padding(.leading, 11)
+                Text(saving ? "Saving…" : SubscriptionValue.anchorSource(sub))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .padding(.leading, 11)
+            } else {
+                Text("No subscription info").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .padding(.leading, 11)
+            }
+            if let actionError {
+                StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
+                    Text(actionError).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+            }
+        }
+        .onChange(of: sub?.anchorDay) { value in
+            day = min(28, max(1, value ?? 1))
+        }
+    }
+
+    private func save(_ value: Int?) {
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.setAnchorDay(agent: agent, day: value)
+                if value == nil { day = min(28, max(1, sub?.anchorDay ?? 1)) }
+            } catch {
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            saving = false
+        }
     }
 }
