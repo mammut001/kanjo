@@ -83,6 +83,7 @@ final class DiskStore: ObservableObject {
                     }
                 }
             } catch {
+                if src is DiskDataSource { await ReportStore.shared.checkPython() }
                 if gen == generation {
                     self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 }
@@ -110,6 +111,10 @@ final class DiskStore: ObservableObject {
     /// 先 dry-run（confirmed: false），用户确认后再带 --yes。文件来源会拒绝，不会动磁盘。
     func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
         let src = source ?? makeSource().0
-        return try await src.clean(ids: ids, olderThan: olderThan, confirmed: confirmed)
+        do { return try await src.clean(ids: ids, olderThan: olderThan, confirmed: confirmed) }
+        catch {
+            if src is DiskDataSource { await ReportStore.shared.checkPython() }
+            throw error
+        }
     }
 }

@@ -242,7 +242,8 @@ final class DecodingTests: XCTestCase {
 
     func testResolvedCLIDirectoryFallsBackInOrder() throws {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("kanjo-cli-\(UUID().uuidString)")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("build/kanjo-cli-\(UUID().uuidString)")
         defer { try? fm.removeItem(at: root) }
         let home = root.appendingPathComponent("home")
         let installed = DefaultPaths.installedCLIDirectories(home: home)
@@ -250,18 +251,29 @@ final class DecodingTests: XCTestCase {
 
         let repo = root.appendingPathComponent("repo/cli")
         let user = installed[0]
-        let candidates = [repo, user]
+        let bundled = root.appendingPathComponent("bundle/cli")
+        let system = root.appendingPathComponent("system/cli")
+        let candidates = [bundled, repo, user, system]
         XCTAssertNil(DefaultPaths.resolvedCLIDirectory(candidates: candidates))
 
         // 只建目录不建 kanjo/ 包，不算。
         try fm.createDirectory(at: user, withIntermediateDirectories: true)
         XCTAssertNil(DefaultPaths.resolvedCLIDirectory(candidates: candidates))
 
+        try fm.createDirectory(at: system.appendingPathComponent("kanjo"), withIntermediateDirectories: true)
+        try Data().write(to: system.appendingPathComponent("kanjo/__init__.py"))
+        XCTAssertEqual(DefaultPaths.resolvedCLIDirectory(candidates: candidates), system)
         try fm.createDirectory(at: user.appendingPathComponent("kanjo"), withIntermediateDirectories: true)
+        try Data().write(to: user.appendingPathComponent("kanjo/__init__.py"))
         XCTAssertEqual(DefaultPaths.resolvedCLIDirectory(candidates: candidates)?.path, user.path)
 
         try fm.createDirectory(at: repo.appendingPathComponent("kanjo"), withIntermediateDirectories: true)
+        try Data().write(to: repo.appendingPathComponent("kanjo/__init__.py"))
         XCTAssertEqual(DefaultPaths.resolvedCLIDirectory(candidates: candidates)?.path, repo.path)
+        try fm.createDirectory(at: bundled.appendingPathComponent("kanjo"), withIntermediateDirectories: true)
+        XCTAssertEqual(DefaultPaths.resolvedCLIDirectory(candidates: candidates), repo)
+        try Data().write(to: bundled.appendingPathComponent("kanjo/__init__.py"))
+        XCTAssertEqual(DefaultPaths.resolvedCLIDirectory(candidates: candidates), bundled)
     }
 
     func testRepoCLIDirectoryIsFoundFromSource() {

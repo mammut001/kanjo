@@ -96,8 +96,20 @@ struct MenuPanelView: View {
     @ViewBuilder private var banners: some View {
         let schemaWarning = store.report?.isNewerSchema == true
         let refreshFailed = store.report != nil && store.error != nil
-        if schemaWarning || refreshFailed {
+        if schemaWarning || refreshFailed || store.needsCommandLineTools {
             VStack(spacing: 6) {
+                if store.needsCommandLineTools {
+                    StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
+                        Text("Kanjo's CLI needs Python 3 (included with the Xcode Command Line Tools)")
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            Button("Install Command Line Tools") { store.installCommandLineTools() }
+                            Button("Retry") {
+                                Task { await store.checkPython(); store.refresh() }
+                            }
+                        }
+                    }
+                }
                 if let r = store.report, r.isNewerSchema {
                     StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
                         Text("This data uses schema_version \(r.schemaVersion); this app understands version \(supportedSchemaVersion). Rendering anyway — some fields may be missing or misread.")

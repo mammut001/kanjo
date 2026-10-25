@@ -47,6 +47,7 @@ struct SettingsView: View {
                     .labelsHidden()
 
                     if sourceKind == SourceKind.cli.rawValue {
+                        note(DefaultPaths.cliDescription(customDirectory: cliWorkingDirectory, customCommand: cliCommand))
                         field("Command", text: $cliCommand, placeholder: CLIDataSource.defaultCommand)
                         HStack(alignment: .bottom) {
                             field("Working directory (cli/ path)", text: $cliWorkingDirectory,
