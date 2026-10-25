@@ -164,8 +164,11 @@ struct MenuPanelView: View {
     private var footer: some View {
         HStack(spacing: 2) {
             Button {
-                store.refresh()
-                if route == .disk { disk.refresh() }
+                if route == .disk {
+                    disk.refresh(rescan: true)
+                } else {
+                    store.refresh()
+                }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }

@@ -42,7 +42,7 @@ struct DiskView: View {
             }
         }
         .onAppear {
-            if disk.report == nil && disk.error == nil && !disk.isLoading { disk.refresh() }
+            if !disk.hasReport && disk.error == nil && !disk.isLoading { disk.refresh() }
             applyExpanded()
         }
         .onChange(of: disk.report?.generatedAt) { _ in
@@ -153,6 +153,17 @@ struct DiskView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Reclaimable \(Fmt.bytes(report.reclaimableBytes))")
+            }
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                HStack(spacing: 4) {
+                    Text(DiskScanCaption.text(for: report, now: context.date))
+                    if disk.isRescanning {
+                        Text("· rescanning…")
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
             }
             CostNote(text: "Numbers stay in the ledger after cleanup")
         }
@@ -421,7 +432,7 @@ struct DiskView: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Button("Retry") { disk.refresh() }.buttonStyle(.borderedProminent)
+                    Button("Retry") { disk.refresh(rescan: true) }.buttonStyle(.borderedProminent)
                     Button("Open Settings", action: onSettings).buttonStyle(.bordered)
                 }
                 Text("Expected JSON from `kanjo disk --json` (see CONTRACT.md). The app does not delete files itself.")
@@ -463,7 +474,7 @@ struct DiskView: View {
                 pending = nil
                 finished = result
                 selected.removeAll()
-                disk.refresh()
+                disk.refresh(rescan: true)
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

@@ -79,6 +79,9 @@ public struct DiskReport: Codable, Equatable {
     public var totalBytes: Int
     public var reclaimableBytes: Int
     public var agents: [DiskAgent]
+    public var cached: Bool?
+    public var scannedAt: String?
+    public var scanSeconds: Double?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -86,16 +89,23 @@ public struct DiskReport: Codable, Equatable {
         case totalBytes = "total_bytes"
         case reclaimableBytes = "reclaimable_bytes"
         case agents
+        case cached
+        case scannedAt = "scanned_at"
+        case scanSeconds = "scan_seconds"
     }
 
     public static let empty = DiskReport(schemaVersion: 1, generatedAt: "", totalBytes: 0, reclaimableBytes: 0, agents: [])
 
-    public init(schemaVersion: Int, generatedAt: String, totalBytes: Int, reclaimableBytes: Int, agents: [DiskAgent]) {
+    public init(schemaVersion: Int, generatedAt: String, totalBytes: Int, reclaimableBytes: Int, agents: [DiskAgent],
+                cached: Bool? = nil, scannedAt: String? = nil, scanSeconds: Double? = nil) {
         self.schemaVersion = schemaVersion
         self.generatedAt = generatedAt
         self.totalBytes = totalBytes
         self.reclaimableBytes = reclaimableBytes
         self.agents = agents
+        self.cached = cached
+        self.scannedAt = scannedAt
+        self.scanSeconds = scanSeconds
     }
 
     public var isNewerSchema: Bool { schemaVersion > supportedSchemaVersion }
