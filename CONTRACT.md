@@ -42,6 +42,19 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
     },
     "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" }
   },
+  "subscriptions": {                          // 各 agent 的订阅档位，供 UI 的「Subscription value」卡和「This billing cycle」范围用；拿不到的 agent 不出现
+    "claude": {
+      "plan": "max_5x",                       // 内部 key：claude 用 pro | max_5x | max_20x；codex 用 free | go | plus | pro | team；antigravity 用 google_ai_pro | google_ai_ultra；未知档位原样给出
+      "plan_label": "Claude Max 5x",          // 显示名
+      "monthly_price_usd": 100.0,             // 档位未知时为 null
+      "cycle_start": "2026-10-25T00:00:00Z",  // 当前账期起点，ISO 8601 UTC（按 anchor_day 在报告 timezone 的 00:00 折算）
+      "cycle_end": "2026-11-25T00:00:00Z",    // 下一账期起点
+      "anchor_day": 25,                       // 每月几号开新账期
+      "cycle_source": "subscription_date",    // subscription_date（从订阅创建日推出）| calendar_month（不知道订阅日，按自然月）| manual
+      "extra_usage_enabled": false,           // Claude 的 hasExtraUsageEnabled：true 表示超额会真实扣款，UI 要单独标出
+      "source": "detected"                    // detected（本机读到）| manual（用户配置）
+    }
+  },
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
   "buckets": {
@@ -205,7 +218,8 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 ## 6.1 时间范围（UI 侧计算）
 
 UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`30d`、`Last week`（上一个周一到周日）、
-`Since reset`（各 agent 自己的周窗口起点 = `weekly_resets_at - weekly_window_hours`，缺 `quota_windows` 的 agent 在该范围下不计入并在 UI 标明）。
+`Since reset`（各 agent 自己的周窗口起点 = `weekly_resets_at - weekly_window_hours`，缺 `quota_windows` 的 agent 在该范围下不计入并在 UI 标明）、
+`Billing cycle`（各 agent 自己的 `subscriptions[agent].cycle_start` 到现在，缺 `subscriptions` 的 agent 不计入并标明）。
 范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出，sessions 数按 `sessions_detail[].started` 落在范围内计数。
 对账行只在 `All` 下显示。`cost_note` 在任何范围下都显示。
 
@@ -215,6 +229,9 @@ UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`3
 2. 项目列表，按 cost 降序，每行：name、cost、sessions、last_active，以及能看出用了哪些 agent 的标记（色点、色块或小条形均可）。
 3. 项目详情：by_agent、by_model、by_day 时间线、by_branch、sessions_detail 表。
 4. 三个桶各一行，显示数量和金额，即使为 0。
+4.1 **Subscription value 卡**（`subscriptions` 非空时）：每个有订阅的 agent 一行：plan_label、月费、本账期 API 等价用量、倍数（用量 ÷ 月费，月费为 null 时不显示倍数）、`extra_usage_enabled` 为 true 时标「extra usage on」。卡片固定一句说明：
+   「You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.」不可隐藏。
+   项目详情页：对每个有订阅的 agent 显示一行「This repo: N% of your <plan_label> usage this cycle」。
 5. 对账行：`totals.cost` 与各项之和，差异超过 0.01 时高亮。
 
 ---
