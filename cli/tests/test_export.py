@@ -34,6 +34,9 @@ class FixtureExportTest(unittest.TestCase):
     def test_contract(self):
         validate_contract(self, self.doc)
         self.assertEqual(check_invariants(self.doc), [])
+        self.assertIn("ledger", self.doc)
+        self.assertEqual(self.doc["ledger"]["orphaned"], 0)
+        self.assertGreaterEqual(self.doc["ledger"]["sessions"], self.doc["totals"]["unique_sessions"])
 
     def test_json_round_trip(self):
         self.assertEqual(json.loads(json.dumps(self.doc)), self.doc)

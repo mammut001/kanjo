@@ -12,6 +12,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from . import attribution as attr
 from . import quota
 from .config import Config
+from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
@@ -42,14 +43,23 @@ class ScanResult:
     sessions: List[Session]
     failed_files: List[str]
     stats: Dict[str, SourceStats]
+    ledger: Optional[dict] = None
 
 
-def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None) -> ScanResult:
+def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Optional[Ledger] = None) -> ScanResult:
     """Parse every log file. ``dirs`` maps agent -> directories (defaults to the
-    standard locations, overridable with KANJO_<AGENT>_DIR)."""
+    standard locations, overridable with KANJO_<AGENT>_DIR).
+
+    Each parsed session is upserted into the permanent ledger (loaded once).
+    After the files, sessions whose log has disappeared are appended from the
+    ledger so they still flow through dedupe and export. A file that is still
+    on disk is never also taken from the ledger.
+    """
     sessions: List[Session] = []
     failed: List[str] = []
     stats: Dict[str, SourceStats] = {}
+    ledger = ledger or Ledger()
+    seen = set()
     for agent, module in SOURCES.items():
         roots = (dirs or {}).get(agent)
         if roots is None:
@@ -73,10 +83,25 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None) -> ScanResult:
                 st.subagents += 1
             else:
                 st.sessions += 1
+            ledger.note_file(session, path)
+            seen.add(entry_key(session.agent, session.id, session.subagent_of))
             sessions.append(session)
+    for key, session in ledger.orphan_sessions():
+        if key in seen:
+            continue
+        sessions.append(session)
+        st = stats.get(session.agent)
+        if st is None:
+            continue
+        st.messages += len(session.messages)
+        if session.subagent_of:
+            st.subagents += 1
+        else:
+            st.sessions += 1
+    ledger.save()
     if cache:
         cache.save()
-    return ScanResult(sessions=sessions, failed_files=failed, stats=stats)
+    return ScanResult(sessions=sessions, failed_files=failed, stats=stats, ledger=ledger.summary())
 
 
 def _merge_same_id(sessions: List[Session]) -> List[Session]:
@@ -254,6 +279,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
+    ledger_doc = result.ledger if result.ledger is not None else Ledger().summary()
     sessions = dedupe(result.sessions)
     units = build_units(sessions)
 
@@ -426,6 +452,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
             "excluded": bucket_json(buckets[attr.EXCLUDED]),
             "parse_failed": {"sessions": len(result.failed_files), "files": sorted(result.failed_files)},
         },
+        "ledger": ledger_doc,
     }
 
 

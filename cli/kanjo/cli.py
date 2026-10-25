@@ -1,4 +1,4 @@
-"""Command line interface: ``kanjo export | projects | doctor``."""
+"""Command line interface: ``kanjo export | projects | doctor | ledger | disk``."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from typing import List, Optional
 
 from . import __version__
 from .config import Config, ConfigError, load as load_config
+from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import COST_NOTE, SOURCES, build_export, check_invariants, scan
+from .ledger import Ledger
 from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions as load_subscriptions
 
@@ -51,6 +53,17 @@ def cmd_export(args) -> int:
 
 def _money(v: float) -> str:
     return "${:,.2f}".format(v) if v >= 0.005 or v == 0 else "<$0.01"
+
+
+def _human_bytes(n: int) -> str:
+    value = float(n)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            if unit == "B":
+                return "%d B" % int(value)
+            return "%.1f %s" % (value, unit)
+        value /= 1024.0
+    return "%d B" % int(n)
 
 
 def _table(rows: List[List[str]], align: str) -> str:
@@ -123,6 +136,10 @@ def cmd_doctor(args) -> int:
         print("config: ERROR %s" % exc)
     _print_subscriptions(cfg.subscriptions if cfg is not None else None)
     result = scan(cache=_cache(args))
+    led = result.ledger or {}
+    print()
+    print("ledger: %s" % led.get("path", ""))
+    print("  sessions=%d orphaned=%d" % (int(led.get("sessions") or 0), int(led.get("orphaned") or 0)))
     print()
     rows = [["Agent", "Files", "Sessions", "Subagents", "Failed", "Messages", "Log directories"]]
     for agent, st in result.stats.items():
@@ -136,6 +153,66 @@ def cmd_doctor(args) -> int:
             print("  " + f)
         if len(result.failed_files) > 20:
             print("  ... and %d more" % (len(result.failed_files) - 20))
+    return 0
+
+
+def cmd_ledger(args) -> int:
+    ledger = Ledger()
+    if args.forget_orphans:
+        pending = ledger.summary()["orphaned"]
+        if not args.yes:
+            print("%d orphaned session(s) in %s" % (pending, ledger.path))
+            print("re-run with --forget-orphans --yes to remove them")
+            return 0
+        print("forgot %d orphaned session(s)" % ledger.forget_orphans())
+    info = ledger.summary()
+    print(info["path"])
+    print("sessions: %d" % info["sessions"])
+    print("orphaned: %d" % info["orphaned"])
+    print("size: %d" % ledger.size_bytes())
+    return 0
+
+
+def _format_disk(doc: dict) -> str:
+    rows = [["Agent", "Entry", "Size", "Files", "Newest", "Deletable"]]
+    errors = 0
+    for agent in doc["agents"]:
+        for entry in agent["entries"]:
+            state = entry["deletable"]
+            if entry["blocked"]:
+                state = "%s (%s)" % (state, ",".join(entry["blocked"]))
+            rows.append([
+                agent["label"], entry["id"], _human_bytes(entry["bytes"]),
+                str(entry["files"]), entry["newest"] or "-", state,
+            ])
+            errors += entry.get("skipped_errors") or 0
+    if len(rows) == 1:
+        return "no AI tool directories found"
+    lines = [
+        _table(rows, "llrrll"),
+        "",
+        "total %s, reclaimable %s" % (_human_bytes(doc["total_bytes"]), _human_bytes(doc["reclaimable_bytes"])),
+    ]
+    if errors:
+        lines.append("unreadable paths skipped: %d" % errors)
+    return "\n".join(lines)
+
+
+def cmd_disk(args) -> int:
+    if getattr(args, "disk_cmd", None) == "clean":
+        try:
+            days = parse_older_than(args.older_than) if args.older_than else None
+        except ValueError:
+            print("kanjo: --older-than expects a number of days like 30d", file=sys.stderr)
+            return 2
+        doc = disk_clean(args.ids, older_than_days=days, dry_run=bool(args.dry_run), yes=bool(args.yes))
+        sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
+        return 0
+    doc = disk_report()
+    if args.json:
+        sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
+    else:
+        print(_format_disk(doc))
     return 0
 
 
@@ -169,6 +246,23 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="list log directories, session counts and subscriptions")
     common(p, threshold=False)
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("ledger", help="show the permanent session ledger")
+    p.add_argument("--forget-orphans", action="store_true",
+                   help="remove entries whose log file is gone (requires --yes)")
+    p.add_argument("--yes", action="store_true", help="actually forget orphaned entries")
+    p.set_defaults(func=cmd_ledger)
+
+    p = sub.add_parser("disk", help="show how much disk each AI tool uses")
+    p.add_argument("--json", action="store_true", help="print the CONTRACT.md section 10 document")
+    p.set_defaults(func=cmd_disk, disk_cmd=None)
+    disk_sub = p.add_subparsers(dest="disk_cmd", required=False)
+    c = disk_sub.add_parser("clean", help="move entries into the Trash (nothing moves without --yes)")
+    c.add_argument("ids", nargs="+", metavar="ID", help="entry ids from `kanjo disk`")
+    c.add_argument("--older-than", metavar="ND", help="only files older than N days, for example 30d")
+    c.add_argument("--dry-run", action="store_true", help="print the plan and do not move anything")
+    c.add_argument("--yes", action="store_true", help="actually move files; without this, nothing moves")
+    c.set_defaults(func=cmd_disk)
     return parser
 
 
