@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 
 from kanjo import cli
+from kanjo import disk
 from kanjo.cache import _load_session
 from kanjo.export import build_export
 from kanjo.ledger import Ledger
@@ -172,6 +173,165 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("ledger: %s" % os.path.join(self.data, "ledger.json"), out)
         self.assertIn("orphaned=0", out)
+
+    def disk_roots(self):
+        return {
+            "claude_projects": [self.projects],
+            "scratch": os.path.join(self.tmp, "scratch"),
+            "codex_dirs": [self.codex],
+            "antigravity_dirs": [self.agy],
+            "grok": os.path.join(self.tmp, "grok"),
+            "claude_app": os.path.join(self.tmp, "app"),
+        }
+
+    def codex_sessions(self, doc):
+        found = [e for a in doc["agents"] if a["agent"] == "codex" for e in a["entries"] if e["kind"] == "sessions"]
+        self.assertEqual(len(found), 1, found)
+        return found[0]
+
+    def output_of(self, doc, sid):
+        for project in doc["projects"]:
+            for session in project["sessions_detail"]:
+                if session["id"] == sid:
+                    return session["tokens"]["output"]
+        for name in ("unattributed", "excluded"):
+            for session in doc["buckets"][name]["sessions_detail"]:
+                if session["id"] == sid:
+                    return session["tokens"]["output"]
+        return None
+
+    def write_rollout(self, name, session_id, output):
+        path = os.path.join(self.codex, "sessions", "2026", "07", "01", "rollout-%s.jsonl" % name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        meta = {"id": session_id, "cwd": self.tmp, "timestamp": "2026-07-01T01:00:03.000Z"}
+        usage = {
+            "type": "token_count",
+            "info": {
+                "total_token_usage": {"input_tokens": 10, "output_tokens": output},
+                "last_token_usage": {"input_tokens": 10, "output_tokens": output, "cached_input_tokens": 0},
+            },
+        }
+        lines = [
+            {"timestamp": "2026-07-01T01:00:03.000Z", "type": "session_meta", "payload": meta},
+            {"timestamp": "2026-07-01T01:00:0%d.000Z" % (4 + output), "type": "event_msg", "payload": usage},
+        ]
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("".join(json.dumps(line) + "\n" for line in lines))
+        return path
+
+    def test_same_session_id_records_every_file_and_orphans_when_all_are_gone(self):
+        same = "019f1750-7277-7f50-8187-804ff9c04f25"
+        path_a = self.write_rollout("a", same, 2)
+        doc = self.export()
+        self.assertEqual(self.output_of(doc, same), 2)
+        path_b = self.write_rollout("b", same, 3)
+        doc = self.export()
+        self.assertEqual(self.ids(doc).count(same), 1)
+        self.assertEqual(self.output_of(doc, same), 5)
+        sessions = [entry for entry in Ledger(directory=self.data).entries.values() if "session" in entry]
+        self.assertEqual(len(sessions), 1)
+        entry = sessions[0]
+        self.assertEqual(entry["source_paths"], sorted([path_a, path_b]))
+        self.assertEqual(entry["source_path"], sorted([path_a, path_b])[0])
+        counted = self.codex_sessions(disk.report(roots=self.disk_roots()))
+        self.assertEqual((counted["imported_files"], counted["log_files"], counted["blocked"]), (2, 2, []))
+        blob = self._ledger_bytes()
+        self.export()
+        self.assertEqual(self._ledger_bytes(), blob)
+        os.remove(path_a)
+        doc = self.export()
+        self.assertEqual(self.ids(doc).count(same), 1)
+        self.assertEqual(self.output_of(doc, same), 3)
+        self.assertEqual(doc["ledger"]["orphaned"], 0)
+        os.remove(path_b)
+        doc = self.export()
+        self.assertEqual(self.output_of(doc, same), 5)
+        self.assertGreaterEqual(doc["ledger"]["orphaned"], 1)
+        self.assertEqual(doc["ledger"]["empty"], 0)
+        self.assertEqual(doc["ledger"]["errors"], 0)
+
+    def test_empty_log_is_imported_and_not_exported(self):
+        path = os.path.join(self.codex, "rollout-empty.jsonl")
+        os.makedirs(self.codex, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("")
+        doc = self.export()
+        self.assertNotIn("rollout-empty", self.ids(doc))
+        self.assertEqual((doc["ledger"]["sessions"], doc["ledger"]["empty"], doc["ledger"]["errors"]), (0, 1, 0))
+        ledger = Ledger(directory=self.data)
+        markers = [entry for entry in ledger.entries.values() if entry.get("empty")]
+        self.assertEqual(len(markers), 1)
+        self.assertEqual(markers[0]["source_paths"], [path])
+        self.assertNotIn("session", markers[0])
+        self.assertNotIn("error", markers[0])
+        counted = self.codex_sessions(disk.report(roots=self.disk_roots()))
+        self.assertEqual((counted["imported_files"], counted["log_files"], counted["blocked"]), (1, 1, []))
+        code, out, _ = self.cli("ledger")
+        self.assertEqual(code, 0)
+        self.assertIn("empty: 1", out)
+        self.assertIn("errors: 0", out)
+        blob = self._ledger_bytes()
+        doc = self.export()
+        self.assertEqual(self._ledger_bytes(), blob)
+        self.assertNotIn("rollout-empty", self.ids(doc))
+        os.remove(path)
+        doc = self.export()
+        self.assertNotIn("rollout-empty", self.ids(doc))
+        self.assertEqual(doc["ledger"]["sessions"], 0)
+
+    def test_parse_error_log_is_imported_and_counted_under_errors(self):
+        path = os.path.join(self.codex, "rollout-bad.jsonl")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("this is not json\n")
+        doc = self.export()
+        self.assertEqual(self.ids(doc), [])
+        self.assertEqual(doc["buckets"]["parse_failed"]["files"], [path])
+        self.assertEqual((doc["ledger"]["sessions"], doc["ledger"]["empty"], doc["ledger"]["errors"]), (0, 0, 1))
+        ledger = Ledger(directory=self.data)
+        markers = [entry for entry in ledger.entries.values() if "error" in entry]
+        self.assertEqual(len(markers), 1)
+        self.assertEqual(markers[0]["source_paths"], [path])
+        self.assertTrue(markers[0]["error"])
+        self.assertNotIn("session", markers[0])
+        self.assertNotIn("empty", markers[0])
+        counted = self.codex_sessions(disk.report(roots=self.disk_roots()))
+        self.assertEqual((counted["imported_files"], counted["log_files"], counted["blocked"]), (1, 1, []))
+        code, out, _ = self.cli("ledger")
+        self.assertEqual(code, 0)
+        self.assertIn("errors: 1", out)
+        self.assertIn("empty: 0", out)
+        blob = self._ledger_bytes()
+        self.export()
+        self.assertEqual(self._ledger_bytes(), blob)
+
+    def test_old_ledger_without_source_paths_still_imports(self):
+        path = self.write_log()
+        self.export()
+        ledger_path = os.path.join(self.data, "ledger.json")
+        with open(ledger_path, encoding="utf-8") as handle:
+            stored = json.load(handle)
+        raw = next(iter(stored["entries"].values()))
+        raw.pop("source_paths", None)
+        raw.pop("path_sigs", None)
+        self.assertEqual(raw["source_path"], path)
+        with open(ledger_path, "w", encoding="utf-8") as handle:
+            json.dump(stored, handle)
+            handle.write("\n")
+        loaded = Ledger(directory=self.data)
+        entry = next(iter(loaded.entries.values()))
+        self.assertEqual(entry["source_paths"], [path])
+        self.assertEqual(entry["source_path"], path)
+        with open(ledger_path, encoding="utf-8") as handle:
+            on_disk = next(iter(json.load(handle)["entries"].values()))
+        self.assertNotIn("source_paths", on_disk)
+        counted = disk.report(roots=self.disk_roots())
+        claude = [e for a in counted["agents"] if a["agent"] == "claude" for e in a["entries"] if e["id"] == "claude:sessions"]
+        self.assertEqual(len(claude), 1)
+        self.assertEqual((claude[0]["imported_files"], claude[0]["log_files"], claude[0]["blocked"]), (1, 1, []))
+        os.remove(path)
+        doc = self.export()
+        self.assertIn(SID, self.ids(doc))
+        self.assertEqual(doc["ledger"]["orphaned"], 1)
 
 
 if __name__ == "__main__":

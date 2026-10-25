@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from .ledger import Ledger
+from .ledger import Ledger, paths_of
 from .sources import antigravity, claude, codex
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
@@ -406,21 +406,21 @@ def _imported_index(ledger: Ledger) -> Dict[str, set]:
     """``agent -> source paths`` that have any ledger row. Signature is ignored.
 
     A later export re-imports a file whose size or mtime changed. Matching the
-    signature here kept live session logs ``not_imported`` forever.
+    signature here kept live session logs ``not_imported`` forever. Every path
+    on a row counts, including the other files of a merged session and the
+    lightweight empty / error rows.
     """
     found: Dict[str, set] = {}
     for key, entry in ledger.entries.items():
         if not isinstance(entry, dict):
             continue
-        path = entry.get("source_path")
-        if not isinstance(path, str) or not path:
-            continue
         agent = _entry_agent(key, entry)
         if not agent:
             continue
         bucket = found.setdefault(agent, set())
-        bucket.add(path)
-        bucket.add(os.path.normpath(path))
+        for path in paths_of(entry):
+            bucket.add(path)
+            bucket.add(os.path.normpath(path))
     return found
 
 
