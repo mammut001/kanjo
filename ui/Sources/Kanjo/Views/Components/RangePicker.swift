@@ -2,19 +2,27 @@ import SwiftUI
 import KanjoCore
 
 /// 当前生效的时间范围：存储值 + 报告 → 区间、过滤结果、说明文字。
-/// 「Since reset」在报告没有 quota_windows 时不可用，存储值是它也按 All 显示。
+/// 「Since reset」在报告没有 quota_windows 时不可用，「Billing cycle」在没有 subscriptions 时不可用；
+/// 存储值是它们也按 All 显示。
 struct RangeContext {
     let report: UsageReport
     let range: TimeRange
     let spec: RangeSpec
     let resetAvailable: Bool
+    let cycleAvailable: Bool
 
     init(report: UsageReport, raw: String, now: Date = Date()) {
         self.report = report
-        let available = !(report.quotaWindows ?? [:]).isEmpty
+        let reset = !(report.quotaWindows ?? [:]).isEmpty
+        let cycle = !(report.subscriptions ?? [:]).isEmpty
         let wanted = TimeRange(rawValue: raw) ?? .all
-        range = (wanted == .sinceReset && !available) ? .all : wanted
-        resetAvailable = available
+        switch wanted {
+        case .sinceReset where !reset: range = .all
+        case .billingCycle where !cycle: range = .all
+        default: range = wanted
+        }
+        resetAvailable = reset
+        cycleAvailable = cycle
         spec = RangeEngine.spec(range, report: report, now: now)
     }
 
@@ -35,7 +43,8 @@ struct RangeContext {
 
     /// 范围说明（All 下为 nil）。
     /// 例：`Last 7 days · Oct 18 – Oct 24`；
-    /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · Antigravity: no reset info`。
+    /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · Antigravity: no reset info`；
+    /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
         let cal = spec.calendar
         let md = formatter("MMM d", cal), mdt = formatter("MMM d HH:mm", cal)
@@ -54,15 +63,26 @@ struct RangeContext {
             if !parts.isEmpty { parts[0] = "Since " + parts[0] }
             parts += without.map { "\(shortName($0)): no reset info" }
             return parts.joined(separator: " · ")
+        case .billingCycle:
+            let withCycle = agentOrder.filter { spec.agentStarts[$0] != nil }
+            let without = agentOrder.filter { spec.agentStarts[$0] == nil }
+            let parts = withCycle.map { agent -> String in
+                let label = report.subscriptions?[agent]?.planLabel ?? shortName(agent)
+                return "\(label) since \(md.string(from: spec.agentStarts[agent]!))"
+            }
+            let missing = without.map { "\(shortName($0)): no subscription" }
+            return (["Billing cycle"] + parts + missing).joined(separator: " · ")
         }
     }
 
-    /// 报告里出现的 agent（按总花费降序），后面接只在 quota_windows 里出现的。
+    /// 报告里出现的 agent（按总花费降序），后面接只在 quota_windows / subscriptions 里出现的。
     var agentOrder: [String] {
         var cost: [String: Double] = [:]
         for p in report.projects { for a in p.byAgent { cost[a.agent, default: 0] += a.cost } }
         let used = cost.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
-        let extra = (report.quotaWindows ?? [:]).keys.filter { cost[$0] == nil }.sorted()
+        var extraKeys = Set((report.quotaWindows ?? [:]).keys)
+        extraKeys.formUnion((report.subscriptions ?? [:]).keys)
+        let extra = extraKeys.filter { cost[$0] == nil }.sorted()
         return used + extra
     }
 
@@ -82,12 +102,14 @@ struct RangeContext {
     }
 }
 
-/// 紧凑的分段控件（自绘胶囊）：All · 7d · 30d · Last week · Since reset。
-/// 「Since reset」不可用时画成三级色、不可点，tooltip「No reset info」。
+/// 紧凑的分段控件（自绘胶囊）：All · 7d · 30d · Last week · Since reset · Cycle。
+/// 「Since reset」不可用时画成三级色、不可点，tooltip「No reset info」；
+/// 「Cycle」同理，tooltip「No subscription info」。
 struct RangePicker: View {
     @Binding var raw: String
     let effective: TimeRange
     let resetAvailable: Bool
+    let cycleAvailable: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -100,17 +122,24 @@ struct RangePicker: View {
         .fixedSize()
     }
 
+    /// 没有对应数据时的 tooltip；nil 表示这段可以点。
+    private func unavailable(_ r: TimeRange) -> String? {
+        if r == .sinceReset && !resetAvailable { return "No reset info" }
+        if r == .billingCycle && !cycleAvailable { return "No subscription info" }
+        return nil
+    }
+
     @ViewBuilder private func segment(_ r: TimeRange) -> some View {
         let selected = r == effective
         let label = Text(r.shortLabel)
             .font(.system(size: 10, weight: selected ? .semibold : .regular))
             .lineLimit(1)
-            .padding(.horizontal, 6).padding(.vertical, 2.5)
+            .padding(.horizontal, 5).padding(.vertical, 2.5)
             .background(Capsule().fill(selected ? Color.primary.opacity(0.13) : Color.clear))
             .contentShape(Capsule())
-        if r == .sinceReset && !resetAvailable {
+        if let reason = unavailable(r) {
             // 不用 .disabled：禁用的按钮在 macOS 上不显示 tooltip。
-            label.foregroundStyle(.tertiary).help("No reset info")
+            label.foregroundStyle(.tertiary).help(reason)
         } else {
             Button {
                 withAnimation(.easeOut(duration: 0.15)) { raw = r.rawValue }

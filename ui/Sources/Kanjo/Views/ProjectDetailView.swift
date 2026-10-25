@@ -149,7 +149,8 @@ struct ProjectDetailView: View {
                     Badge(text: "local", help: "No git remote; identified by its absolute path.")
                 }
             }
-            RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable)
+            RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
+                        cycleAvailable: ctx.cycleAvailable)
                 .padding(.top, 4).padding(.bottom, 2)
             HStack(alignment: .bottom, spacing: 10) {
                 HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
@@ -302,8 +303,9 @@ struct ProjectDetailView: View {
 
     private func agentsSection(_ shown: Project) -> some View {
         let maxCost = shown.byAgent.map(\.cost).max() ?? 0
+        let shares = SubscriptionValue.shares(project: project.id, report: report)
         return PanelSection("By agent", inset: true) {
-            VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
                 if shown.byAgent.isEmpty {
                     Text("No usage in this range.").font(.system(size: 11)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,8 +316,25 @@ struct ProjectDetailView: View {
                             value: Fmt.money(a.cost, currency: cur),
                             detail: "\(a.sessions) sess · \(Fmt.tokens(a.tokens.total)) tok · \(Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0))")
                 }
+                if !shares.isEmpty {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(shares) { s in
+                            Text("This repo: \(Self.shareText(s.share)) of your \(s.planLabel) usage this cycle")
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .padding(.top, 1)
+                }
             }
         }
+    }
+
+    /// 0 显示成「0%」，其余沿用 Fmt.percent（38% / 0.4%）。
+    private static func shareText(_ share: Double) -> String {
+        share == 0 ? "0%" : Fmt.percent(share)
     }
 
     private func modelsSection(isAll: Bool) -> some View {

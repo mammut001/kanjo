@@ -245,10 +245,54 @@ quota_windows = {
     "codex": {"weekly_resets_at": "2026-10-28T08:00:00Z", "weekly_window_hours": 168,
               "five_hour_resets_at": None, "source": "manual"},
 }
+
+def cycle_bounds(anchor_day, now=NOW):
+    """Current [cycle_start, cycle_end) for anchor_day at 00:00 LOCAL, as UTC ISO strings.
+
+    The day containing `now` in LOCAL belongs to the cycle that opened on anchor_day
+    (this month if today's day-of-month >= anchor, otherwise last month).
+    """
+    local = now.astimezone(LOCAL)
+    year, month = local.year, local.month
+    if local.day < anchor_day:
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+
+    def add_month(y, m):
+        m += 1
+        if m == 13:
+            return y + 1, 1
+        return y, m
+
+    def iso(y, m, d):
+        dt = datetime(y, m, d, 0, 0, tzinfo=LOCAL).astimezone(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    end_y, end_m = add_month(year, month)
+    return iso(year, month, anchor_day), iso(end_y, end_m, anchor_day)
+
+# 订阅：claude / codex 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
+# 账期按 anchor_day 在 Asia/Shanghai 的 00:00 折算（报告 generated_at 落在 10 月 23 日）。
+claude_start, claude_end = cycle_bounds(25)
+codex_start, codex_end = cycle_bounds(1)
+subscriptions = {
+    "claude": {
+        "plan": "max_5x", "plan_label": "Claude Max 5x", "monthly_price_usd": 100.0,
+        "cycle_start": claude_start, "cycle_end": claude_end, "anchor_day": 25,
+        "cycle_source": "subscription_date", "extra_usage_enabled": False, "source": "detected",
+    },
+    "codex": {
+        "plan": "plus", "plan_label": "ChatGPT Plus", "monthly_price_usd": 20.0,
+        "cycle_start": codex_start, "cycle_end": codex_end, "anchor_day": 1,
+        "cycle_source": "calendar_month", "extra_usage_enabled": False, "source": "detected",
+    },
+}
 out = {"schema_version": 1, "generated_at": "2026-10-23T02:00:00Z", "generated_by": "generate_sample.py",
        "timezone": "Asia/Shanghai", "currency": "USD",
        "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
        "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
+       "subscriptions": subscriptions,
        "totals": totals, "projects": projects, "buckets": buckets}
 import os
 dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample.json")
@@ -268,6 +312,22 @@ for p in projects:
         assert set(d["by_agent"]) <= {a["agent"] for a in p["by_agent"]}, (p["id"], d["day"])
         assert set(d["by_agent_tokens"]) == set(d["by_agent"]), (p["id"], d["day"])
         assert sum(d["by_agent_tokens"].values()) == d["tokens"], (p["id"], d["day"])
+assert set(subscriptions) == {"claude", "codex"}
+assert subscriptions["claude"]["plan"] == "max_5x"
+assert subscriptions["claude"]["monthly_price_usd"] == 100.0
+assert subscriptions["claude"]["anchor_day"] == 25
+assert subscriptions["claude"]["cycle_source"] == "subscription_date"
+assert subscriptions["claude"]["extra_usage_enabled"] is False
+assert subscriptions["claude"]["source"] == "detected"
+assert subscriptions["claude"]["cycle_start"] == "2026-09-24T16:00:00Z"
+assert subscriptions["claude"]["cycle_end"] == "2026-10-24T16:00:00Z"
+assert subscriptions["codex"]["plan"] == "plus"
+assert subscriptions["codex"]["monthly_price_usd"] == 20.0
+assert subscriptions["codex"]["anchor_day"] == 1
+assert subscriptions["codex"]["cycle_source"] == "calendar_month"
+assert subscriptions["codex"]["source"] == "detected"
+assert subscriptions["codex"]["cycle_start"] == "2026-09-30T16:00:00Z"
+assert subscriptions["codex"]["cycle_end"] == "2026-10-31T16:00:00Z"
 print("ok", round(totals["cost"], 2), totals["sessions"])
 for p in projects: print(f'{p["name"]:16} {p["cost"]:10.4f} {p["sessions"]:3} {[a["agent"] for a in p["by_agent"]]} branches={len(p["by_branch"])}')
 print("buckets", buckets["unattributed"]["cost"], buckets["excluded"]["cost"])

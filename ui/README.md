@@ -26,7 +26,7 @@ swift run Kanjo --window --route project:0:locations   # project page scrolled t
 
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
 `project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),
-`project:<index>:locations` (bottom, with Locations expanded), `bucket:unattributed`, `bucket:excluded`, `settings`, `settings-bottom` (Settings scrolled to Quota reset).
+`project:<index>:locations` (bottom, with Locations expanded), `bucket:unattributed`, `bucket:excluded`, `settings`, `settings-bottom` (Settings scrolled to the bottom).
 
 ## Overview: mosaic, heat strips, hide / pin
 
@@ -66,7 +66,7 @@ The panel is 360 pt wide; its background is Liquid Glass on macOS 26+ and `.regu
 
 ## Time range
 
-A compact segmented control — All · 7d · 30d · Last week · Since reset — sits right of "Total cost" on the overview
+A compact segmented control — All · 7d · 30d · Last week · Since reset · Cycle — sits right of "Total cost" on the overview
 and under the name on the project page (one shared choice, `@AppStorage("timeRange")`, default `all`).
 Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` (pure, tested in `TimeRangeTests`):
 
@@ -76,6 +76,9 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
   (`weekly_resets_at − weekly_window_hours`, shifted by whole windows so that start ≤ now < start + window).
   Agents without a quota window are left out and named in the caption ("Antigravity: no reset info").
   Without any `quota_windows` the segment is greyed out with the tooltip "No reset info".
+- **Billing cycle** — each agent from its own `subscriptions[agent].cycle_start` through now.
+  Agents without a subscription are left out and named in the caption ("Antigravity: no subscription").
+  Without any `subscriptions` the segment is greyed out with the tooltip "No subscription info".
 - Project cost / tokens add up `by_day[].by_agent` / `by_agent_tokens` for every day that overlaps the range
   (per agent for Since reset); days without those fields count fully toward the project's dominant agent.
   Session counts use `sessions_detail[].started`. Buckets have no daily data, so they are filtered by session start.
@@ -85,13 +88,17 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
   the reconciliation line is shown only for All; the cost note always. On the project page the token type
   breakdown is hidden (only the total is known per day), and By model / By branch keep all-time numbers with an "All time" tag.
 - The menu bar amount follows the range too: the filtered total with a tiny prefix — `7d $…`, `30d $…`,
-  `wk $…` (Last week), `rst $…` (Since reset) — and the plain report total for All.
+  `wk $…` (Last week), `rst $…` (Since reset), `cyc $…` (Billing cycle) — and the plain report total for All.
 - Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
   (`tokei` / `manual` / `none`); reset times can be set by hand in `~/.config/kanjo/attribution.toml`.
 
-Screenshot tip: `-timeRange days7` (or `all`, `days30`, `lastWeek`, `sinceReset`) presets the range for one launch.
+Screenshot tip: `-timeRange days7` (or `all`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
 Preferences can be preset for one launch without persisting them, through the
 `NSArgumentDomain`, e.g. `.build/debug/Kanjo --window -hiddenProjects $'github.com/a/b\ngithub.com/c/d'`.
+
+## Subscription value
+
+Under the total (above the mosaic) when `subscriptions` is non-empty: one row per subscribed agent, sorted by this cycle's API-equivalent cost — plan, monthly price, usage from that agent's `cycle_start` through now across every project and both buckets, and the multiple of the flat fee (`usage ÷ monthly_price_usd`, shown as `15.7×`, or `—` when the price is null). An "extra usage on" badge appears when `extra_usage_enabled` is true. The rows ignore the selected range. The block always ends with: "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing." On a project, under By agent: "This repo: N% of your <plan> usage this cycle" (skipped when that agent's cycle total is zero). Settings → Subscriptions lists plan, price, anchor day, cycle source and source (`detected` / `manual`). Overrides live in `~/.config/kanjo/attribution.toml` under `[subscriptions.<agent>]`.
 
 ## Data source
 
