@@ -33,7 +33,7 @@ kanjo export -o data.json    # ... or to a file (written atomically)
 kanjo export --compact       # no indentation
 kanjo projects               # readable table, top 25 projects (--all, --limit N)
 kanjo doctor                 # log directories, session counts, ledger, subscriptions
-kanjo ledger                 # permanent ledger: path, session count, orphaned count, size
+kanjo ledger                 # permanent ledger: path, sessions, orphaned, empty, errors, size
 kanjo ledger --forget-orphans --yes
 kanjo disk                   # disk usage table
 kanjo disk --json            # CONTRACT.md section 10
@@ -75,12 +75,15 @@ Parsed sessions are also stored permanently in `~/.local/share/kanjo/ledger.json
 log disappears; the ledger does not. After a log is deleted, `kanjo export` still
 counts that session. The top-level `ledger` object says where the file is, how
 many sessions it holds, how many of those are orphaned (the original file is
-gone) and when it was last written.
+gone) and when it was last written. Logs with no billable messages, and logs
+that fail to parse, are recorded too (`empty` and `errors` in `kanjo ledger`),
+so cleanup is not blocked.
 
 The ledger is loaded once per run and rewritten only when a file's size or mtime
 changed. `--no-cache` still updates it. `kanjo ledger` prints the path, the
-session count, the orphaned count and the file size. `kanjo ledger
---forget-orphans` removes orphaned entries, and only when `--yes` is passed.
+session count, the orphaned count, the empty and error counts, and the file
+size. `kanjo ledger --forget-orphans` removes orphaned entries, and only when
+`--yes` is passed.
 Nothing else mutates the ledger.
 
 `kanjo doctor` prints the ledger path and the orphan count.

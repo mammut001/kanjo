@@ -208,6 +208,11 @@ def check_ledger(tc, ledger):
     tc.assertNotIsInstance(ledger["orphaned"], bool)
     tc.assertGreaterEqual(ledger["orphaned"], 0)
     tc.assertLessEqual(ledger["orphaned"], ledger["sessions"])
+    for key in ("empty", "errors"):
+        if key in ledger:
+            tc.assertIsInstance(ledger[key], int, key)
+            tc.assertNotIsInstance(ledger[key], bool, key)
+            tc.assertGreaterEqual(ledger[key], 0, key)
     tc.assertRegex(ledger["updated_at"], ISO_UTC)
 
 

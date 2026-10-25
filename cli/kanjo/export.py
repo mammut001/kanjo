@@ -12,6 +12,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from . import attribution as attr
 from . import quota
 from .config import Config
+from .cache import _dump_session, _load_session
 from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
@@ -51,8 +52,11 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     standard locations, overridable with KANJO_<AGENT>_DIR).
 
     Each parsed session is upserted into the permanent ledger (loaded once).
-    After the files, sessions whose log has disappeared are appended from the
-    ledger so they still flow through dedupe and export. A file that is still
+    Files that share a session id are one ledger row whose ``source_paths``
+    lists every file. A file with no billable messages, or that fails to parse,
+    is recorded as an empty or error row and is not exported as a session.
+    After the files, sessions whose logs have all disappeared are appended from
+    the ledger so they still flow through dedupe and export. A file that is still
     on disk is never also taken from the ledger.
     """
     sessions: List[Session] = []
@@ -60,6 +64,8 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     stats: Dict[str, SourceStats] = {}
     ledger = ledger or Ledger()
     seen = set()
+    grouped: Dict[str, List[Session]] = {}
+    grouped_paths: Dict[str, List[str]] = {}
     for agent, module in SOURCES.items():
         roots = (dirs or {}).get(agent)
         if roots is None:
@@ -70,22 +76,33 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             st.files += 1
             try:
                 session = cache.get(agent, path, parent, module.parse_file) if cache else module.parse_file(path, parent)
-            except ParseError:
+            except ParseError as exc:
                 st.failed += 1
                 failed.append(path)
+                ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
-            except Exception:  # unknown format change: count it, never abort the scan
+            except Exception as exc:  # unknown format change: count it, never abort the scan
                 st.failed += 1
                 failed.append(path)
+                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                continue
+            if not session.messages:
+                ledger.note_unparsed(agent, path)
                 continue
             st.messages += len(session.messages)
             if session.subagent_of:
                 st.subagents += 1
             else:
                 st.sessions += 1
-            ledger.note_file(session, path)
-            seen.add(entry_key(session.agent, session.id, session.subagent_of))
+            key = entry_key(session.agent, session.id, session.subagent_of)
+            seen.add(key)
             sessions.append(session)
+            grouped.setdefault(key, []).append(session)
+            grouped_paths.setdefault(key, []).append(path)
+    for key, group in grouped.items():
+        # Copy before merging: ``_merge_same_id`` mutates its input, and the
+        # originals still go through export dedupe one file at a time.
+        ledger.note_file(_merged_copy(group), grouped_paths[key])
     for key, session in ledger.orphan_sessions():
         if key in seen:
             continue
@@ -102,6 +119,19 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     if cache:
         cache.save()
     return ScanResult(sessions=sessions, failed_files=failed, stats=stats, ledger=ledger.summary())
+
+
+def _error_text(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
+
+
+def _merged_copy(group: List[Session]) -> Session:
+    """One session carrying every file's messages, without mutating ``group``."""
+    if len(group) == 1:
+        return group[0]
+    copies = [_load_session(_dump_session(item)) for item in group]
+    return _merge_same_id(copies)[0]
 
 
 def _merge_same_id(sessions: List[Session]) -> List[Session]:

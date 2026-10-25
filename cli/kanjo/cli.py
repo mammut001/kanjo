@@ -169,6 +169,8 @@ def cmd_ledger(args) -> int:
     print(info["path"])
     print("sessions: %d" % info["sessions"])
     print("orphaned: %d" % info["orphaned"])
+    print("empty: %d" % info["empty"])
+    print("errors: %d" % info["errors"])
     print("size: %d" % ledger.size_bytes())
     return 0
 
