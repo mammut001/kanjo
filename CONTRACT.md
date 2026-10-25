@@ -240,3 +240,58 @@ UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`3
 
 `schema_version` 变更规则：加字段不升版本，改字段含义或删字段升版本。
 UI 遇到更高的 `schema_version` 显示警告但继续渲染。
+
+---
+
+## 9. 账本 (Ledger)
+
+CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.json`（目录可用 `KANJO_DATA_DIR` 覆盖）。
+原始日志文件被删除后，它的会话仍从账本读出并计入导出，所以**清理磁盘不会丢统计**。
+导出文档顶层多一个可选对象：
+
+```jsonc
+"ledger": {
+  "path": "/Users/alice/.local/share/kanjo/ledger.json",
+  "sessions": 611,            // 账本里的会话数
+  "orphaned": 120,            // 其中原始文件已不存在、只靠账本保留的
+  "updated_at": "2026-10-25T10:00:00Z"
+}
+```
+
+## 10. 磁盘报告 (`kanjo disk --json`)
+
+和 `export` 是两份独立的文档。UI 的 Disk 页读这一份。
+
+```jsonc
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-25T10:00:00Z",
+  "total_bytes": 59000000000,
+  "reclaimable_bytes": 31000000000,     // 所有 deletable != "never" 且 blocked 为空的条目之和
+  "agents": [
+    {
+      "agent": "codex", "label": "Codex CLI",
+      "bytes": 11800000000,
+      "entries": [
+        {
+          "id": "codex:sessions",              // 稳定标识，clean 用它指定目标
+          "kind": "sessions",                  // sessions | scratch | worktrees | cache | memory | other
+          "path": "/Users/alice/.codex/sessions",
+          "bytes": 4600000000, "files": 248,
+          "oldest": "2026-06-30", "newest": "2026-10-25",   // YYYY-MM-DD
+          "deletable": "after_import",         // always | after_import | when_clean | never
+          "blocked": [],                       // 非空表示现在不能删，每项是原因：
+                                               //   "not_imported"（账本未收录全部文件）
+                                               //   "uncommitted_changes"（worktree 有未提交改动）
+                                               //   "active"（24 小时内有修改，或被运行中的进程占用）
+          "note": "Session logs. Numbers are kept in the ledger after deletion."
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `kind` 与 `deletable` 的默认对应：`cache` → always；`sessions` → after_import；`scratch` / `worktrees` → when_clean；`memory`（如 Antigravity 的跨会话记忆）→ never；`other` → never。
+- `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]`：只对 `blocked` 为空的条目生效；文件移入 `~/.Trash/kanjo-<时间戳>/`，不直接删除；git worktree 通过主仓库 `git worktree remove` 拆除；没有 `--yes` 时等同 `--dry-run`。输出 JSON：`{ "moved": [...路径], "freed_bytes": N, "skipped": [{ "id", "reason" }] }`。
+- UI 永远不自己删文件，只调用 `kanjo disk clean`，并且先用 `--dry-run` 展示将要移动的内容，用户确认后再带 `--yes` 执行。
