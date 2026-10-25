@@ -31,7 +31,7 @@ kanjo export                 # CONTRACT.md JSON on stdout
 kanjo export -o data.json    # ... or to a file (written atomically)
 kanjo export --compact       # no indentation
 kanjo projects               # readable table, top 25 projects (--all, --limit N)
-kanjo doctor                 # log directories found, session/sub-agent/failure counts
+kanjo doctor                 # log directories, session counts, detected subscriptions
 ```
 
 These options work with every command:
@@ -94,6 +94,83 @@ Sources, per agent (the first one found wins):
 A weekly reset time that is already past moves forward by whole windows to the next
 reset. A 5-hour reset time that is already past becomes `null`, because the next 5-hour
 window only starts with the next request.
+
+### Subscriptions (`subscriptions`)
+
+The UI's "Subscription value" card and "Billing cycle" range need each agent's plan
+and the current billing cycle. `kanjo` fills the top-level `subscriptions` field.
+An agent with nothing detected and nothing configured is left out. The field is `{}`
+when nothing is found. A bad manual entry is a config error (exit code 2), like any other.
+
+These monthly prices are public list prices. They may change, and a manual
+`monthly_price_usd` overrides them. They are not the API-equivalent cost in `cost_note`.
+
+A manual table replaces detection for that agent. Sources, per agent:
+
+1. **Manual**, from the attribution config (`"source": "manual"`):
+
+   ```toml
+   [subscriptions.claude]
+   plan = "max_20x"            # a known key, or any string
+   monthly_price_usd = 200     # optional; known plans fill it in, unknown plans need it
+   anchor_day = 25             # optional, 1-28; sets cycle_source = "manual"
+   extra_usage_enabled = false # optional, default false
+
+   [subscriptions.antigravity]
+   plan = "google_ai_pro"
+   ```
+
+   In `attribution.json` this is `{"subscriptions": {"claude": {...}}}`.
+   `plan` alone is enough for a known key. Without `anchor_day` the cycle is the
+   calendar month (the 1st, `"cycle_source": "calendar_month"`).
+
+2. **Claude**, detected from `~/.claude.json` (`"source": "detected"`).
+   `KANJO_CLAUDE_CONFIG` replaces that path. `oauthAccount.billingType` must be a
+   string containing `subscription`. The plan comes from `userRateLimitTier` when
+   it is not null, otherwise `organizationRateLimitTier`. Match by substring,
+   longer keys first:
+
+   | substring | plan | label | USD/month |
+   |---|---|---|---|
+   | `max_20x` | `max_20x` | Claude Max 20x | 200 |
+   | `max_5x` | `max_5x` | Claude Max 5x | 100 |
+   | `pro` | `pro` | Claude Pro | 20 |
+   | anything else | the raw tier | `Claude (<tier>)` | null |
+
+   `subscriptionCreatedAt` sets `anchor_day` to that timestamp's own day of the month
+   (`"cycle_source": "subscription_date"`). If it is missing, the anchor is the 1st
+   (`"calendar_month"`). `hasExtraUsageEnabled` is copied to `extra_usage_enabled`
+   (false when it is absent or not a boolean).
+
+3. **Codex**, detected from Tokei's `~/.tokei/codex_quota_cache.json`
+   (`plan`, or else `limits.plan_type`). The same 14-day staleness rule as quota
+   windows applies (`fetched_at`, or the file mtime when that is missing).
+   `KANJO_TOKEI_DIR` replaces `~/.tokei`. No subscription date is known, so the
+   anchor is the 1st (`"calendar_month"`) and `extra_usage_enabled` is false.
+
+   | plan | label | USD/month |
+   |---|---|---|
+   | `free` | ChatGPT Free | 0 |
+   | `go` | ChatGPT Go | 8 |
+   | `plus` | ChatGPT Plus | 20 |
+   | `pro` | ChatGPT Pro | 200 |
+   | `team` | ChatGPT Team | 30 |
+   | `business` | ChatGPT Business | 30 |
+   | anything else | `ChatGPT (<plan>)` | null |
+
+4. **Antigravity** is not detectable. It appears only from a manual table.
+
+   | plan | label | USD/month |
+   |---|---|---|
+   | `google_ai_pro` | Google AI Pro | 19.99 |
+   | `google_ai_ultra` | Google AI Ultra | 249.99 |
+
+The billing cycle starts at the most recent `anchor_day` at 00:00 in the report
+`timezone` that is still at or before now. `cycle_end` is the anchor day of the
+next month at 00:00 in that timezone. A short month clamps the anchor to its last
+day, and the next month clamps on its own (anchor 31 in February is the 28th, or
+the 29th in a leap year, and March is the 31st again). `cycle_start` and
+`cycle_end` are those local midnights written as ISO 8601 UTC.
 
 ## About `cost_note`
 
@@ -201,6 +278,7 @@ kanjo/
   cli.py          argparse: export / projects / doctor
   config.py       attribution.toml / .json
   quota.py        quota_windows from the config or Tokei's ~/.tokei caches
+  subscriptions.py  subscription plans and billing cycles (Claude config, Tokei, manual)
   identity.py     path -> project (remote normalization, worktrees, scratchpad decoding)
   attribution.py  scoring and decision
   pricing.py      price lookup, family fallback, estimated flag

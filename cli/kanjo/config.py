@@ -20,6 +20,11 @@ quoted or bare keys, strings, numbers, booleans and string arrays).
     weekly_window_hours = 168
     five_hour_resets_at = "2026-10-24T09:30:00Z"   # optional
 
+    [subscriptions.claude]          # manual plan, replaces detection for this agent
+    plan = "max_20x"
+    monthly_price_usd = 200         # optional; known plans fill it in
+    anchor_day = 25                 # optional, 1-28; sets cycle_source = "manual"
+
 Note: in TOML a bare key after a ``[table]`` header belongs to that table, so
 ``exclude`` and ``dominant_threshold`` are also accepted inside any table.
 """
@@ -27,11 +32,14 @@ Note: in TOML a bare key after a ``[table]`` header belongs to that table, so
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+from .subscriptions import known_monthly_price
 
 DEFAULT_THRESHOLD = 0.8
 DEFAULT_DIR = os.path.join("~", ".config", "kanjo")
@@ -49,6 +57,8 @@ class Config:
     dominant_threshold: float = DEFAULT_THRESHOLD
     # agent -> {"weekly_resets_at": epoch s, "weekly_window_hours": int, "five_hour_resets_at": epoch s | None}
     quota_windows: Dict[str, dict] = field(default_factory=dict)
+    # agent -> {"plan", "monthly_price_usd" or None, "anchor_day" or None, "extra_usage_enabled"}
+    subscriptions: Dict[str, dict] = field(default_factory=dict)
     source: Optional[str] = None
 
     def match_override(self, path: Optional[str]):
@@ -209,6 +219,8 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         raise ConfigError("dominant_threshold must be in (0, 1]")
     if flat.get("quota_windows"):
         cfg.quota_windows = _quota_windows(flat["quota_windows"])
+    if flat.get("subscriptions"):
+        cfg.subscriptions = _subscriptions(flat["subscriptions"])
     return cfg
 
 
@@ -249,6 +261,44 @@ def _quota_windows(raw) -> Dict[str, dict]:
             "weekly_resets_at": _parse_time(spec["weekly_resets_at"], where + ".weekly_resets_at"),
             "weekly_window_hours": int(hours),
             "five_hour_resets_at": None if five in (None, "") else _parse_time(five, where + ".five_hour_resets_at"),
+        }
+    return out
+
+
+def _subscriptions(raw) -> Dict[str, dict]:
+    """Manual plans. A known ``plan`` fills in the list price; an unknown one needs ``monthly_price_usd``."""
+    if not isinstance(raw, dict):
+        raise ConfigError("[subscriptions] must be a table")
+    out = {}
+    for agent, spec in raw.items():
+        where = "subscriptions.%s" % agent
+        if not isinstance(spec, dict):
+            raise ConfigError("[%s] must be a table" % where)
+        plan = spec.get("plan")
+        if not isinstance(plan, str) or not plan.strip():
+            raise ConfigError("[%s] needs plan" % where)
+        plan = plan.strip()
+        if "monthly_price_usd" in spec and spec["monthly_price_usd"] is not None:
+            price = spec["monthly_price_usd"]
+            if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or price < 0:
+                raise ConfigError("%s.monthly_price_usd must be a non-negative number" % where)
+            price = float(price)
+        else:
+            price = None
+        if price is None and known_monthly_price(str(agent), plan) is None:
+            raise ConfigError("[%s] plan %r is unknown; set monthly_price_usd" % (where, plan))
+        anchor = spec.get("anchor_day", None)
+        if anchor is not None:
+            if isinstance(anchor, bool) or not isinstance(anchor, int) or not 1 <= anchor <= 28:
+                raise ConfigError("%s.anchor_day must be an integer from 1 to 28" % where)
+        extra = spec.get("extra_usage_enabled", False)
+        if not isinstance(extra, bool):
+            raise ConfigError("%s.extra_usage_enabled must be true or false" % where)
+        out[str(agent)] = {
+            "plan": plan,
+            "monthly_price_usd": price,
+            "anchor_day": anchor,
+            "extra_usage_enabled": extra,
         }
     return out
 

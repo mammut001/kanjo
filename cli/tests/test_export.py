@@ -190,6 +190,7 @@ class SampleFileTest(unittest.TestCase):
         validate_contract(self, doc)
         self.assertEqual(check_invariants(doc), [])
         self.assertGreater(len(doc["projects"]), 1)
+        self.assertTrue(doc["subscriptions"])
         text = json.dumps(doc)
         self.assertNotIn("/Users/dogecoin", text)
 
