@@ -88,7 +88,9 @@ Nothing else mutates the ledger.
 ### Disk
 
 `kanjo disk` prints a table (agent, entry, size, files, newest, deletable or
-blocked). `kanjo disk --json` prints the document in CONTRACT.md section 10.
+blocked). Sessions rows show `imported/total` log files in the Files column.
+`kanjo disk --json` prints the document in CONTRACT.md section 10. Each
+sessions entry also carries `log_files` and `imported_files`.
 Missing paths are skipped. Sizes are allocated disk usage (`st_blocks * 512`),
 not apparent size.
 
@@ -120,14 +122,19 @@ hours. A worktree is `active` on the same rule, and `uncommitted_changes` when
 `git -C <wt> status --porcelain` is not empty.
 
 Deletable classes: `cache` → `always`; `sessions` → `after_import`; `scratch`
-and `worktrees` → `when_clean`; `memory` and `other` → `never`. An
-`after_import` entry is blocked with `not_imported` until every log file under
-it has a ledger entry with the same signature. Grok is not parsed yet, so its
+and `worktrees` → `when_clean`; `memory` and `other` → `never`. A log file
+counts as imported when the ledger has any entry for that agent and path, so
+a file that changed after import still counts; `not_imported` is set only when
+`imported_files` is less than `log_files`. Grok is not parsed yet, so its
 sessions stay `not_imported`. `when_clean` entries are blocked with `active`,
 and worktrees also with `uncommitted_changes`.
 
 `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]` only touches
-entries whose `blocked` list is empty. Files move into
+entries whose `blocked` list is empty. The one exception is `--older-than` on
+a sessions entry blocked only by `not_imported`: each old log file with no
+ledger entry is listed in `skipped` with reason `not_imported`, and the other
+old files (imported logs, plus non-logs such as images, json, zst and
+`.DS_Store`) are moved. Files move into
 `~/.Trash/kanjo-<timestamp>/<id>/` (`KANJO_TRASH_DIR` replaces `~/.Trash`).
 Across volumes, a failed rename falls back to a move. Git worktrees are removed
 with `git worktree remove` from the main repo named by the worktree's `.git`
