@@ -1,7 +1,7 @@
 """Subscription plans for CONTRACT.md ``subscriptions`` (best effort).
 
-Sources, per agent. A manual table replaces detection for that agent
-(``source: "manual"``); everyone else is detected or left out.
+Sources, per agent. Manual fields override detection for that agent
+(``source: "manual"``); unspecified fields keep their detected values.
 
 * Claude: ``~/.claude.json`` (``$KANJO_CLAUDE_CONFIG``). ``oauthAccount.billingType``
   must be a string containing ``subscription``. The tier is ``userRateLimitTier``
@@ -235,19 +235,22 @@ def _detect_codex(directory: str, now: datetime, tz_name: str) -> Optional[dict]
     return _finish(plan, label, price, 1, "calendar_month", False, "detected", now, tz_name)
 
 
-def _from_manual(agent: str, spec, now: datetime, tz_name: str) -> Optional[dict]:
-    if not isinstance(spec, dict):
+def _from_manual(agent: str, spec, now: datetime, tz_name: str,
+                 detected: Optional[dict] = None) -> Optional[dict]:
+    if not isinstance(spec, dict) or not spec:
+        return detected
+    entry = dict(detected or {})
+    if "plan" in spec:
+        plan, label, price = _resolve(agent, spec["plan"], None)
+        entry.update(plan=plan, plan_label=label, monthly_price_usd=price)
+    if not entry.get("plan"):
         return None
-    plan = spec.get("plan")
-    if not isinstance(plan, str) or not plan.strip():
-        return None
-    plan, label, price = _resolve(agent, plan.strip(), spec.get("monthly_price_usd"))
-    anchor = spec.get("anchor_day")
-    if anchor is None:
-        anchor, cycle_source = 1, "calendar_month"
-    else:
-        cycle_source = "manual"
-    return _finish(plan, label, price, anchor, cycle_source, spec.get("extra_usage_enabled", False),
+    if "monthly_price_usd" in spec:
+        entry["monthly_price_usd"] = spec["monthly_price_usd"]
+    anchor = spec.get("anchor_day", entry.get("anchor_day", 1))
+    cycle_source = "manual" if "anchor_day" in spec else entry.get("cycle_source", "calendar_month")
+    extra = spec.get("extra_usage_enabled", entry.get("extra_usage_enabled", False))
+    return _finish(entry["plan"], entry["plan_label"], entry["monthly_price_usd"], anchor, cycle_source, extra,
                    "manual", now, tz_name)
 
 
@@ -256,7 +259,7 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                   timezone_name: Optional[str] = None) -> Dict[str, dict]:
     """agent -> contract ``subscriptions`` entry. ``manual`` is ``Config.subscriptions``.
 
-    Agents with nothing detected and no manual table are absent. Manual wins per agent.
+    Agents with no detected or manual plan are absent. Manual wins per field.
     """
     now_dt = _as_utc(now)
     tz_name = timezone_name or local_timezone_name()
@@ -275,7 +278,7 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
     if detected:
         out["codex"] = detected
     for agent, spec in (manual or {}).items():
-        entry = _from_manual(str(agent), spec, now_dt, tz_name)
+        entry = _from_manual(str(agent), spec, now_dt, tz_name, out.get(str(agent)))
         if entry:
             out[str(agent)] = entry
     return {agent: out[agent] for agent in sorted(out)}
