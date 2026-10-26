@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -144,13 +145,306 @@ def local_timezone_name() -> str:
     return "Etc/GMT%+d" % (-hours) if offset.total_seconds() % 3600 == 0 else "UTC"
 
 
-def short_title(text) -> Optional[str]:
+def _is_cjk(ch: str) -> bool:
+    code = ord(ch)
+    return (
+        0x4E00 <= code <= 0x9FFF
+        or 0x3400 <= code <= 0x4DBF
+        or 0x20000 <= code <= 0x2A6DF
+        or 0xF900 <= code <= 0xFAFF
+        or 0x3040 <= code <= 0x309F
+        or 0x30A0 <= code <= 0x30FF
+        or 0xAC00 <= code <= 0xD7AF
+    )
+
+
+def _is_only_path(s: str) -> bool:
+    t = s.strip().strip("\"'()[]{}").rstrip("…").rstrip(".")
+    if not t:
+        return True
+    if re.match(r"^/(?:goal|plan|browser|compact|schedule|learn|boost|teamwork|grill-me)\b", t, re.I):
+        return False
+    if t.startswith(("http://", "https://", "git@", "ssh://")):
+        return " " not in t
+    if t.startswith(("~/", "./", "../")) or re.match(r"^[A-Za-z]:[/\\]", t):
+        return " " not in t
+    if t.startswith("/"):
+        if " " not in t and "/" in t[1:]:
+            return True
+    return False
+
+
+_PATH_RE = re.compile(r"(?:~|/|[A-Za-z]:[/\\])[^\s\"';|&<>(){}$,]*")
+_ABBREVIATIONS = {"e.g", "i.e", "etc", "vs", "dr", "mr", "mrs", "ms"}
+_TASK_SLASH_COMMANDS = {"goal", "plan", "task", "boost", "learn"}
+
+_TAG_NAMES = {
+    "environment_context", "recommended_plugins", "collaboration_mode",
+    "permissions", "skills_instructions", "apps_instructions",
+    "plugins_instructions", "app-context", "multi_agent_mode",
+    "codex_internal_context", "local-command-caveat", "local-command-stdout",
+    "task-notification", "command_output", "command-name", "command-message",
+    "status", "output-file", "task-id", "tool-use-id", "summary",
+    "transcript_delta", "source", "tags", "context", "cwd", "shell",
+    "current_date", "timezone",
+}
+
+
+def _is_tag_line(line: str) -> bool:
+    line = line.strip()
+    if not line.startswith("<") or not line.endswith(">"):
+        return False
+    if re.fullmatch(r"(?:</?[A-Za-z0-9_-]+(?:\s+[^>]*)?>\s*)+", line):
+        return True
+    m = re.match(r"^<([A-Za-z0-9_-]+)(?:\s+[^>]*)?>.*</\1>$", line)
+    if m and m.group(1).lower() in _TAG_NAMES:
+        return True
+    return False
+
+
+def _is_git_diff_line(line: str) -> bool:
+    s = line.strip()
+    if re.match(r"^:\d{6}\s+\d{6}\b", s):
+        return True
+    if s.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ")) or s.startswith("*** Begin Patch"):
+        return True
+    return False
+
+
+def _is_json_or_mostly_punctuation(line: str) -> bool:
+    s = line.strip()
+    if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, (dict, list)):
+                return True
+        except Exception:
+            pass
+    chars = [c for c in s if not c.isspace()]
+    if not chars:
+        return True
+    alnum = sum(1 for c in chars if c.isalnum() or _is_cjk(c))
+    if alnum == 0 or (alnum / len(chars) < 0.3):
+        return True
+    return False
+
+
+def _is_lead_in_colon_line(line: str) -> bool:
+    s = line.strip()
+    if s.endswith(":") or s.endswith("："):
+        words = s.split()
+        if len(words) < 6:
+            return True
+    return False
+
+
+def _is_work_instruction_or_mostly_path(line: str) -> bool:
+    s = line.strip()
+    if re.match(r"^\s*#*\s*(?:work\s+only|only\s+modify|you\s+are\s+working)\b", s, re.I):
+        return True
+    if "/" in s or "~" in s or "\\" in s:
+        remainder = _PATH_RE.sub("", s)
+        words = re.findall(r"\w+", remainder)
+        if len(words) <= 2:
+            return True
+    return False
+
+
+def _is_slash_command_only(text: str) -> bool:
+    s = text.strip()
+    m = re.match(r"^/([a-zA-Z0-9_-]+)(?:\s+(.*))?$", s)
+    if not m:
+        return False
+    cmd = m.group(1).lower()
+    args = (m.group(2) or "").strip()
+    if cmd in _TASK_SLASH_COMMANDS:
+        return len(args) == 0
+    return True
+
+
+def _find_sentence_end(text: str) -> Optional[int]:
+    cjk_matches = [m.end() for m in re.finditer(r"[。！？]", text)]
+    eng_ends = []
+    for m in re.finditer(r"([.!?])(?=[\s\"'«»“”\)]|$)", text):
+        dot_idx = m.start(1)
+        if dot_idx > 0 and text[dot_idx - 1] in ".!?":
+            continue
+        if dot_idx > 0 and text[dot_idx - 1].isdigit() and dot_idx + 1 < len(text) and text[dot_idx + 1].isdigit():
+            continue
+        prefix = text[:dot_idx]
+        last_word = re.search(r"([A-Za-z]+)$", prefix)
+        if last_word and last_word.group(1).lower() in _ABBREVIATIONS:
+            continue
+        end_idx = m.end(1)
+        while end_idx < len(text) and text[end_idx] in "\"'«»“”)]}":
+            end_idx += 1
+        eng_ends.append(end_idx)
+
+    candidates = cjk_matches + eng_ends
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def clean_title(text) -> Optional[str]:
+    """Pure title cleaner used by all session parsers.
+
+    Strips markdown heading markers and leading 'Task:' / 'TASK:' / '任务：',
+    drops lines that are only metadata (Worktree:, Branch:, Base commit:,
+    paths, code fences, <tags>), collapses whitespace, cuts at the first
+    sentence end or ~80 chars on a word/character boundary (CJK-aware) with '…'.
+    Never returns a title that is only a path.
+    """
     if not isinstance(text, str):
         return None
-    t = " ".join(text.split())
-    if not t:
+    if "<source>transcript_tail_flush</source>" in text:
         return None
-    return t[:80]
+    if re.match(r"^#*\s*AGENTS\.md\b", text.strip(), re.I):
+        return None
+
+    # Skip whole-message JSON or slash-command-only
+    trimmed = text.strip()
+    if _is_slash_command_only(trimmed):
+        return None
+    if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+        try:
+            parsed = json.loads(trimmed)
+            if isinstance(parsed, (dict, list)):
+                return None
+        except Exception:
+            pass
+
+    m_in = re.search(r"<input>(.*?)</input>", text, re.DOTALL | re.I)
+    if m_in and m_in.group(1).strip():
+        text = m_in.group(1).strip()
+        if _is_slash_command_only(text.strip()):
+            return None
+
+    lines = text.splitlines()
+    candidate = None
+    in_code = False
+    in_tag = None
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("```") or line.startswith("~~~"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        if in_tag:
+            if f"</{in_tag}>" in line:
+                in_tag = None
+            continue
+        m_start = re.match(r"^<([A-Za-z0-9_-]+)(?:\s+[^>]*)?>", line)
+        if m_start:
+            tag = m_start.group(1).lower()
+            if tag in _TAG_NAMES:
+                if f"</{tag}>" not in line:
+                    in_tag = tag
+                continue
+        if _is_tag_line(line):
+            continue
+        if _is_git_diff_line(line):
+            continue
+        if _is_json_or_mostly_punctuation(line):
+            continue
+        if _is_work_instruction_or_mostly_path(line):
+            continue
+        if _is_lead_in_colon_line(line):
+            continue
+        if _is_slash_command_only(line):
+            continue
+        if re.match(r"^#*\s*(?:Files (?:pasted|mentioned) by the user|已粘贴的文本)\b", line, re.I):
+            continue
+        if "This session is being continued from a previous conversation" in line:
+            continue
+        if re.match(r"^(?:Summary|Overview|Context)\s*:\s*$", line, re.I):
+            continue
+        if re.match(r"^(\d+\.|\*|-)?\s*(primary request|overview|context|intent|goals?)\b", line, re.I):
+            continue
+        if re.match(r"^#*\s*My request\s*:\s*$", line, re.I):
+            continue
+        if "AGENTS.md" in line:
+            continue
+
+        if re.match(r"^(?:worktree|branch|base commit|workspace)\s*:", line, re.I):
+            remainder = re.sub(r"(?:worktree|branch|base commit|workspace)\s*:\s*\S+", "", line, flags=re.I).strip()
+            if not remainder or _is_only_path(remainder):
+                continue
+            line = remainder
+
+        line = re.split(r"(?:\s{2,}|\s+)(?:Worktree|Branch|Base commit):", line, flags=re.I)[0].strip()
+
+        m_pasted = re.match(r"^#*\s*[\"\'“](.+?)[\"\'”]\s*:\s*(?:~|/|\.\w+).*$", line)
+        if m_pasted:
+            line = m_pasted.group(1)
+
+        while True:
+            new_line = re.sub(r"^\s*#{1,6}\s*", "", line)
+            new_line = re.sub(r"^(?:task|任务)\s*[:：]\s*", "", new_line, flags=re.I)
+            if new_line == line:
+                break
+            line = new_line
+
+        # Unwrap slash commands with task (e.g. /goal ...)
+        m_cmd = re.match(r"^/(?:goal|plan|task|boost|learn)\s+(.+)$", line, re.I)
+        if m_cmd:
+            line = m_cmd.group(1).strip()
+
+        line = re.sub(r"^\s*(?:[-*]|\d+\.)\s*", "", line)
+        line = re.sub(r"^\*\*[^*]+(?:\*\*:|\*\*)\s*", "", line)
+        line = line.strip("\"'«»“” ")
+        line = re.sub(r"<[^>]+>", "", line).strip()
+
+        if (
+            not line
+            or _is_only_path(line)
+            or _is_lead_in_colon_line(line)
+            or _is_work_instruction_or_mostly_path(line)
+            or _is_json_or_mostly_punctuation(line)
+        ):
+            continue
+
+        candidate = line
+        break
+
+    if not candidate:
+        return None
+
+    text = " ".join(candidate.split())
+    if (
+        not text
+        or _is_only_path(text)
+        or _is_lead_in_colon_line(text)
+        or _is_json_or_mostly_punctuation(text)
+        or _is_work_instruction_or_mostly_path(text)
+    ):
+        return None
+
+    first_end = _find_sentence_end(text)
+    if first_end is not None and first_end <= 80:
+        return text[:first_end].strip()
+
+    if len(text) <= 80:
+        return text
+
+    limit = 79
+    if _is_cjk(text[limit - 1]) or _is_cjk(text[limit]):
+        cut_pos = limit
+    else:
+        pos = limit
+        while pos > 40 and text[pos] != " ":
+            pos -= 1
+        cut_pos = pos if text[pos] == " " else limit
+
+    cut = text[:cut_pos].rstrip(" \t\r\n,;:.-")
+    cut = cut.rstrip("….").rstrip()
+    return cut + "…"
+
+
+short_title = clean_title
 
 
 # ---- path extraction -------------------------------------------------------

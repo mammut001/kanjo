@@ -127,7 +127,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
 
             if role == "user":
                 if session.title is None:
-                    session.title = short_title(_user_text(msg_dict))
+                    t = short_title(_user_text(msg_dict))
+                    if t:
+                        session.title = t
                 continue
 
             # Assistant messages with usage

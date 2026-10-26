@@ -59,8 +59,13 @@ def _user_text(message) -> Optional[str]:
     if not isinstance(text, str):
         return None
     stripped = text.strip()
-    if not stripped or stripped.startswith("<") or stripped.startswith("Caveat:"):
+    if not stripped or stripped.startswith("Caveat:"):
         return None
+    if stripped.startswith(("<local-command-caveat", "<local-command-stdout", "<task-notification")):
+        return None
+    m_cmd = re.search(r"<command-args>(.*?)</command-args>", stripped, re.DOTALL)
+    if m_cmd and m_cmd.group(1).strip():
+        return m_cmd.group(1).strip()
     return stripped
 
 
@@ -85,7 +90,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     session.origin_ts = parse_iso(m_ts.group(1).decode("ascii", "replace"))
             is_assistant = b'"assistant"' in raw
             want_user = session.title is None and b'"user"' in raw
-            if not is_assistant and not want_user:
+            want_custom = b'"custom-title"' in raw
+            if not is_assistant and not want_user and not want_custom:
                 if good == 0 and bad == 0 and raw.strip():
                     # still validate that the file is JSON lines at all
                     try:
@@ -106,9 +112,26 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             kind = obj.get("type")
             ts = parse_iso(obj.get("timestamp"))
             cwd = obj.get("cwd") if isinstance(obj.get("cwd"), str) else None
+            if kind == "custom-title":
+                ct = obj.get("customTitle")
+                if isinstance(ct, str):
+                    t = short_title(ct)
+                    if t:
+                        session.title = t
+                continue
             if kind == "user":
-                if session.title is None and not obj.get("isMeta"):
-                    session.title = short_title(_user_text(obj.get("message")))
+                if not obj.get("isMeta"):
+                    raw_text = _user_text(obj.get("message"))
+                    if raw_text:
+                        if "This session is being continued from a previous conversation that ran out of context" in raw_text:
+                            if session.title is None:
+                                summary_title = short_title(raw_text)
+                                if summary_title:
+                                    session.title = summary_title
+                        elif session.title is None:
+                            t = short_title(raw_text)
+                            if t:
+                                session.title = t
                 session.note_time(ts)
                 session.note_cwd(cwd, 0)
                 continue
