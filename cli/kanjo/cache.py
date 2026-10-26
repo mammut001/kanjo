@@ -32,12 +32,13 @@ def _cache_dir() -> str:
 
 
 def _signature(path: str) -> Optional[list]:
+    stat_path = path.split("::", 1)[0] if "::" in path else path
     sig = []
-    for p in (path, path + "-wal"):
+    for p in (stat_path, stat_path + "-wal"):
         try:
             st = os.stat(p)
         except OSError:
-            if p == path:
+            if p == stat_path:
                 return None
             sig.append(None)
             continue

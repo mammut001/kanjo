@@ -17,7 +17,7 @@ from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
-from .sources import antigravity, claude, codex, commandcode, grok, qwen
+from .sources import antigravity, claude, codex, commandcode, copilot, grok, minimax, opencode, qwen
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
 
@@ -30,6 +30,9 @@ SOURCES = {
     "grok": grok,
     "qwen": qwen,
     "commandcode": commandcode,
+    "minimax": minimax,
+    "opencode": opencode,
+    "copilot": copilot,
 }
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "thinking")
 

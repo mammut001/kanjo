@@ -15,6 +15,9 @@ enum AgentPalette {
         "grok": (0xC2255C, 0xE64980),         // rose
         "qwen": (0xF59F00, 0xFCC419),         // amber
         "commandcode": (0x1098AD, 0x22B8CF),  // cyan
+        "minimax": (0x0CA678, 0x20C997),      // teal
+        "opencode": (0xAE3EC9, 0xCC5DE8),     // magenta
+        "copilot": (0x2DA44E, 0x3FB950),      // green
     ]
 
     /// 合并的「+N more」方块、未知 agent、没有花费的项目。
