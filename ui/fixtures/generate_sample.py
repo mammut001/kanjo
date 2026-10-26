@@ -3,12 +3,22 @@
 Usage: python3 fixtures/generate_sample.py [out.json]   (default: fixtures/sample.json)
 Deterministic (seeded). Edit SPECS to change projects; invariants are asserted at the end.
 """
-import json, random, uuid, sys
+import json, random, uuid, sys, os
 from datetime import datetime, timedelta, timezone
 
 rnd = random.Random(42)
 LOCAL = timezone(timedelta(hours=8))
-LABELS = {"claude": "Claude Code", "antigravity": "Antigravity CLI", "codex": "Codex CLI"}
+LABELS = {
+    "claude": "Claude Code",
+    "codex": "Codex CLI",
+    "antigravity": "Antigravity CLI",
+    "grok": "Grok CLI",
+    "qwen": "Qwen Code",
+    "commandcode": "Command Code",
+    "minimax": "MiniMax",
+    "opencode": "OpenCode",
+    "copilot": "Copilot CLI",
+}
 # per Mtok: input, output, cache_read, cache_write ; estimated flag
 PRICES = {
     "claude-opus-5-5":        (15, 75, 1.5, 18.75, False),
@@ -20,11 +30,23 @@ PRICES = {
     "gemini-3.5-pro-exp":     (2.5, 15, 0.25, 0.6, True),
     "gpt-5.5-codex":          (1.25, 10, 0.125, 0, False),
     "gpt-5.5-mini":           (0.25, 2, 0.025, 0, False),
+    "grok-4-beta":            (2, 6, 0.5, 0, False),
+    "qwen-3.8-max":           (2, 6, 0.25, 2.5, False),
+    "command-r-plus":         (2.5, 10, 0.25, 0, False),
+    "minimax-m3":             (0.5, 2, 0.05, 0, False),
+    "deepseek-v4-pro":        (0.66, 1.98, 0.022, 0, False),
+    "copilot-sonnet-5":       (3, 15, 0.3, 3.75, False),
 }
 AGENT_MODELS = {
     "claude": [["claude-opus-5-5"], ["claude-opus-5-5", "claude-haiku-5-5"], ["claude-sonnet-5"], ["claude-sonnet-5", "claude-haiku-5-5"]],
     "antigravity": [["gemini-3-pro"], ["gemini-3-pro", "gemini-3-flash"], ["gemini-3-flash"]],
     "codex": [["gpt-5.5-codex"], ["gpt-5.5-codex", "gpt-5.5-mini"]],
+    "grok": [["grok-4-beta"]],
+    "qwen": [["qwen-3.8-max"]],
+    "commandcode": [["command-r-plus"]],
+    "minimax": [["minimax-m3"]],
+    "opencode": [["deepseek-v4-pro"]],
+    "copilot": [["copilot-sonnet-5"]],
 }
 TITLES = [
     "fix quota reset after midnight rollover", "add widget refresh on app foreground",
@@ -54,14 +76,19 @@ def make_raw_session(agent, start, cwd, branch, scale=1.0, models=None):
     per_model = {}
     for i, m in enumerate(models):
         t = toks(scale * (1.0 if i == 0 else 0.25))
-        think_ratio = {"claude": 0.3, "antigravity": 0.45, "codex": 0.0}[agent]
+        think_ratio = {
+            "claude": 0.3, "antigravity": 0.45, "codex": 0.0,
+            "grok": 0.2, "qwen": 0.15, "commandcode": 0.0,
+            "minimax": 0.2, "opencode": 0.25, "copilot": 0.0,
+        }.get(agent, 0.0)
         think = int(t[1] * think_ratio * rnd.uniform(0.5, 1))
         per_model[m] = t + [think]
+    subagents = rnd.choice([0, 0, 0, 1, 2, 3]) if agent == "claude" else (rnd.choice([0, 0, 1]) if agent == "grok" else 0)
     return {
         "id": str(uuid.UUID(int=rnd.getrandbits(128))), "agent": agent,
         "started": start, "ended": start + dur, "cwd": cwd, "branch": branch,
         "models": models, "per_model": per_model,
-        "subagents": rnd.choice([0, 0, 0, 1, 2, 3]) if agent == "claude" else 0,
+        "subagents": subagents,
         "title": rnd.choice(TITLES),
     }
 
@@ -149,19 +176,22 @@ SPECS = [
     # id, name, remote, paths, missing, agents weights, n sessions, scale, days window, branches
     ("github.com/alice/pocket-timer", "PocketTimer", "github.com/alice/pocket-timer",
      [H+"PocketTimer", H+"PocketTimer-fixes-146", H+"PocketTimer-widgets"], False,
-     {"claude": 6, "codex": 2, "antigravity": 1}, 34, 1.3, (0, 75), ["main", "release-1.4.5", "fix/146-quota", "feat/widgets", None]),
+     {"claude": 16, "codex": 8, "antigravity": 2, "grok": 2, "copilot": 2}, 46, 1.4, (0, 75),
+     ["main", "release-1.4.5", "fix/146-quota", "feat/widgets", None]),
     ("github.com/bobchen/meterkit", "meterkit", "github.com/bobchen/meterkit", [H+"meterkit"], False,
-     {"claude": 3, "antigravity": 2}, 18, 1.0, (2, 60), ["main", "feat/pricing-json", "fix/dedupe-stream"]),
+     {"claude": 8, "antigravity": 4, "minimax": 2, "opencode": 2}, 22, 1.0, (0, 60),
+     ["main", "feat/pricing-json", "fix/dedupe-stream"]),
     ("github.com/alice/habit-garden", "HabitGarden", "github.com/alice/habit-garden",
      [H+"HabitGarden", H+"HabitGarden/.worktrees/agy-onboarding"], False,
-     {"claude": 2, "antigravity": 3, "codex": 2}, 22, 0.9, (0, 45), ["main", "agy/onboarding", "agy/streaks", None]),
+     {"claude": 6, "antigravity": 5, "codex": 5, "grok": 2, "qwen": 2}, 28, 0.9, (0, 45),
+     ["main", "agy/onboarding", "agy/streaks", None]),
     ("github.com/alice/weather-cli", "weather-cli", "github.com/alice/weather-cli", [H+"weather-cli"], False,
      {"claude": 1}, 7, 0.8, (0, 3), ["main"]),
     ("/Users/alice/Documents/experiments/rust-playground", "rust-playground", None,
      ["/Users/alice/Documents/experiments/rust-playground"], False,
-     {"codex": 1}, 6, 0.6, (5, 40), ["master", None]),
+     {"codex": 1}, 8, 1.5, (5, 40), ["master", None]),
     ("gitlab.com/acme/infra-scripts", "infra-scripts", "gitlab.com/acme/infra-scripts", [H+"infra-scripts"], False,
-     {"codex": 2, "claude": 1}, 9, 0.5, (10, 80), ["main", "chore/terraform-1.9"]),
+     {"codex": 8, "claude": 2, "commandcode": 2}, 16, 1.2, (0, 80), ["main", "chore/terraform-1.9"]),
     ("github.com/alice/old-blog", "old-blog", "github.com/alice/old-blog", ["/Users/alice/Sites/old-blog"], True,
      {"claude": 1}, 4, 0.4, (70, 90), [None]),
     ("github.com/alice/dotfiles", "dotfiles", "github.com/alice/dotfiles", ["/Users/alice/.dotfiles"], False,
@@ -214,7 +244,7 @@ def bucket(rows_pm):
 
 un = []
 for i in range(5):
-    agent = pick({"claude": 2, "antigravity": 1, "codex": 1})
+    agent = pick({"claude": 2, "antigravity": 1, "codex": 1, "grok": 1})
     raw = make_raw_session(agent, rand_time(60), rnd.choice(["/Users/alice", "/Users/alice/Downloads", "/tmp"]), None, 0.3)
     raw["title"] = rnd.choice(["what's the difference between tokio and async-std?", "summarize this pdf", None, "convert this curl to python"])
     un.append(portion(raw, 1.0, "none"))
@@ -238,12 +268,35 @@ totals = {"cost": round(sum(p["cost"] for p in projects) + buckets["unattributed
           "sessions": sum(p["sessions"] for p in projects) + buckets["unattributed"]["sessions"] + buckets["excluded"]["sessions"],
           "first_active": min(all_days), "last_active": max(all_days)}
 
-# 额度窗口：claude / codex 有（来源不同），antigravity 没有 → UI 的「Since reset」下 antigravity 不计入。
+# 额度窗口：claude / codex / grok 有，antigravity 没有 → UI 的「Since reset」下 antigravity 不计入。
 quota_windows = {
-    "claude": {"weekly_resets_at": "2026-10-27T10:00:00Z", "weekly_window_hours": 168,
-               "five_hour_resets_at": "2026-10-23T04:30:00Z", "source": "tokei"},
-    "codex": {"weekly_resets_at": "2026-10-28T08:00:00Z", "weekly_window_hours": 168,
-              "five_hour_resets_at": None, "source": "manual"},
+    "claude": {
+        "weekly_resets_at": "2026-10-27T10:00:00Z",
+        "weekly_window_hours": 168,
+        "weekly_used_percent": 57.0,
+        "five_hour_resets_at": "2026-10-23T04:30:00Z",
+        "five_hour_window_hours": 5,
+        "five_hour_used_percent": 13.0,
+        "source": "tokei",
+    },
+    "codex": {
+        "weekly_resets_at": "2026-10-28T08:00:00Z",
+        "weekly_window_hours": 168,
+        "weekly_used_percent": 38.0,
+        "five_hour_resets_at": "2026-10-23T05:00:00Z",
+        "five_hour_window_hours": 5,
+        "five_hour_used_percent": 18.0,
+        "source": "manual",
+    },
+    "grok": {
+        "weekly_resets_at": "2026-10-27T05:00:00Z",
+        "weekly_window_hours": 168,
+        "weekly_used_percent": 42.0,
+        "five_hour_resets_at": None,
+        "five_hour_window_hours": None,
+        "five_hour_used_percent": None,
+        "source": "tokei",
+    },
 }
 
 def cycle_bounds(anchor_day, now=NOW):
@@ -272,13 +325,15 @@ def cycle_bounds(anchor_day, now=NOW):
     end_y, end_m = add_month(year, month)
     return iso(year, month, anchor_day), iso(end_y, end_m, anchor_day)
 
-# 订阅：claude / codex 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
-# Codex 未知真实续费日，用 generated_at 结束的滚动 30 天演示设置引导。
+# 订阅：claude / codex / grok 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
+# Codex / Grok 未知真实续费日，用 generated_at 结束的滚动 30 天演示设置引导。
 # 账期按 anchor_day 在 Asia/Shanghai 的 00:00 折算（报告 generated_at 落在 10 月 23 日）。
 claude_start, claude_end = cycle_bounds(25)
 generated_at = datetime(2026, 10, 23, 2, tzinfo=timezone.utc)
 codex_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
 codex_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+grok_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+grok_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 subscriptions = {
     "claude": {
         "plan": "max_5x", "plan_label": "Claude Max 5x", "monthly_price_usd": 100.0,
@@ -290,6 +345,11 @@ subscriptions = {
         "cycle_start": codex_start, "cycle_end": codex_end, "anchor_day": None,
         "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
     },
+    "grok": {
+        "plan": "supergrok", "plan_label": "SuperGrok", "monthly_price_usd": 30.0,
+        "cycle_start": grok_start, "cycle_end": grok_end, "anchor_day": None,
+        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
+    },
 }
 out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "generated_by": "generate_sample.py",
        "timezone": "Asia/Shanghai", "currency": "USD",
@@ -297,7 +357,6 @@ out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%
        "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
        "subscriptions": subscriptions,
        "totals": totals, "projects": projects, "buckets": buckets}
-import os
 dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample.json")
 json.dump(out, open(dest, "w"), indent=2, ensure_ascii=False)
 
@@ -315,7 +374,7 @@ for p in projects:
         assert set(d["by_agent"]) <= {a["agent"] for a in p["by_agent"]}, (p["id"], d["day"])
         assert set(d["by_agent_tokens"]) == set(d["by_agent"]), (p["id"], d["day"])
         assert sum(d["by_agent_tokens"].values()) == d["tokens"], (p["id"], d["day"])
-assert set(subscriptions) == {"claude", "codex"}
+assert set(subscriptions) == {"claude", "codex", "grok"}
 assert subscriptions["claude"]["plan"] == "max_5x"
 assert subscriptions["claude"]["monthly_price_usd"] == 100.0
 assert subscriptions["claude"]["anchor_day"] == 25
@@ -331,6 +390,13 @@ assert subscriptions["codex"]["cycle_source"] == "rolling_30d"
 assert subscriptions["codex"]["source"] == "detected"
 assert subscriptions["codex"]["cycle_start"] == "2026-09-23T02:00:00Z"
 assert subscriptions["codex"]["cycle_end"] == out["generated_at"]
+assert subscriptions["grok"]["plan"] == "supergrok"
+assert subscriptions["grok"]["monthly_price_usd"] == 30.0
+assert subscriptions["grok"]["anchor_day"] is None
+assert subscriptions["grok"]["cycle_source"] == "rolling_30d"
+assert subscriptions["grok"]["source"] == "detected"
+assert subscriptions["grok"]["cycle_start"] == "2026-09-23T02:00:00Z"
+assert subscriptions["grok"]["cycle_end"] == out["generated_at"]
 assert generated_at - datetime.fromisoformat(codex_start.replace("Z", "+00:00")) == timedelta(days=30)
 print("ok", round(totals["cost"], 2), totals["sessions"])
 for p in projects: print(f'{p["name"]:16} {p["cost"]:10.4f} {p["sessions"]:3} {[a["agent"] for a in p["by_agent"]]} branches={len(p["by_branch"])}')
