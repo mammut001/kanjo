@@ -18,13 +18,20 @@ struct OverviewView: View {
 
     private var cur: String { report.currency }
 
-    /// 报告中出现的所有 agent（按总花费降序），用于图例。
-    private var agents: [(key: String, label: String)] {
+    /// 当前范围内有花费的所有 agent（按花费降序），用于图例。
+    private func legendAgents(in f: FilteredReport) -> [(key: String, label: String)] {
         var cost: [String: Double] = [:], label: [String: String] = [:]
-        for p in report.projects {
-            for a in p.byAgent { cost[a.agent, default: 0] += a.cost; label[a.agent] = a.label }
+        for p in f.projects {
+            for a in p.byAgent {
+                cost[a.agent, default: 0] += a.cost
+                if label[a.agent] == nil || label[a.agent] == a.agent {
+                    label[a.agent] = a.label
+                }
+            }
         }
-        return cost.sorted { $0.value > $1.value }.map { ($0.key, label[$0.key] ?? $0.key) }
+        return cost.filter { $0.value > 0 }
+            .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            .map { ($0.key, label[$0.key] ?? report.agentLabels[$0.key] ?? $0.key) }
     }
 
     /// 列表里的项目都是按当前范围过滤后的值（`projected`）。
@@ -63,7 +70,8 @@ struct OverviewView: View {
                                 .padding(.horizontal, Metrics.listInset - Metrics.flatPagePadding)
                         }
                     }
-                    projectsSection(visible: lists.visible, hidden: lists.hidden, idle: lists.idle, isAll: ctx.isAll)
+                    projectsSection(visible: lists.visible, hidden: lists.hidden, idle: lists.idle,
+                                    isAll: ctx.isAll, legendAgents: legendAgents(in: f))
                     modelsSection(f)
                     bucketsSection(f)
                     VStack(alignment: .leading, spacing: 8) {
@@ -142,13 +150,18 @@ struct OverviewView: View {
         .padding(.horizontal, Metrics.listInset)
     }
 
-    private func projectsSection(visible: [Project], hidden: [Project], idle: Int, isAll: Bool) -> some View {
+    private func projectsSection(visible: [Project], hidden: [Project], idle: Int, isAll: Bool,
+                                 legendAgents: [(key: String, label: String)]) -> some View {
         let pinned = ProjectPrefs.parse(pinnedRaw)
         let end = report.heatEndDate
         let labels = report.agentLabels
         return PanelSection(L10n.tr("settings.section.projects"), flat: true) {
-            Legend(agents: agents)
-        } content: {
+            if !legendAgents.isEmpty {
+                Legend(agents: legendAgents)
+                    .padding(.horizontal, Metrics.listInset)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
+            }
             if visible.isEmpty {
                 Text(report.projects.isEmpty ? L10n.tr("overview.projects.empty")
                      : idle > 0 ? L10n.tr("overview.projects.no_usage_range") : L10n.tr("overview.projects.all_hidden"))

@@ -233,32 +233,119 @@ struct HBarRow: View {
     }
 }
 
-/// agent 图例。放不下全名时用名字的第一个词（"Claude Code" → "Claude"），再放不下只留色点；
-/// 绝不截断，全名始终在 tooltip 里。
-struct Legend: View {
-    let agents: [(key: String, label: String)]
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            row { $0 }
-            row { String($0.split(separator: " ").first ?? Substring($0)) }
-            row { _ in nil }
-        }
+/// 自动折行的流式布局（按从左到右填充，放不下则折到下一行）。
+struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    init(spacing: CGFloat = 8, lineSpacing: CGFloat = 4) {
+        self.spacing = spacing
+        self.lineSpacing = lineSpacing
     }
 
-    private func row(_ name: @escaping (String) -> String?) -> some View {
-        HStack(spacing: 9) {
+    struct Row {
+        var elements: [(subview: LayoutSubview, size: CGSize)] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    struct Cache {
+        var lastWidth: CGFloat?
+        var rows: [Row] = []
+        var size: CGSize = .zero
+    }
+
+    func makeCache(subviews: Subviews) -> Cache {
+        Cache()
+    }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        cache = Cache()
+    }
+
+    private func arrange(width: CGFloat?, subviews: Subviews) -> (rows: [Row], size: CGSize) {
+        let maxWidth = width.flatMap { $0.isFinite ? $0 : nil } ?? .infinity
+        var rows: [Row] = []
+        var currentRow = Row()
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let proposedWidth = currentRow.elements.isEmpty
+                ? size.width
+                : currentRow.width + spacing + size.width
+
+            if !currentRow.elements.isEmpty && proposedWidth > maxWidth + 0.5 {
+                rows.append(currentRow)
+                currentRow = Row(elements: [(subview, size)], width: size.width, height: size.height)
+            } else {
+                currentRow.elements.append((subview, size))
+                currentRow.width = proposedWidth
+                currentRow.height = max(currentRow.height, size.height)
+            }
+        }
+        if !currentRow.elements.isEmpty {
+            rows.append(currentRow)
+        }
+
+        if rows.isEmpty {
+            return ([], .zero)
+        }
+        let maxRowWidth = rows.map(\.width).max() ?? 0
+        let totalSpacing = CGFloat(rows.count - 1) * lineSpacing
+        let totalHeight = rows.map(\.height).reduce(0, +) + totalSpacing
+        return (rows, CGSize(width: maxRowWidth, height: totalHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        let result = arrange(width: proposal.width, subviews: subviews)
+        cache.lastWidth = proposal.width
+        cache.rows = result.rows
+        cache.size = result.size
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let rows: [Row]
+        if let last = cache.lastWidth, abs(last - bounds.width) < 1.0, !cache.rows.isEmpty {
+            rows = cache.rows
+        } else {
+            rows = arrange(width: bounds.width, subviews: subviews).rows
+        }
+
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for item in row.elements {
+                let yOffset = (row.height - item.size.height) / 2
+                item.subview.place(
+                    at: CGPoint(x: x, y: y + yOffset),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+}
+
+/// agent 图例：每个 agent 显示色点 + 名称，使用流式折行，按花费降序排列。
+struct Legend: View {
+    let agents: [(key: String, label: String)]
+
+    var body: some View {
+        FlowLayout(spacing: 9, lineSpacing: 4) {
             ForEach(agents, id: \.key) { a in
                 HStack(spacing: 4) {
                     AgentDot(agent: a.key, size: 6)
-                    if let n = name(a.label) {
-                        Text(n).font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
+                    Text(a.label)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 .help(a.label)
             }
         }
-        .lineLimit(1)
-        .fixedSize()
     }
 }
 
