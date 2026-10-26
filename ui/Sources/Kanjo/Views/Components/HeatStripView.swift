@@ -24,13 +24,32 @@ struct HeatStripView: View {
     var body: some View {
         let peak = weeks.map(\.cost).max() ?? 0
         HStack(spacing: spacing) {
-            ForEach(Array(weeks.enumerated()), id: \.offset) { _, w in
-                cellView(w, level: HeatStrip.level(w.cost, max: peak))
-                    .frame(width: cell.width, height: cell.height)
-                    .help(label(w))
+            ForEach(0..<weeks.count, id: \.self) { i in
+                let w = weeks[i]
+                weekCell(w, peak: peak)
             }
         }
         .fixedSize()
+    }
+
+    @ViewBuilder private func weekCell(_ w: WeekCost, peak: Double) -> some View {
+        let rows = HoverCardRowBuilder.agentRows(
+            agents: w.rankedWithTokens.map { item in
+                (agent: item.agent, label: agentLabels[item.agent] ?? item.agent, cost: item.cost, tokens: item.tokens)
+            }
+        )
+        cellView(w, level: HeatStrip.level(w.cost, max: peak))
+            .frame(width: cell.width, height: cell.height)
+            .hoverCard {
+                AgentRowsHoverCard(
+                    title: HeatStrip.weekLabel(start: w.start),
+                    cost: w.cost,
+                    tokens: w.tokens,
+                    currency: currency,
+                    rows: rows
+                )
+            }
+            .accessibilityLabel(label(w))
     }
 
     @ViewBuilder private func cellView(_ w: WeekCost, level: Int) -> some View {

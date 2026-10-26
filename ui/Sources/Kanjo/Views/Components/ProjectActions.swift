@@ -82,6 +82,6 @@ struct RowIconButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
-        .help(help)
+        .hoverTip(help)
     }
 }

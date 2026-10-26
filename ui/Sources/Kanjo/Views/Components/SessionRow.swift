@@ -18,7 +18,7 @@ struct SessionRow: View {
                 }
                 .font(.system(size: 12))
                 .lineLimit(2)
-                .help(session.title ?? "")
+                .hoverTip(session.title)
                 Spacer(minLength: 6)
                 Text(Fmt.money(session.cost, currency: currency))
                     .font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit()
@@ -36,25 +36,53 @@ struct SessionRow: View {
             }
             .font(.system(size: 10.5))
             .foregroundStyle(.secondary)
-            .help(TooltipBuilder.agentLine(label: session.label, cost: session.cost, tokens: session.tokens.total, currency: currency))
+            .hoverCard {
+                AgentRowsHoverCard(
+                    title: session.label,
+                    titleDotColor: AgentPalette.color(for: session.agent),
+                    cost: session.cost,
+                    tokens: session.tokens.total,
+                    currency: currency,
+                    rows: [HoverCardRowItem(id: session.agent, label: session.label, cost: session.cost, tokens: session.tokens.total, fraction: 1.0)],
+                    subtitle: Fmt.timestamp(session.started)
+                )
+            }
+            .accessibilityLabel(TooltipBuilder.agentLine(label: session.label, cost: session.cost, tokens: session.tokens.total, currency: currency))
 
             HStack(spacing: 5) {
                 Badge(text: session.attribution,
                       style: session.attribution == "split" ? .warn : .neutral,
                       help: AttributionInfo.explanation(session.attribution, threshold: threshold))
                 Text(L10n.tr("session.share", Fmt.percent(session.share)))
-                    .help(L10n.tr("session.share_help"))
+                    .hoverTip(L10n.tr("session.share_help"))
                 if session.subagents > 0 {
                     Text(session.subagents == 1
                          ? L10n.tr("session.subagent.singular", session.subagents)
                          : L10n.tr("session.subagent.plural", session.subagents))
-                        .help(L10n.tr("session.subagents_help"))
+                        .hoverTip(L10n.tr("session.subagents_help"))
                 }
                 Spacer(minLength: 4)
                 Text(session.models.joined(separator: ", "))
                     .font(.system(size: 9.5, design: .monospaced))
                     .lineLimit(1).truncationMode(.tail)
-                    .help(session.models.joined(separator: ", "))
+                    .hoverCard {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 5) {
+                                Circle().fill(AgentPalette.color(for: session.agent)).frame(width: 7, height: 7)
+                                Text(L10n.tr("project.noun.models")).font(.system(size: 12, weight: .semibold))
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                ForEach(session.models, id: \.self) { m in
+                                    Text(m)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(.primary)
+                                }
+                            }
+                        }
+                        .monospacedDigit()
+                        .hoverCard()
+                    }
+                    .accessibilityLabel(session.models.joined(separator: ", "))
             }
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
@@ -107,7 +135,7 @@ struct SessionList: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help(descending ? L10n.tr("session.sort.descending") : L10n.tr("session.sort.ascending"))
+                .hoverTip(descending ? L10n.tr("session.sort.descending") : L10n.tr("session.sort.ascending"))
                 Spacer()
                 AttributionLegendButton(threshold: threshold)
             }
@@ -142,7 +170,7 @@ struct AttributionLegendButton: View {
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.borderless)
-        .help(L10n.tr("session.attribution_button_help"))
+        .hoverTip(L10n.tr("session.attribution_button_help"))
         .popover(isPresented: $shown, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.tr("session.attribution_popover_title")).font(.system(size: 12, weight: .semibold))

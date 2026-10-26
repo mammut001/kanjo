@@ -118,6 +118,12 @@ struct MenuPanelView: View {
         .frame(minHeight: isTall ? Self.size.height : nil)
         .frame(height: isTall ? nil : Self.size.height)
         .panelBackground()
+        .environment(\.pinnedHoverId, activeAnchor)
+        .overlayPreferenceValue(HoverCardPreferenceKey.self) { payload in
+            GeometryReader { rootGeo in
+                HoverCardOverlayHost(payload: payload, containerSize: rootGeo.size)
+            }
+        }
         .onAppear { applyDevRoute(report: store.report) }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
     }
@@ -233,7 +239,7 @@ struct MenuPanelView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.refresh_now"))
+            .hoverTip(L10n.tr("menu.refresh_now"))
             .disabled(route == .disk ? disk.isLoading : store.isLoading)
 
             Group {
@@ -255,7 +261,7 @@ struct MenuPanelView: View {
             }
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(.secondary)
-            .help(route == .disk ? disk.sourceDescription : store.sourceDescription)
+            .hoverTip(route == .disk ? disk.sourceDescription : store.sourceDescription)
 
             Spacer()
 
@@ -268,7 +274,7 @@ struct MenuPanelView: View {
                 Image(systemName: "internaldrive")
             }
             .buttonStyle(IconButtonStyle(active: route == .disk))
-            .help(L10n.tr("menu.disk"))
+            .hoverTip(L10n.tr("menu.disk"))
 
             Button {
                 overviewAnchor = nil
@@ -278,7 +284,7 @@ struct MenuPanelView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.settings"))
+            .hoverTip(L10n.tr("menu.settings"))
 
             Button {
                 NSApp.terminate(nil)
@@ -286,7 +292,7 @@ struct MenuPanelView: View {
                 Image(systemName: "power")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.quit"))
+            .hoverTip(L10n.tr("menu.quit"))
         }
         .padding(.horizontal, 5).padding(.vertical, 3)
         .glassSurface(cornerRadius: 12)

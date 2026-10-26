@@ -72,7 +72,7 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
-                            .help(L10n.tr("settings.disk_command_help"))
+                            .hoverTip(L10n.tr("settings.disk_command_help"))
                     } else {
                         HStack(alignment: .bottom) {
                             field(L10n.tr("settings.json_file"), text: $filePath, placeholder: DefaultPaths.sampleFixture.path)
@@ -446,7 +446,7 @@ private struct SubscriptionSettingsRow: View {
             .font(.system(size: 11)).monospacedDigit()
             .lineLimit(1)
             .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-            .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+            .hoverTip(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
             .padding(.leading, 11)
         HStack(spacing: 6) {
             Spacer()
@@ -806,7 +806,7 @@ private struct QuotaResetSettingsRow: View {
                 .disabled(quota?.source != "manual")
             }
             .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-            .help(store.canEditSubscriptions ? "" : L10n.tr("settings.renews_day_disabled_help"))
+            .hoverTip(store.canEditSubscriptions ? "" : L10n.tr("settings.renews_day_disabled_help"))
             .padding(.leading, 11)
 
             if saving {

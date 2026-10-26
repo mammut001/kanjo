@@ -113,7 +113,7 @@ struct RangePicker: View {
             .contentShape(Capsule())
         if let reason = unavailable(r) {
             // 不用 .disabled：禁用的按钮在 macOS 上不显示 tooltip。
-            label.foregroundStyle(.tertiary).help(reason)
+            label.foregroundStyle(.tertiary).hoverTip(reason)
         } else {
             Button {
                 withAnimation(.easeOut(duration: 0.15)) { raw = r.rawValue }
@@ -121,7 +121,7 @@ struct RangePicker: View {
                 label.foregroundStyle(selected ? .primary : .secondary)
             }
             .buttonStyle(.plain)
-            .help(r.longLabel)
+            .hoverTip(r.longLabel)
         }
     }
 }
@@ -149,18 +149,6 @@ struct RangeCaption: View {
         .font(.system(size: 10.5))
         .foregroundStyle(.secondary)
         .monospacedDigit()
-        .modifier(OptionalHelpModifier(help: help))
-    }
-}
-
-private struct OptionalHelpModifier: ViewModifier {
-    let help: String?
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let help, !help.isEmpty {
-            content.help(help)
-        } else {
-            content
-        }
+        .hoverTip(help)
     }
 }

@@ -21,6 +21,8 @@ struct DayChart: View {
     var color: Color = AgentPalette.chartBar
     var agentLabels: [String: String] = [:]
     @State private var hovered: Point?
+    @State private var carded: Point?
+    @State private var cardTask: Task<Void, Never>?
 
     private var points: [Point] {
         days.compactMap { d in
@@ -99,30 +101,90 @@ struct DayChart: View {
         }
         .chartOverlay { proxy in
             GeometryReader { geo in
-                Rectangle().fill(Color.clear).contentShape(Rectangle())
-                    .onContinuousHover { phase in
-                        switch phase {
-                        case .active(let loc):
-                            let origin = geo[proxy.plotAreaFrame].origin
-                            guard let date: Date = proxy.value(atX: loc.x - origin.x) else { hovered = nil; return }
-                            hovered = nearest(to: date, in: pts)
-                        case .ended:
-                            hovered = nil
+                let plotFrame = geo[proxy.plotAreaFrame]
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(Color.clear).contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let loc):
+                                let origin = plotFrame.origin
+                                guard let date: Date = proxy.value(atX: loc.x - origin.x) else {
+                                    hovered = nil
+                                    cardTask?.cancel()
+                                    carded = nil
+                                    return
+                                }
+                                let p = nearest(to: date, in: pts)
+                                if hovered?.id != p?.id {
+                                    hovered = p
+                                    cardTask?.cancel()
+                                    if let p {
+                                        cardTask = Task { @MainActor in
+                                            try? await Task.sleep(nanoseconds: 350_000_000)
+                                            if !Task.isCancelled {
+                                                withAnimation(.easeOut(duration: 0.12)) {
+                                                    carded = p
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        withAnimation(.easeIn(duration: 0.08)) {
+                                            carded = nil
+                                        }
+                                    }
+                                }
+                            case .ended:
+                                hovered = nil
+                                cardTask?.cancel()
+                                withAnimation(.easeIn(duration: 0.08)) {
+                                    carded = nil
+                                }
+                            }
                         }
+                        .accessibilityLabel(hovered.map { dayHelpText(for: $0) } ?? "")
+
+                    if let c = carded, let x = proxy.position(forX: c.date) {
+                        Color.clear
+                            .frame(width: 14, height: plotFrame.height)
+                            .position(x: x + plotFrame.origin.x, y: plotFrame.midY)
+                            .hoverCard(isPinned: true) {
+                                dayHoverCard(for: c)
+                            }
                     }
-                    .help(hovered.map {
-                        TooltipBuilder.dayTooltip(
-                            dayString: $0.day,
-                            cost: $0.cost,
-                            tokens: $0.tokens,
-                            byAgent: $0.byAgent,
-                            byAgentTokens: $0.byAgentTokens,
-                            agentLabels: agentLabels,
-                            currency: currency
-                        )
-                    } ?? "")
+                }
             }
         }
+    }
+
+    private func dayHoverCard(for p: Point) -> some View {
+        let rows: [HoverCardRowItem]
+        if let byAgent = p.byAgent, !byAgent.isEmpty {
+            let items = byAgent.map { k, v in
+                (agent: k, label: agentLabels[k] ?? k, cost: v, tokens: p.byAgentTokens?[k] ?? 0)
+            }
+            rows = HoverCardRowBuilder.agentRows(agents: items)
+        } else {
+            rows = []
+        }
+        return AgentRowsHoverCard(
+            title: Fmt.day(p.day),
+            cost: p.cost,
+            tokens: p.tokens,
+            currency: currency,
+            rows: rows
+        )
+    }
+
+    private func dayHelpText(for p: Point) -> String {
+        TooltipBuilder.dayTooltip(
+            dayString: p.day,
+            cost: p.cost,
+            tokens: p.tokens,
+            byAgent: p.byAgent,
+            byAgentTokens: p.byAgentTokens,
+            agentLabels: agentLabels,
+            currency: currency
+        )
     }
 
     /// 只在鼠标落在某根柱所在的那一天（±半天）时选中，空白日不选。

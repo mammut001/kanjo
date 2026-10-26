@@ -75,14 +75,10 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous))
     }
 
-    /// 当文本非空时附加 .help tooltip。
+    /// 当文本非空时附加悬停卡提示（兼容旧调用，已迁移为 hoverTip）。
     @ViewBuilder
     func helpIfPresent(_ text: String?) -> some View {
-        if let text, !text.isEmpty {
-            self.help(text)
-        } else {
-            self
-        }
+        self.hoverTip(text)
     }
 }
 
@@ -166,7 +162,7 @@ struct Badge: View {
             .padding(.horizontal, 5).padding(.vertical, 1)
             .foregroundStyle(fg)
             .background(Capsule().fill(bg))
-            .help(help ?? "")
+            .hoverTip(help)
     }
 
     private var fg: Color {
@@ -206,10 +202,22 @@ struct AgentDots: View {
         let used = agents.filter { $0.sessions > 0 || $0.cost > 0 || $0.tokens.total > 0 }.sorted { $0.cost > $1.cost }
         if !used.isEmpty {
             let helpText = TooltipBuilder.agentLines(agents: used, currency: currency).joined(separator: "\n")
+            let totalCost = used.reduce(0.0) { $0 + $1.cost }
+            let totalTokens = used.reduce(0) { $0 + $1.tokens.total }
+            let rows = HoverCardRowBuilder.agentRows(agents: used.map { ($0.agent, $0.label, $0.cost, $0.tokens.total) })
             HStack(spacing: 3) {
                 ForEach(used.prefix(3)) { a in AgentDot(agent: a.agent, size: size) }
             }
-            .help(helpText)
+            .hoverCard {
+                AgentRowsHoverCard(
+                    title: L10n.tr("project.section.by_agent"),
+                    cost: totalCost,
+                    tokens: totalTokens,
+                    currency: currency,
+                    rows: rows
+                )
+            }
+            .accessibilityLabel(helpText)
         }
     }
 }
@@ -222,9 +230,11 @@ struct HBarRow: View {
     let value: String
     var detail: String? = nil
     var help: String? = nil
+    var card: (() -> AnyView)? = nil
 
+    @ViewBuilder
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let content = VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Circle().fill(color).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
                 Text(label).font(.system(size: 12))
@@ -240,7 +250,12 @@ struct HBarRow: View {
             }
             .frame(height: 3)
         }
-        .helpIfPresent(help)
+
+        if let card {
+            content.hoverCard { card() }
+        } else {
+            content.hoverTip(help)
+        }
     }
 }
 
@@ -380,7 +395,17 @@ struct Legend: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .help(helpText(for: a))
+                .hoverCard {
+                    AgentRowsHoverCard(
+                        title: a.label,
+                        titleDotColor: AgentPalette.color(for: a.key),
+                        cost: a.cost,
+                        tokens: a.tokens,
+                        currency: currency,
+                        rows: [HoverCardRowItem(id: a.key, label: a.label, cost: a.cost, tokens: a.tokens, fraction: 1.0)]
+                    )
+                }
+                .accessibilityLabel(helpText(for: a))
             }
         }
     }
