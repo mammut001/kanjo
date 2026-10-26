@@ -176,7 +176,7 @@ struct ProjectDetailView: View {
             Text(L10n.tr(sessKey, shown.sessions, usageStr))
                 .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
             if let caption = ctx.caption {
-                RangeCaption(text: caption).padding(.top, 1)
+                RangeCaption(text: caption, help: ctx.captionHelp).padding(.top, 1)
             }
             CostNote(text: report.costNote).padding(.top, 2)
 
@@ -462,7 +462,7 @@ struct BucketDetailView: View {
                 Text(L10n.tr(sessKey, b.sessions, usageStr))
                     .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 if let caption = ctx.caption {
-                    RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start")).padding(.top, 1)
+                    RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start"), help: ctx.captionHelp).padding(.top, 1)
                 }
                 CostNote(text: report.costNote).padding(.top, 2)
                 Text(AttributionInfo.explanation(kind == .unattributed ? "none" : "excluded",

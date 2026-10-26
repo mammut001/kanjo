@@ -39,6 +39,8 @@
 "timerange.caption.reset" = "%@ reset %@";
 "timerange.caption.no_reset_info" = "%@: no reset info";
 "timerange.caption.no_subscription" = "%@: no subscription";
+"timerange.caption.no_reset_info_others" = "%d others have no reset info (not counted)";
+"timerange.caption.no_subscription_others" = "%d others have no subscription (not counted)";
 
 /* Formatting & Cycle */
 "fmt.cycle_dates_unavailable" = "Cycle dates unavailable";

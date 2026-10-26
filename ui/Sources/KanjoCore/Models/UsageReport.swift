@@ -37,6 +37,13 @@ public struct UsageReport: Codable, Equatable {
 
     /// schema_version 高于本 UI 支持的版本：显示警告，继续渲染。
     public var isNewerSchema: Bool { schemaVersion > supportedSchemaVersion }
+
+    /// 报告里所有 agent 的显示名（agent key → label）。
+    public var agentLabels: [String: String] {
+        var out: [String: String] = [:]
+        for p in projects { for a in p.byAgent { out[a.agent] = a.label } }
+        return out
+    }
 }
 
 public struct ReportConfig: Codable, Equatable {
