@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
+import shutil
+import sqlite3
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional
@@ -12,6 +16,9 @@ AGENT_LABELS = {
     "claude": "Claude Code",
     "antigravity": "Antigravity CLI",
     "codex": "Codex CLI",
+    "minimax": "MiniMax",
+    "opencode": "OpenCode",
+    "copilot": "Copilot CLI",
 }
 
 
@@ -245,3 +252,69 @@ def paths_from_args(args, cwd: Optional[str], path_keys, cmd_keys, home: Optiona
                 value = " ".join(str(v) for v in value)
             out.extend(extract_paths(value, home))
     return out
+
+
+def git_branch(cwd: Optional[str]) -> Optional[str]:
+    """Recover branch name from .git/HEAD in cwd (or linked worktree) without invoking git."""
+    if not cwd or not os.path.isdir(cwd):
+        return None
+    dotgit = os.path.join(cwd, ".git")
+    head_file = None
+    if os.path.isdir(dotgit):
+        head_file = os.path.join(dotgit, "HEAD")
+    elif os.path.isfile(dotgit):
+        try:
+            with open(dotgit, "r", encoding="utf-8") as f:
+                line = f.read().strip()
+                if line.startswith("gitdir:"):
+                    gdir = line.split(":", 1)[1].strip()
+                    if not os.path.isabs(gdir):
+                        gdir = os.path.normpath(os.path.join(cwd, gdir))
+                    head_file = os.path.join(gdir, "HEAD")
+        except OSError:
+            pass
+    if head_file and os.path.isfile(head_file):
+        try:
+            with open(head_file, "r", encoding="utf-8") as hf:
+                c = hf.read().strip()
+                if c.startswith("ref: refs/heads/"):
+                    return c[len("ref: refs/heads/"):].strip()
+        except OSError:
+            pass
+    return None
+
+
+@contextlib.contextmanager
+def open_sqlite_ro(path: str):
+    """Open SQLite db in read-only mode, safely copying db + -wal + -shm to temp
+    so uncheckpointed WAL rows are accessible without write-locking or touching source files.
+    """
+    if not os.path.isfile(path):
+        raise ParseError("database file not found: %s" % path)
+    tmp_dir = tempfile.mkdtemp(prefix="kanjo-db-")
+    try:
+        tmp_db = os.path.join(tmp_dir, os.path.basename(path))
+        shutil.copy2(path, tmp_db)
+        wal_path = path + "-wal"
+        if os.path.isfile(wal_path):
+            try:
+                shutil.copy2(wal_path, tmp_db + "-wal")
+            except OSError:
+                pass
+        shm_path = path + "-shm"
+        if os.path.isfile(shm_path):
+            try:
+                shutil.copy2(shm_path, tmp_db + "-shm")
+            except OSError:
+                pass
+        conn = sqlite3.connect(tmp_db)
+        try:
+            yield conn
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError) as exc:
+        raise ParseError("cannot open database %s: %s" % (path, exc))
+    finally:
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+

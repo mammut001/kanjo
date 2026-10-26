@@ -1,0 +1,4 @@
+{"type": "session.start", "timestamp": "2026-07-12T04:31:31.092Z", "data": {}}
+{"type": "user.message", "timestamp": "2026-07-12T04:31:32.000Z", "data": {"content": "Fix bug in app"}}
+{"type": "assistant.message", "timestamp": "2026-07-12T04:31:35.000Z", "data": {"model": "claude-haiku-4.5", "messageId": "msg-1", "outputTokens": 80}}
+{"type": "session.shutdown", "timestamp": "2026-07-12T04:31:39.000Z", "data": {"shutdownType": "routine", "modelMetrics": {"claude-haiku-4.5": {"requests": {"count": 1}, "usage": {"inputTokens": 1000, "outputTokens": 80, "cacheReadTokens": 100, "cacheWriteTokens": 50, "reasoningTokens": 20}}}, "codeChanges": {"filesModified": ["src/fix.py"]}}}

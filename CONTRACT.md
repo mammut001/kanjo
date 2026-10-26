@@ -116,6 +116,9 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `claude` | Claude Code |
 | `antigravity` | Antigravity CLI |
 | `codex` | Codex CLI |
+| `minimax` | MiniMax |
+| `opencode` | OpenCode |
+| `copilot` | Copilot CLI |
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 
