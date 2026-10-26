@@ -155,6 +155,10 @@
 "menu.error_title" = "无法加载用量数据";
 "menu.open_settings" = "打开设置";
 "menu.expected_export_json" = "需要由 `kanjo export` 生成的 JSON 文件（参见 CONTRACT.md）。";
+"menu.first_scan_hint" = "首次运行要读取所有 AI 工具的日志，大约需要半分钟；之后每次刷新只要几秒。";
+"menu.first_scan_elapsed" = "已用 %d 秒";
+"menu.first_run_hint" = "首次运行要读取所有 AI 工具的日志，大约需要半分钟；之后每次刷新只要几秒。";
+"menu.first_run_elapsed" = "已用 %d 秒";
 
 /* 总览 */
 "overview.total_cost" = "总花费";

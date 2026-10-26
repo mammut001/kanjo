@@ -131,42 +131,45 @@ enum SnapshotRunner {
     static func run(config: SnapshotConfig) async {
         let rawRoute = config.route ?? "overview"
         let needsDisk = rawRoute == "disk" || rawRoute.hasPrefix("disk:")
+        let isLoadingRoute = rawRoute == "loading" || rawRoute.hasPrefix("loading:")
 
         if needsDisk {
             DiskStore.shared.refresh()
         }
 
-        // 等待数据加载完成，超时约 20 秒
-        let timeoutSeconds: TimeInterval = 20.0
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        if !isLoadingRoute {
+            // 等待数据加载完成，超时约 20 秒
+            let timeoutSeconds: TimeInterval = 20.0
+            let deadline = Date().addingTimeInterval(timeoutSeconds)
 
-        while true {
-            let storeDone = !ReportStore.shared.isLoading && (ReportStore.shared.report != nil || ReportStore.shared.error != nil)
-            let diskDone = !needsDisk || (!DiskStore.shared.isLoading && (DiskStore.shared.hasReport || DiskStore.shared.error != nil))
+            while true {
+                let storeDone = !ReportStore.shared.isLoading && (ReportStore.shared.report != nil || ReportStore.shared.error != nil)
+                let diskDone = !needsDisk || (!DiskStore.shared.isLoading && (DiskStore.shared.hasReport || DiskStore.shared.error != nil))
 
-            if storeDone && diskDone {
-                break
+                if storeDone && diskDone {
+                    break
+                }
+
+                if Date() >= deadline {
+                    fputs("Error: Timed out waiting for data to load (~20s)\n", stderr)
+                    exit(1)
+                }
+
+                try? await Task.sleep(nanoseconds: 50_000_000)
             }
 
-            if Date() >= deadline {
-                fputs("Error: Timed out waiting for data to load (~20s)\n", stderr)
+            // 检查加载错误
+            if ReportStore.shared.report == nil {
+                let err = ReportStore.shared.error ?? "Failed to load usage report"
+                fputs("Error: \(err)\n", stderr)
                 exit(1)
             }
 
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-
-        // 检查加载错误
-        if ReportStore.shared.report == nil {
-            let err = ReportStore.shared.error ?? "Failed to load usage report"
-            fputs("Error: \(err)\n", stderr)
-            exit(1)
-        }
-
-        if needsDisk && DiskStore.shared.report == nil {
-            let err = DiskStore.shared.error ?? "Failed to load disk report"
-            fputs("Error: \(err)\n", stderr)
-            exit(1)
+            if needsDisk && DiskStore.shared.report == nil {
+                let err = DiskStore.shared.error ?? "Failed to load disk report"
+                fputs("Error: \(err)\n", stderr)
+                exit(1)
+            }
         }
 
         // 订阅行编辑等场景：确保已知订阅档位加载完成
