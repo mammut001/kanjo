@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generated_at": "2026-10-25T10:00:00Z",
-  "total_bytes": 55200000000,
-  "reclaimable_bytes": 31400000000,
+  "total_bytes": 42200000000,
+  "reclaimable_bytes": 25900000000,
   "agents": [
     {
       "agent": "claude",
@@ -107,51 +107,6 @@
       ]
     },
     {
-      "agent": "gemini",
-      "label": "Gemini CLI",
-      "bytes": 10600000000,
-      "entries": [
-        {
-          "id": "gemini:sessions",
-          "kind": "sessions",
-          "path": "/Users/alice/.gemini/sessions",
-          "bytes": 4200000000,
-          "files": 510,
-          "oldest": "2026-04-04",
-          "newest": "2026-10-23",
-          "deletable": "after_import",
-          "blocked": [],
-          "note": "Gemini session logs already copied into the ledger."
-        },
-        {
-          "id": "gemini:scratch",
-          "kind": "scratch",
-          "path": "/Users/alice/.gemini/tmp",
-          "bytes": 2200000000,
-          "files": 88,
-          "oldest": "2026-10-20",
-          "newest": "2026-10-25",
-          "deletable": "when_clean",
-          "blocked": [
-            "active"
-          ],
-          "note": "Temporary files still in use."
-        },
-        {
-          "id": "gemini:memory",
-          "kind": "memory",
-          "path": "/Users/alice/.gemini/memory",
-          "bytes": 4200000000,
-          "files": 15,
-          "oldest": "2026-02-02",
-          "newest": "2026-09-30",
-          "deletable": "never",
-          "blocked": [],
-          "note": "Gemini memory store. Never deleted."
-        }
-      ]
-    },
-    {
       "agent": "antigravity",
       "label": "Antigravity CLI",
       "bytes": 8400000000,
@@ -209,45 +164,171 @@
       ]
     },
     {
-      "agent": "cursor",
-      "label": "Cursor",
-      "bytes": 8000000000,
+      "agent": "grok",
+      "label": "Grok CLI",
+      "bytes": 2000000000,
       "entries": [
         {
-          "id": "cursor:cache",
-          "kind": "cache",
-          "path": "/Users/alice/Library/Application Support/Cursor/Cache",
-          "bytes": 626000000,
-          "files": 4100,
-          "oldest": "2026-09-12",
-          "newest": "2026-10-18",
-          "deletable": "always",
-          "blocked": [],
-          "note": "Editor cache. Cursor recreates it."
-        },
-        {
-          "id": "cursor:sessions",
+          "id": "grok:sessions",
           "kind": "sessions",
-          "path": "/Users/alice/Library/Application Support/Cursor/User/globalStorage",
-          "bytes": 4374000000,
-          "files": 220,
-          "oldest": "2026-03-15",
+          "path": "/Users/alice/.grok/sessions",
+          "bytes": 1200000000,
+          "files": 84,
+          "oldest": "2026-08-10",
           "newest": "2026-10-24",
           "deletable": "after_import",
           "blocked": [],
-          "note": "Chat transcripts already imported into the ledger."
+          "note": "Grok sessions. Numbers stay in the ledger after deletion."
         },
         {
-          "id": "cursor:other",
+          "id": "grok:bundled",
           "kind": "other",
-          "path": "/Users/alice/Library/Application Support/Cursor/User/workspaceStorage",
-          "bytes": 3000000000,
-          "files": 96,
-          "oldest": "2026-02-11",
-          "newest": "2026-10-16",
+          "path": "/Users/alice/.grok/bundled",
+          "bytes": 800000000,
+          "files": 12,
+          "oldest": "2026-08-01",
+          "newest": "2026-09-15",
           "deletable": "never",
           "blocked": [],
-          "note": "Workspace state the editor still needs."
+          "note": "Bundled models and assets. Never deleted."
+        }
+      ]
+    },
+    {
+      "agent": "qwen",
+      "label": "Qwen Code",
+      "bytes": 1000000000,
+      "entries": [
+        {
+          "id": "qwen:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.qwen/usage",
+          "bytes": 600000000,
+          "files": 45,
+          "oldest": "2026-07-01",
+          "newest": "2026-10-23",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Qwen Code monthly usage logs."
+        },
+        {
+          "id": "qwen:projects",
+          "kind": "other",
+          "path": "/Users/alice/.qwen/projects",
+          "bytes": 400000000,
+          "files": 18,
+          "oldest": "2026-07-01",
+          "newest": "2026-10-20",
+          "deletable": "never",
+          "blocked": [],
+          "note": "Qwen project metadata. Kept across sessions."
+        }
+      ]
+    },
+    {
+      "agent": "commandcode",
+      "label": "Command Code",
+      "bytes": 500000000,
+      "entries": [
+        {
+          "id": "commandcode:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.commandcode/projects",
+          "bytes": 500000000,
+          "files": 32,
+          "oldest": "2026-08-15",
+          "newest": "2026-10-22",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Command Code project sessions."
+        }
+      ]
+    },
+    {
+      "agent": "minimax",
+      "label": "MiniMax",
+      "bytes": 300000000,
+      "entries": [
+        {
+          "id": "minimax:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.minimax",
+          "bytes": 300000000,
+          "files": 3,
+          "oldest": "2026-09-01",
+          "newest": "2026-10-24",
+          "deletable": "never",
+          "blocked": [],
+          "note": "MiniMax SQLite database. DB-backed sessions are never deleted by disk clean."
+        }
+      ]
+    },
+    {
+      "agent": "opencode",
+      "label": "OpenCode",
+      "bytes": 400000000,
+      "entries": [
+        {
+          "id": "opencode:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.local/share/opencode",
+          "bytes": 400000000,
+          "files": 4,
+          "oldest": "2026-08-20",
+          "newest": "2026-10-24",
+          "deletable": "never",
+          "blocked": [],
+          "note": "OpenCode SQLite database. DB-backed sessions are never deleted by disk clean."
+        }
+      ]
+    },
+    {
+      "agent": "copilot",
+      "label": "Copilot CLI",
+      "bytes": 700000000,
+      "entries": [
+        {
+          "id": "copilot:sessions",
+          "kind": "sessions",
+          "path": "/Users/alice/.copilot/session-state",
+          "bytes": 700000000,
+          "files": 150,
+          "oldest": "2026-06-10",
+          "newest": "2026-10-23",
+          "deletable": "after_import",
+          "blocked": [],
+          "note": "Copilot CLI session state."
+        }
+      ]
+    },
+    {
+      "agent": "claude-desktop",
+      "label": "Claude Desktop",
+      "bytes": 700000000,
+      "entries": [
+        {
+          "id": "claude-desktop:cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Application Support/Claude/Cache",
+          "bytes": 500000000,
+          "files": 3200,
+          "oldest": "2026-09-10",
+          "newest": "2026-10-25",
+          "deletable": "always",
+          "blocked": [],
+          "note": "Claude desktop app cache. Safe to delete."
+        },
+        {
+          "id": "claude-desktop:code-cache",
+          "kind": "cache",
+          "path": "/Users/alice/Library/Application Support/Claude/Code Cache",
+          "bytes": 200000000,
+          "files": 1100,
+          "oldest": "2026-09-10",
+          "newest": "2026-10-25",
+          "deletable": "always",
+          "blocked": [],
+          "note": "Claude desktop code cache. Safe to delete."
         }
       ]
     }
