@@ -42,9 +42,8 @@ NOTES = {
     "other": "Not deleted.",
 }
 LABELS = dict(AGENT_LABELS)
-LABELS["grok"] = "Grok"
 LABELS["claude-desktop"] = "Claude Desktop"
-AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "claude-desktop"]
+AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "claude-desktop"]
 _PARSERS = {"claude": claude, "codex": codex, "antigravity": antigravity}
 _OLDER = re.compile(r"^(\d+)d$")
 
@@ -78,6 +77,8 @@ def default_roots() -> dict:
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", ["~/.gemini/antigravity-cli/conversations"]),
         "grok": os.path.expanduser(os.environ.get("KANJO_GROK_DIR") or "~/.grok"),
+        "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
+        "commandcode": os.path.expanduser(os.environ["KANJO_COMMANDCODE_DIR"]) if os.environ.get("KANJO_COMMANDCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.commandcode")),
         "claude_app": os.path.expanduser(
             os.environ.get("KANJO_CLAUDE_APP_CACHE") or "~/Library/Application Support/Claude"),
     }
@@ -347,10 +348,27 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         sessions = os.path.join(grok, "sessions")
         if _isdir(sessions):
             add("grok", take_id("grok:sessions"), "sessions", sessions, ["not_imported"],
-                note="Grok sessions. Kanjo does not parse Grok yet, so this stays not_imported.")
+                note="Grok sessions.")
         bundled = os.path.join(grok, "bundled")
         if _isdir(bundled):
             add("grok", take_id("grok:bundled"), "other", bundled)
+
+    qwen = roots.get("qwen")
+    if qwen:
+        usage = os.path.join(qwen, "usage")
+        if _isdir(usage):
+            add("qwen", take_id("qwen:sessions"), "sessions", usage, ["not_imported"],
+                note="Qwen Code monthly usage logs.")
+        projects = os.path.join(qwen, "projects")
+        if _isdir(projects):
+            add("qwen", take_id("qwen:projects"), "other", projects)
+
+    cmd = roots.get("commandcode")
+    if cmd:
+        projects = os.path.join(cmd, "projects")
+        if _isdir(projects):
+            add("commandcode", take_id("commandcode:sessions"), "sessions", projects, ["not_imported"],
+                note="Command Code project sessions.")
 
     app = roots.get("claude_app")
     if app:

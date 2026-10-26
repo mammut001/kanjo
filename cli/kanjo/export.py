@@ -17,13 +17,20 @@ from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
-from .sources import antigravity, claude, codex
+from .sources import antigravity, claude, codex, commandcode, grok, qwen
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
 
 SCHEMA_VERSION = 1
 COST_NOTE = "API-equivalent cost estimated from public API prices. Not actual subscription spend."
-SOURCES = {"claude": claude, "antigravity": antigravity, "codex": codex}
+SOURCES = {
+    "claude": claude,
+    "antigravity": antigravity,
+    "codex": codex,
+    "grok": grok,
+    "qwen": qwen,
+    "commandcode": commandcode,
+}
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "thinking")
 
 
@@ -67,8 +74,9 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}
     for agent, module in SOURCES.items():
-        roots = (dirs or {}).get(agent)
-        if roots is None:
+        if dirs is not None:
+            roots = dirs.get(agent, [])
+        else:
             roots = module.roots()
         st = SourceStats(agent=agent, dirs=[r for r in roots])
         stats[agent] = st

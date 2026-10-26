@@ -12,6 +12,9 @@ enum AgentPalette {
         "claude": (0xD97757, 0xE8926F),       // clay
         "codex": (0x3E79D6, 0x6FA0F0),        // blue
         "antigravity": (0x7A6AD8, 0x9B8DF0),  // violet
+        "grok": (0xC2255C, 0xE64980),         // rose
+        "qwen": (0xF59F00, 0xFCC419),         // amber
+        "commandcode": (0x1098AD, 0x22B8CF),  // cyan
     ]
 
     /// 合并的「+N more」方块、未知 agent、没有花费的项目。
