@@ -78,7 +78,14 @@ struct MenuPanelView: View {
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
     @State private var editingSubscriptionAgent: String?
+    var initialRoute: Route? = nil
+    var initialAnchor: String? = nil
+    var initialEditingAgent: String? = nil
     var isTall: Bool = false
+
+    private var activeRoute: Route { initialRoute ?? route }
+    private var activeAnchor: String? { initialAnchor ?? overviewAnchor }
+    private var activeEditingAgent: String? { initialEditingAgent ?? editingSubscriptionAgent }
 
     init(
         route: Route = .overview,
@@ -87,6 +94,9 @@ struct MenuPanelView: View {
         pendingDevRoute: String? = DevRoute.requested,
         isTall: Bool = false
     ) {
+        self.initialRoute = (route != .overview || anchor != nil || editingAgent != nil) ? route : nil
+        self.initialAnchor = anchor
+        self.initialEditingAgent = editingAgent
         _route = State(initialValue: route)
         _overviewAnchor = State(initialValue: anchor)
         _editingSubscriptionAgent = State(initialValue: editingAgent)
@@ -113,7 +123,7 @@ struct MenuPanelView: View {
 
     /// `disk` 不依赖用量报告，出现时就能打开；项目页要等报告到了再解析。
     private func applyDevRoute(report: UsageReport?) {
-        guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: report) else { return }
+        guard initialRoute == nil, let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: report) else { return }
         pendingDevRoute = nil
         route = resolved.route
         overviewAnchor = resolved.anchor
@@ -158,25 +168,25 @@ struct MenuPanelView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch route {
+        switch activeRoute {
         case .settings:
-            SettingsView(scrollTo: overviewAnchor, initiallyEditingAgent: editingSubscriptionAgent, onBack: {
+            SettingsView(scrollTo: activeAnchor, initiallyEditingAgent: activeEditingAgent, onBack: {
                 route = .overview
                 overviewAnchor = nil
                 editingSubscriptionAgent = nil
                 store.applySettings()
             })
         case .disk:
-            DiskView(expandAll: overviewAnchor == DiskView.expandedAnchor, onBack: {
+            DiskView(expandAll: activeAnchor == DiskView.expandedAnchor, onBack: {
                 route = .overview
                 overviewAnchor = nil
             }, onSettings: { route = .settings })
         default:
             if let r = store.report {
-                switch route {
+                switch activeRoute {
                 case .project(let id):
                     if let p = r.projects.first(where: { $0.id == id }) {
-                        ProjectDetailView(project: p, report: r, devAnchor: overviewAnchor,
+                        ProjectDetailView(project: p, report: r, devAnchor: activeAnchor,
                                           onBack: { route = .overview; overviewAnchor = nil })
                     } else {
                         missing(L10n.tr("menu.project_missing"))
@@ -184,7 +194,7 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    OverviewView(report: r, scrollAnchor: overviewAnchor, onSelect: { route = $0 },
+                    OverviewView(report: r, scrollAnchor: activeAnchor, onSelect: { route = $0 },
                                  onSetRenewalDay: { agent in
                         overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
                         route = .settings

@@ -107,6 +107,21 @@ struct SnapshotConfig {
 
 @MainActor
 enum SnapshotRunner {
+    static func runCLI() {
+        guard let config = SnapshotConfig.parse() else {
+            exit(1)
+        }
+        let app = NSApplication.shared
+        _ = app.setActivationPolicy(.prohibited)
+        if app.activationPolicy() != .prohibited {
+            app.setActivationPolicy(.accessory)
+        }
+        Task { @MainActor in
+            await run(config: config)
+        }
+        app.run()
+    }
+
     static func run(config: SnapshotConfig) async {
         let rawRoute = config.route ?? "overview"
         let needsDisk = rawRoute == "disk" || rawRoute.hasPrefix("disk:")
@@ -162,12 +177,12 @@ enum SnapshotRunner {
             exit(1)
         }
 
-        // 滚动路由：ImageRenderer 不会渲染 ScrollView 偏移量，
-        // 因此截图模式将面板内容渲染为不滚动但完整高度（TALL）。
+        // 滚动路由：离屏渲染时将面板内容渲染为不滚动但完整高度（TALL）。
         let isScrolled = resolved.anchor != nil
 
         if let app = config.appearance {
-            NSApp.appearance = NSAppearance(named: app == .dark ? .darkAqua : .aqua)
+            let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
+            NSApp.appearance = NSAppearance(named: appearanceName)
         }
 
         let panel = MenuPanelView(
@@ -194,16 +209,76 @@ enum SnapshotRunner {
             )
         }
 
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = config.scale
+        let standardSize = MenuPanelView.size
+        let initialRect = NSRect(origin: .zero, size: standardSize)
 
-        guard let cgImage = renderer.cgImage else {
-            fputs("Error: ImageRenderer failed to produce an image\n", stderr)
+        let hosting = NSHostingView(rootView: view)
+        if let app = config.appearance {
+            let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
+            hosting.appearance = NSAppearance(named: appearanceName)
+        }
+
+        let window = NSWindow(
+            contentRect: initialRect,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.alphaValue = 0
+        if let app = config.appearance {
+            let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
+            window.appearance = NSAppearance(named: appearanceName)
+        }
+        window.contentView = hosting
+
+        hosting.layoutSubtreeIfNeeded()
+
+        let renderHeight: CGFloat
+        if isScrolled {
+            let fit = hosting.fittingSize
+            renderHeight = max(standardSize.height, ceil(fit.height))
+        } else {
+            renderHeight = standardSize.height
+        }
+
+        let renderSize = NSSize(width: standardSize.width, height: renderHeight)
+        window.setContentSize(renderSize)
+        hosting.frame = NSRect(origin: .zero, size: renderSize)
+        hosting.layoutSubtreeIfNeeded()
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        hosting.layoutSubtreeIfNeeded()
+
+        let bounds = hosting.bounds
+        guard var rep = hosting.bitmapImageRepForCachingDisplay(in: bounds) else {
+            fputs("Error: Failed to create bitmapImageRepForCachingDisplay\n", stderr)
             exit(1)
         }
 
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        rep.size = NSSize(width: Double(cgImage.width) / config.scale, height: Double(cgImage.height) / config.scale)
+        let targetPixelsWide = Int(round(bounds.width * config.scale))
+        let targetPixelsHigh = Int(round(bounds.height * config.scale))
+
+        if rep.pixelsWide != targetPixelsWide || rep.pixelsHigh != targetPixelsHigh {
+            if let customRep = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: targetPixelsWide,
+                pixelsHigh: targetPixelsHigh,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            ) {
+                customRep.size = bounds.size
+                rep = customRep
+            }
+        }
+
+        hosting.cacheDisplay(in: bounds, to: rep)
 
         guard let pngData = rep.representation(using: .png, properties: [:]) else {
             fputs("Error: Failed to encode image to PNG\n", stderr)

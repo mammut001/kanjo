@@ -310,7 +310,11 @@ private struct SubscriptionSettingsRow: View {
     let initiallyEditing: Bool
 
     @State private var day: Int
-    @State private var isEditing: Bool
+    @State private var isEditingOverride: Bool? = nil
+    private var isEditing: Bool {
+        get { isEditingOverride ?? initiallyEditing }
+        nonmutating set { isEditingOverride = newValue }
+    }
     @State private var selectedPlanKey: String = ""
     @State private var customPlanText: String = ""
     @State private var inputPrice: String = ""
@@ -325,7 +329,7 @@ private struct SubscriptionSettingsRow: View {
         self.label = label
         self.currency = currency
         self.initiallyEditing = initiallyEditing
-        _isEditing = State(initialValue: initiallyEditing)
+        _isEditingOverride = State(initialValue: initiallyEditing ? true : nil)
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
         _selectedPlanKey = State(initialValue: sub?.plan ?? "")
         _customPlanText = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
@@ -367,14 +371,14 @@ private struct SubscriptionSettingsRow: View {
         }
         .onAppear {
             if initiallyEditing {
-                isEditing = true
+                isEditingOverride = true
             }
             syncInputs()
             Task { await store.loadKnownPlans() }
         }
         .onChange(of: initiallyEditing) { editing in
             if editing {
-                isEditing = true
+                isEditingOverride = true
                 syncInputs()
             }
         }
@@ -419,16 +423,19 @@ private struct SubscriptionSettingsRow: View {
         Text("\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency))")
             .font(.system(size: 10)).foregroundStyle(.secondary)
             .padding(.leading, 11)
-        HStack(spacing: 8) {
-            Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
-                .font(.system(size: 11)).monospacedDigit()
-                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-                .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+        Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
+            .font(.system(size: 11)).monospacedDigit()
+            .lineLimit(1)
+            .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+            .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+            .padding(.leading, 11)
+        HStack(spacing: 6) {
+            Spacer()
             Button(L10n.tr("common.apply")) { saveAnchor(day) }
             Button(L10n.tr("common.reset")) { resetAll() }
             Button(L10n.tr("settings.edit")) {
                 syncInputs()
-                isEditing = true
+                isEditingOverride = true
             }
         }
         .buttonStyle(.bordered)
@@ -457,7 +464,7 @@ private struct SubscriptionSettingsRow: View {
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
             Button(L10n.tr("settings.add_subscription")) {
                 syncInputs()
-                isEditing = true
+                isEditingOverride = true
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -515,7 +522,7 @@ private struct SubscriptionSettingsRow: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                 Button(L10n.tr("common.cancel")) {
-                    isEditing = false
+                    isEditingOverride = false
                     syncInputs()
                 }
                 .buttonStyle(.bordered)
