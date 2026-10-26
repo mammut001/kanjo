@@ -158,7 +158,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     if session.title is None:
                         text = payload.get("message")
                         if isinstance(text, str):
-                            session.title = short_title(text)
+                            t = short_title(text)
+                            if t:
+                                session.title = t
                     session.note_time(ts)
                 elif ptype == "token_count":
                     info = payload.get("info")
@@ -199,7 +201,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     elif isinstance(payload.get("message"), str):
                         text = payload.get("message")
                     if text:
-                        session.title = short_title(text)
+                        t = short_title(text)
+                        if t:
+                            session.title = t
                     session.note_time(ts)
                 found = unique(_tool_paths(payload, cwd))
                 if found:
@@ -209,7 +213,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 if session.title is None:
                     text = payload.get("text") or payload.get("instructions") or payload.get("instruction")
                     if isinstance(text, str):
-                        session.title = short_title(text)
+                        t = short_title(text)
+                        if t:
+                            session.title = t
                 session.note_time(ts)
                 continue
     if not have_meta:

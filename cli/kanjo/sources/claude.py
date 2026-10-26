@@ -129,7 +129,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                                 if summary_title:
                                     session.title = summary_title
                         elif session.title is None:
-                            session.title = short_title(raw_text)
+                            t = short_title(raw_text)
+                            if t:
+                                session.title = t
                 session.note_time(ts)
                 session.note_cwd(cwd, 0)
                 continue

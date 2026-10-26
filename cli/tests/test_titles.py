@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 
-from kanjo.sources import base, claude, codex
+from kanjo.sources import base, claude, codex, commandcode
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE_CODEX_BP = os.path.join(
@@ -38,12 +38,39 @@ class TitleCleanerTest(unittest.TestCase):
             ("任务: 修复闪退问题", "修复闪退问题"),
             ("TASK: Update dependencies", "Update dependencies"),
             ("###### Task: Deep heading test", "Deep heading test"),
-            # Metadata lines dropping (Branch:, Base commit:, paths, code fences, <tags>)
-            ("Branch: agy/session-titles\nReal task description here", "Real task description here"),
-            ("Base commit: abc123def456\nAnother task description", "Another task description"),
-            ("```python\nprint('hello world')\n```\nUser prompt following code fence", "User prompt following code fence"),
-            ("<environment_context>\n<cwd>/Users/alice</cwd>\n</environment_context>\nActual task", "Actual task"),
-            ("<tags>\n<command_output>ignored</command_output>\n</tags>", None),
+            # Lead-in line ending with ':' that has < 6 words
+            ("You are working in:\n# Task: Add export filtering", "Add export filtering"),
+            ("You are working in:", None),
+            ("Repository:\nhttps://github.com/alice/repo\nImplement feature X", "Implement feature X"),
+            ("My request:\nDo something useful", "Do something useful"),
+            # Lines whose main content is a filesystem path or starting with Work only / Only modify / You are working
+            (
+                "Work ONLY /Users/dogecoin/Documents/GitHub/reussir-en-francais\nImplement French quiz module",
+                "Implement French quiz module",
+            ),
+            ("Work ONLY /Users/dogecoin/Documents/GitHub/reussir-en-francais", None),
+            ("Only modify /private/tmp/wt", None),
+            ("You are working locally on the mammut001/FocusApp repository:", None),
+            ("In /Users/alice/repo:", None),
+            # Git raw/diff lines
+            (
+                ":100644 100644 269f21f 4a3c38d M capture-your-screen/main.swift\nReview screen recording diff",
+                "Review screen recording diff",
+            ),
+            (":100644 100644 269f21f 4a3c38d M capture-your-screen/main.swift", None),
+            ("diff --git a/foo.py b/foo.py\nFix syntax error in foo", "Fix syntax error in foo"),
+            # JSON-only or mostly punctuation
+            ('{"page_id":null}\nActual user prompt here', "Actual user prompt here"),
+            ('{"page_id":null}', None),
+            ('[{"key": "value"}]', None),
+            ("--- === ***", None),
+            ("[]", None),
+            # Slash-command-only messages
+            ("/taste off", None),
+            ("/taste off\nStart new feature", "Start new feature"),
+            ("/compact", None),
+            ("/goal", None),
+            ("/goal Fix navigation animation", "Fix navigation animation"),
             # Never return a title that is only a path
             ("/private/tmp/claude-501/-Users-dogecoin-Documents-GitHub-FocusApp", None),
             ("~/Documents/GitHub/FocusApp", None),
@@ -156,6 +183,76 @@ class CodexBoilerplateFixtureTest(unittest.TestCase):
         self.assertEqual(session.agent, "codex")
         self.assertEqual(session.title, "Implement dashboard widgets for iOS app")
         self.assertEqual(len(session.messages), 1)
+
+    def test_codex_skips_json_only_first_message(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({
+                "timestamp": "2026-08-22T00:00:00.000Z",
+                "type": "session_meta",
+                "payload": {"id": "codex-json-1", "session_id": "codex-json-1"}
+            }) + "\n")
+            f.write(json.dumps({
+                "timestamp": "2026-08-22T00:00:01.000Z",
+                "type": "turn_context",
+                "payload": {"cwd": "/Users/alice/repo", "model": "gpt-5.5"}
+            }) + "\n")
+            # Message 1: JSON-only
+            f.write(json.dumps({
+                "timestamp": "2026-08-22T00:00:02.000Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": '{"page_id":null}'}
+            }) + "\n")
+            # Message 2: Real prompt
+            f.write(json.dumps({
+                "timestamp": "2026-08-22T00:00:03.000Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": "Refactor authentication flow"}
+            }) + "\n")
+            path = f.name
+        try:
+            s = codex.parse_file(path)
+            self.assertEqual(s.title, "Refactor authentication flow")
+        finally:
+            os.remove(path)
+
+
+class CommandCodeFallbackTest(unittest.TestCase):
+    def test_slash_command_fallback_to_next_message(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "session", "id": "cmd-test-1", "cwd": "/Users/alice/repo"}) + "\n")
+            # Message 1: slash command only
+            f.write(json.dumps({
+                "type": "message",
+                "timestamp": "2026-10-20T10:00:00.000Z",
+                "message": {"role": "user", "content": "/taste off"}
+            }) + "\n")
+            # Message 2: real prompt
+            f.write(json.dumps({
+                "type": "message",
+                "timestamp": "2026-10-20T10:01:00.000Z",
+                "message": {"role": "user", "content": "Fix button styling in settings"}
+            }) + "\n")
+            path = f.name
+        try:
+            s = commandcode.parse_file(path)
+            self.assertEqual(s.title, "Fix button styling in settings")
+        finally:
+            os.remove(path)
+
+    def test_slash_command_only_falls_back_to_none(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "session", "id": "cmd-test-2", "cwd": "/Users/alice/repo"}) + "\n")
+            f.write(json.dumps({
+                "type": "message",
+                "timestamp": "2026-10-20T10:00:00.000Z",
+                "message": {"role": "user", "content": "/taste off"}
+            }) + "\n")
+            path = f.name
+        try:
+            s = commandcode.parse_file(path)
+            self.assertIsNone(s.title)
+        finally:
+            os.remove(path)
 
 
 if __name__ == "__main__":

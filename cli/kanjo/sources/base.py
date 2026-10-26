@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -173,7 +174,9 @@ def _is_only_path(s: str) -> bool:
     return False
 
 
+_PATH_RE = re.compile(r"(?:~|/|[A-Za-z]:[/\\])[^\s\"';|&<>(){}$,]*")
 _ABBREVIATIONS = {"e.g", "i.e", "etc", "vs", "dr", "mr", "mrs", "ms"}
+_TASK_SLASH_COMMANDS = {"goal", "plan", "task", "boost", "learn"}
 
 _TAG_NAMES = {
     "environment_context", "recommended_plugins", "collaboration_mode",
@@ -197,6 +200,66 @@ def _is_tag_line(line: str) -> bool:
     if m and m.group(1).lower() in _TAG_NAMES:
         return True
     return False
+
+
+def _is_git_diff_line(line: str) -> bool:
+    s = line.strip()
+    if re.match(r"^:\d{6}\s+\d{6}\b", s):
+        return True
+    if s.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ")) or s.startswith("*** Begin Patch"):
+        return True
+    return False
+
+
+def _is_json_or_mostly_punctuation(line: str) -> bool:
+    s = line.strip()
+    if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, (dict, list)):
+                return True
+        except Exception:
+            pass
+    chars = [c for c in s if not c.isspace()]
+    if not chars:
+        return True
+    alnum = sum(1 for c in chars if c.isalnum() or _is_cjk(c))
+    if alnum == 0 or (alnum / len(chars) < 0.3):
+        return True
+    return False
+
+
+def _is_lead_in_colon_line(line: str) -> bool:
+    s = line.strip()
+    if s.endswith(":") or s.endswith("："):
+        words = s.split()
+        if len(words) < 6:
+            return True
+    return False
+
+
+def _is_work_instruction_or_mostly_path(line: str) -> bool:
+    s = line.strip()
+    if re.match(r"^\s*#*\s*(?:work\s+only|only\s+modify|you\s+are\s+working)\b", s, re.I):
+        return True
+    if "/" in s or "~" in s or "\\" in s:
+        remainder = _PATH_RE.sub("", s)
+        words = re.findall(r"\w+", remainder)
+        if len(words) <= 2:
+            return True
+    return False
+
+
+def _is_slash_command_only(text: str) -> bool:
+    s = text.strip()
+    m = re.match(r"^/([a-zA-Z0-9_-]+)(?:\s+(.*))?$", s)
+    if not m:
+        return False
+    cmd = m.group(1).lower()
+    args = (m.group(2) or "").strip()
+    if cmd in _TASK_SLASH_COMMANDS:
+        return len(args) == 0
+    return True
 
 
 def _find_sentence_end(text: str) -> Optional[int]:
@@ -239,9 +302,23 @@ def clean_title(text) -> Optional[str]:
     if re.match(r"^#*\s*AGENTS\.md\b", text.strip(), re.I):
         return None
 
+    # Skip whole-message JSON or slash-command-only
+    trimmed = text.strip()
+    if _is_slash_command_only(trimmed):
+        return None
+    if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+        try:
+            parsed = json.loads(trimmed)
+            if isinstance(parsed, (dict, list)):
+                return None
+        except Exception:
+            pass
+
     m_in = re.search(r"<input>(.*?)</input>", text, re.DOTALL | re.I)
     if m_in and m_in.group(1).strip():
         text = m_in.group(1).strip()
+        if _is_slash_command_only(text.strip()):
+            return None
 
     lines = text.splitlines()
     candidate = None
@@ -268,6 +345,16 @@ def clean_title(text) -> Optional[str]:
                     in_tag = tag
                 continue
         if _is_tag_line(line):
+            continue
+        if _is_git_diff_line(line):
+            continue
+        if _is_json_or_mostly_punctuation(line):
+            continue
+        if _is_work_instruction_or_mostly_path(line):
+            continue
+        if _is_lead_in_colon_line(line):
+            continue
+        if _is_slash_command_only(line):
             continue
         if re.match(r"^#*\s*(?:Files (?:pasted|mentioned) by the user|已粘贴的文本)\b", line, re.I):
             continue
@@ -301,12 +388,23 @@ def clean_title(text) -> Optional[str]:
                 break
             line = new_line
 
+        # Unwrap slash commands with task (e.g. /goal ...)
+        m_cmd = re.match(r"^/(?:goal|plan|task|boost|learn)\s+(.+)$", line, re.I)
+        if m_cmd:
+            line = m_cmd.group(1).strip()
+
         line = re.sub(r"^\s*(?:[-*]|\d+\.)\s*", "", line)
         line = re.sub(r"^\*\*[^*]+(?:\*\*:|\*\*)\s*", "", line)
         line = line.strip("\"'«»“” ")
         line = re.sub(r"<[^>]+>", "", line).strip()
 
-        if not line or _is_only_path(line):
+        if (
+            not line
+            or _is_only_path(line)
+            or _is_lead_in_colon_line(line)
+            or _is_work_instruction_or_mostly_path(line)
+            or _is_json_or_mostly_punctuation(line)
+        ):
             continue
 
         candidate = line
@@ -316,7 +414,13 @@ def clean_title(text) -> Optional[str]:
         return None
 
     text = " ".join(candidate.split())
-    if not text or _is_only_path(text):
+    if (
+        not text
+        or _is_only_path(text)
+        or _is_lead_in_colon_line(text)
+        or _is_json_or_mostly_punctuation(text)
+        or _is_work_instruction_or_mostly_path(text)
+    ):
         return None
 
     first_end = _find_sentence_end(text)
