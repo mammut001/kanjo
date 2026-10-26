@@ -35,7 +35,7 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 
 - **A treemap of your repos by cost.** One glance tells you where the money went.
 - **An 8-week burn strip per repo**, colored by agent across all 9 supported tools.
-- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Detected automatically for Claude, Codex, and Grok, or configured manually in Settings for any agent.
+- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Detected automatically for Claude, Codex, and Grok, or configured manually in Settings for any agent. Hover a plan to see its 5-hour and weekly quota: how much is used and when each window resets.
 - **Time ranges**: all time, Today, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
 - **Menu bar in cost or tokens mode.** Displays either spend (`$`) or total tokens with compact formatting and range suffixes.
 - **Languages.** Fully localized into English, 简体中文, and Français, with localized token units (`k`/`M`/`B`, `万`/`亿`, `k`/`M`/`Md`).
@@ -43,6 +43,11 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 - **Disk.** How much space each agent's logs, scratch worktrees and caches take, what is safe to reclaim, and a cleanup that goes through the Trash. Your statistics stay in a permanent ledger, so deleting logs never deletes history.
 - **Hide and pin** repos you don't care about or care about most.
 - **Liquid Glass** on macOS 26, a plain material on 13–25.
+
+<p align="center">
+  <img src="docs/screenshots/quota-hover-claude.png" width="360" alt="Quota card on hover: Claude Max 5-hour and weekly windows">
+  <img src="docs/screenshots/quota-hover-grok.png" width="360" alt="Quota card on hover: SuperGrok weekly window near its limit">
+</p>
 
 <p align="center">
   <img src="docs/screenshots/detail-light.png" width="360" alt="Project detail">
