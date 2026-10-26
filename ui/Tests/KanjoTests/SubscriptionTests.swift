@@ -25,6 +25,28 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(SubscriptionValue.assumedDayHelp, "Renewal day unknown; set it in Settings")
     }
 
+    /// DateFormatter 在 AM/PM 前用窄不换行空格，断言时统一成普通空格。
+    private func plain(_ lines: [String]) -> [String] {
+        lines.map { $0.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ") }
+    }
+
+    func testQuotaLines() {
+        let utc = TimeZone(secondsFromGMT: 0)!
+        let now = ReportDates.parseTimestamp("2026-10-24T12:00:00Z")!
+        let codex = QuotaWindow(weeklyResetsAt: "2026-10-31T04:53:24Z", weeklyUsedPercent: 24.4,
+                                fiveHourResetsAt: "2026-10-24T17:05:49Z", fiveHourWindowHours: 5, fiveHourUsedPercent: 8)
+        XCTAssertEqual(plain(SubscriptionValue.quotaLines(codex, timezone: utc, now: now, language: "en_US")),
+                       ["5-hour: 8% used · resets 5:05 PM", "Weekly: 24% used · resets Sat, Oct 31 at 4:53 AM"])
+        // 5 小时窗口已过 → 只剩周窗口；没有百分比 → 只给重置时间
+        let past = QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", fiveHourResetsAt: "2026-10-24T11:00:00Z")
+        XCTAssertEqual(plain(SubscriptionValue.quotaLines(past, timezone: utc, now: now, language: "en_US")),
+                       ["Weekly: resets Tue, Oct 27 at 5:00 AM"])
+        let day = QuotaWindow(weeklyResetsAt: "2026-10-25T05:00:00Z", weeklyWindowHours: 24, weeklyUsedPercent: 42)
+        XCTAssertEqual(plain(SubscriptionValue.quotaLines(day, timezone: utc, now: now, language: "en_US")),
+                       ["24-hour: 42% used · resets Sun, Oct 25 at 5:00 AM"])
+        XCTAssertEqual(SubscriptionValue.quotaLines(nil, timezone: utc), ["No quota data"])
+    }
+
     func testRenewalTodayTomorrowAndExpired() {
         let zone = TimeZone(identifier: "Asia/Shanghai")!
         let end = "2026-11-24T16:00:00Z"

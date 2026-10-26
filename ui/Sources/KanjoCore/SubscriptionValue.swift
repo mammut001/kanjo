@@ -42,6 +42,34 @@ public enum SubscriptionValue {
         }
     }
 
+    /// 悬停订阅行时的额度行（契约 quota_windows）：5 小时窗口、周窗口各一行，
+    /// 有已用百分比就显示，重置时间按报告时区。没有该 agent 的窗口时返回「无额度数据」。
+    public static func quotaLines(_ window: QuotaWindow?, timezone: TimeZone, now: Date = Date(),
+                                  language: String? = nil) -> [String] {
+        guard let window else { return [L10n.tr("overview.quota.none")] }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timezone
+        var lines: [String] = []
+        if let five = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp), five > now {
+            let time = RangeCaptionBuilder.templateFormatter("jmm", cal, language: language).string(from: five)
+            lines.append(line(hours: window.fiveHourWindowHours ?? 5, percent: window.fiveHourUsedPercent, reset: time))
+        }
+        if let weekly = ReportDates.parseTimestamp(window.weeklyResetsAt) {
+            let time = RangeCaptionBuilder.templateFormatter("EEEMMMdjmm", cal, language: language).string(from: weekly)
+            lines.append(line(hours: window.weeklyWindowHours, percent: window.weeklyUsedPercent, reset: time))
+        }
+        return lines.isEmpty ? [L10n.tr("overview.quota.none")] : lines
+    }
+
+    private static func line(hours: Int, percent: Double?, reset: String) -> String {
+        let name = hours == 168 ? L10n.tr("overview.quota.weekly")
+            : hours == 5 ? L10n.tr("overview.quota.five_hour")
+            : L10n.tr("overview.quota.hours", hours)
+        guard let percent, percent.isFinite else { return L10n.tr("overview.quota.resets", name, reset) }
+        let pct = "\(Int(min(max(percent, 0), 100).rounded()))%"
+        return L10n.tr("overview.quota.used_resets", name, pct, reset)
+    }
+
     /// 用量 ÷ 月费。月费为空或不是正数时为 nil（界面显示「—」，不显示倍数）。
     public static func multiplier(usage: Double, monthlyPriceUsd: Double?) -> Double? {
         guard let price = monthlyPriceUsd, price > 0, usage.isFinite else { return nil }

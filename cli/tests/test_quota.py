@@ -81,9 +81,13 @@ class QuotaTest(unittest.TestCase):
         qw = quota.quota_windows(directory=self.dir, now=NOW)
         self.assertEqual(qw, {
             "claude": {"weekly_resets_at": "2026-10-27T14:00:00Z", "weekly_window_hours": 168,
-                       "five_hour_resets_at": "2026-10-24T16:30:00Z", "source": "tokei"},
+                       "weekly_used_percent": 57.0,
+                       "five_hour_resets_at": "2026-10-24T16:30:00Z", "five_hour_window_hours": 5,
+                       "five_hour_used_percent": 13.0, "source": "tokei"},
             "codex": {"weekly_resets_at": "2026-10-31T04:53:24Z", "weekly_window_hours": 168,
-                      "five_hour_resets_at": "2026-10-24T17:05:49Z", "source": "tokei"},
+                      "weekly_used_percent": 0.0,
+                      "five_hour_resets_at": "2026-10-24T17:05:49Z", "five_hour_window_hours": 5,
+                      "five_hour_used_percent": 0.0, "source": "tokei"},
         })
         check_quota_windows(self, qw)
 
@@ -93,10 +97,32 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(qw["grok"], {
             "weekly_resets_at": "2026-10-27T05:00:00Z",
             "weekly_window_hours": 168,
+            "weekly_used_percent": 42.0,
             "five_hour_resets_at": None,
+            "five_hour_window_hours": None,
+            "five_hour_used_percent": None,
             "source": "tokei",
         })
         check_quota_windows(self, qw)
+
+    def test_used_percent_edge_cases(self):
+        # past weekly reset rolls forward and drops the old window's percent; past 5h drops both
+        self.write(quota.CLAUDE_FILE, claude_cache(NOW - HOUR, ts("2026-10-20T14:00:00Z"), ts("2026-10-24T10:00:00Z")))
+        c = quota.quota_windows(directory=self.dir, now=NOW)["claude"]
+        self.assertEqual(c["weekly_resets_at"], "2026-10-27T14:00:00Z")
+        self.assertIsNone(c["weekly_used_percent"])
+        self.assertIsNone(c["five_hour_resets_at"])
+        self.assertIsNone(c["five_hour_window_hours"])
+        self.assertIsNone(c["five_hour_used_percent"])
+        # codex: real percents, clamped; malformed -> null
+        data = codex_cache(NOW - HOUR, ts("2026-10-31T04:53:24Z"), ts("2026-10-24T17:05:49Z"))
+        data["limits"]["primary"]["used_percent"] = 130
+        data["limits"]["secondary"]["used_percent"] = "x"
+        self.write(quota.CODEX_FILE, data)
+        c = quota.quota_windows(directory=self.dir, now=NOW)["codex"]
+        self.assertEqual(c["five_hour_used_percent"], 100.0)
+        self.assertIsNone(c["weekly_used_percent"])
+        check_quota_windows(self, {"codex": c})
 
     def test_grok_window_mapping(self):
         # "day" -> 24h
@@ -141,7 +167,10 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(qw["grok"], {
             "weekly_resets_at": "2026-10-27T09:00:00Z",
             "weekly_window_hours": 168,
+            "weekly_used_percent": None,
             "five_hour_resets_at": None,
+            "five_hour_window_hours": None,
+            "five_hour_used_percent": None,
             "source": "manual",
         })
 
@@ -209,13 +238,17 @@ class QuotaTest(unittest.TestCase):
             'weekly_window_hours = 168\n'))
         qw = quota.quota_windows(cfg.quota_windows, directory=self.dir, now=NOW)
         self.assertEqual(qw["claude"], {"weekly_resets_at": "2026-10-27T10:00:00Z", "weekly_window_hours": 168,
-                                        "five_hour_resets_at": None, "source": "manual"})
+                                        "weekly_used_percent": None, "five_hour_resets_at": None,
+                                        "five_hour_window_hours": None, "five_hour_used_percent": None,
+                                        "source": "manual"})
         self.assertEqual(qw["codex"]["source"], "tokei")
         # manual works without Tokei, and an old anchor rolls forward to the next reset
         cfg = config.from_dict({"quota_windows": {"codex": {"weekly_resets_at": "2026-09-01T08:00:00+02:00"}}})
         qw = quota.quota_windows(cfg.quota_windows, directory=os.path.join(self.dir, "nope"), now=NOW)
         self.assertEqual(qw, {"codex": {"weekly_resets_at": "2026-10-27T06:00:00Z", "weekly_window_hours": 168,
-                                        "five_hour_resets_at": None, "source": "manual"}})
+                                        "weekly_used_percent": None, "five_hour_resets_at": None,
+                                        "five_hour_window_hours": None, "five_hour_used_percent": None,
+                                        "source": "manual"}})
 
     def test_manual_config_parsing(self):
         text = ('dominant_threshold = 0.7\n'
@@ -280,7 +313,9 @@ class QuotaTest(unittest.TestCase):
                 self.assertEqual(cli.main(["export", "--config", path, "--no-cache"]), 0)
             self.assertEqual(json.loads(out.getvalue())["quota_windows"], {
                 "claude": {"weekly_resets_at": "2099-01-05T10:00:00Z", "weekly_window_hours": 168,
-                           "five_hour_resets_at": None, "source": "manual"}})
+                           "weekly_used_percent": None, "five_hour_resets_at": None,
+                                        "five_hour_window_hours": None, "five_hour_used_percent": None,
+                                        "source": "manual"}})
         finally:
             shutil.rmtree(cache)
 

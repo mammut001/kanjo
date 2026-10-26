@@ -143,7 +143,8 @@ def _check_session(tc, s, where, kinds, share_one=False):
     tc.assertTrue(s["cwd"] is None or isinstance(s["cwd"], str))
 
 
-QUOTA_KEYS = {"weekly_resets_at", "weekly_window_hours", "five_hour_resets_at", "source"}
+QUOTA_KEYS = {"weekly_resets_at", "weekly_window_hours", "weekly_used_percent", "five_hour_resets_at",
+              "five_hour_window_hours", "five_hour_used_percent", "source"}
 SUBSCRIPTION_KEYS = {"plan", "plan_label", "monthly_price_usd", "cycle_start", "cycle_end",
                      "anchor_day", "cycle_source", "extra_usage_enabled", "source"}
 CYCLE_SOURCES = {"subscription_date", "rolling_30d", "manual"}
@@ -161,6 +162,12 @@ def check_quota_windows(tc, qw):
         tc.assertGreater(w["weekly_window_hours"], 0, where)
         tc.assertTrue(w["five_hour_resets_at"] is None or ISO_UTC.match(w["five_hour_resets_at"]), where)
         tc.assertIn(w["source"], {"tokei", "manual"}, where)
+        tc.assertEqual(w["five_hour_window_hours"] is None, w["five_hour_resets_at"] is None, where)
+        if w["five_hour_resets_at"] is None:
+            tc.assertIsNone(w["five_hour_used_percent"], where)
+        for key in ("weekly_used_percent", "five_hour_used_percent"):
+            pct = w[key]
+            tc.assertTrue(pct is None or (isinstance(pct, float) and 0 <= pct <= 100), where)
 
 
 def check_subscriptions(tc, subs):

@@ -463,10 +463,12 @@ private struct SubscriptionValueCard: View {
     private func help(_ row: SubscriptionRow) -> String {
         let price = Fmt.perMonth(row.monthlyPriceUsd, currency: cur)
         let usage = Fmt.money(row.usage, currency: cur)
-        if let m = row.multiplier {
-            return L10n.tr("overview.sub_help_multiplier", row.planLabel, price, usage, Fmt.multiple(m))
-        }
-        return L10n.tr("overview.sub_help_unknown", row.planLabel, usage)
+        let value = row.multiplier.map {
+            L10n.tr("overview.sub_help_multiplier", row.planLabel, price, usage, Fmt.multiple($0))
+        } ?? L10n.tr("overview.sub_help_unknown", row.planLabel, usage)
+        let quota = SubscriptionValue.quotaLines(report.quotaWindows?[row.agent],
+                                                 timezone: RangeEngine.timezone(of: report))
+        return ([value, ""] + quota).joined(separator: "\n")
     }
 }
 
