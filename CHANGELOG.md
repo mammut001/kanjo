@@ -6,6 +6,40 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-26
+
+### Added
+
+- **Six new agents.** Reads logs from Grok CLI (`~/.grok/sessions`), Qwen Code (`~/.qwen`), Command Code
+  (`~/.commandcode/projects`), MiniMax (`~/.minimax/sqlite.db`), OpenCode (`~/.local/share/opencode/opencode.db`),
+  and Copilot CLI (`~/.copilot`, `~/.copilot-cli`). MiniMax and OpenCode shared sessions are identified
+  and counted only once. Brand colors and a wrapping legend support all nine tools.
+- **Subscriptions for all agents.** Grok plans are detected automatically from Tokei's cache
+  (`grok_quota_cache.json`), joining Claude and Codex. Built-in list prices for standard plans across
+  all nine supported agents. Manage subscriptions directly in Settings (plan name, monthly price in USD,
+  and renewal day 1–28) or via `kanjo config set subscriptions.<agent>.<field>`, with vendor billing
+  page links for each service.
+- **Localization (Simplified Chinese and French).** Complete UI localization in 简体中文 (`zh-Hans`)
+  and Français (`fr`) alongside English, with an in-app language picker in Settings that switches
+  immediately without restarting.
+- **Localized token units.** Token counts format according to the active language: `k` / `M` / `B` in
+  English, 4-digit groups with `万` / `亿` / `万亿` in Simplified Chinese, and `k` / `M` / `Md` with decimal
+  commas in French.
+- **Today time range.** New `Today` segment in the time range picker covering `[today 00:00, now)` in
+  the report timezone, with a `· today` menu bar suffix and single-date formatting for one-day ranges.
+- **Menu bar tokens mode.** Settings toggle to display either cost (`$`) or total token counts in the
+  menu bar, with compact formatting and range suffixes (e.g. `23.5B · 30d`, `235亿 · 30d`).
+- **By model breakdown.** Overview panel lists model token usage and API-equivalent cost across all
+  projects and buckets for the active time range, sorted by total tokens, with agent dots, estimated
+  indicators, and an expand toggle.
+
+### Changed
+
+- **Tidier menu bar label.** Compact amount tiers (< $100 shows cents, $100–$9,999 drops decimals
+  with thousand separators, ≥ $10,000 uses compact K/M), time range shown as a middle-dot suffix
+  (e.g. `$3,057 · 30d`, omitted for All time), and dropped the redundant dollar icon when an amount or
+  token count is shown.
+
 ## [0.2.0] - 2026-10-25
 
 ### Added
@@ -67,6 +101,7 @@ First public release. Before publishing, the project went by the working name `a
 - `ui/package.sh` builds an ad-hoc signed `Kanjo.app` and a zip for release.
 - GitHub Actions CI for the CLI (Python 3.9 and 3.12) and the app (`swift build`, `swift test`).
 
-[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mammut001/kanjo/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mammut001/kanjo/releases/tag/v0.2.0
 [0.1.0]: https://github.com/mammut001/kanjo/releases/tag/v0.1.0

@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>How much AI money did each git repo cost?</strong><br>
-  <sub>A macOS menu bar app and CLI that turn Claude Code, Codex and Antigravity logs into one bill per repo.</sub><br><br>
+  <sub>A macOS menu bar app and CLI that turn Claude Code, Codex, Antigravity, Grok, Qwen, Command Code, MiniMax, OpenCode and Copilot CLI logs into one bill per repo.</sub><br><br>
   <a href="#中文">中文</a> · <a href="https://github.com/mammut001/kanjo/releases/latest">Download</a> · <a href="ATTRIBUTION.md">How attribution works</a>
 </p>
 
@@ -34,10 +34,12 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 ## What you get
 
 - **A treemap of your repos by cost.** One glance tells you where the money went.
-- **An 8-week burn strip per repo**, colored by agent, so you can see which weeks were Claude and which were Codex.
-- **Subscription value.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. The number subscription users actually want.
-- **Time ranges**: all time, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
-- **Per-repo detail**: by agent, by model, by day, by branch, every session with how it was attributed, and the repo's share of each plan's cycle.
+- **An 8-week burn strip per repo**, colored by agent across all 9 supported tools.
+- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Detected automatically for Claude, Codex, and Grok, or configured manually in Settings for any agent.
+- **Time ranges**: all time, Today, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
+- **Menu bar in cost or tokens mode.** Displays either spend (`$`) or total tokens with compact formatting and range suffixes.
+- **Languages.** Fully localized into English, 简体中文, and Français, with localized token units (`k`/`M`/`B`, `万`/`亿`, `k`/`M`/`Md`).
+- **Per-repo detail and overview model breakdown**: by agent, by model, by day, by branch, every session with how it was attributed, and the repo's share of each plan's cycle.
 - **Disk.** How much space each agent's logs, scratch worktrees and caches take, what is safe to reclaim, and a cleanup that goes through the Trash. Your statistics stay in a permanent ledger, so deleting logs never deletes history.
 - **Hide and pin** repos you don't care about or care about most.
 - **Liquid Glass** on macOS 26, a plain material on 13–25.
@@ -54,10 +56,16 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | Agent | Logs read | Attributed by |
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl` | files touched, cwd, scratchpad path |
-| Codex CLI | `~/.codex/sessions/**/*.jsonl` | files touched, cwd |
+| Codex CLI | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**` | files touched, cwd |
 | Antigravity CLI | `~/.gemini/antigravity-cli/conversations/*.db` | files touched, workspace |
+| Grok CLI | `~/.grok/sessions/**` | files touched, cwd |
+| Qwen Code | `~/.qwen/chats/*.jsonl`, `~/.qwen/usage/token-usage-*.jsonl` | files touched, cwd |
+| Command Code | `~/.commandcode/projects/**/*.jsonl` | files touched, cwd |
+| MiniMax | `~/.minimax/sqlite.db` | files touched, workspace |
+| OpenCode | `~/.local/share/opencode/opencode.db` | files touched, directory / worktree |
+| Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot-cli/session-store.db` | files touched, cwd |
 
-Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
+MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
 ## How attribution works
 
@@ -151,10 +159,12 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 ### 功能
 
 - **按花费的 treemap**：一眼看出钱去哪了。
-- **每个 repo 一条 8 周燃烧热力条**，按 agent 分色，哪周是 Claude、哪周是 Codex 看得出来。
-- **订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。订阅用户真正关心的数。
-- **时间范围**：全部、7 天、30 天、上周、自上次额度重置以来、或本账期。
-- **项目详情**：按 agent、按模型、按天、按分支，每个会话是怎么归属的，以及这个 repo 占了你各订阅本账期的多少。
+- **每个 repo 一条 8 周燃烧热力条**，按 9 种 agent 分色，每周花费构成一目了然。
+- **所有 agent 的订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。Claude、Codex、Grok 自动识别，其他 agent 均可在设置中手动配置。
+- **时间范围**：全部、**今天**、7 天、30 天、上周、自上次额度重置以来、或本账期。
+- **菜单栏金额与 Token 模式**：可在设置中切换显示金额或 Token 数，带紧凑进位与时间范围后缀。
+- **多语言界面**：原生支持 English、简体中文与 Français，以及本地化的 Token 计数单位（万/亿、k/M/B、k/M/Md）。
+- **项目详情与总览模型分布**：按 agent、按模型、按天、按分支，每个会话是怎么归属的，以及这个 repo 占了你各订阅本账期的多少。
 - **Disk**：每个工具的日志、临时 worktree、缓存各占多少空间，哪些能安全回收，清理走废纸篓。统计数据存在永久账本里，删日志不丢历史。
 - **隐藏与置顶**。
 - macOS 26 用 **Liquid Glass**，13 到 25 用普通材质。
@@ -163,7 +173,19 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 
 ### 支持的工具
 
-Claude Code、Codex CLI、Antigravity CLI。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
+| 工具 | 读取的日志 | 归属依据 |
+|---|---|---|
+| Claude Code | `~/.claude/projects/**/*.jsonl` | 碰过的文件、当前工作目录、scratchpad 路径 |
+| Codex CLI | `~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**` | 碰过的文件、当前工作目录 |
+| Antigravity CLI | `~/.gemini/antigravity-cli/conversations/*.db` | 碰过的文件、工作区 |
+| Grok CLI | `~/.grok/sessions/**` | 碰过的文件、当前工作目录 |
+| Qwen Code | `~/.qwen/chats/*.jsonl`、`~/.qwen/usage/token-usage-*.jsonl` | 碰过的文件、当前工作目录 |
+| Command Code | `~/.commandcode/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| MiniMax | `~/.minimax/sqlite.db` | 碰过的文件、工作区 |
+| OpenCode | `~/.local/share/opencode/opencode.db` | 碰过的文件、目录／worktree |
+| Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot-cli/session-store.db` | 碰过的文件、当前工作目录 |
+
+MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 
 ### 归属规则
 

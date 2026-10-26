@@ -145,7 +145,7 @@ If `schema_version` is newer than 1, a warning appears and the app keeps renderi
 
 ```bash
 ./package.sh            # version from ../VERSION
-./package.sh 0.2.0      # explicit version
+./package.sh 0.3.0      # explicit version
 ./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
 ```
 
