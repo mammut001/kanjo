@@ -239,7 +239,7 @@ UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`3
 2. 项目列表，按 cost 降序，每行：name、cost、sessions、last_active，以及能看出用了哪些 agent 的标记（色点、色块或小条形均可）。
 3. 项目详情：by_agent、by_model、by_day 时间线、by_branch、sessions_detail 表。
 4. 三个桶各一行，显示数量和金额，即使为 0。
-4.1 **Subscription value 卡**（`subscriptions` 非空时）：每个有订阅的 agent 一行：plan_label、月费、本账期 API 等价用量、倍数（用量 ÷ 月费，月费为 null 时不显示倍数）、`extra_usage_enabled` 为 true 时标「extra usage on」。悬停一行时浮出额度卡（该 agent 有 `quota_windows` 时）：5 小时窗口和周窗口各一行，进度条（≥ 80% 警示色，≥ 95% 红色）、已用百分比、「X 后重置 · 绝对时间」；窗口已结束时显示「—」和「Window ended」。没有额度数据的 agent 不出卡片。卡片固定一句说明：
+4.1 **Subscription value 卡**（`subscriptions` 非空时）：每个有订阅的 agent 一行：plan_label、月费、本账期 API 等价用量、倍数（用量 ÷ 月费，月费为 null 时不显示倍数）、`extra_usage_enabled` 为 true 时标「extra usage on」。悬停一行时浮出额度卡（该 agent 有 `quota_windows` 时，样式同系统 tooltip）：5 小时窗口和周窗口各一行，已用百分比、「X 后重置 · 绝对时间」；窗口已结束时显示「—」和「Window ended」。没有额度数据的 agent 不出卡片。卡片固定一句说明：
    「You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.」不可隐藏。
    项目详情页：对每个有订阅的 agent 显示一行「This repo: N% of your <plan_label> usage this cycle」。
 5. 对账行：`totals.cost` 与各项之和，差异超过 0.01 时高亮。

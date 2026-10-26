@@ -198,6 +198,7 @@
 "overview.dismiss_renewal_reminder" = "忽略续费日提醒";
 "overview.renewal_day_unknown_help" = "续费日未知；请在“设置”中填写";
 "overview.sub_help_multiplier" = "%@ 固定费用为 %@。%@ 为本账期 API 等价用量，是固定费用的 %@。并非额外收费。";
+"overview.quota.title" = "额度";
 "overview.quota.five_hour" = "5 小时";
 "overview.quota.weekly" = "每周";
 "overview.quota.hours" = "%d 小时";
