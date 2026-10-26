@@ -27,7 +27,8 @@ AGENT = "codex"
 PATH_KEYS = {"workdir", "path", "file_path", "cwd", "paths", "dir", "directory", "working_directory"}
 CMD_KEYS = {"cmd", "command"}
 _PATCH_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+?)\s*$|^\*\*\* Move to: (.+?)\s*$", re.M)
-_MARKERS = (b'"session_meta"', b'"turn_context"', b'"token_count"', b'"user_message"',
+_MARKERS = (b'"session_meta"', b'"turn_context"', b'"token_count"', b'"user_message"', b'"user"',
+            b'"instructions"', b'"instruction"',
             b'"function_call"', b'"custom_tool_call"', b'"local_shell_call"')
 
 
@@ -156,7 +157,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 if ptype == "user_message":
                     if session.title is None:
                         text = payload.get("message")
-                        if isinstance(text, str) and not text.lstrip().startswith("<"):
+                        if isinstance(text, str):
                             session.title = short_title(text)
                     session.note_time(ts)
                 elif ptype == "token_count":
@@ -179,9 +180,38 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     session.note_cwd(cwd)
                 continue
             if kind == "response_item":
+                if session.title is None and payload.get("role") == "user":
+                    content = payload.get("content")
+                    text = None
+                    if isinstance(content, list):
+                        parts = []
+                        for b in content:
+                            if isinstance(b, dict):
+                                t = b.get("text") or b.get("input_text")
+                                if isinstance(t, str):
+                                    parts.append(t)
+                            elif isinstance(b, str):
+                                parts.append(b)
+                        if parts:
+                            text = "\n".join(parts)
+                    elif isinstance(content, str):
+                        text = content
+                    elif isinstance(payload.get("message"), str):
+                        text = payload.get("message")
+                    if text:
+                        session.title = short_title(text)
+                    session.note_time(ts)
                 found = unique(_tool_paths(payload, cwd))
                 if found:
                     session.tool_paths.append(found)
+                continue
+            if kind in ("instructions", "instruction"):
+                if session.title is None:
+                    text = payload.get("text") or payload.get("instructions") or payload.get("instruction")
+                    if isinstance(text, str):
+                        session.title = short_title(text)
+                session.note_time(ts)
+                continue
     if not have_meta:
         if good == 0 and bad > 0:
             raise ParseError("no valid JSON lines")
