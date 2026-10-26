@@ -2,7 +2,7 @@ import CoreGraphics
 import XCTest
 @testable import KanjoCore
 
-final class TreemapTests: XCTestCase {
+final class TreemapTests: KanjoTestCase {
     private let bounds = CGRect(x: 10, y: 20, width: 352, height: 150)
     private let eps: CGFloat = 1e-6
 

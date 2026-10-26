@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class ProjectPrefsTests: XCTestCase {
+final class ProjectPrefsTests: KanjoTestCase {
     func testParse() {
         XCTAssertEqual(ProjectPrefs.parse(""), [])
         XCTAssertEqual(ProjectPrefs.parse("a\nb\n\n  c  \r\nb\n"), ["a", "b", "c"])

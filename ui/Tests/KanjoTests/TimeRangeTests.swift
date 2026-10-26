@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class TimeRangeTests: XCTestCase {
+final class TimeRangeTests: KanjoTestCase {
     private let shanghai = TimeZone(identifier: "Asia/Shanghai")!
     private var cal: Calendar { RangeEngine.calendar(timezone: shanghai) }
 

@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class LocalizationTests: XCTestCase {
+final class LocalizationTests: KanjoTestCase {
     /// 确保 en 中的每一个 key 在 zh-Hans 和 fr 中都存在
     func testAllKeysPresentInAllLanguages() {
         guard let enStrings = L10n.allStrings(for: "en") else {
@@ -31,7 +31,7 @@ final class LocalizationTests: XCTestCase {
             "common.done",
             "settings.title",
             "overview.total_cost",
-            "disk.total",
+            "disk.clean_help",
             "menu.quit",
         ]
         for key in sampleKeys {

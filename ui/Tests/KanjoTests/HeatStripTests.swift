@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class HeatStripTests: XCTestCase {
+final class HeatStripTests: KanjoTestCase {
     private var cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!

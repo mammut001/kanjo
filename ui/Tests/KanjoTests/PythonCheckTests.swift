@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class PythonCheckTests: XCTestCase {
+final class PythonCheckTests: KanjoTestCase {
     func testMissingToolsDiagnostic() {
         XCTAssertTrue(PythonCheck.needsCommandLineTools(status: 1, stderr: "xcode-select: note: no developer tools were found"))
         XCTAssertTrue(PythonCheck.needsCommandLineTools(status: 72, stderr: "Install Command Line Tools"))
