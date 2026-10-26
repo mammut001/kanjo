@@ -53,9 +53,7 @@ public enum AppDefaults {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> UserDefaults {
         if let name = suiteName(arguments: arguments, environment: environment) {
-            let suite = UserDefaults(suiteName: name) ?? .standard
-            applyArgumentOverrides(to: suite, arguments: arguments)
-            return suite
+            return UserDefaults(suiteName: name) ?? .standard
         }
         return .standard
     }
@@ -66,64 +64,5 @@ public enum AppDefaults {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> UserDefaults {
         resolveStore(arguments: arguments, environment: environment)
-    }
-
-    /// 解析命令行 `-key value` 参数覆盖（NSArgumentDomain 行为）。
-    public static func parseArgumentDomain(arguments: [String]) -> [String: Any] {
-        var domain: [String: Any] = [:]
-        var i = 0
-        while i < arguments.count {
-            let arg = arguments[i]
-            if arg.hasPrefix("-") && !arg.hasPrefix("--") && arg.count > 1 {
-                let key = String(arg.dropFirst())
-                if i + 1 < arguments.count {
-                    let next = arguments[i + 1]
-                    if !next.hasPrefix("-") {
-                        domain[key] = parseArgumentValue(next)
-                        i += 2
-                        continue
-                    }
-                }
-            }
-            i += 1
-        }
-        return domain
-    }
-
-    /// 字符串类型转换（Bool, Int, Double, String）。
-    public static func parseArgumentValue(_ raw: String) -> Any {
-        if raw.caseInsensitiveCompare("YES") == .orderedSame || raw.caseInsensitiveCompare("TRUE") == .orderedSame {
-            return true
-        }
-        if raw.caseInsensitiveCompare("NO") == .orderedSame || raw.caseInsensitiveCompare("FALSE") == .orderedSame {
-            return false
-        }
-        if let intVal = Int(raw) {
-            return intVal
-        }
-        if let doubleVal = Double(raw) {
-            return doubleVal
-        }
-        return raw
-    }
-
-    /// 将命令行启动参数的 -key value 应用到自定义 suite 的 argumentDomain 和 registrationDomain。
-    public static func applyArgumentOverrides(
-        to suite: UserDefaults,
-        arguments: [String] = CommandLine.arguments
-    ) {
-        var domain = suite.volatileDomain(forName: UserDefaults.argumentDomain)
-        let stdDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-        for (k, v) in stdDomain {
-            domain[k] = v
-        }
-        let parsed = parseArgumentDomain(arguments: arguments)
-        for (k, v) in parsed {
-            domain[k] = v
-        }
-        if !domain.isEmpty {
-            suite.setVolatileDomain(domain, forName: UserDefaults.argumentDomain)
-            suite.register(defaults: domain)
-        }
     }
 }

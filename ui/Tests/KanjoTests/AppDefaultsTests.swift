@@ -65,21 +65,17 @@ final class AppDefaultsTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "kanjo_isolated_key"))
     }
 
-    func testLaunchArgumentOverridesAppliedToIsolatedSuite() {
-        let suite = "kanjo-test-overrides-\(UUID().uuidString)"
-        let args = [
-            "--defaults-suite", suite,
-            "-refreshMinutes", "42",
-            "-appLanguage", "fr",
-            "-showAmountInMenuBar", "false",
-            "-cliCommand", "echo custom_cli"
-        ]
-        let store = AppDefaults.resolveStore(arguments: args, environment: [:])
+    func testSuiteStoreIsIsolatedFromStandard() {
+        let suite = "kanjo-test-suite-\(UUID().uuidString)"
+        let store = AppDefaults.store(arguments: ["--defaults-suite", suite], environment: [:])
         defer { store.removePersistentDomain(forName: suite) }
 
-        XCTAssertEqual(store.integer(forKey: SettingsKeys.refreshMinutes), 42)
-        XCTAssertEqual(store.string(forKey: SettingsKeys.appLanguage), "fr")
-        XCTAssertFalse(store.bool(forKey: SettingsKeys.showAmountInMenuBar))
-        XCTAssertEqual(store.string(forKey: SettingsKeys.cliCommand), "echo custom_cli")
+        store.set("suiteValue", forKey: "testKey")
+        XCTAssertEqual(store.string(forKey: "testKey"), "suiteValue")
+        XCTAssertNil(UserDefaults.standard.string(forKey: "testKey"))
+
+        UserDefaults.standard.set("standardValue", forKey: "standardOnlyKey")
+        defer { UserDefaults.standard.removeObject(forKey: "standardOnlyKey") }
+        XCTAssertNil(store.string(forKey: "standardOnlyKey"))
     }
 }
