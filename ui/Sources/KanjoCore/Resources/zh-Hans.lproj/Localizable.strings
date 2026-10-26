@@ -66,6 +66,10 @@
 "settings.section.data_source" = "数据源";
 "settings.source.file" = "JSON 文件";
 "settings.source.cli" = "CLI 命令";
+"settings.cli_source.bundled" = "内置 CLI %@";
+"settings.cli_source.custom" = "自定义";
+"settings.cli_source.unavailable" = "CLI 不可用";
+"settings.cli_source.repo" = "仓库源码 cli/";
 "settings.data_override" = "通过 --data / KANJO_DATA 启动：%@。在未携带该参数重启前，将覆盖下方的数据源。";
 "settings.command" = "命令";
 "settings.working_directory" = "工作目录（cli/ 路径）";
@@ -246,6 +250,9 @@
 "disk.ledger_note" = "清理后用量记录仍保留在账本中";
 "disk.older_than" = "早于";
 "disk.age.any" = "不限";
+"disk.age.7d" = "7天";
+"disk.age.30d" = "30天";
+"disk.age.90d" = "90天";
 "disk.age.caption.any" = "不限时间";
 "disk.age.caption.older" = "早于 %@";
 "disk.age_help" = "作为 --older-than 参数传给 kanjo disk clean。“不限”不按时间过滤。";

@@ -9,9 +9,16 @@ enum DiskAge: String, CaseIterable, Identifiable {
     case d90 = "90d"
 
     var id: String { rawValue }
-    var label: String { self == .any ? L10n.tr("disk.age.any") : rawValue }
+    var label: String {
+        switch self {
+        case .any: return L10n.tr("disk.age.any")
+        case .d7: return L10n.tr("disk.age.7d")
+        case .d30: return L10n.tr("disk.age.30d")
+        case .d90: return L10n.tr("disk.age.90d")
+        }
+    }
     var argument: String? { self == .any ? nil : rawValue }
-    var caption: String { self == .any ? L10n.tr("disk.age.caption.any") : L10n.tr("disk.age.caption.older", rawValue) }
+    var caption: String { self == .any ? L10n.tr("disk.age.caption.any") : L10n.tr("disk.age.caption.older", label) }
 }
 
 struct DiskView: View {

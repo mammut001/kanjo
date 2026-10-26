@@ -66,6 +66,10 @@
 "settings.section.data_source" = "Source de données";
 "settings.source.file" = "Fichier JSON";
 "settings.source.cli" = "Commande CLI";
+"settings.cli_source.bundled" = "CLI intégré %@";
+"settings.cli_source.custom" = "Personnalisé";
+"settings.cli_source.unavailable" = "CLI indisponible";
+"settings.cli_source.repo" = "Dépôt cli/";
 "settings.data_override" = "Lancé avec --data / KANJO_DATA : %@. Cela remplace la source de données ci-dessous jusqu'au redémarrage de l'application sans ce paramètre.";
 "settings.command" = "Commande";
 "settings.working_directory" = "Répertoire de travail (chemin cli/)";
@@ -246,6 +250,9 @@
 "disk.ledger_note" = "Les montants restent dans le registre après nettoyage";
 "disk.older_than" = "Plus ancien que";
 "disk.age.any" = "Tous";
+"disk.age.7d" = "7 j";
+"disk.age.30d" = "30 j";
+"disk.age.90d" = "90 j";
 "disk.age.caption.any" = "Tout âge";
 "disk.age.caption.older" = "Plus ancien que %@";
 "disk.age_help" = "Passé à kanjo disk clean comme --older-than. « Tous » ne filtre pas par âge.";

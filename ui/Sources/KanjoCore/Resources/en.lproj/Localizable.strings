@@ -66,6 +66,10 @@
 "settings.section.data_source" = "Data source";
 "settings.source.file" = "JSON file";
 "settings.source.cli" = "CLI command";
+"settings.cli_source.bundled" = "Bundled CLI %@";
+"settings.cli_source.custom" = "Custom";
+"settings.cli_source.unavailable" = "CLI unavailable";
+"settings.cli_source.repo" = "Repository cli/";
 "settings.data_override" = "Launched with --data / KANJO_DATA: %@. This overrides the data source below until the app is restarted without it.";
 "settings.command" = "Command";
 "settings.working_directory" = "Working directory (cli/ path)";
@@ -246,6 +250,9 @@
 "disk.ledger_note" = "Numbers stay in the ledger after cleanup";
 "disk.older_than" = "Older than";
 "disk.age.any" = "Any";
+"disk.age.7d" = "7d";
+"disk.age.30d" = "30d";
+"disk.age.90d" = "90d";
 "disk.age.caption.any" = "Any age";
 "disk.age.caption.older" = "Older than %@";
 "disk.age_help" = "Passed to kanjo disk clean as --older-than. Any does not filter by age.";
