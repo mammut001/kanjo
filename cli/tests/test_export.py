@@ -10,6 +10,7 @@ import unittest
 from unittest import mock
 
 from kanjo import cli
+from kanjo.cache import RepoCache, SessionCache
 from kanjo.config import Config
 from kanjo.export import _apportion_by_weight, build_export, check_invariants
 
@@ -250,6 +251,85 @@ class CliTest(unittest.TestCase):
     def test_bad_config_and_threshold(self):
         self.assertEqual(self.run_cli("export", "--config", "/nonexistent/attribution.toml")[0], 2)
         self.assertEqual(self.run_cli("export", "--threshold", "1.5")[0], 2)
+
+
+class CacheExportComparisonTest(unittest.TestCase):
+    def setUp(self):
+        self.fs = standard_fs()
+        self.cache_dir = tempfile.mkdtemp(prefix="kanjo-test-cache-")
+
+    def tearDown(self):
+        self.fs.cleanup()
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+
+    def test_build_export_byte_identical_with_and_without_caches(self):
+        # 1. build_export without any caches
+        doc_no_cache = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI)
+
+        # 2. build_export with cold cache (populates parse cache and repo cache)
+        cache_cold = SessionCache(self.cache_dir)
+        doc_cold = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold)
+
+        # Verify repo cache file was saved
+        repo_cache_path = os.path.join(self.cache_dir, "repo-cache-v1.json")
+        self.assertTrue(os.path.exists(repo_cache_path))
+        with open(repo_cache_path, "r", encoding="utf-8") as h:
+            cached_data = json.load(h)
+        self.assertIn("paths", cached_data)
+        self.assertGreater(len(cached_data["paths"]), 0)
+
+        # 3. build_export with warm cache (fresh SessionCache loading from disk)
+        cache_warm = SessionCache(self.cache_dir)
+        doc_warm = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm)
+
+        # Exclude generated_at from comparison
+        time_no_cache = doc_no_cache.pop("generated_at")
+        time_cold = doc_cold.pop("generated_at")
+        time_warm = doc_warm.pop("generated_at")
+        self.assertTrue(time_no_cache and time_cold and time_warm)
+
+        # Verify documents are 100% byte-identical
+        json_no_cache = json.dumps(doc_no_cache, indent=2, sort_keys=True)
+        json_cold = json.dumps(doc_cold, indent=2, sort_keys=True)
+        json_warm = json.dumps(doc_warm, indent=2, sort_keys=True)
+
+        self.assertEqual(json_no_cache, json_cold)
+        self.assertEqual(json_no_cache, json_warm)
+
+    def test_repo_cache_invalidation_when_repo_deleted(self):
+        # Populate cache
+        cache = SessionCache(self.cache_dir)
+        doc_before = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache)
+        self.assertTrue(any(p["id"] == FOCUS for p in doc_before["projects"]))
+
+        # Invalidate repo by deleting its .git directory
+        dotgit_real = self.fs.real(GITHUB + "/FocusApp/.git")
+        shutil.rmtree(dotgit_real)
+
+        # Warm cache run: validity check on FocusApp/.git must fail (file missing),
+        # invalidating the cached repo resolution.
+        cache_warm = SessionCache(self.cache_dir)
+        hit, _ = cache_warm.repo_cache.get(GITHUB + "/FocusApp/Focus/App.swift", fs_root=self.fs.root)
+        self.assertFalse(hit)
+
+        # build_export runs and handles the invalidated repo gracefully
+        doc_after = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm)
+        self.assertEqual(check_invariants(doc_after), [])
+
+    def test_repo_cache_negative_ttl_invalidation(self):
+        repo_cache = RepoCache(self.cache_dir)
+        dummy_path = "/nonexistent/test/path"
+
+        # Fresh negative entry (current timestamp)
+        now = 1000.0
+        repo_cache.put(dummy_path, None, now=now)
+        hit, val = repo_cache.get(dummy_path, now=now + 300)  # 5 min later: within 10 min TTL
+        self.assertTrue(hit)
+        self.assertIsNone(val)
+
+        # Expired negative entry (11 min later)
+        hit_expired, _ = repo_cache.get(dummy_path, now=now + 660)  # 11 min later: past 10 min TTL
+        self.assertFalse(hit_expired)
 
 
 if __name__ == "__main__":

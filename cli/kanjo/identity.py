@@ -29,6 +29,12 @@ _TEMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folde
 # "name.ext": treated as a file, so it is not itself checked for a .git entry
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
+_CLEAN_CACHE: Dict[str, Optional[str]] = {}
+
+
+def clear_clean_cache() -> None:
+    _CLEAN_CACHE.clear()
+
 
 def _private_alias(path: str) -> str:
     """macOS spells the same directory /tmp/x and /private/tmp/x."""
@@ -144,11 +150,35 @@ class RepoInfo:
     outer: Optional["RepoInfo"] = None
 
 
+def _dump_repo(info: Optional[RepoInfo]) -> Optional[dict]:
+    if info is None:
+        return None
+    return {
+        "root": info.root,
+        "main_root": info.main_root,
+        "common_dir": info.common_dir,
+        "remote_url": info.remote_url,
+        "outer": _dump_repo(info.outer),
+    }
+
+
+def _load_repo(d: Optional[dict]) -> Optional[RepoInfo]:
+    if d is None:
+        return None
+    return RepoInfo(
+        root=d["root"],
+        main_root=d["main_root"],
+        common_dir=d["common_dir"],
+        remote_url=d.get("remote_url"),
+        outer=_load_repo(d.get("outer")),
+    )
+
+
 class Resolver:
     """Maps arbitrary paths found in logs to projects. All lookups are memoized."""
 
     def __init__(self, aliases: Optional[Dict[str, List[str]]] = None, home: Optional[str] = None,
-                 fs_root: Optional[str] = None):
+                 fs_root: Optional[str] = None, repo_cache=None):
         # fs_root: optional directory that stands in for "/" when touching the
         # filesystem (tests); every path in logs and output stays as logged.
         self.fs_root = (fs_root or "").rstrip("/")
@@ -162,6 +192,7 @@ class Resolver:
         self._hints: Dict[str, str] = {}          # path prefix -> remote url from logs
         self.hints_enabled = True
         self._alias_of: Dict[str, str] = {}       # member id/path -> canonical id
+        self.repo_cache = repo_cache
         for canonical, members in (aliases or {}).items():
             for member in members or []:
                 self._alias_of[self._alias_key(member)] = canonical
@@ -204,6 +235,18 @@ class Resolver:
         may no longer exist). Every directory visited is memoized, so a scan
         costs about one ``lstat`` per distinct directory. The leaf itself is
         not checked for ``.git`` when it looks like a file name."""
+        if path in self._dir_repo:
+            return self._dir_repo[path]
+        if self.repo_cache is not None:
+            hit, cached = self.repo_cache.get(path, self.fs_root)
+            if hit:
+                info = _load_repo(cached)
+                self._dir_repo[path] = info
+                alt = _private_alias(path)
+                if alt != path:
+                    self._dir_repo[alt] = info
+                return info
+
         leaf_checked = leaf_is_dir or not _FILE_LIKE.search(os.path.basename(path))
         chain = []
         cur = path
@@ -213,6 +256,11 @@ class Resolver:
             if check and cur in self._dir_repo:
                 result = self._dir_repo[cur]
                 break
+            if check and self.repo_cache is not None:
+                hit, cached = self.repo_cache.get(cur, self.fs_root)
+                if hit:
+                    result = _load_repo(cached)
+                    break
             if check:
                 chain.append(cur)
                 dotgit = os.path.join(cur, ".git")
@@ -226,8 +274,54 @@ class Resolver:
             if parent == cur:
                 break
             cur = parent
-        for c in chain:  # an unchecked file-like leaf is never memoized
+
+        dotgit = None
+        sig = None
+        dumped = None
+        if result is not None:
+            dotgit = os.path.join(result.root, ".git")
+            stat_path = self._fs(dotgit)
+            if self.repo_cache is not None and stat_path in self.repo_cache._stat_sig_cache:
+                sig = self.repo_cache._stat_sig_cache[stat_path]
+            else:
+                try:
+                    st = os.stat(stat_path)
+                    sig = [st.st_mtime_ns, st.st_ino]
+                    if self.repo_cache is not None:
+                        self.repo_cache._stat_sig_cache[stat_path] = sig
+                except OSError:
+                    sig = None
+            dumped = _dump_repo(result)
+
+        for c in chain:
             self._dir_repo[c] = result
+            alt_c = _private_alias(c)
+            if alt_c != c:
+                self._dir_repo[alt_c] = result
+            if self.repo_cache is not None:
+                if result is None:
+                    self.repo_cache.put(c, None)
+                    if alt_c != c:
+                        self.repo_cache.put(alt_c, None)
+                elif dotgit and sig:
+                    self.repo_cache.put(c, dumped, dotgit, sig)
+                    if alt_c != c:
+                        self.repo_cache.put(alt_c, dumped, dotgit, sig)
+
+        self._dir_repo[path] = result
+        alt_p = _private_alias(path)
+        if alt_p != path:
+            self._dir_repo[alt_p] = result
+        if self.repo_cache is not None:
+            if result is None:
+                self.repo_cache.put(path, None)
+                if alt_p != path:
+                    self.repo_cache.put(alt_p, None)
+            elif dotgit and sig:
+                self.repo_cache.put(path, dumped, dotgit, sig)
+                if alt_p != path:
+                    self.repo_cache.put(alt_p, dumped, dotgit, sig)
+
         return result
 
     def _read_repo(self, root: str, dotgit: str) -> Optional[RepoInfo]:
@@ -363,7 +457,14 @@ class Resolver:
     # ---- public API ------------------------------------------------------
     @staticmethod
     def clean(path: str) -> Optional[str]:
+        try:
+            return _CLEAN_CACHE[path]
+        except KeyError:
+            pass
+        except TypeError:
+            return None
         if not path or not isinstance(path, str):
+            _CLEAN_CACHE[path] = None
             return None
         p = path.strip()
         if p.startswith("file://"):
@@ -371,9 +472,16 @@ class Resolver:
         if p.startswith("~"):
             p = os.path.expanduser(p)
         if not p.startswith("/"):
+            _CLEAN_CACHE[path] = None
             return None
         p = p.rstrip(".,:;")
-        return os.path.normpath(p) if p else None
+        if (len(p) > 1 and not p.endswith("/") and "//" not in p
+                and "/./" not in p and "/../" not in p and not p.endswith("/.") and not p.endswith("/..")):
+            res = p
+        else:
+            res = os.path.normpath(p) if p else None
+        _CLEAN_CACHE[path] = res
+        return res
 
     def resolve(self, path: str, allow_missing_fallback: bool = False) -> Optional[Project]:
         """Path -> Project or None (not a project). ``allow_missing_fallback``
@@ -438,26 +546,32 @@ class Resolver:
         """Longest whole-component prefix of ``path`` that is a key of ``table``."""
         if not table:
             return None
-        cur = path
-        while True:
-            if cur in table:
-                return cur, table[cur]
-            parent = os.path.dirname(cur)
-            if parent == cur:
-                return None
-            cur = parent
+        best_k = None
+        for k in table:
+            if path == k or (path.startswith(k) and (k.endswith("/") or path[len(k)] == "/")):
+                if best_k is None or len(k) > len(best_k):
+                    best_k = k
+        if best_k is not None:
+            return best_k, table[best_k]
+        return None
 
     def prewarm(self, paths) -> None:
         """Discover every repository reachable from ``paths`` from the
         filesystem alone, so that log-recorded remotes (step 3) can be matched
         independently of the order sessions are processed in."""
         self.hints_enabled = False
+        seen = set()
         try:
             for path in paths:
-                self.resolve(path)
+                if path not in seen:
+                    seen.add(path)
+                    self.resolve(path)
         finally:
             self.hints_enabled = True
-            self._resolve_cache.clear()
+            # Only invalidate entries that resolved to None, because they might
+            # now resolve using hints (hints were disabled during prewarm).
+            # Entries that already resolved to a project will never change.
+            self._resolve_cache = {k: v for k, v in self._resolve_cache.items() if v is not None}
 
     def project(self, pid: str) -> Optional[Project]:
         return self.projects.get(pid)
