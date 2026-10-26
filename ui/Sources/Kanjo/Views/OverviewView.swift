@@ -580,17 +580,15 @@ struct ProjectRow: View {
                         if pinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 8.5, weight: .semibold))
-                                .foregroundStyle(AgentPalette.pin)
-                                .hoverTip(L10n.tr("overview.badge.pinned"))
+                                .hidden()
                         }
                         Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                        AgentDots(agents: project.byAgent, currency: currency, id: "overview:hover:dots:\(projectIndex)")
+                        AgentDots(agents: project.byAgent, currency: currency).hidden()
                         if project.pathMissing {
-                            Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
-                                  help: L10n.tr("overview.badge.path_missing_help"))
+                            Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn).hidden()
                         }
                         if project.remote == nil {
-                            Badge(text: L10n.tr("overview.badge.local"), help: L10n.tr("overview.badge.local_help"))
+                            Badge(text: L10n.tr("overview.badge.local")).hidden()
                         }
                         Spacer(minLength: 8)
                         Text(Fmt.money(project.cost, currency: currency))
@@ -603,11 +601,10 @@ struct ProjectRow: View {
                             : L10n.tr("overview.row.subtitle.plural", project.sessions, Fmt.tokens(project.tokens.total), ShortDate.relative(project.lastActive))
                         Text(sessStr)
                             .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .hoverTip(L10n.tr("overview.row.last_active", Fmt.day(project.lastActive)))
+                            .hidden()
                         Spacer(minLength: 8)
-                        strip
+                        Color.clear.frame(width: strip.width, height: strip.cell.height)
                     }
                 }
                 .padding(.horizontal, Metrics.listInset).padding(.vertical, Self.padV)
@@ -615,6 +612,50 @@ struct ProjectRow: View {
             }
             .buttonStyle(RowButtonStyle(highlighted: hover, cornerRadius: Metrics.rowRadius))
             .hoverTip(project.id)
+            .overlay(alignment: .topLeading) {
+                HStack(alignment: .center, spacing: 6) {
+                    if pinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .foregroundStyle(AgentPalette.pin)
+                            .hoverTip(L10n.tr("overview.badge.pinned"))
+                    }
+                    Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1).hidden()
+                    AgentDots(agents: project.byAgent, currency: currency, id: "overview:hover:dots:\(projectIndex)")
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpen)
+                    if project.pathMissing {
+                        Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
+                              help: L10n.tr("overview.badge.path_missing_help"))
+                    }
+                    if project.remote == nil {
+                        Badge(text: L10n.tr("overview.badge.local"), help: L10n.tr("overview.badge.local_help"))
+                    }
+                }
+                .padding(.leading, Metrics.listInset)
+                .padding(.top, Self.padV)
+            }
+            .overlay(alignment: .bottomLeading) {
+                let sessStr = project.sessions == 1
+                    ? L10n.tr("overview.row.subtitle.singular", project.sessions, Fmt.tokens(project.tokens.total), ShortDate.relative(project.lastActive))
+                    : L10n.tr("overview.row.subtitle.plural", project.sessions, Fmt.tokens(project.tokens.total), ShortDate.relative(project.lastActive))
+                Text(sessStr)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .hoverTip(L10n.tr("overview.row.last_active", Fmt.day(project.lastActive)))
+                    .padding(.leading, Metrics.listInset)
+                    .padding(.bottom, Self.padV)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                strip
+                    .padding(.trailing, Metrics.listInset)
+                    .padding(.bottom, Self.padV)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+            }
 
             HStack(spacing: 0) {
                 RowIconButton(systemName: pinned ? "pin.fill" : "pin",
