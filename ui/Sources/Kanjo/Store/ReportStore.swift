@@ -8,6 +8,7 @@ final class ReportStore: ObservableObject {
 
     @Published private(set) var needsCommandLineTools = false
     @Published private(set) var report: UsageReport?
+    @Published private(set) var knownPlans: [String: [KnownPlan]]?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
     @Published private(set) var lastRefresh: Date?
@@ -34,6 +35,7 @@ final class ReportStore: ObservableObject {
             SettingsKeys.showAmountInMenuBar: true,
         ])
         Task { await checkPython() }
+        Task { await loadKnownPlans() }
         refresh()
         restartTimer()
     }
@@ -72,6 +74,19 @@ final class ReportStore: ObservableObject {
 
     var canEditSubscriptions: Bool {
         dataOverride == nil && defaults.string(forKey: SettingsKeys.sourceKind) == SourceKind.cli.rawValue
+    }
+
+    func loadKnownPlans() async {
+        guard knownPlans == nil else { return }
+        guard canEditSubscriptions else { return }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do {
+            let plans = try await source.fetchKnownPlans()
+            self.knownPlans = plans
+        } catch {
+            self.knownPlans = nil
+        }
     }
 
     func setAnchorDay(agent: String, day: Int?) async throws {
@@ -149,6 +164,7 @@ final class ReportStore: ObservableObject {
     func applySettings() {
         restartTimer()
         DiskStore.shared.applySettings()
+        Task { await loadKnownPlans() }
         refresh()
     }
 }

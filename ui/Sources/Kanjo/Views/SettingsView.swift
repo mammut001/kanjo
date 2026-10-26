@@ -293,10 +293,13 @@ private struct SubscriptionSettingsRow: View {
 
     @State private var day: Int
     @State private var isEditing = false
-    @State private var inputPlan: String = ""
+    @State private var selectedPlanKey: String = ""
+    @State private var customPlanText: String = ""
     @State private var inputPrice: String = ""
     @State private var saving = false
     @State private var actionError: String?
+
+    private let otherPlanTag = "__custom_other__"
 
     init(agent: String, sub: Subscription?, label: String, currency: String) {
         self.agent = agent
@@ -304,13 +307,22 @@ private struct SubscriptionSettingsRow: View {
         self.label = label
         self.currency = currency
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
-        _inputPlan = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
+        _selectedPlanKey = State(initialValue: sub?.plan ?? "")
+        _customPlanText = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
         if let price = sub?.monthlyPriceUsd {
             let s = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
             _inputPrice = State(initialValue: s)
         } else {
             _inputPrice = State(initialValue: "")
         }
+    }
+
+    private var agentKnownPlans: [KnownPlan]? {
+        store.knownPlans?[agent]
+    }
+
+    private var hasKnownPlans: Bool {
+        !(agentKnownPlans?.isEmpty ?? true)
     }
 
     var body: some View {
@@ -333,13 +345,40 @@ private struct SubscriptionSettingsRow: View {
                 }
             }
         }
+        .onAppear {
+            syncInputs()
+            Task { await store.loadKnownPlans() }
+        }
         .onChange(of: sub?.anchorDay) { value in
             day = min(28, max(1, value ?? 1))
         }
-        .onChange(of: sub) { newSub in
-            inputPlan = newSub?.plan ?? newSub?.planLabel ?? ""
-            if let price = newSub?.monthlyPriceUsd {
-                inputPrice = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+        .onChange(of: sub) { _ in
+            if !isEditing {
+                syncInputs()
+            }
+        }
+        .onChange(of: store.knownPlans) { _ in
+            if !isEditing {
+                syncInputs()
+            }
+        }
+        .onChange(of: selectedPlanKey) { newKey in
+            onPlanSelectionChanged(newKey: newKey)
+        }
+    }
+
+    private func onPlanSelectionChanged(newKey: String) {
+        guard isEditing else { return }
+        if newKey == otherPlanTag {
+            if let price = sub?.monthlyPriceUsd {
+                inputPrice = formatPrice(price)
+            } else {
+                inputPrice = ""
+            }
+        } else if let matching = agentKnownPlans?.first(where: { $0.key == newKey }) {
+            customPlanText = ""
+            if let listPrice = matching.monthlyPriceUsd {
+                inputPrice = formatPrice(listPrice)
             } else {
                 inputPrice = ""
             }
@@ -406,18 +445,43 @@ private struct SubscriptionSettingsRow: View {
 
     @ViewBuilder
     private var editingForm: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                TextField(L10n.tr("settings.plan"), text: $inputPlan)
+        VStack(alignment: .leading, spacing: 6) {
+            // Row 1: Plan Picker (or free text)
+            if let plans = agentKnownPlans, !plans.isEmpty {
+                Picker("", selection: $selectedPlanKey) {
+                    ForEach(plans) { plan in
+                        Text(planMenuLabel(plan)).tag(plan.key)
+                    }
+                    Text(L10n.tr("settings.plan_other")).tag(otherPlanTag)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+
+                if selectedPlanKey == otherPlanTag {
+                    TextField(L10n.tr("settings.plan"), text: $customPlanText)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                }
+            } else {
+                TextField(L10n.tr("settings.plan"), text: $customPlanText)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 11))
-                    .frame(width: 140)
+            }
+
+            // Row 2: Monthly price field & Stepper
+            HStack(spacing: 8) {
                 TextField(L10n.tr("settings.monthly_price_usd"), text: $inputPrice)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 11, design: .monospaced))
-                    .frame(width: 80)
+                    .frame(width: 85)
                 Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
                     .font(.system(size: 11)).monospacedDigit()
+                Spacer(minLength: 0)
+            }
+
+            // Row 3: Actions right-aligned
+            HStack(spacing: 6) {
+                Spacer()
                 Button(L10n.tr("common.apply")) { applyManual() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -433,19 +497,48 @@ private struct SubscriptionSettingsRow: View {
                         .controlSize(.small)
                 }
             }
-            .disabled(saving || store.isLoading)
         }
+        .disabled(saving || store.isLoading)
         .padding(.leading, 11)
+    }
+
+    private func planMenuLabel(_ plan: KnownPlan) -> String {
+        if let price = plan.monthlyPriceUsd {
+            return "\(plan.label) · \(Fmt.perMonth(price, currency: currency))"
+        }
+        return plan.label
     }
 
     private func syncInputs() {
         day = min(28, max(1, sub?.anchorDay ?? 1))
-        inputPlan = sub?.plan ?? sub?.planLabel ?? ""
+        let plans = agentKnownPlans ?? []
+        if let currentPlan = sub?.plan, !currentPlan.isEmpty {
+            if let matching = plans.first(where: { $0.key == currentPlan }) ?? plans.first(where: { $0.label == sub?.planLabel }) {
+                selectedPlanKey = matching.key
+                customPlanText = ""
+            } else {
+                selectedPlanKey = otherPlanTag
+                customPlanText = currentPlan
+            }
+        } else if let first = plans.first {
+            selectedPlanKey = first.key
+            customPlanText = ""
+        } else {
+            selectedPlanKey = otherPlanTag
+            customPlanText = sub?.planLabel ?? ""
+        }
+
         if let price = sub?.monthlyPriceUsd {
-            inputPrice = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+            inputPrice = formatPrice(price)
+        } else if let matching = plans.first(where: { $0.key == selectedPlanKey }), let listPrice = matching.monthlyPriceUsd {
+            inputPrice = formatPrice(listPrice)
         } else {
             inputPrice = ""
         }
+    }
+
+    private func formatPrice(_ price: Double) -> String {
+        price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
     }
 
     private func saveAnchor(_ value: Int?) {
@@ -463,25 +556,49 @@ private struct SubscriptionSettingsRow: View {
     }
 
     private func applyManual() {
-        let plan = inputPlan.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isCustom = !hasKnownPlans || selectedPlanKey == otherPlanTag
+        let plan = isCustom ? customPlanText.trimmingCharacters(in: .whitespacesAndNewlines) : selectedPlanKey
         guard !plan.isEmpty else {
             actionError = L10n.tr("settings.error.plan_required")
             return
         }
+
+        let matchingPlan = hasKnownPlans ? agentKnownPlans?.first(where: { $0.key == selectedPlanKey }) : nil
+        let listPrice = isCustom ? nil : matchingPlan?.monthlyPriceUsd
         let priceStr = inputPrice.trimmingCharacters(in: .whitespacesAndNewlines)
-        var price: Double? = nil
+
+        var enteredPrice: Double? = nil
         if !priceStr.isEmpty {
             guard let p = Double(priceStr), p >= 0, p.isFinite else {
                 actionError = L10n.tr("settings.error.invalid_price")
                 return
             }
-            price = p
+            enteredPrice = p
+        } else if listPrice == nil {
+            actionError = L10n.tr("settings.error.price_required")
+            return
+        } else {
+            enteredPrice = listPrice
         }
+
+        let fields = SubscriptionPlanHelper.fieldsToSave(
+            plan: plan,
+            isCustom: isCustom,
+            enteredPrice: enteredPrice,
+            listPrice: listPrice,
+            anchorDay: day
+        )
+
         saving = true
         actionError = nil
         Task {
             do {
-                try await store.setSubscription(agent: agent, plan: plan, monthlyPriceUsd: price, anchorDay: day)
+                try await store.setSubscription(
+                    agent: agent,
+                    plan: fields.plan,
+                    monthlyPriceUsd: fields.monthlyPriceUsd,
+                    anchorDay: fields.anchorDay
+                )
                 isEditing = false
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

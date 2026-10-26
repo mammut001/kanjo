@@ -6,7 +6,7 @@ import tempfile
 
 from .config import ConfigError, _subscriptions, config_paths, load, read_overrides, subscription_value
 from .sources.base import AGENT_LABELS
-from .subscriptions import subscriptions
+from .subscriptions import known_plans_payload, subscriptions
 
 AGENTS = tuple(AGENT_LABELS.keys())
 FIELDS = ("anchor_day", "plan", "monthly_price_usd")
@@ -60,9 +60,29 @@ def cmd_config(args):
     if args.config_cmd == "path":
         if args.key is not None or args.value is not None:
             raise ConfigError("config path takes no key or value")
+        if getattr(args, "json", False):
+            raise ConfigError("config path does not accept --json")
         print(primary)
         print(path)
         return 0
+    if args.config_cmd == "plans":
+        if args.key is not None or args.value is not None:
+            raise ConfigError("config plans takes no key or value")
+        import sys
+        payload = known_plans_payload()
+        if getattr(args, "json", False):
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        lines = []
+        for agent, plans in payload.items():
+            lines.append("%s:" % agent)
+            for p in plans:
+                price = "$%.2f" % p["monthly_price_usd"] if p["monthly_price_usd"] is not None else "unknown"
+                lines.append("  %-16s %s (%s)" % (p["key"], p["label"], price))
+        sys.stdout.write("\n".join(lines) + "\n")
+        return 0
+    if getattr(args, "json", False):
+        raise ConfigError("config %s does not accept --json" % args.config_cmd)
     agent, key = _key(args.key)
     if args.config_cmd == "set":
         if args.value is None:
