@@ -140,12 +140,12 @@ public enum SubscriptionSettingsRoute {
     public static func parse(_ raw: String) -> (agent: String, isEdit: Bool)? {
         let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 3 || parts.count == 4 else { return nil }
-        guard parts[0] == "settings", parts[1] == "subscriptions", !parts[2].isEmpty else { return nil }
+        guard parts[0].lowercased() == "settings", parts[1].lowercased() == "subscriptions", !parts[2].isEmpty else { return nil }
         if parts.count == 4 {
-            guard parts[3] == "edit" else { return nil }
-            return (String(parts[2]), true)
+            guard parts[3].lowercased() == "edit" else { return nil }
+            return (String(parts[2]).lowercased(), true)
         }
-        return (String(parts[2]), false)
+        return (String(parts[2]).lowercased(), false)
     }
 
     public static func agent(from raw: String) -> String? {

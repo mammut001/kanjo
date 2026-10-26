@@ -331,10 +331,29 @@ private struct SubscriptionSettingsRow: View {
         self.initiallyEditing = initiallyEditing
         _isEditingOverride = State(initialValue: initiallyEditing ? true : nil)
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
-        _selectedPlanKey = State(initialValue: sub?.plan ?? "")
-        _customPlanText = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
+
+        let plans = KnownPlan.fallbackPlans[agent] ?? []
+        if let currentPlan = sub?.plan, !currentPlan.isEmpty {
+            if let matching = plans.first(where: { $0.key == currentPlan }) ?? plans.first(where: { $0.label == sub?.planLabel }) {
+                _selectedPlanKey = State(initialValue: matching.key)
+                _customPlanText = State(initialValue: "")
+            } else {
+                _selectedPlanKey = State(initialValue: otherPlanTag)
+                _customPlanText = State(initialValue: currentPlan)
+            }
+        } else if initiallyEditing, let first = plans.first {
+            _selectedPlanKey = State(initialValue: first.key)
+            _customPlanText = State(initialValue: "")
+        } else {
+            _selectedPlanKey = State(initialValue: sub?.plan ?? "")
+            _customPlanText = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
+        }
+
         if let price = sub?.monthlyPriceUsd {
             let s = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+            _inputPrice = State(initialValue: s)
+        } else if initiallyEditing, let first = plans.first, let listPrice = first.monthlyPriceUsd {
+            let s = listPrice.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", listPrice) : String(listPrice)
             _inputPrice = State(initialValue: s)
         } else {
             _inputPrice = State(initialValue: "")
