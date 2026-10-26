@@ -273,9 +273,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("config", help="get, set or unset subscription overrides")
-    p.add_argument("config_cmd", choices=("get", "set", "unset", "path"))
+    p.add_argument("config_cmd", choices=("get", "set", "unset", "path", "plans"))
     p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field>")
     p.add_argument("value", nargs="?", help="override value (set only)")
+    p.add_argument("--json", action="store_true", help="output as JSON (plans only)")
     p.add_argument("--config", metavar="PATH", help="attribution config; overrides.json is stored beside it")
     p.set_defaults(func=cmd_config)
 

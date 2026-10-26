@@ -118,9 +118,11 @@
 "settings.add_subscription" = "Ajouter un abonnement";
 "settings.edit" = "Modifier";
 "settings.plan" = "Forfait";
+"settings.plan_other" = "Autre…";
 "settings.monthly_price_usd" = "Prix mensuel ($)";
 "settings.remove_subscription" = "Supprimer";
 "settings.error.plan_required" = "Le nom du forfait est requis.";
+"settings.error.price_required" = "Le prix est requis pour ce forfait.";
 "settings.error.invalid_price" = "Le prix doit être un nombre positif ou nul.";
 "settings.saving" = "Enregistrement…";
 "settings.source.not_set" = "non défini · 30 derniers jours";

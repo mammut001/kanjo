@@ -269,6 +269,49 @@ class ConfigCommandTest(unittest.TestCase):
         self.assertIn("anchor day 8 (overrides.json)", out)
         self.assertIn("anchor day 25 (detected)", out)
 
+    def test_config_plans_json(self):
+        from kanjo.subscriptions import KNOWN_PLANS
+        code, out, err = self.run_cli("config", "plans", "--json")
+        self.assertEqual((code, err), (0, ""))
+        data = json.loads(out)
+        self.assertEqual(list(data.keys()), list(KNOWN_PLANS.keys()))
+        for agent, expected_plans in KNOWN_PLANS.items():
+            self.assertIn(agent, data)
+            actual_plans = data[agent]
+            self.assertEqual(len(actual_plans), len(expected_plans))
+            for actual, (expected_key, (expected_label, expected_price)) in zip(actual_plans, expected_plans.items()):
+                self.assertEqual(actual["key"], expected_key)
+                self.assertEqual(actual["label"], expected_label)
+                self.assertEqual(actual["monthly_price_usd"], expected_price)
+
+    def test_config_plans_text(self):
+        code, out, err = self.run_cli("config", "plans")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("claude:", out)
+        self.assertIn("Claude Pro ($20.00)", out)
+        self.assertIn("ChatGPT Plus ($20.00)", out)
+        self.assertIn("X Premium+ (unknown)", out)
+
+    def test_config_plans_rejects_arguments(self):
+        code, _, err = self.run_cli("config", "plans", "extra")
+        self.assertEqual(code, 2)
+        self.assertIn("takes no key or value", err)
+        code, _, err = self.run_cli("config", "plans", "k", "v")
+        self.assertEqual(code, 2)
+        self.assertIn("takes no key or value", err)
+
+    def test_config_json_rejected_for_non_plans(self):
+        for subcmd in ("get", "set", "unset", "path"):
+            args = ["config", subcmd]
+            if subcmd in ("get", "unset"):
+                args.append("subscriptions.codex.plan")
+            elif subcmd == "set":
+                args.extend(["subscriptions.codex.plan", "plus"])
+            args.append("--json")
+            code, _, err = self.run_cli(*args)
+            self.assertEqual(code, 2)
+            self.assertIn("does not accept --json", err)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -131,6 +131,17 @@ def known_monthly_price(agent: str, plan: str) -> Optional[float]:
     return None if found is None else found[2]
 
 
+def known_plans_payload() -> Dict[str, list]:
+    """Mapping of {agent: [{key, label, monthly_price_usd}]} in stable table order."""
+    return {
+        agent: [
+            {"key": key, "label": label, "monthly_price_usd": price}
+            for key, (label, price) in plans.items()
+        ]
+        for agent, plans in KNOWN_PLANS.items()
+    }
+
+
 def _known(agent: str, plan: str) -> Optional[Tuple[str, str, Optional[float]]]:
     table = KNOWN_PLANS.get(agent, {})
     if plan in table:
