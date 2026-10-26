@@ -3,32 +3,15 @@ import Foundation
 /// 模型聚合工具：纯函数，负责聚合报告或项目中的模型用量。
 public enum ModelAggregation {
     /// 聚合当前范围下的所有模型，按总 token 数降序排列。
+    /// - All 范围：直接从各项目的 by_model 汇总（精确值）；
+    /// - 非 All 范围：仅从范围内的会话（sessionsDetail，已按范围过滤）汇总：
+    ///   单模型会话直接计入；多模型会话平均分配（向上取整的余数给首个模型，标记 estimated = true）。
     public static func aggregate(in report: FilteredReport) -> [ModelCost] {
-        aggregate(projects: report.projects, isAll: report.spec.isAll)
-    }
-
-    /// 聚合过滤后的项目列表。
-    public static func aggregate(projects: [FilteredProject], isAll: Bool) -> [ModelCost] {
         var map: [String: ModelCost] = [:]
 
-        for fp in projects {
-            // 范围过滤：非 All 模式下跳过无用量的项目
-            if !isAll && !fp.hasUsage {
-                continue
-            }
-
-            // 确定该项目在范围内活跃的模型集合
-            let activeModels: Set<String>? = {
-                guard !isAll else { return nil }
-                let modelsInSessions = Set(fp.sessionsDetail.flatMap(\.models))
-                return modelsInSessions.isEmpty ? nil : modelsInSessions
-            }()
-
-            if !fp.project.byModel.isEmpty {
+        if report.spec.isAll {
+            for fp in report.projects {
                 for m in fp.project.byModel {
-                    if let active = activeModels, !active.contains(m.model) {
-                        continue
-                    }
                     let key = m.id
                     if let existing = map[key] {
                         map[key] = ModelCost(
@@ -42,21 +25,66 @@ public enum ModelAggregation {
                         map[key] = m
                     }
                 }
-            } else if !fp.sessionsDetail.isEmpty {
-                // 如果项目未提供 byModel，从活跃会话中汇总模型（容错回退）
-                for s in fp.sessionsDetail {
-                    guard !s.models.isEmpty else { continue }
-                    let count = s.models.count
-                    let shareTokens = Tokens(
-                        input: s.tokens.input / count,
-                        output: s.tokens.output / count,
-                        cacheRead: s.tokens.cacheRead / count,
-                        cacheWrite: s.tokens.cacheWrite / count,
-                        thinking: s.tokens.thinking / count,
-                        total: s.tokens.total / count
-                    )
+            }
+        } else {
+            // 与总览 hero 使用完全相同的范围过滤会话集
+            let sessions: [Session] = report.projects.flatMap(\.sessionsDetail)
+                + report.unattributed.sessionsDetail
+                + report.excluded.sessionsDetail
+
+            for s in sessions {
+                guard !s.models.isEmpty else { continue }
+                let count = s.models.count
+                if count == 1 {
+                    let model = s.models[0]
+                    let key = "\(s.agent)/\(model)"
+                    if let existing = map[key] {
+                        map[key] = ModelCost(
+                            model: model,
+                            agent: s.agent,
+                            cost: existing.cost + s.cost,
+                            tokens: existing.tokens + s.tokens,
+                            estimated: existing.estimated
+                        )
+                    } else {
+                        map[key] = ModelCost(
+                            model: model,
+                            agent: s.agent,
+                            cost: s.cost,
+                            tokens: s.tokens,
+                            estimated: false
+                        )
+                    }
+                } else {
                     let shareCost = s.cost / Double(count)
-                    for model in s.models {
+                    for (i, model) in s.models.enumerated() {
+                        func splitField(_ value: Int) -> Int {
+                            let base = value / count
+                            let rem = value % count
+                            return i == 0 ? base + rem : base
+                        }
+
+                        let splitInp = splitField(s.tokens.input)
+                        let splitOut = splitField(s.tokens.output)
+                        let splitCr = splitField(s.tokens.cacheRead)
+                        let splitCw = splitField(s.tokens.cacheWrite)
+                        let splitTh = splitField(s.tokens.thinking)
+                        let splitTotal: Int
+                        if s.tokens.input + s.tokens.output + s.tokens.cacheRead + s.tokens.cacheWrite > 0 {
+                            splitTotal = splitInp + splitOut + splitCr + splitCw
+                        } else {
+                            splitTotal = splitField(s.tokens.total)
+                        }
+
+                        let shareTokens = Tokens(
+                            input: splitInp,
+                            output: splitOut,
+                            cacheRead: splitCr,
+                            cacheWrite: splitCw,
+                            thinking: splitTh,
+                            total: splitTotal
+                        )
+
                         let key = "\(s.agent)/\(model)"
                         if let existing = map[key] {
                             map[key] = ModelCost(
@@ -64,7 +92,7 @@ public enum ModelAggregation {
                                 agent: s.agent,
                                 cost: existing.cost + shareCost,
                                 tokens: existing.tokens + shareTokens,
-                                estimated: existing.estimated
+                                estimated: true
                             )
                         } else {
                             map[key] = ModelCost(
@@ -72,7 +100,7 @@ public enum ModelAggregation {
                                 agent: s.agent,
                                 cost: shareCost,
                                 tokens: shareTokens,
-                                estimated: false
+                                estimated: true
                             )
                         }
                     }
@@ -90,50 +118,5 @@ public enum ModelAggregation {
             }
             return a.model < b.model
         }
-    }
-
-    /// 聚合原始项目列表（等同于 All 范围）。
-    public static func aggregate(_ projects: [Project]) -> [ModelCost] {
-        let fps = projects.map { p in
-            FilteredProject(
-                project: p,
-                cost: p.cost,
-                tokens: p.tokens.total,
-                sessions: p.sessions,
-                byAgent: p.byAgent,
-                byDay: p.byDay,
-                sessionsDetail: p.sessionsDetail,
-                firstActive: p.firstActive,
-                lastActive: p.lastActive
-            )
-        }
-        return aggregate(projects: fps, isAll: true)
-    }
-
-    /// 聚合全量使用报告（等同于 All 范围）。
-    public static func aggregate(_ report: UsageReport) -> [ModelCost] {
-        aggregate(report.projects)
-    }
-}
-
-extension FilteredReport {
-    /// 聚合当前范围下的所有模型用量。
-    public var aggregatedModels: [ModelCost] {
-        ModelAggregation.aggregate(in: self)
-    }
-
-    public func aggregateModels() -> [ModelCost] {
-        ModelAggregation.aggregate(in: self)
-    }
-}
-
-extension RangeEngine {
-    /// 聚合当前范围下的所有模型用量。
-    public static func aggregateModels(in report: FilteredReport) -> [ModelCost] {
-        ModelAggregation.aggregate(in: report)
-    }
-
-    public static func aggregateModels(projects: [FilteredProject], isAll: Bool) -> [ModelCost] {
-        ModelAggregation.aggregate(projects: projects, isAll: isAll)
     }
 }

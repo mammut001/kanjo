@@ -29,8 +29,32 @@ final class ModelAggregationTests: KanjoTestCase {
         )
     }
 
-    /// 验证模型聚合在多项目之间正确求和，且正确包含缓存读取和写入。
-    func testSumsAcrossProjectsAndIncludesCacheTokens() {
+    private func makeFilteredReport(
+        projects: [FilteredProject],
+        unattributed: FilteredBucket = FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+        excluded: FilteredBucket = FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+        isAll: Bool = false
+    ) -> FilteredReport {
+        let range: TimeRange = isAll ? .all : .days7
+        let spec = RangeSpec(range: range, calendar: Calendar(identifier: .gregorian))
+        let totalCost = projects.reduce(0.0) { $0 + $1.cost } + unattributed.cost + excluded.cost
+        let totalTokens = projects.reduce(0) { $0 + $1.tokens } + unattributed.tokens + excluded.tokens
+        let totalSessions = projects.reduce(0) { $0 + $1.sessions } + unattributed.sessions + excluded.sessions
+        return FilteredReport(
+            spec: spec,
+            projects: projects,
+            unattributed: unattributed,
+            excluded: excluded,
+            cost: totalCost,
+            tokens: totalTokens,
+            sessions: totalSessions,
+            firstActive: "2026-10-18",
+            lastActive: "2026-10-24"
+        )
+    }
+
+    /// 验证 All 范围：直接汇总各项目的 by_model（精确值），且正确包含缓存读取和写入并按总 token 降序排序。
+    func testAllRangeUsesProjectByModelExact() {
         let t1 = makeTokens(input: 100, output: 200, cacheRead: 300, cacheWrite: 400) // total = 1000
         let t2 = makeTokens(input: 50, output: 50, cacheRead: 500, cacheWrite: 400)   // total = 1000
         let t3 = makeTokens(input: 10, output: 10, cacheRead: 30, cacheWrite: 50)     // total = 100
@@ -43,7 +67,13 @@ final class ModelAggregationTests: KanjoTestCase {
             ModelCost(model: "opus", agent: "claude", cost: 10.0, tokens: t2)
         ])
 
-        let result = ModelAggregation.aggregate([p1, p2])
+        let fp1 = FilteredProject(project: p1, cost: p1.cost, tokens: p1.tokens.total, sessions: 0,
+                                  byAgent: [], byDay: [], sessionsDetail: [])
+        let fp2 = FilteredProject(project: p2, cost: p2.cost, tokens: p2.tokens.total, sessions: 0,
+                                  byAgent: [], byDay: [], sessionsDetail: [])
+
+        let report = makeFilteredReport(projects: [fp1, fp2], isAll: true)
+        let result = ModelAggregation.aggregate(in: report)
 
         XCTAssertEqual(result.count, 2)
         // opus 排序第一：总 token = 1000 + 1000 = 2000，包含 cacheRead (300+500=800) 与 cacheWrite (400+400=800)
@@ -52,6 +82,7 @@ final class ModelAggregationTests: KanjoTestCase {
         XCTAssertEqual(opus?.tokens.cacheRead, 800)
         XCTAssertEqual(opus?.tokens.cacheWrite, 800)
         XCTAssertEqual(opus?.cost ?? 0, 25.0, accuracy: 1e-9)
+        XCTAssertFalse(opus?.estimated ?? true)
 
         // haiku 排序第二：总 token = 100
         let haiku = try? XCTUnwrap(result.first { $0.model == "haiku" })
@@ -61,75 +92,180 @@ final class ModelAggregationTests: KanjoTestCase {
         XCTAssertEqual(haiku?.cost ?? 0, 1.0, accuracy: 1e-9)
     }
 
-    /// 验证聚合结果严格按总 token 数降序排列。
-    func testSortedByTotalTokensDesc() {
-        let p = makeProject(id: "p", models: [
-            ModelCost(model: "small", agent: "claude", cost: 5.0, tokens: makeTokens(input: 10, output: 10, cacheRead: 10, cacheWrite: 10)), // 40
-            ModelCost(model: "huge", agent: "claude", cost: 50.0, tokens: makeTokens(input: 1000, output: 1000, cacheRead: 1000, cacheWrite: 1000)), // 4000
-            ModelCost(model: "medium", agent: "claude", cost: 20.0, tokens: makeTokens(input: 200, output: 200, cacheRead: 200, cacheWrite: 200)) // 800
-        ])
+    /// 验证非 All 范围：不使用各项目全量 by_model 的累计值，仅从当前范围过滤后的会话中汇总。
+    func testNonAllRangeAggregatesOnlyFromInRangeSessions() {
+        // 项目的全量历史 by_model：opus 拥有 100,000 token 与 $100 花费
+        let historicalOpus = ModelCost(model: "opus", agent: "claude", cost: 100.0, tokens: Tokens(total: 100_000))
+        let historicalSonnet = ModelCost(model: "sonnet", agent: "claude", cost: 50.0, tokens: Tokens(total: 50_000))
+        let p = makeProject(id: "p", models: [historicalOpus, historicalSonnet])
 
-        let result = ModelAggregation.aggregate([p])
-        XCTAssertEqual(result.map(\.model), ["huge", "medium", "small"])
-        XCTAssertEqual(result.map(\.tokens.total), [4000, 800, 40])
-    }
+        // 但在当前 7 天范围内，仅发生了一次 1,200 token 的 sonnet 会话
+        let inRangeSession = Session(
+            id: "s1",
+            agent: "claude",
+            label: "Claude Code",
+            started: "2026-10-22T10:00:00Z",
+            ended: "2026-10-22T10:30:00Z",
+            cwd: nil,
+            branch: nil,
+            models: ["sonnet"],
+            cost: 1.2,
+            tokens: makeTokens(input: 200, output: 200, cacheRead: 400, cacheWrite: 400), // total = 1200
+            share: 1,
+            attribution: "dominant",
+            subagents: 0,
+            title: "recent session"
+        )
 
-    /// 验证聚合遵循时间范围：不在范围内的项目被剔除，在范围内的项目仅聚合范围中活跃的模型。
-    func testRespectsTimeRange() {
-        let sIn = Session(id: "s1", agent: "claude", label: "Claude Code", started: "2026-10-22T10:00:00Z",
-                          ended: "2026-10-22T10:30:00Z", cwd: nil, branch: nil, models: ["sonnet"],
-                          cost: 10.0, tokens: Tokens(total: 1000), share: 1, attribution: "dominant",
-                          subagents: 0, title: "in-range session")
-        let sOut = Session(id: "s2", agent: "claude", label: "Claude Code", started: "2026-08-01T10:00:00Z",
-                           ended: "2026-08-01T10:30:00Z", cwd: nil, branch: nil, models: ["opus"],
-                           cost: 20.0, tokens: Tokens(total: 2000), share: 1, attribution: "dominant",
-                           subagents: 0, title: "out-of-range session")
-
-        // 项目 1：在当前范围内活跃，活跃会话仅使用 sonnet
-        let p1 = makeProject(id: "p1", models: [
-            ModelCost(model: "sonnet", agent: "claude", cost: 10.0, tokens: Tokens(total: 1000)),
-            ModelCost(model: "opus", agent: "claude", cost: 20.0, tokens: Tokens(total: 2000))
-        ], sessions: [sIn, sOut])
-
-        // 项目 2：在当前范围外（历史项目）
-        let p2 = makeProject(id: "p2", models: [
-            ModelCost(model: "gpt-4", agent: "codex", cost: 30.0, tokens: Tokens(total: 3000))
-        ], sessions: [sOut])
-
-        let fp1 = FilteredProject(
-            project: p1,
-            cost: 10.0,
-            tokens: 1000,
+        let fp = FilteredProject(
+            project: p,
+            cost: inRangeSession.cost,
+            tokens: inRangeSession.tokens.total,
             sessions: 1,
             byAgent: [],
             byDay: [],
-            sessionsDetail: [sIn],
-            firstActive: "2026-10-22",
-            lastActive: "2026-10-22"
+            sessionsDetail: [inRangeSession]
         )
-        let fp2 = FilteredProject(
-            project: p2,
-            cost: 0,
-            tokens: 0,
-            sessions: 0,
+
+        let report = makeFilteredReport(projects: [fp], isAll: false)
+        let result = ModelAggregation.aggregate(in: report)
+
+        // 仅出现 sonnet，不出现历史的 opus；且 sonnet 的数值为 1200 / $1.2，绝非全量 50,000 / $50
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.model, "sonnet")
+        XCTAssertEqual(result.first?.tokens.total, 1200)
+        XCTAssertEqual(result.first?.cost ?? 0, 1.2, accuracy: 1e-9)
+        XCTAssertFalse(result.first?.estimated ?? true)
+    }
+
+    /// 验证多模型会话平分 token，整除余数给首个模型，且标记 estimated=true；单模型会话标记 estimated=false。
+    func testMultiModelSessionSplitsEvenlyWithRemainderToFirstModel() {
+        // 会话总 token = 100 (input: 10, output: 20, cacheRead: 30, cacheWrite: 40)
+        // 3 个模型平分：
+        // input 10 / 3 = 3，余 1 -> m0: 4, m1: 3, m2: 3 (和 10)
+        // output 20 / 3 = 6，余 2 -> m0: 8, m1: 6, m2: 6 (和 20)
+        // cacheRead 30 / 3 = 10，余 0 -> m0: 10, m1: 10, m2: 10 (和 30)
+        // cacheWrite 40 / 3 = 13，余 1 -> m0: 14, m1: 13, m2: 13 (和 40)
+        // total: m0: 36, m1: 32, m2: 32 (和 100)
+        let multiSession = Session(
+            id: "s_multi",
+            agent: "claude",
+            label: "Claude Code",
+            started: "2026-10-22T10:00:00Z",
+            ended: "2026-10-22T10:30:00Z",
+            cwd: nil,
+            branch: nil,
+            models: ["m0", "m1", "m2"],
+            cost: 30.0,
+            tokens: makeTokens(input: 10, output: 20, cacheRead: 30, cacheWrite: 40),
+            share: 1,
+            attribution: "dominant",
+            subagents: 0,
+            title: nil
+        )
+
+        let fp = FilteredProject(
+            project: makeProject(id: "p", models: []),
+            cost: multiSession.cost,
+            tokens: multiSession.tokens.total,
+            sessions: 1,
             byAgent: [],
             byDay: [],
-            sessionsDetail: [],
-            firstActive: nil,
-            lastActive: nil
+            sessionsDetail: [multiSession]
         )
 
-        // isAll = true 时，所有项目的全部模型均计入
-        let allResult = ModelAggregation.aggregate(projects: [fp1, fp2], isAll: true)
-        XCTAssertEqual(Set(allResult.map(\.model)), ["gpt-4", "opus", "sonnet"])
+        let report = makeFilteredReport(projects: [fp], isAll: false)
+        let result = ModelAggregation.aggregate(in: report)
 
-        // isAll = false 时：
-        // 1. fp2 无用量，完全排除（gpt-4 不出现）
-        // 2. fp1 仅 sonnet 在范围内的会话中出现，历史模型 opus 被排除
-        let filteredResult = ModelAggregation.aggregate(projects: [fp1, fp2], isAll: false)
-        XCTAssertEqual(filteredResult.count, 1)
-        XCTAssertEqual(filteredResult.first?.model, "sonnet")
-        XCTAssertEqual(filteredResult.first?.tokens.total, 1000)
-        XCTAssertEqual(filteredResult.first?.cost ?? 0, 10.0, accuracy: 1e-9)
+        XCTAssertEqual(result.count, 3)
+        let m0 = try? XCTUnwrap(result.first { $0.model == "m0" })
+        let m1 = try? XCTUnwrap(result.first { $0.model == "m1" })
+        let m2 = try? XCTUnwrap(result.first { $0.model == "m2" })
+
+        // 验证整除余数分配与不丢失任何 token
+        XCTAssertEqual(m0?.tokens.input, 4)
+        XCTAssertEqual(m1?.tokens.input, 3)
+        XCTAssertEqual(m2?.tokens.input, 3)
+
+        XCTAssertEqual(m0?.tokens.output, 8)
+        XCTAssertEqual(m1?.tokens.output, 6)
+        XCTAssertEqual(m2?.tokens.output, 6)
+
+        XCTAssertEqual(m0?.tokens.total, 36)
+        XCTAssertEqual(m1?.tokens.total, 32)
+        XCTAssertEqual(m2?.tokens.total, 32)
+
+        XCTAssertEqual((m0?.tokens.total ?? 0) + (m1?.tokens.total ?? 0) + (m2?.tokens.total ?? 0), 100)
+        XCTAssertEqual(m0?.cost ?? 0, 10.0, accuracy: 1e-9)
+        XCTAssertEqual(m1?.cost ?? 0, 10.0, accuracy: 1e-9)
+        XCTAssertEqual(m2?.cost ?? 0, 10.0, accuracy: 1e-9)
+
+        // 多模型会话标记为 estimated = true
+        XCTAssertTrue(m0?.estimated ?? false)
+        XCTAssertTrue(m1?.estimated ?? false)
+        XCTAssertTrue(m2?.estimated ?? false)
+    }
+
+    /// 验证范围报告下模型行总 token 之和严格等于总览 hero 总 token 数（包含项目会话与未归属/已排除会话）。
+    func testSumInvariantMatchesHeroTotalTokens() {
+        let sProjSingle = Session(
+            id: "s1", agent: "claude", label: "Claude Code", started: "2026-10-22T08:00:00Z",
+            ended: "2026-10-22T08:10:00Z", cwd: nil, branch: nil, models: ["opus"],
+            cost: 5.0, tokens: makeTokens(input: 100, output: 200, cacheRead: 300, cacheWrite: 400), // 1000
+            share: 1, attribution: "dominant", subagents: 0, title: nil
+        )
+        let sProjMulti = Session(
+            id: "s2", agent: "claude", label: "Claude Code", started: "2026-10-22T09:00:00Z",
+            ended: "2026-10-22T09:10:00Z", cwd: nil, branch: nil, models: ["sonnet", "haiku", "opus"],
+            cost: 9.0, tokens: makeTokens(input: 77, output: 88, cacheRead: 99, cacheWrite: 111), // 375
+            share: 1, attribution: "dominant", subagents: 0, title: nil
+        )
+        let sUnattributed = Session(
+            id: "s3", agent: "codex", label: "Codex CLI", started: "2026-10-22T10:00:00Z",
+            ended: "2026-10-22T10:10:00Z", cwd: nil, branch: nil, models: ["gpt-4o", "gpt-4o-mini"],
+            cost: 4.0, tokens: makeTokens(input: 15, output: 25, cacheRead: 35, cacheWrite: 45), // 120
+            share: 1, attribution: "cwd", subagents: 0, title: nil
+        )
+        let sExcluded = Session(
+            id: "s4", agent: "antigravity", label: "Antigravity", started: "2026-10-22T11:00:00Z",
+            ended: "2026-10-22T11:10:00Z", cwd: nil, branch: nil, models: ["gemini-pro"],
+            cost: 2.0, tokens: makeTokens(input: 50, output: 50, cacheRead: 50, cacheWrite: 50), // 200
+            share: 1, attribution: "override", subagents: 0, title: nil
+        )
+
+        let fp = FilteredProject(
+            project: makeProject(id: "p1", models: []),
+            cost: sProjSingle.cost + sProjMulti.cost,
+            tokens: sProjSingle.tokens.total + sProjMulti.tokens.total,
+            sessions: 2,
+            byAgent: [],
+            byDay: [],
+            sessionsDetail: [sProjSingle, sProjMulti]
+        )
+        let u = FilteredBucket(
+            cost: sUnattributed.cost,
+            tokens: sUnattributed.tokens.total,
+            sessions: 1,
+            sessionsDetail: [sUnattributed]
+        )
+        let e = FilteredBucket(
+            cost: sExcluded.cost,
+            tokens: sExcluded.tokens.total,
+            sessions: 1,
+            sessionsDetail: [sExcluded]
+        )
+
+        let report = makeFilteredReport(projects: [fp], unattributed: u, excluded: e, isAll: false)
+
+        // 总览 hero 展示的总 token 数
+        let heroTokens = report.tokens
+        XCTAssertEqual(heroTokens, 1000 + 375 + 120 + 200)
+
+        // 模型聚合列表
+        let models = ModelAggregation.aggregate(in: report)
+        let sumOfModelTokens = models.reduce(0) { $0 + $1.tokens.total }
+
+        // 不变量：模型行的总 token 数严格等于总览 hero 的总 token 数
+        XCTAssertEqual(sumOfModelTokens, heroTokens)
     }
 }
