@@ -92,8 +92,9 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.tokens(10_000, language: "zh-Hans"), "1万")
         XCTAssertEqual(Fmt.tokens(12_345, language: "zh-Hans"), "1.2万")
 
-        // 99,995,000 boundary rollover to 1亿
-        XCTAssertEqual(Fmt.tokens(99_995_000, language: "zh-Hans"), "1亿")
+        // 99,995,000 stays in 万 (9999.5万); 99,999,600 rounds to 10000.0万 and rolls over to 1亿
+        XCTAssertEqual(Fmt.tokens(99_995_000, language: "zh-Hans"), "9999.5万")
+        XCTAssertEqual(Fmt.tokens(99_999_600, language: "zh-Hans"), "1亿")
 
         // 1e8 boundary
         XCTAssertEqual(Fmt.tokens(100_000_000, language: "zh-Hans"), "1亿")
