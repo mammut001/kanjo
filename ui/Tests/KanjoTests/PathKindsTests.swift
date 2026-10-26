@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class PathKindsTests: XCTestCase {
+final class PathKindsTests: KanjoTestCase {
     private let home = "/Users/me"
 
     func testTemporaryPaths() {

@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class DiskTests: XCTestCase {
+final class DiskTests: KanjoTestCase {
     private func fixtureURL() throws -> URL {
         let root = try XCTUnwrap(DefaultPaths.packageRoot)
         return root.appendingPathComponent("fixtures/disk-sample.json")

@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class DecodingTests: XCTestCase {
+final class DecodingTests: KanjoTestCase {
     private func loadFixture() throws -> UsageReport {
         let data = try Data(contentsOf: DefaultPaths.sampleFixture)
         return try ReportDecoder.decode(data)

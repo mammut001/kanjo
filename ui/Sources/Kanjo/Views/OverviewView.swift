@@ -9,6 +9,7 @@ struct OverviewView: View {
     let onSelect: (Route) -> Void
     let onSetRenewalDay: (String) -> Void
 
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(SettingsKeys.hiddenProjects) private var hiddenRaw = ""
     @AppStorage(SettingsKeys.pinnedProjects) private var pinnedRaw = ""
     @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
@@ -66,7 +67,7 @@ struct OverviewView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         // 对账只在 All 下有意义（契约 6.1）。
                         if ctx.isAll { ReconciliationView(report: report) }
-                        Text("Generated \(Fmt.timestamp(report.generatedAt)) · schema v\(report.schemaVersion)")
+                        Text(L10n.tr("overview.generated_footer", Fmt.timestamp(report.generatedAt), report.schemaVersion))
                             .font(.system(size: 10)).foregroundStyle(.tertiary)
                     }
                     .padding(.horizontal, Metrics.listInset)
@@ -89,35 +90,43 @@ struct OverviewView: View {
     private func hero(_ ctx: RangeContext, _ f: FilteredReport, visible: [Project], hiddenCount: Int) -> some View {
         let t = report.totals
         let failed = report.buckets.parseFailed.sessions
-        let projects = Self.count(visible.count, "project") + (hiddenCount > 0 ? " (\(hiddenCount) hidden)" : "")
+        let projCountStr = visible.count == 1 ? L10n.tr("overview.count.project.singular", visible.count) : L10n.tr("overview.count.project.plural", visible.count)
+        let projects = projCountStr + (hiddenCount > 0 ? L10n.tr("overview.count.hidden", hiddenCount) : "")
         let range = f.firstActive == nil && !ctx.isAll
-            ? "No usage" : ShortDate.range(f.firstActive, f.lastActive, compact: true)
-        let counts = [projects, Self.count(f.sessions, "session"),
-                      "\(Fmt.tokens(f.tokens)) tokens"].joined(separator: " · ")
-        var help = [f.firstActive == nil ? "No usage in this range." : "\(ShortDate.range(f.firstActive, f.lastActive)).",
-                    ctx.isAll ? "\(Fmt.tokens(t.tokens.cacheRead)) of the tokens are cache reads."
-                              : "Cost and tokens summed from daily data; sessions counted by start time."]
+            ? L10n.tr("overview.no_usage") : ShortDate.range(f.firstActive, f.lastActive, compact: true)
+        let sessCountStr = f.sessions == 1 ? L10n.tr("overview.count.session.singular", f.sessions) : L10n.tr("overview.count.session.plural", f.sessions)
+        let counts = [projects, sessCountStr,
+                      L10n.tr("overview.tokens_count", Fmt.tokens(f.tokens))].joined(separator: " · ")
+        var help = [f.firstActive == nil ? L10n.tr("overview.help.no_usage_range") : "\(ShortDate.range(f.firstActive, f.lastActive)).",
+                    ctx.isAll ? L10n.tr("overview.help.cache_reads", Fmt.tokens(t.tokens.cacheRead))
+                              : L10n.tr("overview.help.daily_summed")]
         if hiddenCount > 0 {
-            help.insert("\(report.projects.count) projects in the report; \(hiddenCount) hidden from the list and mosaic.", at: 1)
+            help.insert(L10n.tr("overview.help.hidden_projects", report.projects.count, hiddenCount), at: 1)
         }
         if failed > 0 {
-            help.append("Plus \(failed) log file\(failed == 1 ? "" : "s") that failed to parse (not counted in sessions).")
+            help.append(failed == 1 ? L10n.tr("overview.help.failed_log.singular", failed) : L10n.tr("overview.help.failed_log.plural", failed))
         }
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 8) {
-                Text("Total cost").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(L10n.tr("overview.total_cost"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 4)
                 RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
                             cycleAvailable: ctx.cycleAvailable)
+                    .layoutPriority(0)
             }
             HeroAmount(value: Fmt.money(f.cost, currency: cur))
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {
-                Text("\(range) · \(counts)").font(.system(size: 11)).fixedSize()
-                Text("\(range) · \(counts)").font(.system(size: 10.5)).fixedSize()
+                Text("\(range) · \(counts)").font(.system(size: 11)).lineLimit(1).fixedSize()
+                Text("\(range) · \(counts)").font(.system(size: 10.5)).lineLimit(1).fixedSize()
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(range)
-                    Text(counts)
+                    Text(range).lineLimit(1)
+                    Text(counts).lineLimit(1)
                 }
                 .font(.system(size: 11))
             }
@@ -131,20 +140,16 @@ struct OverviewView: View {
         .padding(.horizontal, Metrics.listInset)
     }
 
-    private static func count(_ n: Int, _ noun: String) -> String {
-        "\(n) \(noun)\(n == 1 ? "" : "s")"
-    }
-
     private func projectsSection(visible: [Project], hidden: [Project], idle: Int, isAll: Bool) -> some View {
         let pinned = ProjectPrefs.parse(pinnedRaw)
         let end = report.heatEndDate
         let labels = report.agentLabels
-        return PanelSection("Projects", flat: true) {
+        return PanelSection(L10n.tr("settings.section.projects"), flat: true) {
             Legend(agents: agents)
         } content: {
             if visible.isEmpty {
-                Text(report.projects.isEmpty ? "No projects."
-                     : idle > 0 ? "No project usage in this range." : "All projects are hidden.")
+                Text(report.projects.isEmpty ? L10n.tr("overview.projects.empty")
+                     : idle > 0 ? L10n.tr("overview.projects.no_usage_range") : L10n.tr("overview.projects.all_hidden"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(.horizontal, Metrics.listInset).padding(.vertical, 8)
             }
@@ -162,7 +167,7 @@ struct OverviewView: View {
                 hiddenFooter(hidden)
             }
             if !isAll && idle > 0 {
-                Text("\(Self.count(idle, "project")) with no usage in this range")
+                Text(idle == 1 ? L10n.tr("overview.projects.idle.singular", idle) : L10n.tr("overview.projects.idle.plural", idle))
                     .font(.system(size: 10.5)).foregroundStyle(.tertiary)
                     .padding(.horizontal, Metrics.listInset).padding(.vertical, 6)
             }
@@ -188,8 +193,8 @@ struct OverviewView: View {
         let cost = hidden.reduce(0) { $0 + $1.cost }
         HStack(spacing: 4) {
             Image(systemName: "eye.slash").font(.system(size: 9))
-            Text("\(hidden.count) hidden · \(Fmt.money(cost, currency: cur)) ·").monospacedDigit()
-            Button(showHidden ? "Hide" : "Show") {
+            Text(L10n.tr("overview.hidden_footer", hidden.count, Fmt.money(cost, currency: cur))).monospacedDigit()
+            Button(showHidden ? L10n.tr("common.hide") : L10n.tr("common.show")) {
                 withAnimation(.easeOut(duration: 0.15)) { showHidden.toggle() }
             }
             .buttonStyle(.plain)
@@ -215,15 +220,15 @@ struct OverviewView: View {
     private func bucketsSection(_ f: FilteredReport) -> some View {
         let b = report.buckets
         let u = f.unattributed, e = f.excluded
-        return PanelSection("Not in any project", flat: true) {
-            BucketRow(name: "Unattributed",
-                      desc: "No file signal, and no cwd or scratchpad that maps to a project",
+        return PanelSection(L10n.tr("overview.section.not_in_project"), flat: true) {
+            BucketRow(name: L10n.tr("overview.unattributed"),
+                      desc: L10n.tr("overview.unattributed_desc"),
                       sessions: u.sessions,
                       value: Fmt.money(u.cost, currency: cur),
                       action: u.sessionsDetail.isEmpty ? nil : { onSelect(.bucket(.unattributed)) })
             RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
-            BucketRow(name: "Excluded",
-                      desc: "Matched an exclude path in your config",
+            BucketRow(name: L10n.tr("overview.excluded"),
+                      desc: L10n.tr("overview.excluded_desc"),
                       sessions: e.sessions,
                       value: Fmt.money(e.cost, currency: cur),
                       action: e.sessionsDetail.isEmpty ? nil : { onSelect(.bucket(.excluded)) })
@@ -248,13 +253,13 @@ private struct SubscriptionValueCard: View {
 
     var body: some View {
         let rows = SubscriptionValue.rows(of: report)
-        return PanelSection("Subscription value", flat: true) {
+        return PanelSection(L10n.tr("overview.section.subscription_value"), flat: true) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
                     line(row)
                 }
-                Text(subscriptionValueExplanation)
+                Text(L10n.tr("overview.subscription_value.explanation"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -273,9 +278,9 @@ private struct SubscriptionValueCard: View {
         if let agent = pending.first {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Button { onSetRenewalDay(agent) } label: {
-                    (Text("Renewal days not set for \(pending.map { subs[$0]?.planLabel ?? $0 }.joined(separator: ", ")) · ")
+                    (Text(L10n.tr("overview.renewal_not_set", pending.map { subs[$0]?.planLabel ?? $0 }.joined(separator: ", ")))
                         .foregroundColor(.secondary)
-                     + Text("Set now").foregroundColor(.accentColor))
+                     + Text(L10n.tr("overview.set_now")).foregroundColor(.accentColor))
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                         .contentShape(Rectangle())
@@ -285,8 +290,8 @@ private struct SubscriptionValueCard: View {
                     dismissedRaw = RenewalNudge.serializeDismissed(dismissed.union(pending))
                 }
                 .foregroundStyle(.secondary)
-                .help("Dismiss renewal day reminder")
-                .accessibilityLabel("Dismiss renewal day reminder")
+                .help(L10n.tr("overview.dismiss_renewal_reminder"))
+                .accessibilityLabel(L10n.tr("overview.dismiss_renewal_reminder"))
             }
             .buttonStyle(.plain)
             .font(.system(size: 10.5))
@@ -309,8 +314,8 @@ private struct SubscriptionValueCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if row.extraUsageEnabled {
-                    Badge(text: "extra usage on", style: .warn,
-                          help: "Extra usage is enabled, so overage is billed on top of the flat fee.")
+                    Badge(text: L10n.tr("overview.extra_usage_on"), style: .warn,
+                          help: L10n.tr("overview.extra_usage_help"))
                         .fixedSize()
                 }
                 Spacer(minLength: 8)
@@ -359,9 +364,9 @@ private struct SubscriptionValueCard: View {
         let price = Fmt.perMonth(row.monthlyPriceUsd, currency: cur)
         let usage = Fmt.money(row.usage, currency: cur)
         if let m = row.multiplier {
-            return "\(row.planLabel) is \(price) flat. \(usage) is the API-equivalent cost this billing cycle, \(Fmt.multiple(m)) the flat fee. Not an extra charge."
+            return L10n.tr("overview.sub_help_multiplier", row.planLabel, price, usage, Fmt.multiple(m))
         }
-        return "\(row.planLabel): monthly price unknown. \(usage) is the API-equivalent cost this billing cycle. Not an extra charge."
+        return L10n.tr("overview.sub_help_unknown", row.planLabel, usage)
     }
 }
 
@@ -388,16 +393,16 @@ struct ProjectRow: View {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 8.5, weight: .semibold))
                                 .foregroundStyle(AgentPalette.pin)
-                                .help("Pinned")
+                                .help(L10n.tr("overview.badge.pinned"))
                         }
                         Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
                         AgentDots(agents: project.byAgent)
                         if project.pathMissing {
-                            Badge(text: "path missing", style: .warn,
-                                  help: "None of this project's local paths exist any more.")
+                            Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
+                                  help: L10n.tr("overview.badge.path_missing_help"))
                         }
                         if project.remote == nil {
-                            Badge(text: "local", help: "No git remote; identified by its absolute path.")
+                            Badge(text: L10n.tr("overview.badge.local"), help: L10n.tr("overview.badge.local_help"))
                         }
                         Spacer(minLength: 8)
                         Text(Fmt.money(project.cost, currency: currency))
@@ -405,11 +410,14 @@ struct ProjectRow: View {
                             .lineLimit(1)
                     }
                     HStack(alignment: .center, spacing: 8) {
-                        Text("\(project.sessions) session\(project.sessions == 1 ? "" : "s") · \(Fmt.tokens(project.tokens.total)) tokens · active \(ShortDate.relative(project.lastActive))")
+                        let sessStr = project.sessions == 1
+                            ? L10n.tr("overview.row.subtitle.singular", project.sessions, Fmt.tokens(project.tokens.total), ShortDate.relative(project.lastActive))
+                            : L10n.tr("overview.row.subtitle.plural", project.sessions, Fmt.tokens(project.tokens.total), ShortDate.relative(project.lastActive))
+                        Text(sessStr)
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .help("Last active \(Fmt.day(project.lastActive))")
+                            .help(L10n.tr("overview.row.last_active", Fmt.day(project.lastActive)))
                         Spacer(minLength: 8)
                         strip
                     }
@@ -423,8 +431,8 @@ struct ProjectRow: View {
             HStack(spacing: 0) {
                 RowIconButton(systemName: pinned ? "pin.fill" : "pin",
                               tint: pinned ? AgentPalette.pin : nil,
-                              help: pinned ? "Unpin" : "Pin to top", action: onTogglePin)
-                RowIconButton(systemName: "eye.slash", help: "Hide from list and mosaic", action: onHide)
+                              help: pinned ? L10n.tr("overview.action.unpin") : L10n.tr("overview.action.pin"), action: onTogglePin)
+                RowIconButton(systemName: "eye.slash", help: L10n.tr("overview.action.hide"), action: onHide)
             }
             .padding(.trailing, Metrics.listInset + strip.width + 6)
             .padding(.bottom, Self.padV - 1)
@@ -461,7 +469,7 @@ struct HiddenProjectRow: View {
             }
             .buttonStyle(.plain)
             .help(project.id)
-            RowIconButton(systemName: "eye", help: "Unhide", action: onUnhide)
+            RowIconButton(systemName: "eye", help: L10n.tr("overview.action.unhide"), action: onUnhide)
         }
         .padding(.leading, Metrics.listInset).padding(.trailing, Metrics.listInset - 4)
         .contextMenu {
@@ -483,7 +491,7 @@ struct BucketRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(name).font(.system(size: 12))
                 Spacer(minLength: 6)
-                Text("\(sessions) session\(sessions == 1 ? "" : "s")")
+                Text(sessions == 1 ? L10n.tr("overview.count.session.singular", sessions) : L10n.tr("overview.count.session.plural", sessions))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
                 Text(value).font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit()
                     .frame(minWidth: 52, alignment: .trailing)
@@ -495,7 +503,7 @@ struct BucketRow: View {
         .contentShape(Rectangle())
 
         if let action {
-            Button(action: action) { row }.buttonStyle(RowButtonStyle(cornerRadius: Metrics.rowRadius)).help("Show these sessions")
+            Button(action: action) { row }.buttonStyle(RowButtonStyle(cornerRadius: Metrics.rowRadius)).help(L10n.tr("overview.show_these_sessions"))
         } else {
             row
         }
@@ -514,7 +522,7 @@ struct ParseFailedRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         HStack(spacing: 4) {
-                            Text("Parse failed").font(.system(size: 12))
+                            Text(L10n.tr("overview.parse_failed")).font(.system(size: 12))
                             if !bucket.files.isEmpty {
                                 Image(systemName: expanded ? "chevron.down" : "chevron.right")
                                     .font(.system(size: 8, weight: .semibold))
@@ -522,14 +530,14 @@ struct ParseFailedRow: View {
                             }
                         }
                         Spacer(minLength: 6)
-                        Text("\(bucket.sessions) session\(bucket.sessions == 1 ? "" : "s")")
+                        Text(bucket.sessions == 1 ? L10n.tr("overview.count.session.singular", bucket.sessions) : L10n.tr("overview.count.session.plural", bucket.sessions))
                             .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
                         Text("—").font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                             .frame(minWidth: 52, alignment: .trailing)
-                            .help("Cost of unparseable logs cannot be computed.")
+                            .help(L10n.tr("overview.parse_failed_help"))
                     }
-                    Text("Log files kanjo could not read; cost unknown")
+                    Text(L10n.tr("overview.parse_failed_desc"))
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, Metrics.listInset).padding(.vertical, 7)
@@ -559,17 +567,20 @@ struct ReconciliationView: View {
     var body: some View {
         let rec = Reconciliation(report: report)
         let cur = report.currency
+        let diffCost = rec.cost.ok ? "" : L10n.tr("reconcile.diff", signedMoney(rec.cost.diff, cur))
+        let diffTokens = rec.tokens.ok ? "" : L10n.tr("reconcile.diff", "\(Int(rec.tokens.diff))")
+        let diffSessions = rec.sessions.ok ? "" : L10n.tr("reconcile.diff", "\(Int(rec.sessions.diff))")
         let lines = [
-            (rec.cost.ok, "Total \(Fmt.money(rec.cost.reported, currency: cur)) vs projects \(Fmt.money(rec.projectsCost, currency: cur)) + unattributed \(Fmt.money(rec.unattributedCost, currency: cur)) + excluded \(Fmt.money(rec.excludedCost, currency: cur)) = \(Fmt.money(rec.cost.summed, currency: cur))" + (rec.cost.ok ? "" : " · diff \(signedMoney(rec.cost.diff, cur))")),
-            (rec.tokens.ok, "Tokens \(Fmt.tokens(Int(rec.tokens.reported))) vs sum \(Fmt.tokens(Int(rec.tokens.summed)))" + (rec.tokens.ok ? "" : " · diff \(Int(rec.tokens.diff))")),
-            (rec.sessions.ok, "Sessions \(Int(rec.sessions.reported)) vs sum \(Int(rec.sessions.summed))" + (rec.sessions.ok ? "" : " · diff \(Int(rec.sessions.diff))")),
+            (rec.cost.ok, L10n.tr("reconcile.cost_line", Fmt.money(rec.cost.reported, currency: cur), Fmt.money(rec.projectsCost, currency: cur), Fmt.money(rec.unattributedCost, currency: cur), Fmt.money(rec.excludedCost, currency: cur), Fmt.money(rec.cost.summed, currency: cur)) + diffCost),
+            (rec.tokens.ok, L10n.tr("reconcile.tokens_line", Fmt.tokens(Int(rec.tokens.reported)), Fmt.tokens(Int(rec.tokens.summed))) + diffTokens),
+            (rec.sessions.ok, L10n.tr("reconcile.sessions_line", "\(Int(rec.sessions.reported))", "\(Int(rec.sessions.summed))") + diffSessions),
         ]
-        let contract = "Invariant from the data contract: totals = sum(projects) + unattributed + excluded (cost tolerance $0.01)."
+        let contract = L10n.tr("reconcile.contract_invariant")
 
         if rec.ok {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Image(systemName: "checkmark.circle.fill")
-                Text("Reconciled: \(Fmt.money(rec.cost.reported, currency: cur)) = projects + unattributed + excluded")
+                Text(L10n.tr("overview.reconciled", Fmt.money(rec.cost.reported, currency: cur)))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(.system(size: 10.5))
@@ -578,7 +589,7 @@ struct ReconciliationView: View {
             .help(lines.map(\.1).joined(separator: "\n") + "\n\n" + contract)
         } else {
             StatusBlock(kind: .bad, icon: "exclamationmark.triangle.fill") {
-                Text("Totals do not reconcile").font(.system(size: 12, weight: .semibold))
+                Text(L10n.tr("overview.reconcile_failed")).font(.system(size: 12, weight: .semibold))
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
                     Text(l.1)
                         .font(.system(size: 10.5, weight: l.0 ? .regular : .semibold))

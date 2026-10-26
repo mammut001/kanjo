@@ -9,6 +9,7 @@ struct SettingsView: View {
     var scrollTo: String? = nil     // 支持底部或具体订阅行
     let onBack: () -> Void
 
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(SettingsKeys.sourceKind) private var sourceKind =
         (DefaultPaths.cliDirectoryExists ? SourceKind.cli : SourceKind.file).rawValue
     @AppStorage(SettingsKeys.filePath) private var filePath = ""
@@ -25,21 +26,30 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 8) {
-                    BackButton(title: "Done", action: onBack)
+                    BackButton(title: L10n.tr("common.done"), action: onBack)
                         .padding(.leading, -4)
-                    Text("Settings").font(.system(size: 15, weight: .semibold))
+                    Text(L10n.tr("settings.title")).font(.system(size: 15, weight: .semibold))
                 }
                 .padding(.horizontal, Metrics.rowInset)
 
                 if let o = store.dataOverride {
                     StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
-                        Text("Launched with --data / KANJO_DATA: \(o.path). This overrides the data source below until the app is restarted without it.")
+                        Text(L10n.tr("settings.data_override", o.path))
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                     }
                 }
 
-                PanelSection("Data source", inset: true) {
+                PanelSection(L10n.tr("settings.section.language"), inset: true) {
+                    Picker(L10n.tr("settings.language"), selection: $appLanguage) {
+                        ForEach(AppLanguage.allCases) { lang in
+                            Text(lang.displayName).tag(lang.rawValue)
+                        }
+                    }
+                    .font(.system(size: 12))
+                }
+
+                PanelSection(L10n.tr("settings.section.data_source"), inset: true) {
                     Picker("Source", selection: $sourceKind) {
                         ForEach(SourceKind.allCases) { Text($0.label).tag($0.rawValue) }
                     }
@@ -48,58 +58,58 @@ struct SettingsView: View {
 
                     if sourceKind == SourceKind.cli.rawValue {
                         note(DefaultPaths.cliDescription(customDirectory: cliWorkingDirectory, customCommand: cliCommand))
-                        field("Command", text: $cliCommand, placeholder: CLIDataSource.defaultCommand)
+                        field(L10n.tr("settings.command"), text: $cliCommand, placeholder: CLIDataSource.defaultCommand)
                         HStack(alignment: .bottom) {
-                            field("Working directory (cli/ path)", text: $cliWorkingDirectory,
-                                  placeholder: DefaultPaths.resolvedCLIDirectory()?.path ?? "Inherit")
-                            Button("Choose…") { if let p = chooseFolder() { cliWorkingDirectory = p } }
+                            field(L10n.tr("settings.working_directory"), text: $cliWorkingDirectory,
+                                  placeholder: DefaultPaths.resolvedCLIDirectory()?.path ?? L10n.tr("settings.inherit"))
+                            Button(L10n.tr("settings.choose")) { if let p = chooseFolder() { cliWorkingDirectory = p } }
                         }
-                        note("Runs via /bin/zsh -l -c and reads kanjo export JSON from stdout.")
-                        Text("Disk · \(derivedDiskCommand)")
+                        note(L10n.tr("settings.cli_note"))
+                        Text(L10n.tr("settings.disk_command", derivedDiskCommand))
                             .font(.system(size: 10.5, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
-                            .help("Derived from the command above by replacing export with disk --json. Cleanup runs disk clean and moves files to the Trash.")
+                            .help(L10n.tr("settings.disk_command_help"))
                     } else {
                         HStack(alignment: .bottom) {
-                            field("JSON file", text: $filePath, placeholder: DefaultPaths.sampleFixture.path)
-                            Button("Choose…") { if let p = chooseFile() { filePath = p } }
+                            field(L10n.tr("settings.json_file"), text: $filePath, placeholder: DefaultPaths.sampleFixture.path)
+                            Button(L10n.tr("settings.choose")) { if let p = chooseFile() { filePath = p } }
                         }
-                        note("Leave empty to use the bundled sample: fixtures/sample.json.")
+                        note(L10n.tr("settings.file_note"))
                     }
                 }
 
-                PanelSection("Refresh", inset: true) {
-                    Picker("Auto refresh", selection: $refreshMinutes) {
+                PanelSection(L10n.tr("settings.section.refresh"), inset: true) {
+                    Picker(L10n.tr("settings.auto_refresh"), selection: $refreshMinutes) {
                         ForEach(intervals, id: \.self) { m in
-                            Text(m == 0 ? "Off" : "Every \(m) min").tag(m)
+                            Text(m == 0 ? L10n.tr("settings.refresh_off") : L10n.tr("settings.refresh_minutes", m)).tag(m)
                         }
                     }
                     .font(.system(size: 12))
-                    Toggle("Show total cost in menu bar", isOn: $showAmount)
+                    Toggle(L10n.tr("settings.show_menu_bar_cost"), isOn: $showAmount)
                         .font(.system(size: 12))
                 }
 
-                PanelSection("Projects", inset: true) {
+                PanelSection(L10n.tr("settings.section.projects"), inset: true) {
                     let hidden = ProjectPrefs.parse(hiddenRaw).count
                     HStack {
-                        Text("Hidden projects: \(hidden)").font(.system(size: 12)).monospacedDigit()
+                        Text(L10n.tr("settings.hidden_projects_count", hidden)).font(.system(size: 12)).monospacedDigit()
                         Spacer()
-                        Button("Unhide all") { hiddenRaw = "" }
+                        Button(L10n.tr("settings.unhide_all")) { hiddenRaw = "" }
                             .disabled(hidden == 0)
                     }
-                    note("Hide or pin a project from its row in the overview (hover or right-click).")
+                    note(L10n.tr("settings.projects_note"))
                 }
 
                 quotaSection
                 subscriptionsSection
 
                 VStack(alignment: .trailing, spacing: 8) {
-                    Button("Apply & Refresh") { store.applySettings() }
+                    Button(L10n.tr("settings.apply_refresh")) { store.applySettings() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
-                    Text("Current source — \(store.sourceDescription)")
+                    Text(L10n.tr("settings.current_source", store.sourceDescription))
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -123,14 +133,14 @@ struct SettingsView: View {
 
     /// 各 agent 的额度重置时间和来源（quota_windows），供总览的「Since reset」范围用。
     private var quotaSection: some View {
-        PanelSection("Quota reset", inset: true) {
+        PanelSection(L10n.tr("settings.section.quota_reset"), inset: true) {
             if let r = store.report {
                 let ctx = RangeContext(report: r, raw: TimeRange.sinceReset.rawValue)
                 let quota = r.quotaWindows ?? [:]
                 let cal = RangeEngine.calendar(timezone: RangeEngine.timezone(of: r))
                 Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
                     GridRow {
-                        Text("Agent"); Text("Next weekly reset"); Text("Source").gridColumnAlignment(.trailing)
+                        Text(L10n.tr("settings.grid.agent")); Text(L10n.tr("settings.grid.next_reset")); Text(L10n.tr("settings.grid.source")).gridColumnAlignment(.trailing)
                     }
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     ForEach(ctx.agentOrder, id: \.self) { agent in
@@ -148,15 +158,15 @@ struct SettingsView: View {
                     }
                 }
             } else {
-                note("No data loaded yet.")
+                note(L10n.tr("settings.no_data_loaded"))
             }
-            note("Read from the tokei cache (~/.tokei) when available. To set or override a reset time by hand, add it to ~/.config/kanjo/attribution.toml. Agents without reset info are left out of the Since reset range.")
+            note(L10n.tr("settings.quota_note"))
         }
     }
 
     /// 各 agent 的订阅档位（subscriptions），供总览的 Subscription value 卡和 Billing cycle 范围用。
     private var subscriptionsSection: some View {
-        PanelSection("Subscriptions", inset: true) {
+        PanelSection(L10n.tr("settings.section.subscriptions"), inset: true) {
             if let r = store.report {
                 let ctx = RangeContext(report: r, raw: TimeRange.all.rawValue)
                 let subs = r.subscriptions ?? [:]
@@ -171,9 +181,9 @@ struct SettingsView: View {
                     }
                 }
             } else {
-                note("No data loaded yet.")
+                note(L10n.tr("settings.no_data_loaded"))
             }
-            note("Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.")
+            note(L10n.tr("settings.subscriptions_note"))
         }
     }
 
@@ -183,22 +193,22 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(Self.stamp(reset, cal)).font(.system(size: 11.5)).monospacedDigit()
                 if let start {
-                    Text("window since \(Self.stamp(start, cal)) · \(q.weeklyWindowHours)h")
+                    Text(L10n.tr("settings.quota_window_since", Self.stamp(start, cal), q.weeklyWindowHours))
                         .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
         } else if q != nil {
-            Text("unreadable").font(.system(size: 11.5)).foregroundStyle(AgentPalette.warnInk)
+            Text(L10n.tr("settings.unreadable")).font(.system(size: 11.5)).foregroundStyle(AgentPalette.warnInk)
         } else {
-            Text("No reset info").font(.system(size: 11.5)).foregroundStyle(.tertiary)
+            Text(L10n.tr("settings.no_reset_info")).font(.system(size: 11.5)).foregroundStyle(.tertiary)
         }
     }
 
     private static func stamp(_ d: Date, _ cal: Calendar) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.timeZone = cal.timeZone
-        f.dateFormat = "EEE MMM d HH:mm"
+        f.setLocalizedDateFormatFromTemplate("EEEMMMdHHmm")
         return f.string(from: d)
     }
 
@@ -272,32 +282,32 @@ private struct SubscriptionSettingsRow: View {
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .padding(.leading, 11)
                 HStack(spacing: 8) {
-                    Stepper("Renews on day \(day)", value: $day, in: 1...28)
+                    Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
                         .font(.system(size: 11)).monospacedDigit()
                         .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-                        .help(store.canEditSubscriptions ? "Day of the month (1–28)" : "Editing needs the CLI data source")
-                    Button("Apply") { save(day) }
-                    Button("Reset") { save(nil) }
+                        .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+                    Button(L10n.tr("common.apply")) { save(day) }
+                    Button(L10n.tr("common.reset")) { save(nil) }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(!store.canEditSubscriptions || saving || store.isLoading)
                 .padding(.leading, 11)
-                Text(saving ? "Saving…" : SubscriptionValue.anchorSource(sub))
+                Text(saving ? L10n.tr("settings.saving") : SubscriptionValue.anchorSource(sub))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .padding(.leading, 11)
                 if let url = SubscriptionValue.billingPage(for: agent) {
-                    Button("Open billing page") { NSWorkspace.shared.open(url) }
+                    Button(L10n.tr("settings.open_billing_page")) { NSWorkspace.shared.open(url) }
                         .buttonStyle(.link)
                         .font(.system(size: 11))
                         .padding(.leading, 11)
-                    Text("Look for \"renews on\" and enter that day above")
+                    Text(L10n.tr("settings.billing_page_hint"))
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.leading, 11)
                 }
             } else {
-                Text("No subscription info").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text(L10n.tr("settings.no_subscription_info")).font(.system(size: 10)).foregroundStyle(.tertiary)
                     .padding(.leading, 11)
             }
             if let actionError {

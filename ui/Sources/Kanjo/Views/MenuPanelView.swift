@@ -67,6 +67,7 @@ struct MenuPanelView: View {
 
     @EnvironmentObject var store: ReportStore
     @EnvironmentObject var disk: DiskStore
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
@@ -100,11 +101,11 @@ struct MenuPanelView: View {
             VStack(spacing: 6) {
                 if store.needsCommandLineTools {
                     StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
-                        Text("Kanjo's CLI needs Python 3 (included with the Xcode Command Line Tools)")
+                        Text(L10n.tr("menu.python_needed"))
                             .fixedSize(horizontal: false, vertical: true)
                         HStack {
-                            Button("Install Command Line Tools") { store.installCommandLineTools() }
-                            Button("Retry") {
+                            Button(L10n.tr("menu.install_clt")) { store.installCommandLineTools() }
+                            Button(L10n.tr("common.retry")) {
                                 Task { await store.checkPython(); store.refresh() }
                             }
                         }
@@ -112,13 +113,13 @@ struct MenuPanelView: View {
                 }
                 if let r = store.report, r.isNewerSchema {
                     StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
-                        Text("This data uses schema_version \(r.schemaVersion); this app understands version \(supportedSchemaVersion). Rendering anyway — some fields may be missing or misread.")
+                        Text(L10n.tr("menu.schema_warning", r.schemaVersion, supportedSchemaVersion))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 if store.report != nil, let err = store.error {
                     StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
-                        Text("Last refresh failed — showing previous data.").fontWeight(.semibold)
+                        Text(L10n.tr("menu.refresh_failed_banner")).fontWeight(.semibold)
                         Text(err)
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
@@ -150,7 +151,7 @@ struct MenuPanelView: View {
                         ProjectDetailView(project: p, report: r, devAnchor: overviewAnchor,
                                           onBack: { route = .overview; overviewAnchor = nil })
                     } else {
-                        missing("Project no longer in the data.")
+                        missing(L10n.tr("menu.project_missing"))
                     }
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
@@ -167,7 +168,7 @@ struct MenuPanelView: View {
             } else {
                 VStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Loading…").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.tr("common.loading")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -176,7 +177,7 @@ struct MenuPanelView: View {
     private func missing(_ text: String) -> some View {
         VStack(spacing: 8) {
             Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
-            BackButton(title: "Back to overview") { route = .overview }
+            BackButton(title: L10n.tr("menu.back_to_overview")) { route = .overview }
         }
     }
 
@@ -193,24 +194,24 @@ struct MenuPanelView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle())
-            .help("Refresh now")
+            .help(L10n.tr("menu.refresh_now"))
             .disabled(route == .disk ? disk.isLoading : store.isLoading)
 
             Group {
                 if route == .disk {
                     if disk.isLoading {
-                        Text("Refreshing…")
+                        Text(L10n.tr("menu.refreshing"))
                     } else if let t = disk.lastRefresh {
-                        Text("Updated \(ShortDate.clock(t))")
+                        Text(L10n.tr("menu.updated_at", ShortDate.clock(t)))
                     } else {
-                        Text("Not refreshed yet")
+                        Text(L10n.tr("menu.not_refreshed_yet"))
                     }
                 } else if store.isLoading {
-                    Text("Refreshing…")
+                    Text(L10n.tr("menu.refreshing"))
                 } else if let t = store.lastRefresh {
-                    Text("Updated \(ShortDate.clock(t))")
+                    Text(L10n.tr("menu.updated_at", ShortDate.clock(t)))
                 } else {
-                    Text("Not refreshed yet")
+                    Text(L10n.tr("menu.not_refreshed_yet"))
                 }
             }
             .font(.system(size: 11).monospacedDigit())
@@ -228,7 +229,7 @@ struct MenuPanelView: View {
                 Image(systemName: "internaldrive")
             }
             .buttonStyle(IconButtonStyle(active: route == .disk))
-            .help("Disk")
+            .help(L10n.tr("menu.disk"))
 
             Button {
                 overviewAnchor = nil
@@ -238,7 +239,7 @@ struct MenuPanelView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(IconButtonStyle())
-            .help("Settings")
+            .help(L10n.tr("menu.settings"))
 
             Button {
                 NSApp.terminate(nil)
@@ -246,7 +247,7 @@ struct MenuPanelView: View {
                 Image(systemName: "power")
             }
             .buttonStyle(IconButtonStyle())
-            .help("Quit Kanjo")
+            .help(L10n.tr("menu.quit"))
         }
         .padding(.horizontal, 5).padding(.vertical, 3)
         .glassSurface(cornerRadius: 12)
@@ -263,7 +264,7 @@ struct ErrorStateView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Could not load usage data", systemImage: "xmark.octagon.fill")
+                Label(L10n.tr("menu.error_title"), systemImage: "xmark.octagon.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AgentPalette.bad)
                 Text(message)
@@ -274,16 +275,16 @@ struct ErrorStateView: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentPalette.badFill))
-                Text("Source — \(source)")
+                Text(L10n.tr("settings.current_source", source))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Button("Retry", action: onRetry).buttonStyle(.borderedProminent)
-                    Button("Open Settings", action: onSettings).buttonStyle(.bordered)
+                    Button(L10n.tr("common.retry"), action: onRetry).buttonStyle(.borderedProminent)
+                    Button(L10n.tr("menu.open_settings"), action: onSettings).buttonStyle(.bordered)
                 }
                 .controlSize(.regular)
-                Text("Expected a JSON file produced by `kanjo export` (see CONTRACT.md).")
+                Text(L10n.tr("menu.expected_export_json"))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
             }
             .padding(Metrics.pagePadding)

@@ -9,9 +9,16 @@ enum DiskAge: String, CaseIterable, Identifiable {
     case d90 = "90d"
 
     var id: String { rawValue }
-    var label: String { self == .any ? "Any" : rawValue }
+    var label: String {
+        switch self {
+        case .any: return L10n.tr("disk.age.any")
+        case .d7: return L10n.tr("disk.age.7d")
+        case .d30: return L10n.tr("disk.age.30d")
+        case .d90: return L10n.tr("disk.age.90d")
+        }
+    }
     var argument: String? { self == .any ? nil : rawValue }
-    var caption: String { self == .any ? "Any age" : "Older than \(rawValue)" }
+    var caption: String { self == .any ? L10n.tr("disk.age.caption.any") : L10n.tr("disk.age.caption.older", label) }
 }
 
 struct DiskView: View {
@@ -22,6 +29,7 @@ struct DiskView: View {
     let onBack: () -> Void
     var onSettings: () -> Void = {}
 
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @EnvironmentObject private var disk: DiskStore
     @State private var expanded: Set<String> = []
     @State private var selected: Set<String> = []
@@ -68,7 +76,7 @@ struct DiskView: View {
                     back
                     Spacer()
                     ProgressView().controlSize(.small)
-                    Text("Loading disk…").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.tr("disk.loading")).font(.system(size: 11)).foregroundStyle(.secondary)
                     Spacer()
                 }
                 .padding(.horizontal, Metrics.pagePadding)
@@ -78,7 +86,7 @@ struct DiskView: View {
     }
 
     private var back: some View {
-        BackButton(title: "Overview", action: onBack)
+        BackButton(title: L10n.tr("disk.navigation.overview"), action: onBack)
             .padding(.leading, Metrics.rowInset - 4)
     }
 
@@ -90,13 +98,13 @@ struct DiskView: View {
                 VStack(spacing: 6) {
                     if report.isNewerSchema {
                         StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
-                            Text("This disk report uses schema_version \(report.schemaVersion); this app understands version \(supportedSchemaVersion).")
+                            Text(L10n.tr("disk.schema_warning", report.schemaVersion, supportedSchemaVersion))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     if let err = disk.error {
                         StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
-                            Text("Last refresh failed — showing previous data.").fontWeight(.semibold)
+                            Text(L10n.tr("menu.refresh_failed_banner")).fontWeight(.semibold)
                             Text(err).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         }
                     }
@@ -108,9 +116,9 @@ struct DiskView: View {
                     back
                     hero(report).padding(.horizontal, Metrics.rowInset)
                     agePicker.padding(.horizontal, Metrics.rowInset)
-                    PanelSection("By agent", inset: true) {
+                    PanelSection(L10n.tr("disk.by_agent"), inset: true) {
                         if agents.isEmpty {
-                            Text("No disk usage.").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(L10n.tr("disk.no_disk_usage")).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(agents) { agent in
@@ -124,7 +132,7 @@ struct DiskView: View {
                         }
                         .padding(.horizontal, Metrics.rowInset)
                     }
-                    Text("Generated \(Fmt.timestamp(report.generatedAt)) · schema v\(report.schemaVersion)")
+                    Text(L10n.tr("overview.generated_footer", Fmt.timestamp(report.generatedAt), report.schemaVersion))
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                         .padding(.horizontal, Metrics.rowInset)
                         .help(disk.sourceDescription)
@@ -142,44 +150,44 @@ struct DiskView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Total").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.tr("disk.total")).font(.system(size: 11)).foregroundStyle(.secondary)
                     HeroAmount(value: Fmt.bytes(report.totalBytes), size: 28)
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("Reclaimable").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.tr("disk.reclaimable")).font(.system(size: 11)).foregroundStyle(.secondary)
                     HeroAmount(value: Fmt.bytes(report.reclaimableBytes), size: 28, color: .accentColor)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Reclaimable \(Fmt.bytes(report.reclaimableBytes))")
+                .accessibilityLabel(L10n.tr("disk.reclaimable") + " " + Fmt.bytes(report.reclaimableBytes))
             }
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 HStack(spacing: 4) {
                     Text(DiskScanCaption.text(for: report, now: context.date))
                     if disk.isRescanning {
-                        Text("· rescanning…")
+                        Text(L10n.tr("disk.rescanning"))
                         ProgressView().controlSize(.mini)
                     }
                 }
                 .font(.system(size: 10.5))
                 .foregroundStyle(.secondary)
             }
-            CostNote(text: "Numbers stay in the ledger after cleanup")
+            CostNote(text: L10n.tr("disk.ledger_note"))
         }
     }
 
     private var agePicker: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Older than").font(.system(size: 11)).foregroundStyle(.secondary)
-            Picker("Older than", selection: $age) {
+            Text(L10n.tr("disk.older_than")).font(.system(size: 11)).foregroundStyle(.secondary)
+            Picker(L10n.tr("disk.older_than"), selection: $age) {
                 ForEach(DiskAge.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
             .disabled(checking || applying || pending != nil)
-            .help("Passed to kanjo disk clean as --older-than. Any does not filter by age.")
+            .help(L10n.tr("disk.age_help"))
         }
     }
 
@@ -214,7 +222,7 @@ struct DiskView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(open ? "Hide \(agent.label) entries" : "Show \(agent.label) entries")
+            .help(open ? L10n.tr("disk.hide_agent_entries", agent.label) : L10n.tr("disk.show_agent_entries", agent.label))
             if open {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(agent.entries.enumerated()), id: \.element.id) { i, entry in
@@ -228,7 +236,8 @@ struct DiskView: View {
     }
 
     private func entryRow(_ entry: DiskEntry) -> some View {
-        let files = entry.files == 1 ? "1 file" : "\(entry.files) files"
+        let fileKey = entry.files == 1 ? "disk.file.singular" : "disk.file.plural"
+        let files = L10n.tr(fileKey, entry.files)
         // 每行都留出复选框的位置，这样 Kept / Blocked 的徽章和路径跟可清理行对齐。
         let slot: CGFloat = 16
         return VStack(alignment: .leading, spacing: 3) {
@@ -236,7 +245,7 @@ struct DiskView: View {
                 ZStack {
                     if entry.isReclaimable {
                         Toggle(isOn: binding(entry.id)) {
-                            Text("Clean \(entry.path)")
+                            Text(L10n.tr("disk.clean_path", entry.path))
                         }
                         .toggleStyle(.checkbox)
                         .labelsHidden()
@@ -276,10 +285,10 @@ struct DiskView: View {
 
     @ViewBuilder private func statePill(_ entry: DiskEntry) -> some View {
         if entry.deletable == .never {
-            Badge(text: "Kept", help: "Kept on disk. Entries marked never, such as memory, are not part of cleanup.")
+            Badge(text: L10n.tr("disk.badge.kept"), help: L10n.tr("disk.badge.kept_help"))
         } else if entry.blocked.isEmpty {
-            Badge(text: "Reclaimable", style: .good,
-                  help: "The CLI can move this to the Trash. Numbers stay in the ledger after the files are gone.")
+            Badge(text: L10n.tr("disk.badge.reclaimable"), style: .good,
+                  help: L10n.tr("disk.badge.reclaimable_help"))
         } else {
             VStack(alignment: .trailing, spacing: 2) {
                 ForEach(Array(entry.blocked.enumerated()), id: \.offset) { _, reason in
@@ -293,9 +302,10 @@ struct DiskView: View {
         let entries = report.allEntries.filter { selected.contains($0.id) }
         let bytes = entries.reduce(0) { $0 + $1.bytes }
         let n = entries.count
+        let titleKey = n == 1 ? "disk.clean_button.singular" : "disk.clean_button.plural"
         let title = checking
-            ? "Checking…"
-            : "Clean \(n) \(n == 1 ? "item" : "items") · \(Fmt.bytes(bytes))…"
+            ? L10n.tr("disk.checking")
+            : L10n.tr(titleKey, n, Fmt.bytes(bytes))
         return VStack(spacing: 0) {
             Divider().opacity(0.6)
             Button(action: dryRun) {
@@ -307,7 +317,7 @@ struct DiskView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(checking || applying)
-            .help("Runs kanjo disk clean --dry-run, then asks before moving files to the Trash.")
+            .help(L10n.tr("disk.clean_help"))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
@@ -316,24 +326,24 @@ struct DiskView: View {
     @ViewBuilder private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let result = finished {
-                Text("Moved to Trash").font(.system(size: 14, weight: .semibold))
-                Text("Freed \(Fmt.bytes(result.freedBytes))")
+                Text(L10n.tr("disk.card.moved_title")).font(.system(size: 14, weight: .semibold))
+                Text(L10n.tr("disk.card.freed", Fmt.bytes(result.freedBytes)))
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Color.accentColor)
                 skippedList(result)
-                Button("Done") { finished = nil; actionError = nil }
+                Button(L10n.tr("common.done")) { finished = nil; actionError = nil }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             } else if let result = pending {
-                Text("Move to Trash?").font(.system(size: 14, weight: .semibold))
+                Text(L10n.tr("disk.card.confirm_title")).font(.system(size: 14, weight: .semibold))
                 Text(age.caption).font(.system(size: 10.5)).foregroundStyle(.secondary)
                 ScrollView {
                     planBody(result)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 320)
-                Text("Files go to the Trash via kanjo disk clean. Nothing is deleted permanently.")
+                Text(L10n.tr("disk.card.warning"))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionError {
@@ -344,7 +354,7 @@ struct DiskView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    Button("Cancel") { pending = nil; actionError = nil }
+                    Button(L10n.tr("common.cancel")) { pending = nil; actionError = nil }
                         .buttonStyle(.bordered)
                         .keyboardShortcut(.cancelAction)
                         .disabled(applying)
@@ -353,7 +363,7 @@ struct DiskView: View {
                         if applying {
                             ProgressView().controlSize(.small).frame(width: 88)
                         } else {
-                            Text("Move to Trash")
+                            Text(L10n.tr("disk.card.move_button"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -370,7 +380,7 @@ struct DiskView: View {
     @ViewBuilder private func planBody(_ result: CleanResult) -> some View {
         let groups = CleanPlan.groups(report: disk.report ?? .empty, moved: result.moved)
         if result.moved.isEmpty {
-            Text("Nothing will be moved.").font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(L10n.tr("disk.card.nothing_moved")).font(.system(size: 12)).foregroundStyle(.secondary)
         }
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(groups.enumerated()), id: \.offset) { _, g in
@@ -389,7 +399,7 @@ struct DiskView: View {
                         .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
-            Text("Total \(CleanPlan.countAndSize(count: result.moved.count, bytes: result.freedBytes))")
+            Text(L10n.tr("disk.card.total", CleanPlan.countAndSize(count: result.moved.count, bytes: result.freedBytes)))
                 .font(.system(size: 11, weight: .medium)).monospacedDigit()
         }
         skippedList(result)
@@ -398,7 +408,7 @@ struct DiskView: View {
     @ViewBuilder private func skippedList(_ result: CleanResult) -> some View {
         if !result.skipped.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Skipped").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Text(L10n.tr("disk.card.skipped")).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 ForEach(Array(result.skipped.enumerated()), id: \.offset) { _, skip in
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(skip.id) — \(DiskBlock.short(skip.reason))")
@@ -416,7 +426,7 @@ struct DiskView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 back
-                Label("Could not load disk data", systemImage: "xmark.octagon.fill")
+                Label(L10n.tr("disk.error_title"), systemImage: "xmark.octagon.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AgentPalette.bad)
                 Text(message)
@@ -427,15 +437,15 @@ struct DiskView: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentPalette.badFill))
-                Text("Source — \(disk.sourceDescription)")
+                Text(L10n.tr("settings.current_source", disk.sourceDescription))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Button("Retry") { disk.refresh(rescan: true) }.buttonStyle(.borderedProminent)
-                    Button("Open Settings", action: onSettings).buttonStyle(.bordered)
+                    Button(L10n.tr("common.retry")) { disk.refresh(rescan: true) }.buttonStyle(.borderedProminent)
+                    Button(L10n.tr("menu.open_settings"), action: onSettings).buttonStyle(.bordered)
                 }
-                Text("Expected JSON from `kanjo disk --json` (see CONTRACT.md). The app does not delete files itself.")
+                Text(L10n.tr("disk.expected_json"))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

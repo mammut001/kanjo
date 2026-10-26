@@ -113,12 +113,20 @@ struct CostNote: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Image(systemName: "info.circle")
-            Text(text)
+            Text(displayText)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
         .font(.system(size: 10.5))
         .foregroundStyle(.tertiary)
+    }
+
+    private var displayText: String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == "API-equivalent cost estimated from public API prices. Not actual subscription spend." {
+            return L10n.tr("common.cost_note_default")
+        }
+        return text
     }
 }
 
@@ -281,7 +289,7 @@ struct ShowAllButton: View {
         Button {
             withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
         } label: {
-            Text(expanded ? "Show fewer" : "Show all \(total) \(noun)")
+            Text(expanded ? L10n.tr("common.show_fewer") : L10n.tr("common.show_all", total, noun))
                 .font(.system(size: 11))
                 .foregroundStyle(Color.accentColor)
                 .contentShape(Rectangle())
@@ -292,12 +300,14 @@ struct ShowAllButton: View {
 
 /// 视图层的短日期：同一年省略年份，今天 / 昨天用相对说法。只用于展示，不改数据。
 enum ShortDate {
-    private static let monthDay: DateFormatter = {
+    private static func templateFormatter(_ template: String) -> DateFormatter {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "MMM d"
+        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.calendar = Calendar.current
+        f.setLocalizedDateFormatFromTemplate(template)
         return f
-    }()
+    }
+
     private static let hourMinute: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -310,15 +320,15 @@ enum ShortDate {
         guard let s, let d = ReportDates.parseDay(s) else { return Fmt.day(s) }
         let cal = Calendar.current
         return cal.component(.year, from: d) == cal.component(.year, from: Date())
-            ? monthDay.string(from: d) : Fmt.day(s)
+            ? templateFormatter("MMMd").string(from: d) : Fmt.day(s)
     }
 
     /// "today" / "yesterday" / day(_:)。
     static func relative(_ s: String?) -> String {
         guard let s, let d = ReportDates.parseDay(s) else { return Fmt.day(s) }
         let cal = Calendar.current
-        if cal.isDateInToday(d) { return "today" }
-        if cal.isDateInYesterday(d) { return "yesterday" }
+        if cal.isDateInToday(d) { return L10n.tr("common.today") }
+        if cal.isDateInYesterday(d) { return L10n.tr("common.yesterday") }
         return day(s)
     }
 
@@ -329,11 +339,12 @@ enum ShortDate {
         }
         let cal = Calendar.current
         let thisYear = cal.component(.year, from: Date())
+        let f = templateFormatter("MMMd")
         if compact, cal.component(.year, from: da) == thisYear, cal.component(.year, from: db) == thisYear {
-            return "\(monthDay.string(from: da)) – \(monthDay.string(from: db))"
+            return "\(f.string(from: da)) – \(f.string(from: db))"
         }
         if cal.component(.year, from: da) == cal.component(.year, from: db) {
-            return "\(monthDay.string(from: da)) – \(Fmt.day(b))"
+            return "\(f.string(from: da)) – \(Fmt.day(b))"
         }
         return "\(Fmt.day(a)) – \(Fmt.day(b))"
     }

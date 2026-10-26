@@ -4,11 +4,14 @@ import Foundation
 // 视图只负责把这些数字画出来。
 
 /// 契约要求卡片底部固定的一句，不可隐藏。
-public let subscriptionValueExplanation =
-    "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing."
+public var subscriptionValueExplanation: String {
+    L10n.tr("overview.subscription_value.explanation")
+}
 
 public enum SubscriptionValue {
-    public static let assumedDayHelp = "Renewal day unknown; set it in Settings"
+    public static var assumedDayHelp: String {
+        L10n.tr("overview.renewal_day_unknown_help")
+    }
 
     public static func needsRenewalDay(_ sub: Subscription) -> Bool {
         sub.cycleSource == "rolling_30d"
@@ -26,10 +29,10 @@ public enum SubscriptionValue {
     /// cycle_source 优先：手填档位也可能仍然不知道续费日。
     public static func anchorSource(_ sub: Subscription) -> String {
         switch sub.cycleSource {
-        case "rolling_30d": return "not set · using last 30 days"
-        case "manual": return "manual"
-        case "subscription_date": return "detected"
-        default: return sub.source == "manual" ? "manual" : "detected"
+        case "rolling_30d": return L10n.tr("settings.source.not_set")
+        case "manual": return L10n.tr("settings.source.manual")
+        case "subscription_date": return L10n.tr("settings.source.detected")
+        default: return sub.source == "manual" ? L10n.tr("settings.source.manual") : L10n.tr("settings.source.detected")
         }
     }
 

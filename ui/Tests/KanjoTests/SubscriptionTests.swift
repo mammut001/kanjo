@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class SubscriptionTests: XCTestCase {
+final class SubscriptionTests: KanjoTestCase {
     private func subscription(start: String = "2026-10-24T16:00:00Z", end: String = "2026-11-24T16:00:00Z",
                               cycleSource: String = "subscription_date", source: String = "detected") -> Subscription {
         Subscription(plan: "max_5x", planLabel: "Claude Max 5x", monthlyPriceUsd: 100,

@@ -38,14 +38,14 @@ public enum DefaultPaths {
 
     public static func cliDescription(customDirectory: String, customCommand: String) -> String {
         if !customDirectory.trimmingCharacters(in: .whitespaces).isEmpty
-            || (!customCommand.isEmpty && customCommand != CLIDataSource.defaultCommand) { return "Custom" }
-        guard let url = resolvedCLIDirectory() else { return "CLI unavailable" }
+            || (!customCommand.isEmpty && customCommand != CLIDataSource.defaultCommand) { return L10n.tr("settings.cli_source.custom") }
+        guard let url = resolvedCLIDirectory() else { return L10n.tr("settings.cli_source.unavailable") }
         if url == bundledCLIDirectory {
             let version = (try? String(contentsOf: url.appendingPathComponent("VERSION"), encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
-            return "Bundled CLI \(version)"
+            return L10n.tr("settings.cli_source.bundled", version)
         }
-        if url == cliDirectory { return "Repository cli/" }
+        if url == cliDirectory { return L10n.tr("settings.cli_source.repo") }
         if url == installedCLIDirectories()[0] { return "~/.local/share/kanjo/cli" }
         return url.path
     }

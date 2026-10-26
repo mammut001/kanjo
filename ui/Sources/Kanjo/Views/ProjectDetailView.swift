@@ -35,7 +35,7 @@ struct ProjectPathsView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 1)
-                .help("Scratchpads, worktrees and other temporary directories agents worked in.")
+                .help(L10n.tr("project.locations.temporary_help"))
                 if showTemporary {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(temporary, id: \.self) { pathRow($0, size: 9.5) }
@@ -47,8 +47,15 @@ struct ProjectPathsView: View {
     }
 
     private var toggleTitle: String {
-        let noun = temporary.count == 1 ? "temporary path" : "temporary paths"
-        return showTemporary ? "Hide \(temporary.count) \(noun)" : "\(temporary.count) \(noun)"
+        let noun = temporary.count == 1
+            ? L10n.tr("project.locations.temporary.singular", temporary.count)
+            : L10n.tr("project.locations.temporary.plural", temporary.count)
+        if showTemporary {
+            return temporary.count == 1
+                ? L10n.tr("project.locations.hide_temp.singular", temporary.count)
+                : L10n.tr("project.locations.hide_temp.plural", temporary.count)
+        }
+        return noun
     }
 
     private func pathRow(_ p: String, size: CGFloat = 10) -> some View {
@@ -100,6 +107,7 @@ struct ProjectDetailView: View {
     var devAnchor: String? = nil
     let onBack: () -> Void
 
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
     @State private var showAllModels = false
     @State private var showAllBranches = false
@@ -117,16 +125,16 @@ struct ProjectDetailView: View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
         let f = ctx.filter(project)
         let shown = f.projected
-        DetailPage(backTitle: "Projects", scrollTo: devScrollTarget, onBack: onBack) {
+        DetailPage(backTitle: L10n.tr("project.navigation.projects"), scrollTo: devScrollTarget, onBack: onBack) {
             header(ctx, shown)
             tokensSection(shown, isAll: ctx.isAll)
             agentsSection(shown)
             modelsSection(isAll: ctx.isAll)
-            PanelSection("By day", inset: true) {
+            PanelSection(L10n.tr("project.section.by_day"), inset: true) {
                 DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown))
             }
             branchesSection(isAll: ctx.isAll)
-            PanelSection("Sessions · \(shown.sessionsDetail.count)", inset: true) {
+            PanelSection(L10n.tr("project.section.sessions", shown.sessionsDetail.count), inset: true) {
                 SessionList(sessions: shown.sessionsDetail,
                             threshold: report.config.dominantThreshold, currency: cur)
             }
@@ -143,10 +151,10 @@ struct ProjectDetailView: View {
                 Text(project.name).font(.system(size: 15, weight: .semibold)).lineLimit(2)
                     .textSelection(.enabled)
                 if project.pathMissing {
-                    Badge(text: "path missing", style: .warn, help: "None of this project's local paths exist any more.")
+                    Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn, help: L10n.tr("overview.badge.path_missing_help"))
                 }
                 if project.remote == nil {
-                    Badge(text: "local", help: "No git remote; identified by its absolute path.")
+                    Badge(text: L10n.tr("overview.badge.local"), help: L10n.tr("overview.badge.local_help"))
                 }
             }
             RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
@@ -156,14 +164,16 @@ struct ProjectDetailView: View {
                 HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("Last 8 weeks").font(.system(size: 9.5)).foregroundStyle(.secondary)
+                    Text(L10n.tr("project.last_8_weeks")).font(.system(size: 9.5)).foregroundStyle(.secondary)
                     HeatStripView(weeks: shown.heatWeeks(endingOn: report.heatEndDate),
                                   agentLabels: report.agentLabels, currency: cur,
                                   cell: CGSize(width: 12, height: 20), radius: 3)
                 }
                 .padding(.bottom, 5)
             }
-            Text("\(shown.sessions) session\(shown.sessions == 1 ? "" : "s") · \(shown.firstActive == nil ? "no usage" : ShortDate.range(shown.firstActive, shown.lastActive))")
+            let usageStr = shown.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(shown.firstActive, shown.lastActive)
+            let sessKey = shown.sessions == 1 ? "project.subtitle.singular" : "project.subtitle.plural"
+            Text(L10n.tr(sessKey, shown.sessions, usageStr))
                 .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
             if let caption = ctx.caption {
                 RangeCaption(text: caption).padding(.top, 1)
@@ -174,7 +184,7 @@ struct ProjectDetailView: View {
                 if let r = project.remote {
                     Label(r, systemImage: "link")
                 } else {
-                    Label("local repository", systemImage: "internaldrive")
+                    Label(L10n.tr("project.local_repo"), systemImage: "internaldrive")
                 }
             }
             .font(.system(size: 10.5)).foregroundStyle(.secondary)
@@ -190,12 +200,12 @@ struct ProjectDetailView: View {
     private var locationsSection: some View {
         let split = splitPaths(project.paths)
         return VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("Locations")
+            SectionTitle(L10n.tr("project.section.locations"))
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(locationsCaption(primary: split.primary.count, temporary: split.temporary.count))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
                 if project.pathMissing {
-                    Badge(text: "path missing", style: .warn, help: "None of this project's local paths exist any more.")
+                    Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn, help: L10n.tr("overview.badge.path_missing_help"))
                 }
                 Spacer(minLength: 8)
                 if !project.paths.isEmpty {
@@ -203,7 +213,7 @@ struct ProjectDetailView: View {
                         withAnimation(.easeOut(duration: 0.15)) { showLocations.toggle() }
                     } label: {
                         HStack(spacing: 3) {
-                            Text(showLocations ? "Hide" : "Show")
+                            Text(showLocations ? L10n.tr("common.hide") : L10n.tr("common.show"))
                             Image(systemName: showLocations ? "chevron.down" : "chevron.right")
                                 .font(.system(size: 8, weight: .semibold))
                         }
@@ -223,10 +233,14 @@ struct ProjectDetailView: View {
     }
 
     private func locationsCaption(primary: Int, temporary: Int) -> String {
-        if primary + temporary == 0 { return "No local paths" }
-        if primary == 0 { return "\(temporary) temporary path\(temporary == 1 ? "" : "s")" }
-        let main = "\(primary) path\(primary == 1 ? "" : "s")"
-        return temporary == 0 ? main : "\(main) · \(temporary) temporary"
+        if primary + temporary == 0 { return L10n.tr("project.locations.no_local_paths") }
+        if primary == 0 {
+            let key = temporary == 1 ? "project.locations.temporary.singular" : "project.locations.temporary.plural"
+            return L10n.tr(key, temporary)
+        }
+        let mainKey = primary == 1 ? "project.locations.path.singular" : "project.locations.path.plural"
+        let main = L10n.tr(mainKey, primary)
+        return temporary == 0 ? main : L10n.tr("project.locations.combined", main, temporary)
     }
 
     /// 输入 / 输出 / 缓存的拆分只有全量数据：非 All 范围只显示 total。
@@ -234,13 +248,13 @@ struct ProjectDetailView: View {
         if isAll {
             tokensBreakdown(shown.tokens)
         } else {
-            PanelSection("Tokens", inset: true) {
-                Text("\(Fmt.tokens(shown.tokens.total)) total").font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+            PanelSection(L10n.tr("project.section.tokens"), inset: true) {
+                Text(L10n.tr("project.tokens_total", Fmt.tokens(shown.tokens.total))).font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
             } content: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(Fmt.tokens(shown.tokens.total))
                         .font(.system(size: 13, weight: .medium, design: .rounded).monospacedDigit())
-                    Text("Breakdown by type (input, output, cache) is only available for All.")
+                    Text(L10n.tr("project.breakdown_all_only"))
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -249,20 +263,20 @@ struct ProjectDetailView: View {
     }
 
     private func tokensBreakdown(_ t: Tokens) -> some View {
-        PanelSection("Tokens", inset: true) {
-            Text("\(Fmt.tokens(t.total)) total").font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+        PanelSection(L10n.tr("project.section.tokens"), inset: true) {
+            Text(L10n.tr("project.tokens_total", Fmt.tokens(t.total))).font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
         } content: {
             tokenBar(t)
                 .padding(.bottom, 2)
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
                 GridRow {
-                    tok("Input", t.input, AgentPalette.tokenInput, "Non-cached input tokens")
-                    tok("Output", t.output, AgentPalette.tokenOutput, "Output tokens, including thinking")
-                    tok("Thinking", t.thinking, nil, "Subset of output; shown for reference, not added to the total. Some agents report 0.")
+                    tok(L10n.tr("project.token.input"), t.input, AgentPalette.tokenInput, L10n.tr("project.token.input_help"))
+                    tok(L10n.tr("project.token.output"), t.output, AgentPalette.tokenOutput, L10n.tr("project.token.output_help"))
+                    tok(L10n.tr("project.token.thinking"), t.thinking, nil, L10n.tr("project.token.thinking_help"))
                 }
                 GridRow {
-                    tok("Cache read", t.cacheRead, AgentPalette.tokenCacheRead, "Tokens read from prompt cache")
-                    tok("Cache write", t.cacheWrite, AgentPalette.tokenCacheWrite, "Tokens written to prompt cache")
+                    tok(L10n.tr("project.token.cache_read"), t.cacheRead, AgentPalette.tokenCacheRead, L10n.tr("project.token.cache_read_help"))
+                    tok(L10n.tr("project.token.cache_write"), t.cacheWrite, AgentPalette.tokenCacheWrite, L10n.tr("project.token.cache_write_help"))
                     Color.clear.frame(height: 1)
                 }
             }
@@ -304,26 +318,26 @@ struct ProjectDetailView: View {
     private func agentsSection(_ shown: Project) -> some View {
         let maxCost = shown.byAgent.map(\.cost).max() ?? 0
         let shares = SubscriptionValue.shares(project: project.id, report: report)
-        return PanelSection("By agent", inset: true) {
+        return PanelSection(L10n.tr("project.section.by_agent"), inset: true) {
             VStack(alignment: .leading, spacing: 10) {
                 if shown.byAgent.isEmpty {
-                    Text("No usage in this range.").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.tr("project.no_usage_range")).font(.system(size: 11)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ForEach(shown.byAgent) { a in
                     HBarRow(label: a.label, color: AgentPalette.color(for: a.agent),
                             fraction: maxCost > 0 ? a.cost / maxCost : 0,
                             value: Fmt.money(a.cost, currency: cur),
-                            detail: "\(a.sessions) sess · \(Fmt.tokens(a.tokens.total)) tok · \(Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0))")
+                            detail: L10n.tr("project.agent_detail", a.sessions, Fmt.tokens(a.tokens.total), Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0)))
                 }
                 if !shares.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(shares) { s in
-                            Text("This repo: \(Self.shareText(s.share)) of your \(s.planLabel) usage this cycle")
+                            Text(L10n.tr("project.cycle_share", Self.shareText(s.share), s.planLabel))
                                 .fixedSize(horizontal: false, vertical: true)
                                 .help(report.subscriptions?[s.agent].map {
                                     Fmt.cycleCaption($0, timezone: RangeEngine.timezone(of: report))
-                                } ?? "Cycle dates unavailable")
+                                } ?? L10n.tr("fmt.cycle_dates_unavailable"))
                         }
                     }
                     .font(.system(size: 10.5))
@@ -343,12 +357,12 @@ struct ProjectDetailView: View {
     private func modelsSection(isAll: Bool) -> some View {
         let all = project.byModel
         let shown = showAllModels ? all : Array(all.prefix(collapsedLimit))
-        return PanelSection("By model", inset: true) {
-            if !isAll { AllTimeBadge(what: "models") }
+        return PanelSection(L10n.tr("project.section.by_model"), inset: true) {
+            if !isAll { AllTimeBadge(what: L10n.tr("project.noun.models")) }
         } content: {
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                 GridRow {
-                    Text("Model").frame(maxWidth: .infinity, alignment: .leading); Text("Tokens").gridColumnAlignment(.trailing); Text("Cost").gridColumnAlignment(.trailing)
+                    Text(L10n.tr("project.model")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.section.tokens")).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                 }
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 ForEach(shown) { m in
@@ -357,8 +371,8 @@ struct ProjectDetailView: View {
                             AgentDot(agent: m.agent, size: 6)
                             Text(m.model).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                             if m.estimated {
-                                Badge(text: "est.", style: .warn,
-                                      help: "Price unknown for this model; estimated from the most expensive tier of its family.")
+                                Badge(text: L10n.tr("project.estimated"), style: .warn,
+                                      help: L10n.tr("project.estimated_help"))
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -369,7 +383,7 @@ struct ProjectDetailView: View {
                 }
             }
             if all.count > collapsedLimit {
-                ShowAllButton(expanded: $showAllModels, total: all.count, noun: "models")
+                ShowAllButton(expanded: $showAllModels, total: all.count, noun: L10n.tr("project.noun.models"))
             }
         }
     }
@@ -377,20 +391,21 @@ struct ProjectDetailView: View {
     private func branchesSection(isAll: Bool) -> some View {
         let all = project.byBranch
         let shown = showAllBranches ? all : Array(all.prefix(collapsedLimit))
-        return PanelSection("By branch", inset: true) {
-            if !isAll { AllTimeBadge(what: "branches") }
+        return PanelSection(L10n.tr("project.section.by_branch"), inset: true) {
+            if !isAll { AllTimeBadge(what: L10n.tr("project.noun.branches")) }
         } content: {
             if all.isEmpty {
-                Text("No branch information for this project.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(L10n.tr("project.no_branch_info")).font(.system(size: 11)).foregroundStyle(.secondary)
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                     GridRow {
-                        Text("Branch").frame(maxWidth: .infinity, alignment: .leading); Text("Sessions").gridColumnAlignment(.trailing); Text("Cost").gridColumnAlignment(.trailing)
+                        Text(L10n.tr("project.branch")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.noun.sessions").capitalized).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                     }
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     ForEach(shown) { b in
                         GridRow {
-                            Text(b.branch).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                            Text(b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch)
+                                .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                                 .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .help(b.branch)
@@ -400,7 +415,7 @@ struct ProjectDetailView: View {
                     }
                 }
                 if all.count > collapsedLimit {
-                    ShowAllButton(expanded: $showAllBranches, total: all.count, noun: "branches")
+                    ShowAllButton(expanded: $showAllBranches, total: all.count, noun: L10n.tr("project.noun.branches"))
                 }
             }
         }
@@ -411,7 +426,7 @@ struct ProjectDetailView: View {
 struct AllTimeBadge: View {
     let what: String
     var body: some View {
-        Badge(text: "All time", help: "The data has no daily breakdown for \(what), so this section ignores the time range.")
+        Badge(text: L10n.tr("project.badge.all_time"), help: L10n.tr("project.badge.all_time_help", what))
     }
 }
 
@@ -430,6 +445,7 @@ struct BucketDetailView: View {
     let report: UsageReport
     let onBack: () -> Void
 
+    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
 
     // 桶没有 by_day：范围下按会话的 started 过滤，金额是这些会话之和。
@@ -437,14 +453,16 @@ struct BucketDetailView: View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
         let raw = kind == .unattributed ? report.buckets.unattributed : report.buckets.excluded
         let b = RangeEngine.filter(raw, range: ctx.spec)
-        DetailPage(backTitle: "Overview", onBack: onBack) {
+        DetailPage(backTitle: L10n.tr("disk.navigation.overview"), onBack: onBack) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(kind == .unattributed ? "Unattributed" : "Excluded").font(.system(size: 15, weight: .semibold))
+                Text(kind == .unattributed ? L10n.tr("overview.unattributed") : L10n.tr("overview.excluded")).font(.system(size: 15, weight: .semibold))
                 HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
-                Text("\(b.sessions) session\(b.sessions == 1 ? "" : "s") · \(b.firstActive == nil ? "no usage" : ShortDate.range(b.firstActive, b.lastActive))")
+                let usageStr = b.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(b.firstActive, b.lastActive)
+                let sessKey = b.sessions == 1 ? "project.subtitle.singular" : "project.subtitle.plural"
+                Text(L10n.tr(sessKey, b.sessions, usageStr))
                     .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 if let caption = ctx.caption {
-                    RangeCaption(text: caption + " · by session start").padding(.top, 1)
+                    RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start")).padding(.top, 1)
                 }
                 CostNote(text: report.costNote).padding(.top, 2)
                 Text(AttributionInfo.explanation(kind == .unattributed ? "none" : "excluded",
@@ -454,7 +472,7 @@ struct BucketDetailView: View {
                     .padding(.top, 8)
             }
             .padding(.horizontal, Metrics.rowInset)
-            PanelSection("Sessions · \(b.sessionsDetail.count)", inset: true) {
+            PanelSection(L10n.tr("project.section.sessions", b.sessionsDetail.count), inset: true) {
                 SessionList(sessions: b.sessionsDetail, threshold: report.config.dominantThreshold,
                             currency: report.currency)
             }

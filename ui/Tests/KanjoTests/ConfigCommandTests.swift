@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class ConfigCommandTests: XCTestCase {
+final class ConfigCommandTests: KanjoTestCase {
     func testArguments() throws {
         XCTAssertEqual(try ConfigCommand.arguments(agent: "codex", anchorDay: 8),
                        ["config", "set", "subscriptions.codex.anchor_day", "8"])

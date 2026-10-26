@@ -73,10 +73,11 @@ public enum Fmt {
     /// 月费：`$100/mo`。整数美元不带小数；价格未知时为「—」。
     public static func perMonth(_ v: Double?, currency: String = "USD") -> String {
         guard let v, v.isFinite else { return "—" }
+        let suffix = L10n.tr("fmt.per_month_suffix")
         if currency.uppercased() == "USD", v == v.rounded(), abs(v) < 1e12 {
-            return "$\(Int(v.rounded()))/mo"
+            return "$\(Int(v.rounded()))" + suffix
         }
-        return money(v, currency: currency) + "/mo"
+        return money(v, currency: currency) + suffix
     }
 
     /// 字节：1000 进位，B / KB / MB / GB / TB。一位小数，去掉末尾的 `.0`（`1.1 GB`、`626 MB`）。
@@ -114,45 +115,45 @@ public enum Fmt {
     /// 账期时间戳按报告时区显示；倒计时按自然日计算，跨夏令时也不会少一天。
     public static func cycleDates(_ sub: Subscription, timezone: TimeZone) -> String {
         guard let start = ReportDates.parseTimestamp(sub.cycleStart),
-              let end = ReportDates.parseTimestamp(sub.cycleEnd) else { return "Cycle dates unavailable" }
+              let end = ReportDates.parseTimestamp(sub.cycleEnd) else { return L10n.tr("fmt.cycle_dates_unavailable") }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = timezone
-        f.dateFormat = "MMM d"
+        f.setLocalizedDateFormatFromTemplate("MMMd")
         return "\(f.string(from: start)) – \(f.string(from: end))"
     }
 
     public static func renewal(_ cycleEnd: String, timezone: TimeZone, now: Date = Date()) -> String {
-        guard let end = ReportDates.parseTimestamp(cycleEnd) else { return "Renewal date unavailable" }
+        guard let end = ReportDates.parseTimestamp(cycleEnd) else { return L10n.tr("fmt.renewal_date_unavailable") }
         let cal = RangeEngine.calendar(timezone: timezone)
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: end)).day ?? 0
         switch days {
-        case ..<0: return "renewal date passed"
-        case 0: return "renews today"
-        case 1: return "renews tomorrow"
-        default: return "renews in \(days) days"
+        case ..<0: return L10n.tr("fmt.renewal_date_passed")
+        case 0: return L10n.tr("fmt.renews_today")
+        case 1: return L10n.tr("fmt.renews_tomorrow")
+        default: return L10n.tr("fmt.renews_in_days", days)
         }
     }
 
     public static func cycleCaption(_ sub: Subscription, timezone: TimeZone, now: Date = Date()) -> String {
         if SubscriptionValue.needsRenewalDay(sub) {
-            return "Last 30 days · set renewal day for exact cycle"
+            return L10n.tr("fmt.cycle_needs_renewal_day")
         }
         return cycleDates(sub, timezone: timezone) + " · " + renewal(sub.cycleEnd, timezone: timezone, now: now)
     }
 
     public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone) -> String {
         if SubscriptionValue.needsRenewalDay(sub) {
-            return "\(sub.planLabel) · last 30 days (day not set)"
+            return L10n.tr("fmt.cycle_range_needs_renewal_day", sub.planLabel)
         }
         guard let start = ReportDates.parseTimestamp(sub.cycleStart) else { return sub.planLabel }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = timezone
-        f.dateFormat = "MMM d"
-        return "\(sub.planLabel) since \(f.string(from: start))"
+        f.setLocalizedDateFormatFromTemplate("MMMd")
+        return L10n.tr("fmt.cycle_range_since", sub.planLabel, f.string(from: start))
     }
 
     private static let shortDay: DateFormatter = {
@@ -178,7 +179,11 @@ public enum Fmt {
     public static func day(_ s: String?) -> String {
         guard let s else { return "—" }
         guard let d = ReportDates.parseDay(s) else { return s }
-        return shortDay.string(from: d)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.calendar = Calendar(identifier: .gregorian)
+        f.setLocalizedDateFormatFromTemplate("yMMMd")
+        return f.string(from: d)
     }
 
     /// ISO 时间戳 → 本地 "yyyy-MM-dd HH:mm"。

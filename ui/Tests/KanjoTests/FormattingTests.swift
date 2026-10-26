@@ -1,7 +1,7 @@
 import XCTest
 @testable import KanjoCore
 
-final class FormattingTests: XCTestCase {
+final class FormattingTests: KanjoTestCase {
     func testMoney() {
         XCTAssertEqual(Fmt.money(0), "$0.00")
         XCTAssertEqual(Fmt.money(0.0013), "<$0.01")

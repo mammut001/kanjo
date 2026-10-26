@@ -47,7 +47,7 @@ struct RangeContext {
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
         let cal = spec.calendar
-        let md = formatter("MMM d", cal), mdt = formatter("MMM d HH:mm", cal)
+        let md = templateFormatter("MMMd", cal), mdt = templateFormatter("MMMdHHmm", cal)
         switch range {
         case .all:
             return nil
@@ -59,9 +59,11 @@ struct RangeContext {
         case .sinceReset:
             let withReset = agentOrder.filter { spec.agentStarts[$0] != nil }
             let without = agentOrder.filter { spec.agentStarts[$0] == nil }
-            var parts = withReset.map { "\(shortName($0)) reset \(mdt.string(from: spec.agentStarts[$0]!))" }
-            if !parts.isEmpty { parts[0] = "Since " + parts[0] }
-            parts += without.map { "\(shortName($0)): no reset info" }
+            var parts = withReset.map { L10n.tr("timerange.caption.reset", shortName($0), mdt.string(from: spec.agentStarts[$0]!)) }
+            if !parts.isEmpty {
+                parts[0] = L10n.tr("timerange.caption.since", shortName(withReset[0]), mdt.string(from: spec.agentStarts[withReset[0]]!))
+            }
+            parts += without.map { L10n.tr("timerange.caption.no_reset_info", shortName($0)) }
             return parts.joined(separator: " · ")
         case .billingCycle:
             let withCycle = agentOrder.filter { spec.agentStarts[$0] != nil }
@@ -70,8 +72,8 @@ struct RangeContext {
                 guard let sub = report.subscriptions?[agent] else { return shortName(agent) }
                 return Fmt.cycleRangeCaption(sub, timezone: cal.timeZone)
             }
-            let missing = without.map { "\(shortName($0)): no subscription" }
-            return (["Billing cycle"] + parts + missing).joined(separator: " · ")
+            let missing = without.map { L10n.tr("timerange.caption.no_subscription", shortName($0)) }
+            return ([L10n.tr("timerange.billingCycle.long")] + parts + missing).joined(separator: " · ")
         }
     }
 
@@ -92,12 +94,12 @@ struct RangeContext {
         return String(label.split(separator: " ").first ?? Substring(label))
     }
 
-    private func formatter(_ format: String, _ cal: Calendar) -> DateFormatter {
+    private func templateFormatter(_ template: String, _ cal: Calendar) -> DateFormatter {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.calendar = cal
         f.timeZone = cal.timeZone
-        f.dateFormat = format
+        f.setLocalizedDateFormatFromTemplate(template)
         return f
     }
 }
@@ -124,8 +126,8 @@ struct RangePicker: View {
 
     /// 没有对应数据时的 tooltip；nil 表示这段可以点。
     private func unavailable(_ r: TimeRange) -> String? {
-        if r == .sinceReset && !resetAvailable { return "No reset info" }
-        if r == .billingCycle && !cycleAvailable { return "No subscription info" }
+        if r == .sinceReset && !resetAvailable { return L10n.tr("timerange.tooltip.no_reset_info") }
+        if r == .billingCycle && !cycleAvailable { return L10n.tr("timerange.tooltip.no_subscription_info") }
         return nil
     }
 
