@@ -175,12 +175,14 @@ Sources, per agent (the first one found wins):
 
    ```toml
    [quota_windows.claude]
-   weekly_resets_at = "2026-10-27T10:00:00Z"   # any past or future reset, ISO 8601
+   weekly_reset = "tue 05:00"                  # weekday + local time in the report timezone
+   # or: weekly_resets_at = "2026-10-27T10:00:00Z"   # any past or future reset, ISO 8601
    weekly_window_hours = 168                   # optional, default 168
    five_hour_resets_at = "2026-10-24T09:30:00Z" # optional
    ```
 
    In `attribution.json` this is `{"quota_windows": {"claude": {...}}}`.
+   You can also set or unset overrides via `kanjo config set quota_windows.<agent>.weekly_reset "tue 05:00"` and `kanjo config unset quota_windows.<agent>.weekly_reset`.
 2. **Tokei** (https://github.com/cclank/tokei), if it is installed (`"source": "tokei"`).
    `kanjo` reads Tokei's cache files and does not call any API:
 
@@ -188,6 +190,7 @@ Sources, per agent (the first one found wins):
    |---|---|---|---|---|
    | `claude` | `claude_quota_swift_cache.json` | `snapshot.q7Reset` (168 h) | `snapshot.q5Reset` | `snapshot.updated` |
    | `codex` | `codex_quota_cache.json` | `limits.secondary.resets_at` (`window_minutes` / 60) | `limits.primary.resets_at` | `fetched_at` |
+   | `grok` | `grok_quota_cache.json` | `quota.reset` (168 h for "week", 24 h for "day") | `null` | `fetched_at` |
 
    A cache file fetched more than 14 days ago is ignored. `KANJO_TOKEI_DIR` replaces `~/.tokei`.
 

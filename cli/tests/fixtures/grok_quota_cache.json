@@ -1,0 +1,10 @@
+{
+  "fetched_at": 1792929600.0,
+  "quota": {
+    "reset": 1793534400,
+    "window": "week",
+    "plan": "SuperGrok",
+    "pct": 42.0,
+    "stale": false
+  }
+}

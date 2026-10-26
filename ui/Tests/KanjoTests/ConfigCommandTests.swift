@@ -49,6 +49,22 @@ final class ConfigCommandTests: KanjoTestCase {
         XCTAssertThrowsError(try ConfigCommand.fieldArguments(agent: "bad;agent", field: "plan", value: "x"))
     }
 
+    func testQuotaResetArguments() throws {
+        XCTAssertEqual(try ConfigCommand.quotaResetArguments(agent: "claude", weeklyReset: "tue 05:00"),
+                       ["config", "set", "quota_windows.claude.weekly_reset", "tue 05:00"])
+        XCTAssertEqual(try ConfigCommand.quotaResetArguments(agent: "grok", weeklyReset: nil),
+                       ["config", "unset", "quota_windows.grok.weekly_reset"])
+        XCTAssertEqual(try ConfigCommand.quotaResetArguments(agent: "antigravity", weeklyReset: "  "),
+                       ["config", "unset", "quota_windows.antigravity.weekly_reset"])
+        for agent in ["grok", "copilot", "minimax", "qwen", "commandcode", "opencode", "custom_agent"] {
+            XCTAssertEqual(try ConfigCommand.quotaResetArguments(agent: agent, weeklyReset: "mon 09:00"),
+                           ["config", "set", "quota_windows.\(agent).weekly_reset", "mon 09:00"])
+        }
+        for agent in ["", "bad;agent", "agent with spaces"] {
+            XCTAssertThrowsError(try ConfigCommand.quotaResetArguments(agent: agent, weeklyReset: "tue 05:00"))
+        }
+    }
+
     func testPlansCommand() throws {
         XCTAssertEqual(ConfigCommand.plansArguments(), ["config", "plans", "--json"])
         XCTAssertEqual(try ConfigCommand.plansCommand(from: CLIDataSource.defaultCommand),

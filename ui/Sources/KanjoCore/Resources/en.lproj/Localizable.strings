@@ -101,7 +101,14 @@
 "settings.grid.next_reset" = "Next weekly reset";
 "settings.grid.source" = "Source";
 "settings.no_data_loaded" = "No data loaded yet.";
-"settings.quota_note" = "Read from the tokei cache (~/.tokei) when available. To set or override a reset time by hand, add it to ~/.config/kanjo/attribution.toml. Agents without reset info are left out of the Since reset range.";
+"settings.quota_note" = "Read from the tokei cache (~/.tokei) when available. Apply sets a manual weekly reset; Reset clears it. Agents without reset info are left out of the Since reset range.";
+"weekday.mon" = "Mon";
+"weekday.tue" = "Tue";
+"weekday.wed" = "Wed";
+"weekday.thu" = "Thu";
+"weekday.fri" = "Fri";
+"weekday.sat" = "Sat";
+"weekday.sun" = "Sun";
 "settings.section.subscriptions" = "Subscriptions";
 "settings.subscriptions_note" = "Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.";
 "settings.renews_on_day" = "Renews on day %d";

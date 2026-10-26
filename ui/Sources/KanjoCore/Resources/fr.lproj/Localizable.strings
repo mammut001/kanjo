@@ -101,7 +101,14 @@
 "settings.grid.next_reset" = "Prochaine réinit. hebdomadaire";
 "settings.grid.source" = "Source";
 "settings.no_data_loaded" = "Aucune donnée chargée pour le moment.";
-"settings.quota_note" = "Lu depuis le cache tokei (~/.tokei) si disponible. Pour définir ou modifier manuellement une heure de réinitialisation, ajoutez-la à ~/.config/kanjo/attribution.toml. Les agents sans information de réinitialisation sont exclus de la période Depuis réinitialisation.";
+"settings.quota_note" = "Lu depuis le cache tokei (~/.tokei) si disponible. « Appliquer » définit une réinitialisation hebdomadaire manuelle ; « Réinitialiser » l'efface. Les agents sans information de réinitialisation sont exclus de la période Depuis réinitialisation.";
+"weekday.mon" = "lun.";
+"weekday.tue" = "mar.";
+"weekday.wed" = "mer.";
+"weekday.thu" = "jeu.";
+"weekday.fri" = "ven.";
+"weekday.sat" = "sam.";
+"weekday.sun" = "dim.";
 "settings.section.subscriptions" = "Abonnements";
 "settings.subscriptions_note" = "« Appliquer » enregistre le jour de renouvellement via le CLI ; « Réinitialiser » restaure la détection. Les agents sans abonnement sont exclus de la période Cycle de facturation.";
 "settings.renews_on_day" = "Renouvellement le %d du mois";

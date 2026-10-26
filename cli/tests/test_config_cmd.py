@@ -269,6 +269,35 @@ class ConfigCommandTest(unittest.TestCase):
         self.assertIn("anchor day 8 (overrides.json)", out)
         self.assertIn("anchor day 25 (detected)", out)
 
+    def test_quota_windows_set_get_unset_round_trip(self):
+        key = "quota_windows.claude.weekly_reset"
+        self.assert_line(("set", key, "tue 05:00"), key + ' = "tue 05:00" (overrides)')
+        self.assert_line(("get", key), key + ' = "tue 05:00" (overrides)')
+        self.assertEqual(self.read_overrides()["quota_windows"]["claude"], {"weekly_reset": "tue 05:00"})
+        self.assert_line(("unset", key), key + " = unset (default)")
+        self.assertNotIn("claude", self.read_overrides().get("quota_windows", {}))
+
+    def test_quota_windows_precedence_and_validation(self):
+        key = "quota_windows.grok.weekly_reset"
+        self.write_toml('[quota_windows.grok]\nweekly_reset = "mon 09:00"\n')
+        self.assert_line(("get", key), key + ' = "mon 09:00" (toml)')
+        self.assert_line(("set", key, "tue 05:00"), key + ' = "tue 05:00" (overrides)')
+        self.assertEqual(config.load().quota_windows["grok"]["weekly_reset"], "tue 05:00")
+        self.assert_line(("unset", key), key + ' = "mon 09:00" (toml)')
+
+        # Validation errors
+        for bad_args in (
+            ("set", "quota_windows.claude.weekly_reset", "someday 05:00"),
+            ("set", "quota_windows.claude.weekly_reset", "tue 25:00"),
+            ("set", "quota_windows.claude.weekly_reset", "tue 5:60"),
+            ("set", "quota_windows.claude.weekly_reset", "not_a_time"),
+            ("set", "quota_windows.unknown.weekly_reset", "tue 05:00"),
+            ("set", "quota_windows.claude.bad_field", "tue 05:00"),
+        ):
+            code, _, err = self.run_cli("config", *bad_args)
+            self.assertEqual(code, 2)
+            self.assertTrue(len(err) > 0)
+
     def test_config_plans_json(self):
         from kanjo.subscriptions import KNOWN_PLANS
         code, out, err = self.run_cli("config", "plans", "--json")

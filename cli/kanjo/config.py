@@ -37,8 +37,10 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import time
 from typing import Dict, List, Optional
 
+from .quota import parse_weekly_reset
 from .sources.base import AGENT_LABELS
 from .subscriptions import known_monthly_price
 
@@ -56,8 +58,9 @@ class Config:
     overrides: Dict[str, str] = field(default_factory=dict)
     exclude: List[str] = field(default_factory=list)
     dominant_threshold: float = DEFAULT_THRESHOLD
-    # agent -> {"weekly_resets_at": epoch s, "weekly_window_hours": int, "five_hour_resets_at": epoch s | None}
+    # agent -> {"weekly_reset": str, "weekly_resets_at": epoch s, "weekly_window_hours": int, "five_hour_resets_at": epoch s | None}
     quota_windows: Dict[str, dict] = field(default_factory=dict)
+    quota_origins: Dict[str, dict] = field(default_factory=dict)
     # agent -> explicitly configured subscription fields
     subscriptions: Dict[str, dict] = field(default_factory=dict)
     subscription_origins: Dict[str, dict] = field(default_factory=dict)
@@ -221,6 +224,9 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         raise ConfigError("dominant_threshold must be in (0, 1]")
     if flat.get("quota_windows"):
         cfg.quota_windows = _quota_windows(flat["quota_windows"])
+        cfg.quota_origins = {
+            agent: {key: "toml" for key in spec} for agent, spec in cfg.quota_windows.items()
+        }
     if flat.get("subscriptions"):
         cfg.subscriptions = _subscriptions(flat["subscriptions"])
         cfg.subscription_origins = {
@@ -231,6 +237,8 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
 
 def _parse_time(value, where: str) -> float:
     """ISO 8601 string (or a tomllib datetime) -> epoch seconds. Naive times are UTC."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
     if isinstance(value, datetime):
         dt = value
     elif isinstance(value, str):
@@ -253,20 +261,30 @@ def _quota_windows(raw) -> Dict[str, dict]:
         raise ConfigError("[quota_windows] must be a table")
     out = {}
     for agent, spec in raw.items():
+        if agent not in AGENT_LABELS:
+            raise ConfigError("unknown agent in [quota_windows]: %r" % agent)
         where = "quota_windows.%s" % agent
         if not isinstance(spec, dict):
             raise ConfigError("[%s] must be a table" % where)
-        if "weekly_resets_at" not in spec:
-            raise ConfigError("[%s] needs weekly_resets_at" % where)
+        if "weekly_resets_at" not in spec and "weekly_reset" not in spec:
+            raise ConfigError("[%s] needs weekly_reset or weekly_resets_at" % where)
         hours = spec.get("weekly_window_hours", 168)
         if isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours != int(hours) or hours <= 0:
             raise ConfigError("%s.weekly_window_hours must be a positive integer" % where)
         five = spec.get("five_hour_resets_at")
-        out[str(agent)] = {
-            "weekly_resets_at": _parse_time(spec["weekly_resets_at"], where + ".weekly_resets_at"),
+        entry = {
             "weekly_window_hours": int(hours),
             "five_hour_resets_at": None if five in (None, "") else _parse_time(five, where + ".five_hour_resets_at"),
         }
+        if "weekly_reset" in spec:
+            try:
+                norm, _, _, _ = parse_weekly_reset(spec["weekly_reset"], where + ".weekly_reset")
+                entry["weekly_reset"] = norm
+            except ValueError as exc:
+                raise ConfigError(str(exc))
+        if "weekly_resets_at" in spec:
+            entry["weekly_resets_at"] = _parse_time(spec["weekly_resets_at"], where + ".weekly_resets_at")
+        out[str(agent)] = entry
     return out
 
 
@@ -359,7 +377,39 @@ def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config
         for key in spec:
             if key in cfg.subscriptions[agent]:
                 origins[key] = "overrides"
+
+    raw_qw = data.get("quota_windows", {})
+    if not isinstance(raw_qw, dict):
+        raise ConfigError("overrides quota_windows must be an object")
+    merged_qw = {agent: dict(spec) for agent, spec in cfg.quota_windows.items()}
+    for agent, spec in raw_qw.items():
+        if not isinstance(spec, dict):
+            raise ConfigError("overrides quota_windows.%s must be an object" % agent)
+        merged_qw.setdefault(agent, {}).update(spec)
+    cfg.quota_windows = _quota_windows(merged_qw)
+    for agent, spec in raw_qw.items():
+        origins = cfg.quota_origins.setdefault(agent, {})
+        for key in spec:
+            if key in cfg.quota_windows[agent]:
+                origins[key] = "overrides"
     return cfg
+
+
+def quota_value(cfg: Config, agent: str, key: str, directory: Optional[str] = None):
+    """Effective field and its origin for quota_windows."""
+    spec = cfg.quota_windows.get(agent, {})
+    origins = cfg.quota_origins.get(agent, {})
+    if key in spec:
+        return spec[key], origins.get(key, "toml")
+    try:
+        from .quota import tokei_dir, TOKEI_READERS
+        d = directory or tokei_dir()
+        reader = TOKEI_READERS.get(agent)
+        if reader and reader(d, time.time()) is not None:
+            return None, "tokei"
+    except Exception:
+        pass
+    return None, "default"
 
 
 def subscription_value(cfg: Config, agent: str, key: str, found: dict):

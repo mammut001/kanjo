@@ -103,10 +103,12 @@ final class TimeRangeTests: KanjoTestCase {
 
     func testSinceResetPerAgentStarts() {
         let quota = ["claude": QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z"),
-                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z", source: "manual")]
+                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z", source: "manual"),
+                     "grok": QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", source: "tokei")]
         let s = spec(.sinceReset, quota: quota)
         XCTAssertEqual(s.agentStarts["claude"], ts("2026-10-20T10:00:00Z"))
         XCTAssertEqual(s.agentStarts["codex"], ts("2026-10-21T08:00:00Z"))
+        XCTAssertEqual(s.agentStarts["grok"], ts("2026-10-20T05:00:00Z"))
         XCTAssertNil(s.window(for: "antigravity"))
         XCTAssertFalse(s.includes(now, agent: "antigravity"))
         XCTAssertTrue(s.includes(ts("2026-10-20T10:00:00Z"), agent: "claude"))
@@ -125,6 +127,8 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(RangeEngine.windowStart(stale, now: now), ts("2026-10-22T07:00:00Z"))
         let fiveHour = QuotaWindow(weeklyResetsAt: "2026-10-24T09:00:00Z", weeklyWindowHours: 5)
         XCTAssertEqual(RangeEngine.windowStart(fiveHour, now: now), ts("2026-10-24T04:00:00Z"))
+        let grokDay = QuotaWindow(weeklyResetsAt: "2026-10-25T05:00:00Z", weeklyWindowHours: 24)
+        XCTAssertEqual(RangeEngine.windowStart(grokDay, now: now), ts("2026-10-24T05:00:00Z"))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "garbage"), now: now))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z", weeklyWindowHours: 0), now: now))
     }
