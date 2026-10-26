@@ -41,7 +41,7 @@ struct RangeContext {
         RangeEngine.filter(p, range: spec, fallbackAgent: Self.fallbackAgent(p))
     }
 
-    /// 范围说明结果（All 下为 nil）。
+    /// 范围说明结果（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
     var captionResult: RangeCaptionResult? {
         RangeCaptionBuilder.caption(
             for: range,
@@ -52,9 +52,8 @@ struct RangeContext {
         )
     }
 
-    /// 范围说明文本（All 下为 nil）。
-    /// 例：`Today · Oct 24`；
-    /// `Last 7 days · Oct 18 – Oct 24`；
+    /// 范围说明文本（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
+    /// 例：
     /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · 6 others have no reset info (not counted)`；
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {

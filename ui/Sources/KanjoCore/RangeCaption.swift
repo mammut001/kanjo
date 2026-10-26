@@ -33,7 +33,7 @@ public enum RangeCaptionBuilder {
         return String(label.split(separator: " ").first ?? Substring(label))
     }
 
-    /// 范围说明纯函数（All 下为 nil）。
+    /// 范围说明纯函数（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
     public static func caption(
         for range: TimeRange,
         spec: RangeSpec,
@@ -44,24 +44,11 @@ public enum RangeCaptionBuilder {
     ) -> RangeCaptionResult? {
         let cal = spec.calendar
         let lang = language ?? L10n.currentLanguage
-        let md = templateFormatter("MMMd", cal, language: lang)
         let mdt = templateFormatter("MMMdHHmm", cal, language: lang)
 
         switch range {
-        case .all:
+        case .all, .today, .days7, .days30, .lastWeek:
             return nil
-        case .today:
-            guard let s = spec.start else {
-                return RangeCaptionResult(text: L10n.tr("timerange.today.long", language: lang))
-            }
-            return RangeCaptionResult(text: "\(L10n.tr("timerange.today.long", language: lang)) · \(md.string(from: s))")
-        case .days7, .days30, .lastWeek:
-            let label = L10n.tr("timerange.\(range.rawValue).long", language: lang)
-            guard let s = spec.start, let e = spec.end else {
-                return RangeCaptionResult(text: label)
-            }
-            let last = e.addingTimeInterval(-1)
-            return RangeCaptionResult(text: "\(label) · \(md.string(from: s)) – \(md.string(from: last))")
         case .sinceReset:
             let withReset = agentOrder.filter { spec.agentStarts[$0] != nil }
             let without = agentOrder.filter { spec.agentStarts[$0] == nil }

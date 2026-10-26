@@ -42,20 +42,20 @@ final class RangeCaptionTests: KanjoTestCase {
         XCTAssertNil(RangeCaptionBuilder.caption(for: .all, spec: spec, agentOrder: ["claude"]))
     }
 
-    func testFixedRanges() {
+    func testFixedRangesReturnNil() {
         let start = ts("2026-10-24T00:00:00Z")
         let end = ts("2026-10-25T00:00:00Z")
         let todaySpec = RangeSpec(range: .today, calendar: cal, start: start, end: end)
-        let todayCaption = RangeCaptionBuilder.caption(for: .today, spec: todaySpec, agentOrder: ["claude"], language: "en")
-        XCTAssertNotNil(todayCaption)
-        XCTAssertTrue(todayCaption!.text.starts(with: "Today · "))
-        XCTAssertNil(todayCaption!.help)
+        XCTAssertNil(RangeCaptionBuilder.caption(for: .today, spec: todaySpec, agentOrder: ["claude"], language: "en"))
 
         let d7Spec = RangeSpec(range: .days7, calendar: cal, start: ts("2026-10-18T00:00:00Z"), end: end)
-        let d7Caption = RangeCaptionBuilder.caption(for: .days7, spec: d7Spec, agentOrder: ["claude"], language: "en")
-        XCTAssertNotNil(d7Caption)
-        XCTAssertTrue(d7Caption!.text.starts(with: "Last 7 days · "))
-        XCTAssertNil(d7Caption!.help)
+        XCTAssertNil(RangeCaptionBuilder.caption(for: .days7, spec: d7Spec, agentOrder: ["claude"], language: "en"))
+
+        let d30Spec = RangeSpec(range: .days30, calendar: cal, start: ts("2026-09-25T00:00:00Z"), end: end)
+        XCTAssertNil(RangeCaptionBuilder.caption(for: .days30, spec: d30Spec, agentOrder: ["claude"], language: "en"))
+
+        let lastWeekSpec = RangeSpec(range: .lastWeek, calendar: cal, start: ts("2026-10-12T00:00:00Z"), end: ts("2026-10-19T00:00:00Z"))
+        XCTAssertNil(RangeCaptionBuilder.caption(for: .lastWeek, spec: lastWeekSpec, agentOrder: ["claude"], language: "en"))
     }
 
     func testSinceResetAllHaveReset() {

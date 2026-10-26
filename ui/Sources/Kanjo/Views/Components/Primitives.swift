@@ -74,6 +74,16 @@ extension View {
                 .fill(AgentPalette.groupFill))
             .clipShape(RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous))
     }
+
+    /// 当文本非空时附加 .help tooltip。
+    @ViewBuilder
+    func helpIfPresent(_ text: String?) -> some View {
+        if let text, !text.isEmpty {
+            self.help(text)
+        } else {
+            self
+        }
+    }
 }
 
 /// 行与行之间的缩进 hairline。`trailing` 给直接放在面板上的列表用（两端都与文字对齐）。
