@@ -29,12 +29,14 @@ final class RangeCaptionTests: KanjoTestCase {
 
     func testAgentOrder() throws {
         var report = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
-        XCTAssertEqual(RangeCaptionBuilder.agentOrder(report: report), ["claude", "antigravity", "codex"])
+        XCTAssertEqual(RangeCaptionBuilder.agentOrder(report: report),
+                       ["claude", "codex", "grok", "antigravity", "copilot", "commandcode", "qwen", "minimax", "opencode"])
 
         // Add extra keys not in projects
-        report.quotaWindows?["grok"] = QuotaWindow(weeklyResetsAt: "2026-10-27T00:00:00Z", weeklyWindowHours: 168, source: "manual")
-        report.subscriptions?["copilot"] = Subscription(plan: "pro", planLabel: "Copilot Pro", monthlyPriceUsd: 10, cycleStart: "2026-10-01T00:00:00Z", cycleEnd: "2026-11-01T00:00:00Z", anchorDay: 1, cycleSource: "manual", extraUsageEnabled: false, source: "manual")
-        XCTAssertEqual(RangeCaptionBuilder.agentOrder(report: report), ["claude", "antigravity", "codex", "copilot", "grok"])
+        report.quotaWindows?["future_bot"] = QuotaWindow(weeklyResetsAt: "2026-10-27T00:00:00Z", weeklyWindowHours: 168, source: "manual")
+        report.subscriptions?["extra_agent"] = Subscription(plan: "pro", planLabel: "Extra Agent", monthlyPriceUsd: 10, cycleStart: "2026-10-01T00:00:00Z", cycleEnd: "2026-11-01T00:00:00Z", anchorDay: 1, cycleSource: "manual", extraUsageEnabled: false, source: "manual")
+        XCTAssertEqual(RangeCaptionBuilder.agentOrder(report: report),
+                       ["claude", "codex", "grok", "antigravity", "copilot", "commandcode", "qwen", "minimax", "opencode", "extra_agent", "future_bot"])
     }
 
     func testAllRangeReturnsNil() {

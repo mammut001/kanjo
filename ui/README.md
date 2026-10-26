@@ -209,9 +209,9 @@ Sources/KanjoCore/       contract models (Codable), data sources, formatting, re
                           treemap / heat strip / project prefs pure functions (no UI)
 Sources/Kanjo/           SwiftUI app: KanjoApp, Store/ReportStore, Views/…
 Tests/KanjoTests/        decoding + invariant tests on fixtures/sample.json, formatting, treemap, heat strip, prefs tests
-fixtures/sample.json     test data (8 projects, 3 agents, split/cwd sessions, estimated models, buckets)
+fixtures/sample.json     test data (8 projects, 9 agents, split/cwd sessions, estimated models, buckets)
 fixtures/generate_sample.py   regenerates sample.json deterministically and asserts the invariants
-fixtures/disk-sample.json     disk page sample (5 agents); fixtures/generate_disk_sample.py regenerates it
+fixtures/disk-sample.json     disk page sample (10 agents); fixtures/generate_disk_sample.py regenerates it
 Resources/                Kanjo.png / Kanjo.icns app icon and make_icon.swift that draws it
 package.sh               universal .app + zip + DMG
 ```
