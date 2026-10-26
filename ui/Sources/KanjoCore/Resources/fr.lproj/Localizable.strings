@@ -39,6 +39,8 @@
 "timerange.caption.reset" = "%@ réinit. %@";
 "timerange.caption.no_reset_info" = "%@ : aucune info de réinit.";
 "timerange.caption.no_subscription" = "%@ : aucun abonnement";
+"timerange.caption.no_reset_info_others" = "%d autres sans info de réinitialisation (non comptés)";
+"timerange.caption.no_subscription_others" = "%d autres sans abonnement (non comptés)";
 
 /* Formatage et cycle */
 "fmt.cycle_dates_unavailable" = "Dates de cycle indisponibles";

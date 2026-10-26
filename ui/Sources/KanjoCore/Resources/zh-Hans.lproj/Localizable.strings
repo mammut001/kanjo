@@ -39,6 +39,8 @@
 "timerange.caption.reset" = "%@ 重置 %@";
 "timerange.caption.no_reset_info" = "%@：无重置信息";
 "timerange.caption.no_subscription" = "%@：无订阅";
+"timerange.caption.no_reset_info_others" = "其余 %d 个无重置信息（不计入）";
+"timerange.caption.no_subscription_others" = "其余 %d 个无订阅（不计入）";
 
 /* 格式化与账期 */
 "fmt.cycle_dates_unavailable" = "账期日期不可用";

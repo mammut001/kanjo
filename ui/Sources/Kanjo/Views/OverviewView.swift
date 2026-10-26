@@ -152,7 +152,7 @@ struct OverviewView: View {
             .foregroundStyle(.secondary).monospacedDigit()
             .help(help.joined(separator: "\n"))
             if let caption = ctx.caption {
-                RangeCaption(text: caption).padding(.top, 1)
+                RangeCaption(text: caption, help: ctx.captionHelp).padding(.top, 1)
             }
         }
         .padding(.horizontal, Metrics.listInset)

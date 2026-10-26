@@ -180,17 +180,18 @@ public enum Fmt {
         return cycleDates(sub, timezone: timezone) + " · " + renewal(sub.cycleEnd, timezone: timezone, now: now)
     }
 
-    public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone) -> String {
+    public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone, language: String? = nil) -> String {
+        let lang = language ?? L10n.currentLanguage
         if SubscriptionValue.needsRenewalDay(sub) {
-            return L10n.tr("fmt.cycle_range_needs_renewal_day", sub.planLabel)
+            return L10n.tr("fmt.cycle_range_needs_renewal_day", language: lang, sub.planLabel)
         }
         guard let start = ReportDates.parseTimestamp(sub.cycleStart) else { return sub.planLabel }
         let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.locale = Locale(identifier: lang)
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = timezone
         f.setLocalizedDateFormatFromTemplate("MMMd")
-        return L10n.tr("fmt.cycle_range_since", sub.planLabel, f.string(from: start))
+        return L10n.tr("fmt.cycle_range_since", language: lang, sub.planLabel, f.string(from: start))
     }
 
     private static let shortDay: DateFormatter = {

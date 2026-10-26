@@ -73,13 +73,6 @@ extension UsageReport {
             ?? totals.lastActive.flatMap(ReportDates.parseDay)
             ?? Date()
     }
-
-    /// 报告里所有 agent 的显示名（agent key → label）。
-    var agentLabels: [String: String] {
-        var out: [String: String] = [:]
-        for p in projects { for a in p.byAgent { out[a.agent] = a.label } }
-        return out
-    }
 }
 
 extension Project {

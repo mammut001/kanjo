@@ -41,61 +41,38 @@ struct RangeContext {
         RangeEngine.filter(p, range: spec, fallbackAgent: Self.fallbackAgent(p))
     }
 
-    /// 范围说明（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
+    /// 范围说明结果（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
+    var captionResult: RangeCaptionResult? {
+        RangeCaptionBuilder.caption(
+            for: range,
+            spec: spec,
+            agentOrder: agentOrder,
+            agentLabels: report.agentLabels,
+            subscriptions: report.subscriptions
+        )
+    }
+
+    /// 范围说明文本（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
     /// 例：
-    /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · Antigravity: no reset info`；
+    /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · 6 others have no reset info (not counted)`；
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
-        let cal = spec.calendar
-        let mdt = templateFormatter("MMMdHHmm", cal)
-        switch range {
-        case .all, .today, .days7, .days30, .lastWeek:
-            return nil
-        case .sinceReset:
-            let withReset = agentOrder.filter { spec.agentStarts[$0] != nil }
-            let without = agentOrder.filter { spec.agentStarts[$0] == nil }
-            var parts = withReset.map { L10n.tr("timerange.caption.reset", shortName($0), mdt.string(from: spec.agentStarts[$0]!)) }
-            if !parts.isEmpty {
-                parts[0] = L10n.tr("timerange.caption.since", shortName(withReset[0]), mdt.string(from: spec.agentStarts[withReset[0]]!))
-            }
-            parts += without.map { L10n.tr("timerange.caption.no_reset_info", shortName($0)) }
-            return parts.joined(separator: " · ")
-        case .billingCycle:
-            let withCycle = agentOrder.filter { spec.agentStarts[$0] != nil }
-            let without = agentOrder.filter { spec.agentStarts[$0] == nil }
-            let parts = withCycle.map { agent -> String in
-                guard let sub = report.subscriptions?[agent] else { return shortName(agent) }
-                return Fmt.cycleRangeCaption(sub, timezone: cal.timeZone)
-            }
-            let missing = without.map { L10n.tr("timerange.caption.no_subscription", shortName($0)) }
-            return ([L10n.tr("timerange.billingCycle.long")] + parts + missing).joined(separator: " · ")
-        }
+        captionResult?.text
+    }
+
+    /// 未计入 agent 的悬浮提示（若有）。
+    var captionHelp: String? {
+        captionResult?.help
     }
 
     /// 报告里出现的 agent（按总花费降序），后面接只在 quota_windows / subscriptions 里出现的。
     var agentOrder: [String] {
-        var cost: [String: Double] = [:]
-        for p in report.projects { for a in p.byAgent { cost[a.agent, default: 0] += a.cost } }
-        let used = cost.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
-        var extraKeys = Set((report.quotaWindows ?? [:]).keys)
-        extraKeys.formUnion((report.subscriptions ?? [:]).keys)
-        let extra = extraKeys.filter { cost[$0] == nil }.sorted()
-        return used + extra
+        RangeCaptionBuilder.agentOrder(report: report)
     }
 
     /// "Claude Code" → "Claude"；未知 agent 用 key。
     func shortName(_ agent: String) -> String {
-        let label = report.agentLabels[agent] ?? agent.capitalized
-        return String(label.split(separator: " ").first ?? Substring(label))
-    }
-
-    private func templateFormatter(_ template: String, _ cal: Calendar) -> DateFormatter {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
-        f.calendar = cal
-        f.timeZone = cal.timeZone
-        f.setLocalizedDateFormatFromTemplate(template)
-        return f
+        RangeCaptionBuilder.shortName(for: agent, labels: report.agentLabels)
     }
 }
 
@@ -152,6 +129,18 @@ struct RangePicker: View {
 /// 范围说明行：caption 字号、次要色、可折行。
 struct RangeCaption: View {
     let text: String
+    var help: String? = nil
+
+    init(text: String, help: String? = nil) {
+        self.text = text
+        self.help = help
+    }
+
+    init(caption: RangeCaptionResult) {
+        self.text = caption.text
+        self.help = caption.help
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Image(systemName: "calendar")
@@ -160,5 +149,18 @@ struct RangeCaption: View {
         .font(.system(size: 10.5))
         .foregroundStyle(.secondary)
         .monospacedDigit()
+        .modifier(OptionalHelpModifier(help: help))
+    }
+}
+
+private struct OptionalHelpModifier: ViewModifier {
+    let help: String?
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let help, !help.isEmpty {
+            content.help(help)
+        } else {
+            content
+        }
     }
 }
