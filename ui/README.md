@@ -36,7 +36,7 @@ KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 - Data loading waits for the report store (and disk store if the route needs it) to finish loading with a timeout of ~20 seconds.
 - `--snapshot-scale <number>` sets the render scale (defaults to `2`).
 - `--snapshot-appearance light|dark` forces light or dark appearance.
-- **Scrolled routes**: `ImageRenderer` does not render `ScrollView` offsets, so for snapshot mode scrolled routes (routes with a scroll target, such as `overview-bottom`, `settings-bottom`, `settings:subscriptions:<agent>`, `settings:subscriptions:<agent>:edit`, `project:<index>:bottom`, `project:<index>:locations`, and `disk:expanded`) render the panel content unscrolled but **TALL** (full content height, not clipped to the 620 pt panel height).
+- **Scrollable routes**: In snapshot mode, scrollable routes (overview, settings, project routes, disk, and routes with scroll targets) render from the top, full content height (**TALL**, not clipped to the 620 pt panel height).
 
 `--defaults-suite <name>` (or env `KANJO_DEFAULTS_SUITE`): routes all settings reads and writes to `UserDefaults(suiteName: name)` instead of `UserDefaults.standard`.
 `--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
@@ -103,7 +103,7 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
   Without any `subscriptions` the segment is greyed out with the tooltip "No subscription info".
 - Project cost / tokens add up `by_day[].by_agent` / `by_agent_tokens` for every day that overlaps the range
   (per agent for Since reset); days without those fields count fully toward the project's dominant agent.
-  Session counts use `sessions_detail[].started`. Buckets have no daily data, so they are filtered by session start.
+  Session counts count sessions with usage in the range (per-day data if available, else [started, ended] overlapping the range). Buckets have no daily data, so they are filtered by session overlap.
 - Outside All: the hero, summary line, mosaic, rows (amount, sessions, tokens, heat strip), buckets and
   "N hidden · $X" use filtered values; projects with no usage in the range are dropped, with
   "N projects with no usage in this range" under the list; captions under the summary explain Since reset and

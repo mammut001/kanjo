@@ -286,6 +286,74 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(f.byAgent.first?.cost ?? 0, 20, accuracy: 1e-9)
     }
 
+    func testSessionCountingRangeOverlap() {
+        let todaySpec = spec(.today)
+
+        // 1. 会话昨天开始、今天仍在用 -> 计入 Today
+        let sessionActiveToday = Session(
+            id: "s1", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertTrue(todaySpec.includes(sessionActiveToday))
+
+        // 2. 会话在范围前已结束 -> 不计入 Today
+        let sessionEndedBefore = Session(
+            id: "s2", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-23T15:59:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertFalse(todaySpec.includes(sessionEndedBefore))
+
+        // 3. 有按日数据：优先使用按日数据
+        // 跨天会话，但按日数据表明今天没有用量（仅昨天有用量） -> 不计入 Today
+        let sessionWithYesterdayOnly = Session(
+            id: "s3", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [DayCost(day: "2026-10-23", cost: 5, tokens: 50)]
+        )
+        XCTAssertFalse(todaySpec.includes(sessionWithYesterdayOnly))
+
+        // 有今天用量 -> 计入 Today
+        let sessionWithTodayUsage = Session(
+            id: "s4", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [
+                DayCost(day: "2026-10-23", cost: 3, tokens: 30),
+                DayCost(day: "2026-10-24", cost: 2, tokens: 20)
+            ]
+        )
+        XCTAssertTrue(todaySpec.includes(sessionWithTodayUsage))
+
+        // 4. 项目过滤验证（project row / overview summary）
+        let dayToday = DayCost(day: "2026-10-24", cost: 2, tokens: 20, byAgent: ["claude": 2], byAgentTokens: ["claude": 20])
+        let p = Project(
+            id: "proj1", name: "proj1", remote: nil, paths: [], pathMissing: false,
+            cost: 7, tokens: Tokens(total: 70), sessions: 2,
+            firstActive: "2026-10-23", lastActive: "2026-10-24",
+            byAgent: [AgentCost(agent: "claude", label: "Claude", cost: 7, tokens: Tokens(total: 70), sessions: 2)],
+            byModel: [], byDay: [dayToday], byBranch: [],
+            sessionsDetail: [sessionActiveToday, sessionEndedBefore]
+        )
+        let filteredProject = RangeEngine.filter(p, range: todaySpec, fallbackAgent: "claude")
+        XCTAssertEqual(filteredProject.sessions, 1)
+        XCTAssertEqual(filteredProject.sessionsDetail.count, 1)
+        XCTAssertEqual(filteredProject.sessionsDetail.first?.id, "s1")
+
+        // 5. 桶过滤验证
+        let bucket = SessionBucket(
+            cost: 10, tokens: Tokens(total: 100), sessions: 2,
+            firstActive: "2026-10-23", lastActive: "2026-10-24",
+            sessionsDetail: [sessionActiveToday, sessionEndedBefore]
+        )
+        let filteredBucket = RangeEngine.filter(bucket, range: todaySpec)
+        XCTAssertEqual(filteredBucket.sessions, 1)
+        XCTAssertEqual(filteredBucket.sessionsDetail.count, 1)
+        XCTAssertEqual(filteredBucket.sessionsDetail.first?.id, "s1")
+    }
+
     // MARK: - 夹具
 
     private func fixture() throws -> UsageReport {

@@ -227,7 +227,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`30d`、`Last week`（上一个周一到周日）、
 `Since reset`（各 agent 自己的周窗口起点 = `weekly_resets_at - weekly_window_hours`，缺 `quota_windows` 的 agent 在该范围下不计入并在 UI 标明）、
 `Billing cycle`（各 agent 自己的 `subscriptions[agent].cycle_start` 到现在，缺 `subscriptions` 的 agent 不计入并标明）。
-范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出，sessions 数按 `sessions_detail[].started` 落在范围内计数。
+范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出；sessions 数按会话在该范围内有用量计入（优先使用会话的按日数据，否则以 [started, ended] 与范围区间有重叠即计入）。
 对账行只在 `All` 下显示。`cost_note` 在任何范围下都显示。
 
 ## 7. UI 必须展示的内容

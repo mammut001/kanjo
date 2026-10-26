@@ -177,8 +177,8 @@ enum SnapshotRunner {
             exit(1)
         }
 
-        // 滚动路由：离屏渲染时将面板内容渲染为不滚动但完整高度（TALL）。
-        let isScrolled = resolved.anchor != nil
+        // 滚动路由：离屏渲染时从顶部开始渲染，完整内容高度（TALL）。
+        let isTall = true
 
         if let app = config.appearance {
             let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
@@ -190,7 +190,7 @@ enum SnapshotRunner {
             anchor: resolved.anchor,
             editingAgent: resolved.editingAgent,
             pendingDevRoute: nil,
-            isTall: isScrolled
+            isTall: isTall
         )
 
         var view: AnyView = AnyView(
@@ -235,13 +235,8 @@ enum SnapshotRunner {
 
         hosting.layoutSubtreeIfNeeded()
 
-        let renderHeight: CGFloat
-        if isScrolled {
-            let fit = hosting.fittingSize
-            renderHeight = max(standardSize.height, ceil(fit.height))
-        } else {
-            renderHeight = standardSize.height
-        }
+        let fit = hosting.fittingSize
+        let renderHeight = max(standardSize.height, ceil(fit.height))
 
         let renderSize = NSSize(width: standardSize.width, height: renderHeight)
         window.setContentSize(renderSize)

@@ -266,6 +266,46 @@ public struct Session: Codable, Equatable, Identifiable {
     public var attribution: String
     public var subagents: Int
     public var title: String?
+    public var byDay: [DayCost]? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, agent, label, started, ended, cwd, branch, models, cost, tokens, share, attribution, subagents, title
+        case byDay = "by_day"
+    }
+
+    public init(
+        id: String,
+        agent: String,
+        label: String,
+        started: String,
+        ended: String,
+        cwd: String? = nil,
+        branch: String? = nil,
+        models: [String] = [],
+        cost: Double,
+        tokens: Tokens,
+        share: Double,
+        attribution: String,
+        subagents: Int,
+        title: String? = nil,
+        byDay: [DayCost]? = nil
+    ) {
+        self.id = id
+        self.agent = agent
+        self.label = label
+        self.started = started
+        self.ended = ended
+        self.cwd = cwd
+        self.branch = branch
+        self.models = models
+        self.cost = cost
+        self.tokens = tokens
+        self.share = share
+        self.attribution = attribution
+        self.subagents = subagents
+        self.title = title
+        self.byDay = byDay
+    }
 
     public var startedDate: Date? { ReportDates.parseTimestamp(started) }
     public var endedDate: Date? { ReportDates.parseTimestamp(ended) }

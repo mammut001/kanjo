@@ -56,7 +56,7 @@ public enum Fmt {
 
     /// token：按语言本地化单位。
     /// en: k / M / B 缩写，一位小数（如 1.0k、12.3k、188.0M、23.5B）。
-    /// zh-Hans: 万 / 亿 / 万亿 进位，<10,000 无分组纯数字，一位小数去尾部 .0（如 9999、1.2万、1.9亿、235亿、1.2万亿）。
+    /// zh-Hans: 万 / 亿 / 万亿 进位，<10,000 无分组纯数字；≥1000万/亿 无小数；其余一位小数去尾部 .0（如 9999、1.2万、101.1万、7514万、1.9亿、235亿、1235亿、1.2万亿）。
     /// fr: k / M / Md 缩写，逗号小数，单位前无空格，去尾部 ,0（如 12,3k、188M、23,5Md）。
     public static func tokens(_ n: Int) -> String {
         tokens(n, language: L10n.currentLanguage)
@@ -71,11 +71,26 @@ public enum Fmt {
             let units: [(Double, String)] = [(1e4, "万"), (1e8, "亿"), (1e12, "万亿")]
             for (i, (base, suffix)) in units.enumerated() {
                 let scaled = v / base
-                let rounded = (scaled * 10).rounded() / 10
-                if rounded < 10_000 || i == units.count - 1 {
-                    let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
-                    let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
-                    return sign + body + suffix
+                if scaled >= 1000 {
+                    let rounded = scaled.rounded()
+                    if rounded < 10_000 || i == units.count - 1 {
+                        return sign + String(Int(rounded)) + suffix
+                    }
+                    continue
+                } else {
+                    let rounded = (scaled * 10).rounded() / 10
+                    if rounded >= 1000 {
+                        let roundedInt = scaled.rounded()
+                        if roundedInt < 10_000 || i == units.count - 1 {
+                            return sign + String(Int(roundedInt)) + suffix
+                        }
+                        continue
+                    }
+                    if rounded < 10_000 || i == units.count - 1 {
+                        let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                        let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+                        return sign + body + suffix
+                    }
                 }
             }
             return sign + String(Int(v))

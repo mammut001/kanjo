@@ -2,7 +2,7 @@ import Foundation
 
 // 时间范围（CONTRACT.md 6.1）：纯函数，不依赖 SwiftUI。
 // 项目的 cost / tokens 由 by_day 的 by_agent / by_agent_tokens 逐天逐 agent 累加；
-// sessions 按 sessions_detail[].started 落在范围内计数。
+// sessions 按在范围内有用量计（优先按日数据，否则按 [started, ended] 区间重叠）。
 
 public enum TimeRange: String, CaseIterable, Identifiable {
     case all, today, days7, days30, lastWeek, sinceReset, billingCycle
@@ -94,6 +94,38 @@ public struct RangeSpec: Equatable {
         guard let w = window(for: agent) else { return false }
         if let s = w.start, instant < s { return false }
         if let e = w.end, instant >= e { return false }
+        return true
+    }
+
+    /// 会话是否计入此范围：在范围内有用量。
+    /// 优先使用会话的按日数据（若有）；否则按 [started, ended] 与范围区间有重叠计入。
+    public func includes(_ session: Session) -> Bool {
+        guard let w = window(for: session.agent) else { return false }
+        if let byDay = session.byDay, !byDay.isEmpty {
+            for d in byDay {
+                guard let d0 = HeatStrip.parseDay(d.day, calendar: calendar),
+                      let d1 = calendar.date(byAdding: .day, value: 1, to: d0) else { continue }
+                if includes(dayStart: d0, dayEnd: d1, agent: session.agent) {
+                    if d.cost > 0 || d.tokens > 0 { return true }
+                }
+            }
+            for d in byDay {
+                guard let d0 = HeatStrip.parseDay(d.day, calendar: calendar),
+                      let d1 = calendar.date(byAdding: .day, value: 1, to: d0) else { continue }
+                if includes(dayStart: d0, dayEnd: d1, agent: session.agent) {
+                    return true
+                }
+            }
+            return false
+        }
+        guard let s = session.startedDate ?? session.endedDate,
+              let e = session.endedDate ?? session.startedDate else {
+            return false
+        }
+        let sessionStart = min(s, e)
+        let sessionEnd = max(s, e)
+        if let start = w.start, sessionEnd < start { return false }
+        if let end = w.end, sessionStart >= end { return false }
         return true
     }
 }
@@ -282,7 +314,7 @@ public enum RangeEngine {
                                 byAgent: dc, byAgentTokens: dt))
         }
         let sessions = p.sessionsDetail.filter { s in
-            s.startedDate.map { spec.includes($0, agent: s.agent) } ?? false
+            spec.includes(s)
         }
         for s in sessions { agentSessions[s.agent, default: 0] += 1 }
 
@@ -310,10 +342,12 @@ public enum RangeEngine {
                                   sessionsDetail: b.sessionsDetail, firstActive: b.firstActive, lastActive: b.lastActive)
         }
         let ss = b.sessionsDetail.filter { s in
-            s.startedDate.map { spec.includes($0, agent: s.agent) } ?? false
+            spec.includes(s)
         }
         let cal = spec.calendar
-        let days: [String] = ss.compactMap { s -> String? in s.startedDate.map { dayString($0, calendar: cal) } }
+        let days: [String] = ss.flatMap { s -> [String] in
+            [s.startedDate, s.endedDate].compactMap { $0.map { dayString($0, calendar: cal) } }
+        }
         let cost: Double = ss.reduce(0.0) { $0 + $1.cost }
         let tokens: Int = ss.reduce(0) { $0 + $1.tokens.total }
         return FilteredBucket(cost: cost, tokens: tokens, sessions: ss.count, sessionsDetail: ss,
