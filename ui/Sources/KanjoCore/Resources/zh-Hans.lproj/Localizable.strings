@@ -84,6 +84,9 @@
 "settings.auto_refresh" = "自动刷新";
 "settings.refresh_off" = "关闭";
 "settings.refresh_minutes" = "每 %d 分钟";
+"settings.menu_bar_shows" = "菜单栏显示";
+"settings.menubar.cost" = "花费";
+"settings.menubar.tokens" = "Token";
 "settings.show_menu_bar_cost" = "在菜单栏显示总花费";
 "settings.section.projects" = "项目";
 "settings.hidden_projects_count" = "已隐藏项目：%d";
@@ -149,6 +152,9 @@
 "overview.projects.empty" = "暂无项目。";
 "overview.projects.no_usage_range" = "此范围内暂无项目用量。";
 "overview.projects.all_hidden" = "所有项目均已隐藏。";
+"overview.section.by_model" = "按模型";
+"overview.models.no_usage_range" = "此范围内暂无模型用量。";
+"overview.models.more" = "+%d 更多";
 "overview.projects.idle.singular" = "%d 个项目在此范围内无用量";
 "overview.projects.idle.plural" = "%d 个项目在此范围内无用量";
 "overview.hidden_footer" = "%d 个已隐藏 · %@ ·";

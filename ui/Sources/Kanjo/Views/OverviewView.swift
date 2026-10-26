@@ -14,6 +14,7 @@ struct OverviewView: View {
     @AppStorage(SettingsKeys.pinnedProjects) private var pinnedRaw = ""
     @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
     @State private var showHidden = false
+    @State private var showAllModels = false
 
     private var cur: String { report.currency }
 
@@ -63,6 +64,7 @@ struct OverviewView: View {
                         }
                     }
                     projectsSection(visible: lists.visible, hidden: lists.hidden, idle: lists.idle, isAll: ctx.isAll)
+                    modelsSection(f)
                     bucketsSection(f)
                     VStack(alignment: .leading, spacing: 8) {
                         // 对账只在 All 下有意义（契约 6.1）。
@@ -215,6 +217,67 @@ struct OverviewView: View {
                 }
             }
         }
+    }
+
+    private func modelsSection(_ f: FilteredReport) -> some View {
+        let models = ModelAggregation.aggregate(in: f)
+        let shown = showAllModels ? models : Array(models.prefix(8))
+        return PanelSection(L10n.tr("overview.section.by_model"), flat: true) {
+            if models.isEmpty {
+                Text(L10n.tr("overview.models.no_usage_range"))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .padding(.horizontal, Metrics.listInset).padding(.vertical, 8)
+            } else {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { i, m in
+                    if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
+                    modelRow(m)
+                }
+                if models.count > 8 {
+                    RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { showAllModels.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(showAllModels ? L10n.tr("common.show_fewer") : L10n.tr("overview.models.more", models.count - 8))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(Color.accentColor)
+                            Spacer()
+                        }
+                        .padding(.horizontal, Metrics.listInset)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func modelRow(_ m: ModelCost) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            AgentDot(agent: m.agent, size: 6)
+            Text(m.model)
+                .font(.system(size: 11.5, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if m.estimated {
+                Badge(text: L10n.tr("project.estimated"), style: .warn,
+                      help: L10n.tr("project.estimated_help"))
+            }
+            Spacer(minLength: 8)
+            Text(Fmt.tokens(m.tokens.total))
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .lineLimit(1)
+            Text(Fmt.money(m.cost, currency: cur))
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Metrics.listInset)
+        .padding(.vertical, 6)
+        .help("\(m.model) (\(m.agent))")
     }
 
     private func bucketsSection(_ f: FilteredReport) -> some View {

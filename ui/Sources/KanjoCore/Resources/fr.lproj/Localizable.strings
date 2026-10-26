@@ -84,6 +84,9 @@
 "settings.auto_refresh" = "Actualisation automatique";
 "settings.refresh_off" = "Désactivé";
 "settings.refresh_minutes" = "Toutes les %d min";
+"settings.menu_bar_shows" = "Affichage barre des menus";
+"settings.menubar.cost" = "Coût";
+"settings.menubar.tokens" = "Tokens";
 "settings.show_menu_bar_cost" = "Afficher le coût total dans la barre des menus";
 "settings.section.projects" = "Projets";
 "settings.hidden_projects_count" = "Projets masqués : %d";
@@ -149,6 +152,9 @@
 "overview.projects.empty" = "Aucun projet.";
 "overview.projects.no_usage_range" = "Aucune utilisation de projet sur cette période.";
 "overview.projects.all_hidden" = "Tous les projets sont masqués.";
+"overview.section.by_model" = "Par modèle";
+"overview.models.no_usage_range" = "Aucune utilisation de modèle sur cette période.";
+"overview.models.more" = "+%d autres";
 "overview.projects.idle.singular" = "%d projet sans utilisation sur cette période";
 "overview.projects.idle.plural" = "%d projets sans utilisation sur cette période";
 "overview.hidden_footer" = "%d masqué(s) · %@ ·";

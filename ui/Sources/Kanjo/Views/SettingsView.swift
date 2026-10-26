@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.cliWorkingDirectory) private var cliWorkingDirectory = ""
     @AppStorage(SettingsKeys.refreshMinutes) private var refreshMinutes = 5
     @AppStorage(SettingsKeys.showAmountInMenuBar) private var showAmount = true
+    @AppStorage(SettingsKeys.menuBarMode) private var menuBarMode = MenuBarMode.cost.rawValue
     @AppStorage(SettingsKeys.hiddenProjects) private var hiddenRaw = ""
 
     private let intervals = [0, 1, 5, 15, 30, 60]
@@ -84,6 +85,12 @@ struct SettingsView: View {
                     Picker(L10n.tr("settings.auto_refresh"), selection: $refreshMinutes) {
                         ForEach(intervals, id: \.self) { m in
                             Text(m == 0 ? L10n.tr("settings.refresh_off") : L10n.tr("settings.refresh_minutes", m)).tag(m)
+                        }
+                    }
+                    .font(.system(size: 12))
+                    Picker(L10n.tr("settings.menu_bar_shows"), selection: $menuBarMode) {
+                        ForEach(MenuBarMode.allCases) { mode in
+                            Text(mode.label).tag(mode.rawValue)
                         }
                     }
                     .font(.system(size: 12))

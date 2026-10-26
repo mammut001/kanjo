@@ -12,10 +12,10 @@ final class TimeRangeTests: KanjoTestCase {
     private let now = ReportDates.parseTimestamp("2026-10-24T07:00:00Z")!
 
     func testMenuBarPrefix() {
-        XCTAssertEqual(TimeRange.allCases.map(\.menuBarPrefix), [nil, "7d", "30d", "wk", "rst", "cyc"])
+        XCTAssertEqual(TimeRange.allCases.map(\.menuBarSuffix), [nil, "7d", "30d", nil, nil, nil])
         XCTAssertEqual(TimeRange.billingCycle.shortLabel, "Cycle")
         XCTAssertEqual(TimeRange.billingCycle.longLabel, "Billing cycle")
-        XCTAssertEqual(TimeRange.billingCycle.menuBarPrefix, "cyc")
+        XCTAssertNil(TimeRange.billingCycle.menuBarSuffix)
     }
 
     private func spec(_ r: TimeRange, quota: [String: QuotaWindow]? = nil,
