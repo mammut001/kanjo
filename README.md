@@ -49,7 +49,7 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
   <img src="docs/screenshots/disk-light.png" width="360" alt="Disk page">
 </p>
 
-Every number is an **API-equivalent cost**: tokens × public API price. It is what the same work would have cost on pay-as-you-go billing. If you pay a subscription, it is not what you paid. The app says so on every screen and does not let you hide the note.
+Every number is an **API-equivalent cost**: tokens × public API price. It is what the same work would have cost on pay-as-you-go billing. If you pay a subscription, it is not what you paid. The app shows this note via an ⓘ tooltip next to Total cost and does not let you hide it.
 
 ## Supported agents
 
@@ -119,11 +119,12 @@ exclude = ["/Users/me/scratch"]
 "/Users/me/experiments/app-" = "github.com/me/app"
 
 [quota_windows.claude]
-weekly_resets_at = "2026-10-27T10:00:00Z"
+weekly_reset = "tue 05:00"
+# or: weekly_resets_at = "2026-10-27T10:00:00Z"
 weekly_window_hours = 168
 ```
 
-Quota reset times are read from [Tokei](https://github.com/cclank/tokei)'s cache when it is installed, and can be set by hand as above.
+Quota reset times are read from [Tokei](https://github.com/cclank/tokei)'s cache when it is installed (Claude, Codex, Grok), and can be set by hand in Settings or as above.
 
 ## Repository layout
 
@@ -169,7 +170,7 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 - **隐藏与置顶**。
 - macOS 26 用 **Liquid Glass**，13 到 25 用普通材质。
 
-所有数字都是 **API 等价成本**：token 乘以公开 API 单价。订阅用户的实际支出不是这个数，app 每一屏都写着这句话，并且不能隐藏。
+所有数字都是 **API 等价成本**：token 乘以公开 API 单价。订阅用户的实际支出不是这个数，app 在 Total cost 旁的 ⓘ 提示中醒目标注，并且不能隐藏。
 
 ### 支持的工具
 

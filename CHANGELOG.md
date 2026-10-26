@@ -21,6 +21,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   page links for each service.
 - Settings lets you pick a subscription plan from a list of known plans with list prices (or Other… for
   a custom plan).
+- **Since reset for every subscription.** Grok's weekly reset is read from Tokei's
+  `grok_quota_cache.json`, and any agent can get a manual weekly reset (`'tue 05:00'`) in Settings or
+  via `kanjo config set quota_windows.<agent>.weekly_reset`. The `Since reset` and `Billing cycle`
+  captions list agents with a window and summarise the rest in one phrase.
 - **Localization (Simplified Chinese and French).** Complete UI localization in 简体中文 (`zh-Hans`)
   and Français (`fr`) alongside English, with an in-app language picker in Settings that switches
   immediately without restarting.
@@ -41,6 +45,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with thousand separators, ≥ $10,000 uses compact K/M), time range shown as a middle-dot suffix
   (e.g. `$3,057 · 30d`, omitted for All time), and dropped the redundant dollar icon when an amount or
   token count is shown.
+- **Overview header.** The redundant date caption is gone for fixed ranges (Today, 7d, 30d, Last week),
+  and the API-equivalent note moved into an ⓘ tooltip next to Total cost.
+- **Preview settings isolation (developer).** Preview launches with `--window`, or
+  `--defaults-suite <name>` / `KANJO_DEFAULTS_SUITE`, use an isolated settings suite instead of the
+  user's settings.
 
 ## [0.2.0] - 2026-10-25
 
