@@ -9,16 +9,16 @@ struct SettingsView: View {
     var scrollTo: String? = nil     // 支持底部或具体订阅行
     let onBack: () -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.sourceKind) private var sourceKind =
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.sourceKind, store: AppDefaults.store) private var sourceKind =
         (DefaultPaths.cliDirectoryExists ? SourceKind.cli : SourceKind.file).rawValue
-    @AppStorage(SettingsKeys.filePath) private var filePath = ""
-    @AppStorage(SettingsKeys.cliCommand) private var cliCommand = CLIDataSource.defaultCommand
-    @AppStorage(SettingsKeys.cliWorkingDirectory) private var cliWorkingDirectory = ""
-    @AppStorage(SettingsKeys.refreshMinutes) private var refreshMinutes = 5
-    @AppStorage(SettingsKeys.showAmountInMenuBar) private var showAmount = true
-    @AppStorage(SettingsKeys.menuBarMode) private var menuBarMode = MenuBarMode.cost.rawValue
-    @AppStorage(SettingsKeys.hiddenProjects) private var hiddenRaw = ""
+    @AppStorage(SettingsKeys.filePath, store: AppDefaults.store) private var filePath = ""
+    @AppStorage(SettingsKeys.cliCommand, store: AppDefaults.store) private var cliCommand = CLIDataSource.defaultCommand
+    @AppStorage(SettingsKeys.cliWorkingDirectory, store: AppDefaults.store) private var cliWorkingDirectory = ""
+    @AppStorage(SettingsKeys.refreshMinutes, store: AppDefaults.store) private var refreshMinutes = 5
+    @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
+    @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
+    @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
 
     private let intervals = [0, 1, 5, 15, 30, 60]
 

@@ -67,7 +67,7 @@ struct MenuPanelView: View {
 
     @EnvironmentObject var store: ReportStore
     @EnvironmentObject var disk: DiskStore
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?

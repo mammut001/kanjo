@@ -54,7 +54,7 @@ struct KanjoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = ReportStore.shared
     @StateObject private var disk = DiskStore.shared
-    @AppStorage(SettingsKeys.showAmountInMenuBar) private var showAmount = true
+    @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
 
     var body: some Scene {
         MenuBarExtra {
@@ -71,8 +71,8 @@ struct KanjoApp: App {
 struct MenuBarLabel: View {
     @ObservedObject var store: ReportStore
     let showAmount: Bool
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
-    @AppStorage(SettingsKeys.menuBarMode) private var menuBarMode = MenuBarMode.cost.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
 
     private var mode: MenuBarMode {
         MenuBarMode(rawValue: menuBarMode) ?? .cost

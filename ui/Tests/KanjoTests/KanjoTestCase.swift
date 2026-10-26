@@ -8,15 +8,15 @@ class KanjoTestCase: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        priorLanguage = UserDefaults.standard.string(forKey: SettingsKeys.appLanguage)
-        UserDefaults.standard.set(AppLanguage.en.rawValue, forKey: SettingsKeys.appLanguage)
+        priorLanguage = AppDefaults.store.string(forKey: SettingsKeys.appLanguage)
+        AppDefaults.store.set(AppLanguage.en.rawValue, forKey: SettingsKeys.appLanguage)
     }
 
     override func tearDown() {
         if let prior = priorLanguage {
-            UserDefaults.standard.set(prior, forKey: SettingsKeys.appLanguage)
+            AppDefaults.store.set(prior, forKey: SettingsKeys.appLanguage)
         } else {
-            UserDefaults.standard.removeObject(forKey: SettingsKeys.appLanguage)
+            AppDefaults.store.removeObject(forKey: SettingsKeys.appLanguage)
         }
         super.tearDown()
     }

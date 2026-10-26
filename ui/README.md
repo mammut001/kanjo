@@ -19,12 +19,17 @@ Development helpers:
 ```bash
 swift run Kanjo --data /path/to/data.json     # use this file (overrides Settings)
 KANJO_DATA=/path/to/data.json swift run Kanjo
-swift run Kanjo --window                      # also show the panel in a transparent normal window (screenshots/debugging)
+swift run Kanjo --window                      # preview window; isolated automatically into "kanjo-preview" suite
 swift run Kanjo --window --route project:0    # open straight on a page (for screenshots)
 swift run Kanjo --window --route project:0:locations   # project page scrolled to the bottom, Locations expanded
 swift run Kanjo --window --route disk --disk-data fixtures/disk-sample.json
 swift run Kanjo --window --route disk:expanded --disk-data fixtures/disk-sample.json
+swift run Kanjo --defaults-suite kanjo-test   # isolate settings into a custom UserDefaults suite
+KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 ```
+
+`--defaults-suite <name>` (or env `KANJO_DEFAULTS_SUITE`): routes all settings reads and writes to `UserDefaults(suiteName: name)` instead of `UserDefaults.standard`.
+`--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences or leaking scratch paths. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
 
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
 `project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),

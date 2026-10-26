@@ -107,8 +107,8 @@ struct ProjectDetailView: View {
     var devAnchor: String? = nil
     let onBack: () -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @State private var showAllModels = false
     @State private var showAllBranches = false
     @State private var showLocations = false
@@ -445,8 +445,8 @@ struct BucketDetailView: View {
     let report: UsageReport
     let onBack: () -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
 
     // 桶没有 by_day：范围下按会话的 started 过滤，金额是这些会话之和。
     var body: some View {

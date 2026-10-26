@@ -19,9 +19,10 @@ final class ReportStore: ObservableObject {
     private var timer: Timer?
     private var generation = 0
     private var didScheduleDiskPrefetch = false
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = AppDefaults.store) {
+        self.defaults = defaults
         // 默认直接跑 CLI：优先内置 CLI，其次源码和安装目录。
         let defaultKind: SourceKind = DefaultPaths.cliDirectoryExists ? .cli : .file
         defaults.register(defaults: [
@@ -154,12 +155,12 @@ final class ReportStore: ObservableObject {
 
 /// 设置里的 CLI 命令和工作目录。用量导出和磁盘报告共用。
 enum CLILaunch {
-    static func command(defaults: UserDefaults = .standard) -> String {
+    static func command(defaults: UserDefaults = AppDefaults.store) -> String {
         let cmd = (defaults.string(forKey: SettingsKeys.cliCommand) ?? "").trimmingCharacters(in: .whitespaces)
         return cmd.isEmpty ? CLIDataSource.defaultCommand : cmd
     }
 
-    static func workingDirectory(defaults: UserDefaults = .standard) -> URL? {
+    static func workingDirectory(defaults: UserDefaults = AppDefaults.store) -> URL? {
         let dir = (defaults.string(forKey: SettingsKeys.cliWorkingDirectory) ?? "").trimmingCharacters(in: .whitespaces)
         if dir.isEmpty { return DefaultPaths.resolvedCLIDirectory() }
         return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath)

@@ -29,7 +29,7 @@ struct DiskView: View {
     let onBack: () -> Void
     var onSettings: () -> Void = {}
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
     @EnvironmentObject private var disk: DiskStore
     @State private var expanded: Set<String> = []
     @State private var selected: Set<String> = []

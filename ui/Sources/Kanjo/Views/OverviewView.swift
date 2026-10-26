@@ -9,10 +9,10 @@ struct OverviewView: View {
     let onSelect: (Route) -> Void
     let onSetRenewalDay: (String) -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.hiddenProjects) private var hiddenRaw = ""
-    @AppStorage(SettingsKeys.pinnedProjects) private var pinnedRaw = ""
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
+    @AppStorage(SettingsKeys.pinnedProjects, store: AppDefaults.store) private var pinnedRaw = ""
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @State private var showHidden = false
     @State private var showAllModels = false
 
@@ -323,7 +323,7 @@ struct OverviewView: View {
 private struct SubscriptionValueCard: View {
     let report: UsageReport
     let onSetRenewalDay: (String) -> Void
-    @AppStorage("renewalNudgeDismissed") private var dismissedRaw = ""
+    @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
 
     private var cur: String { report.currency }
 

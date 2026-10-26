@@ -114,7 +114,7 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.tokens(12_345, language: "zh"), "1.2万")
 
         // Automatically follows L10n.currentLanguage
-        UserDefaults.standard.set(AppLanguage.zhHans.rawValue, forKey: SettingsKeys.appLanguage)
+        AppDefaults.store.set(AppLanguage.zhHans.rawValue, forKey: SettingsKeys.appLanguage)
         XCTAssertEqual(Fmt.tokens(9999), "9999")
         XCTAssertEqual(Fmt.tokens(12_345), "1.2万")
         XCTAssertEqual(Fmt.tokens(23_500_000_000), "235亿")
@@ -140,7 +140,7 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.tokens(-188_000_000, language: "fr"), "-188M")
 
         // Automatically follows L10n.currentLanguage
-        UserDefaults.standard.set(AppLanguage.fr.rawValue, forKey: SettingsKeys.appLanguage)
+        AppDefaults.store.set(AppLanguage.fr.rawValue, forKey: SettingsKeys.appLanguage)
         XCTAssertEqual(Fmt.tokens(12_345), "12,3k")
         XCTAssertEqual(Fmt.tokens(188_000_000), "188M")
         XCTAssertEqual(Fmt.tokens(23_500_000_000), "23,5Md")
