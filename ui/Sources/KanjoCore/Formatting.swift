@@ -19,6 +19,41 @@ public enum Fmt {
         return (v < 0 ? "-" : "") + symbol + body
     }
 
+    /// 菜单栏金额：< 100 两位小数（如 `<$0.01`、`$12.34`）；100..<10,000 不带小数并带千分位（`$3,057`）；>= 10,000 紧凑 K/M 一位小数并去尾部 `.0`（`$12.3K`、`$10K`、`$1.2M`）。
+    public static func menuBarMoney(_ v: Double, currency: String = "USD") -> String {
+        let mag = abs(v)
+        let symbol = currency.uppercased() == "USD" ? "$" : currency.uppercased() + " "
+        let sign = v < 0 ? "-" : ""
+
+        if mag < 100 {
+            return money(v, currency: currency)
+        } else if mag < 10_000 {
+            let f = NumberFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.numberStyle = .decimal
+            f.usesGroupingSeparator = true
+            f.groupingSeparator = ","
+            f.groupingSize = 3
+            f.minimumFractionDigits = 0
+            f.maximumFractionDigits = 0
+            f.roundingMode = .halfUp
+            let body = f.string(from: NSNumber(value: mag)) ?? String(Int(mag.rounded()))
+            return sign + symbol + body
+        } else {
+            let units: [(Double, String)] = [(1e3, "K"), (1e6, "M"), (1e9, "B"), (1e12, "T")]
+            for (i, (base, suffix)) in units.enumerated() {
+                let scaled = mag / base
+                let rounded = (scaled * 10).rounded() / 10
+                if rounded < 1000 || i == units.count - 1 {
+                    let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                    let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+                    return sign + symbol + body + suffix
+                }
+            }
+            return sign + symbol + String(Int(mag))
+        }
+    }
+
     /// token：k / M / B 缩写，一位小数。
     public static func tokens(_ n: Int) -> String {
         let v = Double(abs(n))
@@ -153,4 +188,16 @@ public enum Fmt {
     }
 
     public static func clock(_ d: Date) -> String { time.string(from: d) }
+}
+
+/// 菜单栏文本生成器：纯逻辑，方便测试。
+public enum MenuBarText {
+    /// 菜单栏文本：金额优先，范围作为后缀以中点连接（如 `$3,057 · 30d`）；.all 时无后缀。
+    public static func make(cost: Double, currency: String = "USD", range: TimeRange) -> String {
+        let amount = Fmt.menuBarMoney(cost, currency: currency)
+        guard let suffix = range.menuBarPrefix, !suffix.isEmpty else {
+            return amount
+        }
+        return "\(amount) · \(suffix)"
+    }
 }

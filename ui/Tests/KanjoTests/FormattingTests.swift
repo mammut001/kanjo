@@ -13,6 +13,40 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(Fmt.money(3, currency: "EUR"), "EUR 3.00")
     }
 
+    func testMenuBarMoney() {
+        // < 100：两位小数，保留 <$0.01
+        XCTAssertEqual(Fmt.menuBarMoney(0.004), "<$0.01")
+        XCTAssertEqual(Fmt.menuBarMoney(12.345), "$12.35")
+        XCTAssertEqual(Fmt.menuBarMoney(99.99), "$99.99")
+
+        // 100 ..< 10,000：无小数，千分位分组
+        XCTAssertEqual(Fmt.menuBarMoney(100), "$100")
+        XCTAssertEqual(Fmt.menuBarMoney(3056.88), "$3,057")
+        XCTAssertEqual(Fmt.menuBarMoney(9999.6), "$10,000")
+
+        // >= 10,000：紧凑 K/M 一位小数，去尾部 .0
+        XCTAssertEqual(Fmt.menuBarMoney(10000), "$10K")
+        XCTAssertEqual(Fmt.menuBarMoney(12345), "$12.3K")
+        XCTAssertEqual(Fmt.menuBarMoney(1_234_567), "$1.2M")
+
+        // 负数：保持前导 -
+        XCTAssertEqual(Fmt.menuBarMoney(-0.004), "-<$0.01")
+        XCTAssertEqual(Fmt.menuBarMoney(-12.345), "-$12.35")
+        XCTAssertEqual(Fmt.menuBarMoney(-3056.88), "-$3,057")
+        XCTAssertEqual(Fmt.menuBarMoney(-12345), "-$12.3K")
+
+        // 非 USD
+        XCTAssertEqual(Fmt.menuBarMoney(12.345, currency: "EUR"), "EUR 12.35")
+        XCTAssertEqual(Fmt.menuBarMoney(3056.88, currency: "EUR"), "EUR 3,057")
+        XCTAssertEqual(Fmt.menuBarMoney(12345, currency: "EUR"), "EUR 12.3K")
+        XCTAssertEqual(Fmt.menuBarMoney(-3056.88, currency: "EUR"), "-EUR 3,057")
+    }
+
+    func testMenuBarText() {
+        XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .all), "$3,057")
+        XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .days30), "$3,057 · 30d")
+    }
+
     func testTokens() {
         XCTAssertEqual(Fmt.tokens(0), "0")
         XCTAssertEqual(Fmt.tokens(999), "999")
