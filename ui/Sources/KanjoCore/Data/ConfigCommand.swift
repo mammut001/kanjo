@@ -57,9 +57,25 @@ public enum ConfigCommand {
         let args = try arguments(agent: agent, anchorDay: anchorDay)
         return try command(from: cliCommand, arguments: args)
     }
+
+    public static func plansArguments() -> [String] {
+        ["config", "plans", "--json"]
+    }
+
+    public static func plansCommand(from cliCommand: String) throws -> String {
+        try command(from: cliCommand, arguments: plansArguments())
+    }
 }
 
 public struct ConfigDataSource {
+    private static var cachedPlans: [String: [KnownPlan]]?
+    private static var didAttemptFetch = false
+
+    public static func resetCacheForTesting() {
+        cachedPlans = nil
+        didAttemptFetch = false
+    }
+
     public let cliCommand: String
     public let workingDirectory: URL?
     public let timeout: TimeInterval
@@ -68,6 +84,31 @@ public struct ConfigDataSource {
         self.cliCommand = cliCommand
         self.workingDirectory = workingDirectory
         self.timeout = timeout
+    }
+
+    public func fetchKnownPlans(useCache: Bool = true) async throws -> [String: [KnownPlan]] {
+        if useCache && Self.didAttemptFetch {
+            if let cached = Self.cachedPlans {
+                return cached
+            }
+            throw DataSourceError.launchFailed("Known plans fetch failed previously")
+        }
+        let args = ConfigCommand.plansArguments()
+        let command = try ConfigCommand.command(from: cliCommand, arguments: args)
+        let cwd = workingDirectory
+        let timeout = self.timeout
+        let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
+        }.value
+        if useCache { Self.didAttemptFetch = true }
+        if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
+        guard status == 0 else {
+            throw DataSourceError.commandFailed(command: command, status: status,
+                                                stderr: String(decoding: err, as: UTF8.self))
+        }
+        let decoded = try JSONDecoder().decode([String: [KnownPlan]].self, from: out)
+        if useCache { Self.cachedPlans = decoded }
+        return decoded
     }
 
     private func execute(args: [String]) async throws {
@@ -97,6 +138,10 @@ public struct ConfigDataSource {
         }
         if let plan = plan, !plan.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let args = try ConfigCommand.fieldArguments(agent: agent, field: "plan", value: plan)
+            try await execute(args: args)
+        }
+        if monthlyPriceUsd == nil {
+            let args = try ConfigCommand.fieldArguments(agent: agent, field: "monthly_price_usd", value: nil)
             try await execute(args: args)
         }
         if let day = anchorDay {

@@ -125,9 +125,11 @@
 "settings.add_subscription" = "添加订阅";
 "settings.edit" = "编辑";
 "settings.plan" = "套餐";
+"settings.plan_other" = "其他…";
 "settings.monthly_price_usd" = "月费 ($)";
 "settings.remove_subscription" = "移除";
 "settings.error.plan_required" = "套餐名称为必填项。";
+"settings.error.price_required" = "该套餐必须填写月费。";
 "settings.error.invalid_price" = "金额必须为非负数。";
 "settings.saving" = "正在保存…";
 "settings.source.not_set" = "未设置 · 使用最近30天";

@@ -298,6 +298,89 @@ class ConfigCommandTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertTrue(len(err) > 0)
 
+    def test_config_plans_json(self):
+        from kanjo.subscriptions import KNOWN_PLANS
+        code, out, err = self.run_cli("config", "plans", "--json")
+        self.assertEqual((code, err), (0, ""))
+        data = json.loads(out)
+        self.assertEqual(list(data.keys()), list(KNOWN_PLANS.keys()))
+        for agent, expected_plans in KNOWN_PLANS.items():
+            self.assertIn(agent, data)
+            actual_plans = data[agent]
+            # No duplicate labels in the plans output
+            labels = [p["label"] for p in actual_plans]
+            self.assertEqual(len(labels), len(set(labels)), "duplicate labels in %s: %r" % (agent, labels))
+            # Verify each returned plan preserves the first key for its (label, price)
+            seen_pairs = set()
+            expected_unique = []
+            for k, (lbl, prc) in expected_plans.items():
+                if (lbl, prc) not in seen_pairs:
+                    seen_pairs.add((lbl, prc))
+                    expected_unique.append((k, lbl, prc))
+            self.assertEqual(len(actual_plans), len(expected_unique))
+            for actual, (expected_key, expected_label, expected_price) in zip(actual_plans, expected_unique):
+                self.assertEqual(actual["key"], expected_key)
+                self.assertEqual(actual["label"], expected_label)
+                self.assertEqual(actual["monthly_price_usd"], expected_price)
+
+        # Explicitly check known alias keys were omitted from plans list
+        copilot_keys = [p["key"] for p in data["copilot"]]
+        self.assertIn("pro", copilot_keys)
+        self.assertNotIn("individual", copilot_keys)
+
+        minimax_keys = [p["key"] for p in data["minimax"]]
+        self.assertIn("starter", minimax_keys)
+        self.assertNotIn("coding_plan_starter", minimax_keys)
+
+        qwen_keys = [p["key"] for p in data["qwen"]]
+        self.assertIn("coding_plan", qwen_keys)
+        self.assertNotIn("pro", qwen_keys)
+
+    def test_alias_keys_still_resolve_when_configured(self):
+        # Alias keys like copilot individual, minimax coding_plan_plus, qwen pro still resolve
+        aliases = [
+            ("copilot", "individual", 10.0, "Copilot Pro"),
+            ("minimax", "coding_plan_plus", 20.0, "MiniMax Coding Plan Plus"),
+            ("qwen", "pro", 50.0, "Qwen Coding Plan Pro"),
+        ]
+        for agent, alias_key, expected_price, expected_label in aliases:
+            key = "subscriptions.%s.plan" % agent
+            self.assertEqual(self.run_cli("config", "set", key, alias_key)[0], 0)
+            self.assert_line(("get", "subscriptions.%s.monthly_price_usd" % agent),
+                             "subscriptions.%s.monthly_price_usd = %s (overrides)" % (agent, expected_price))
+            sub = subscriptions(config.load().subscriptions)[agent]
+            self.assertEqual(sub["plan_label"], expected_label)
+            self.assertEqual(sub["monthly_price_usd"], expected_price)
+            self.assertEqual(self.run_cli("config", "unset", key)[0], 0)
+
+    def test_config_plans_text(self):
+        code, out, err = self.run_cli("config", "plans")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("claude:", out)
+        self.assertIn("Claude Pro ($20.00)", out)
+        self.assertIn("ChatGPT Plus ($20.00)", out)
+        self.assertIn("X Premium+ (unknown)", out)
+
+    def test_config_plans_rejects_arguments(self):
+        code, _, err = self.run_cli("config", "plans", "extra")
+        self.assertEqual(code, 2)
+        self.assertIn("takes no key or value", err)
+        code, _, err = self.run_cli("config", "plans", "k", "v")
+        self.assertEqual(code, 2)
+        self.assertIn("takes no key or value", err)
+
+    def test_config_json_rejected_for_non_plans(self):
+        for subcmd in ("get", "set", "unset", "path"):
+            args = ["config", subcmd]
+            if subcmd in ("get", "unset"):
+                args.append("subscriptions.codex.plan")
+            elif subcmd == "set":
+                args.extend(["subscriptions.codex.plan", "plus"])
+            args.append("--json")
+            code, _, err = self.run_cli(*args)
+            self.assertEqual(code, 2)
+            self.assertIn("does not accept --json", err)
+
 
 if __name__ == "__main__":
     unittest.main()

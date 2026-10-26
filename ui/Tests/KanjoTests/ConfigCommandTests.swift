@@ -64,4 +64,13 @@ final class ConfigCommandTests: KanjoTestCase {
             XCTAssertThrowsError(try ConfigCommand.quotaResetArguments(agent: agent, weeklyReset: "tue 05:00"))
         }
     }
+
+    func testPlansCommand() throws {
+        XCTAssertEqual(ConfigCommand.plansArguments(), ["config", "plans", "--json"])
+        XCTAssertEqual(try ConfigCommand.plansCommand(from: CLIDataSource.defaultCommand),
+                       "python3 -m kanjo config plans --json")
+        let prefix = "export PATH=\"$HOME/.local/bin:$PATH\"; '/opt/tools/bin/python3' -m kanjo "
+        XCTAssertEqual(try ConfigCommand.plansCommand(from: prefix + "export"),
+                       prefix + "config plans --json")
+    }
 }
