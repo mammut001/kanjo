@@ -12,7 +12,10 @@ final class TimeRangeTests: KanjoTestCase {
     private let now = ReportDates.parseTimestamp("2026-10-24T07:00:00Z")!
 
     func testMenuBarPrefix() {
-        XCTAssertEqual(TimeRange.allCases.map(\.menuBarSuffix), [nil, "7d", "30d", nil, nil, nil])
+        XCTAssertEqual(TimeRange.allCases.map(\.menuBarSuffix), [nil, "today", "7d", "30d", nil, nil, nil])
+        XCTAssertEqual(TimeRange.today.shortLabel, "Today")
+        XCTAssertEqual(TimeRange.today.longLabel, "Today")
+        XCTAssertEqual(TimeRange.today.menuBarSuffix, "today")
         XCTAssertEqual(TimeRange.billingCycle.shortLabel, "Cycle")
         XCTAssertEqual(TimeRange.billingCycle.longLabel, "Billing cycle")
         XCTAssertNil(TimeRange.billingCycle.menuBarSuffix)
@@ -38,6 +41,24 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertTrue(s.isAll)
         XCTAssertNil(s.start); XCTAssertNil(s.end)
         XCTAssertTrue(s.includes(.distantPast, agent: "anything"))
+    }
+
+    func testToday() {
+        let s = spec(.today)
+        XCTAssertEqual(s.start, day("2026-10-24"))
+        XCTAssertEqual(s.end, now)
+        // 边界日：Oct 24 算，Oct 23 不算。
+        XCTAssertTrue(s.includes(dayStart: day("2026-10-24"), dayEnd: day("2026-10-25"), agent: "claude"))
+        XCTAssertFalse(s.includes(dayStart: day("2026-10-23"), dayEnd: day("2026-10-24"), agent: "claude"))
+        // 上海 Oct 24 00:00 = UTC Oct 23 16:00。
+        // 包括当天启动的 session
+        XCTAssertTrue(s.includes(ts("2026-10-23T16:00:00Z"), agent: "claude"))
+        XCTAssertTrue(s.includes(ts("2026-10-24T06:59:59Z"), agent: "claude"))
+        // 排除昨天 23:59 (上海 Oct 23 23:59:00 = UTC Oct 23 15:59:00，23:59:59 = UTC Oct 23 15:59:59)
+        XCTAssertFalse(s.includes(ts("2026-10-23T15:59:00Z"), agent: "claude"))
+        XCTAssertFalse(s.includes(ts("2026-10-23T15:59:59Z"), agent: "claude"))
+        // 排除 end 及未来
+        XCTAssertFalse(s.includes(now, agent: "claude"))
     }
 
     func testSevenAndThirtyDays() {

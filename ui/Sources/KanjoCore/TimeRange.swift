@@ -5,7 +5,7 @@ import Foundation
 // sessions 按 sessions_detail[].started 落在范围内计数。
 
 public enum TimeRange: String, CaseIterable, Identifiable {
-    case all, days7, days30, lastWeek, sinceReset, billingCycle
+    case all, today, days7, days30, lastWeek, sinceReset, billingCycle
 
     public var id: String { rawValue }
 
@@ -13,6 +13,7 @@ public enum TimeRange: String, CaseIterable, Identifiable {
     public var shortLabel: String {
         switch self {
         case .all: return L10n.tr("timerange.all.short")
+        case .today: return L10n.tr("timerange.today.short")
         case .days7: return L10n.tr("timerange.days7.short")
         case .days30: return L10n.tr("timerange.days30.short")
         case .lastWeek: return L10n.tr("timerange.lastWeek.short")
@@ -21,9 +22,11 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 菜单栏范围后缀：仅固定时间窗口（7d / 30d）显示本地化短标签，其他范围（All、Last week、Since reset、Billing cycle）无后缀。
+    /// 菜单栏范围后缀：固定时间窗口（Today / 7d / 30d）显示本地化后缀，其他范围（All、Last week、Since reset、Billing cycle）无后缀。
     public var menuBarSuffix: String? {
         switch self {
+        case .today:
+            return L10n.tr("timerange.today.suffix")
         case .days7, .days30:
             return shortLabel
         case .all, .lastWeek, .sinceReset, .billingCycle:
@@ -39,6 +42,7 @@ public enum TimeRange: String, CaseIterable, Identifiable {
     public var longLabel: String {
         switch self {
         case .all: return L10n.tr("timerange.all.long")
+        case .today: return L10n.tr("timerange.today.long")
         case .days7: return L10n.tr("timerange.days7.long")
         case .days30: return L10n.tr("timerange.days30.long")
         case .lastWeek: return L10n.tr("timerange.lastWeek.long")
@@ -163,7 +167,7 @@ public enum RangeEngine {
     }
 
     /// 范围 → 区间。
-    /// - all：无界；days7 / days30：[今天往前 6 / 29 天的零点, now)；
+    /// - all：无界；today：[今天零点, now)；days7 / days30：[今天往前 6 / 29 天的零点, now)；
     /// - lastWeek：上一个周一零点到本周一零点；
     /// - sinceReset：每个 agent 的起点 = 当前周窗口的开始（见 `windowStart`），没有 quota 的 agent 不计入。
     /// - billingCycle：每个 agent 的起点 = `subscriptions[agent].cycle_start`，没有订阅（或起点解析不了）的 agent 不计入。
@@ -176,6 +180,8 @@ public enum RangeEngine {
         switch range {
         case .all:
             return RangeSpec(range: .all, calendar: cal)
+        case .today:
+            return RangeSpec(range: .today, calendar: cal, start: daysBack(0), end: now)
         case .days7:
             return RangeSpec(range: .days7, calendar: cal, start: daysBack(6), end: now)
         case .days30:

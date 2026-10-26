@@ -16,6 +16,7 @@
 
 /* Période */
 "timerange.all.short" = "Tout";
+"timerange.today.short" = "Auj.";
 "timerange.days7.short" = "7 j";
 "timerange.days30.short" = "30 j";
 "timerange.lastWeek.short" = "Sem. préc.";
@@ -23,11 +24,14 @@
 "timerange.billingCycle.short" = "Cycle";
 
 "timerange.all.long" = "Toutes les dates";
+"timerange.today.long" = "Aujourd'hui";
 "timerange.days7.long" = "7 derniers jours";
 "timerange.days30.long" = "30 derniers jours";
 "timerange.lastWeek.long" = "Semaine passée";
 "timerange.sinceReset.long" = "Depuis réinitialisation";
 "timerange.billingCycle.long" = "Cycle de facturation";
+
+"timerange.today.suffix" = "auj.";
 
 "timerange.tooltip.no_reset_info" = "Aucune info de réinit.";
 "timerange.tooltip.no_subscription_info" = "Aucune info d'abonnement";

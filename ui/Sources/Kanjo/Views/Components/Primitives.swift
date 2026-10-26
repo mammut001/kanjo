@@ -333,9 +333,13 @@ enum ShortDate {
     }
 
     /// "Jun 28 – Oct 23, 2026"；跨年时两端都带年份。`compact` 时两端都在今年就连年份也省掉（"Jun 28 – Oct 23"）。
+    /// 首尾同一天时只显示单日（`compact` 为 "Oct 23"，否则为 "Oct 23, 2026"）。
     static func range(_ a: String?, _ b: String?, compact: Bool = false) -> String {
         guard let a, let b, let da = ReportDates.parseDay(a), let db = ReportDates.parseDay(b) else {
-            return "\(Fmt.day(a)) – \(Fmt.day(b))"
+            return a == b ? Fmt.day(a) : "\(Fmt.day(a)) – \(Fmt.day(b))"
+        }
+        if da == db {
+            return compact ? day(a) : Fmt.day(a)
         }
         let cal = Calendar.current
         let thisYear = cal.component(.year, from: Date())
