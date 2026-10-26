@@ -182,21 +182,49 @@ notarize_artifact() {
     trap 'rm -f "$tmp_log"' EXIT
     local status=0
     set +e
-    xcrun notarytool submit "$target" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | tee "$tmp_log"
+    xcrun notarytool submit "$target" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json 2>&1 | tee "$tmp_log"
     status="${PIPESTATUS[0]}"
     set -e
-    if [[ $status -ne 0 ]]; then
-        local sub_id
-        sub_id="$(grep -oE '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' "$tmp_log" | head -n 1 || true)"
+
+    local notary_status="" sub_id=""
+    if [[ -s "$tmp_log" ]]; then
+        local parsed
+        parsed="$(python3 -c '
+import json, re, sys
+content = sys.stdin.read()
+status, sub_id = "", ""
+try:
+    start = content.find("{")
+    end = content.rfind("}")
+    if start != -1 and end != -1:
+        data = json.loads(content[start:end+1])
+        status = str(data.get("status", ""))
+        sub_id = str(data.get("id", ""))
+except Exception:
+    pass
+if not status:
+    m = re.search(r"status\s*[:=]\s*[\"'\''\"]?([A-Za-z]+)", content, re.IGNORECASE)
+    if m:
+        status = m.group(1)
+if not sub_id:
+    m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", content)
+    if m:
+        sub_id = m.group(0)
+print(f"{status.lower()}\t{sub_id}")
+' < "$tmp_log" 2>/dev/null || true)"
+        IFS=$'\t' read -r notary_status sub_id <<< "$parsed"
+    fi
+
+    if [[ $status -ne 0 || "$notary_status" != "accepted" ]]; then
         rm -f "$tmp_log"
         trap - EXIT
-        echo "==> notarization failed for $target" >&2
+        echo "==> notarization failed for $target (status: ${notary_status:-unknown})" >&2
         if [[ -n "$sub_id" ]]; then
             echo "notarytool log command: xcrun notarytool log $sub_id --keychain-profile $NOTARY_PROFILE" >&2
         else
             echo "notarytool log command: xcrun notarytool log <submission-id> --keychain-profile $NOTARY_PROFILE" >&2
         fi
-        exit "$status"
+        exit 1
     fi
     rm -f "$tmp_log"
     trap - EXIT
