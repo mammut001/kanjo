@@ -8,6 +8,19 @@ public var subscriptionValueExplanation: String {
     L10n.tr("overview.subscription_value.explanation")
 }
 
+/// 额度卡的一行。percent 为 nil 时显示「—」（窗口已结束或缓存没有百分比）。
+public struct QuotaRow: Equatable, Identifiable {
+    public var id: String          // "five_hour" | "weekly"
+    public var title: String
+    public var percent: Double?    // 0–100
+    public var detail: String      // 重置文案，或「窗口已结束」
+}
+
+/// 进度条色调：≥ 80% 警示，≥ 95% 才用红色。
+public enum QuotaLevel: Equatable {
+    case normal, warning, critical
+}
+
 public enum SubscriptionValue {
     public static var assumedDayHelp: String {
         L10n.tr("overview.renewal_day_unknown_help")
@@ -40,6 +53,62 @@ public enum SubscriptionValue {
         case "subscription_date": return L10n.tr("settings.source.detected")
         default: return sub.source == "manual" ? L10n.tr("settings.source.manual") : L10n.tr("settings.source.detected")
         }
+    }
+
+    /// 悬停订阅行时的额度卡（契约 quota_windows）：5 小时窗口、周窗口各一行。
+    /// 没有该 agent 的窗口时返回空数组（不显示卡片）。5 小时窗口已结束时那一行标「窗口已结束」。
+    public static func quotaRows(_ window: QuotaWindow?, timezone: TimeZone, now: Date = Date(),
+                                 language: String? = nil) -> [QuotaRow] {
+        guard let window else { return [] }
+        var rows: [QuotaRow] = []
+        if let hours = window.fiveHourWindowHours {
+            let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp).flatMap { $0 > now ? $0 : nil }
+            rows.append(QuotaRow(id: "five_hour", title: windowName(hours: hours),
+                                 percent: reset == nil ? nil : clampPercent(window.fiveHourUsedPercent),
+                                 detail: reset.map { resetText($0, timezone: timezone, now: now, language: language) }
+                                    ?? L10n.tr("overview.quota.ended")))
+        }
+        if let reset = ReportDates.parseTimestamp(window.weeklyResetsAt) {
+            let ended = reset <= now
+            rows.append(QuotaRow(id: "weekly", title: windowName(hours: window.weeklyWindowHours),
+                                 percent: ended ? nil : clampPercent(window.weeklyUsedPercent),
+                                 detail: ended ? L10n.tr("overview.quota.ended")
+                                    : resetText(reset, timezone: timezone, now: now, language: language)))
+        }
+        return rows
+    }
+
+    public static func windowName(hours: Int) -> String {
+        hours == 168 ? L10n.tr("overview.quota.weekly")
+            : hours == 5 ? L10n.tr("overview.quota.five_hour")
+            : L10n.tr("overview.quota.hours", hours)
+    }
+
+    /// 「2 小时 5 分后重置 · 周二 10:00」：相对时间 + 报告时区的绝对时间（当天只给时刻）。
+    public static func resetText(_ reset: Date, timezone: TimeZone, now: Date = Date(), language: String? = nil) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timezone
+        let template = cal.isDate(reset, inSameDayAs: now) ? "jmm" : "EEEjmm"
+        let absolute = RangeCaptionBuilder.templateFormatter(template, cal, language: language).string(from: reset)
+        return L10n.tr("overview.quota.resets_in", relative(from: now, to: reset), absolute)
+    }
+
+    /// 剩余时长，向上取整到分钟：不到 1 小时给分钟，不到 1 天给时+分，否则天+时。
+    public static func relative(from now: Date, to date: Date) -> String {
+        let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
+        if minutes < 60 { return L10n.tr("overview.quota.rel_m", minutes) }
+        if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", minutes / 60, minutes % 60) }
+        return L10n.tr("overview.quota.rel_dh", minutes / 1440, minutes % 1440 / 60)
+    }
+
+    public static func level(_ percent: Double?) -> QuotaLevel {
+        guard let p = percent else { return .normal }
+        return p >= 95 ? .critical : p >= 80 ? .warning : .normal
+    }
+
+    private static func clampPercent(_ p: Double?) -> Double? {
+        guard let p, p.isFinite else { return nil }
+        return min(max(p, 0), 100)
     }
 
     /// 用量 ÷ 月费。月费为空或不是正数时为 nil（界面显示「—」，不显示倍数）。

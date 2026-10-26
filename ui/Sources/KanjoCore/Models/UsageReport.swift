@@ -68,20 +68,31 @@ public struct ReportConfig: Codable, Equatable {
 public struct QuotaWindow: Codable, Equatable {
     public var weeklyResetsAt: String       // 下次周重置，ISO 8601 UTC
     public var weeklyWindowHours: Int
+    public var weeklyUsedPercent: Double?   // 0–100；缓存没有或窗口已过时为 nil
     public var fiveHourResetsAt: String?
+    public var fiveHourWindowHours: Int?
+    public var fiveHourUsedPercent: Double?
     public var source: String               // "tokei" | "manual"
 
     enum CodingKeys: String, CodingKey {
         case weeklyResetsAt = "weekly_resets_at"
         case weeklyWindowHours = "weekly_window_hours"
+        case weeklyUsedPercent = "weekly_used_percent"
         case fiveHourResetsAt = "five_hour_resets_at"
+        case fiveHourWindowHours = "five_hour_window_hours"
+        case fiveHourUsedPercent = "five_hour_used_percent"
         case source
     }
 
-    public init(weeklyResetsAt: String, weeklyWindowHours: Int = 168, fiveHourResetsAt: String? = nil, source: String = "tokei") {
+    public init(weeklyResetsAt: String, weeklyWindowHours: Int = 168, weeklyUsedPercent: Double? = nil,
+                fiveHourResetsAt: String? = nil, fiveHourWindowHours: Int? = nil, fiveHourUsedPercent: Double? = nil,
+                source: String = "tokei") {
         self.weeklyResetsAt = weeklyResetsAt
         self.weeklyWindowHours = weeklyWindowHours
+        self.weeklyUsedPercent = weeklyUsedPercent
         self.fiveHourResetsAt = fiveHourResetsAt
+        self.fiveHourWindowHours = fiveHourWindowHours
+        self.fiveHourUsedPercent = fiveHourUsedPercent
         self.source = source
     }
 }

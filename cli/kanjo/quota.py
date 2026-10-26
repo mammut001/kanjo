@@ -11,13 +11,17 @@ Sources, per agent, highest priority first:
      and ``limits.primary`` (5-hour) ``resets_at``; freshness from ``fetched_at``.
    - Grok: ``grok_quota_cache.json`` -> ``quota.reset`` (weekly, ``window``), freshness
      from ``fetched_at``.
+   Used percent per window comes from ``snapshot.q7`` / ``q5`` (Claude),
+   ``limits.*.used_percent`` (Codex) and ``quota.pct`` (Grok); manual entries have none.
 
 A Tokei cache older than ``MAX_AGE_DAYS`` is ignored. Anything missing or malformed
 just leaves that agent out; this module never raises.
 
 Reset points that are already past are moved forward: the weekly reset by whole
 windows (the cadence is fixed), the 5-hour reset becomes null (the next 5-hour
-window only starts with the next use).
+window only starts with the next use). The used percent of a window that already ended
+is null too: the cache only knows the old window. ``five_hour_window_hours`` stays set
+for an ended 5-hour window (null only when the agent has none), so the UI can say so.
 """
 
 from __future__ import annotations
@@ -122,16 +126,30 @@ def _fresh(stamp: Optional[float], path: str, now: float) -> bool:
     return now - stamp <= MAX_AGE_DAYS * 86400
 
 
-def window(weekly: float, hours: int, five: Optional[float], source: str, now: float) -> dict:
+def _pct(value) -> Optional[float]:
+    """Used percent 0-100 (0 allowed, clamped); None when missing or malformed."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return round(min(max(float(value), 0.0), 100.0), 1)
+
+
+def window(weekly: float, hours: int, five: Optional[float], source: str, now: float,
+           weekly_pct=None, five_pct=None, five_hours: Optional[float] = None) -> dict:
     period = hours * 3600
     if weekly <= now:
         weekly += period * (math.floor((now - weekly) / period) + 1)
+        weekly_pct = None  # the cached usage belongs to a window that already ended
     if five is not None and five <= now:
         five = None
+    if five is None:
+        five_pct = None  # five_hours stays: the agent has a 5-hour window, it just ended
     return {
         "weekly_resets_at": iso_utc(weekly),
         "weekly_window_hours": int(hours),
+        "weekly_used_percent": _pct(weekly_pct),
         "five_hour_resets_at": iso_utc(five),
+        "five_hour_window_hours": int(round(five_hours)) if five_hours else None,
+        "five_hour_used_percent": _pct(five_pct),
         "source": source,
     }
 
@@ -145,7 +163,8 @@ def _claude(directory: str, now: float) -> Optional[dict]:
     weekly = _num(snap.get("q7Reset"))
     if weekly is None or not _fresh(_num(snap.get("updated")), path, now):
         return None
-    return window(weekly, DEFAULT_WEEKLY_HOURS, _num(snap.get("q5Reset")), "tokei", now)
+    return window(weekly, DEFAULT_WEEKLY_HOURS, _num(snap.get("q5Reset")), "tokei", now,
+                  snap.get("q7"), snap.get("q5"), 5 if _num(snap.get("q5Reset")) else None)
 
 
 def _codex(directory: str, now: float) -> Optional[dict]:
@@ -161,7 +180,9 @@ def _codex(directory: str, now: float) -> Optional[dict]:
         return None
     minutes = _num(secondary.get("window_minutes"))
     hours = int(round(minutes / 60)) if minutes else DEFAULT_WEEKLY_HOURS
-    return window(weekly, hours or DEFAULT_WEEKLY_HOURS, _num(primary.get("resets_at")), "tokei", now)
+    return window(weekly, hours or DEFAULT_WEEKLY_HOURS, _num(primary.get("resets_at")), "tokei", now,
+                  secondary.get("used_percent"), primary.get("used_percent"),
+                  (_num(primary.get("window_minutes")) or 300) / 60 if _num(primary.get("resets_at")) else None)
 
 
 def _grok(directory: str, now: float) -> Optional[dict]:
@@ -182,7 +203,7 @@ def _grok(directory: str, now: float) -> Optional[dict]:
         hours = 24
     else:
         return None
-    return window(reset, hours, None, "tokei", now)
+    return window(reset, hours, None, "tokei", now, quota.get("pct"))
 
 
 TOKEI_READERS = {"claude": _claude, "codex": _codex, "grok": _grok}
@@ -210,5 +231,6 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         else:
             continue
         hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
-        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now)
+        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now,
+                             five_hours=5 if spec.get("five_hour_resets_at") is not None else None)
     return {agent: out[agent] for agent in sorted(out)}
