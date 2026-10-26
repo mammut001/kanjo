@@ -6,6 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Subscription quota card on hover.** Hovering a row of the Subscription value card shows a quota
+  card with the 5-hour and weekly windows (progress bar, percent, relative + absolute reset time;
+  expired windows show '—'), from new `quota_windows` fields `weekly_used_percent`,
+  `five_hour_used_percent`, and `five_hour_window_hours` read from Tokei caches.
+- **Signed DMG and optional notarization.** The DMG is signed with the Developer ID, and
+  `ui/package.sh` supports optional notarization via `KANJO_NOTARY_PROFILE` or `--notarize`.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added
