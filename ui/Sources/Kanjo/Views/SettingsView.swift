@@ -142,25 +142,18 @@ struct SettingsView: View {
     private var quotaSection: some View {
         PanelSection(L10n.tr("settings.section.quota_reset"), inset: true) {
             if let r = store.report {
-                let ctx = RangeContext(report: r, raw: TimeRange.sinceReset.rawValue)
+                let agents = quotaAgentList(report: r)
                 let quota = r.quotaWindows ?? [:]
                 let cal = RangeEngine.calendar(timezone: RangeEngine.timezone(of: r))
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
-                    GridRow {
-                        Text(L10n.tr("settings.grid.agent")); Text(L10n.tr("settings.grid.next_reset")); Text(L10n.tr("settings.grid.source")).gridColumnAlignment(.trailing)
-                    }
-                    .font(.system(size: 10)).foregroundStyle(.tertiary)
-                    ForEach(ctx.agentOrder, id: \.self) { agent in
-                        GridRow {
-                            HStack(spacing: 5) {
-                                AgentDot(agent: agent, size: 6)
-                                Text(r.agentLabels[agent] ?? agent).lineLimit(1)
-                            }
-                            .font(.system(size: 11.5))
-                            quotaCell(quota[agent], cal: cal)
-                            Text(quota[agent]?.source ?? "none")
-                                .font(.system(size: 10.5, design: .monospaced))
-                                .foregroundStyle(quota[agent] == nil ? .tertiary : .secondary)
+                if agents.isEmpty {
+                    Text(L10n.tr("settings.no_reset_info"))
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(agents, id: \.self) { agent in
+                            QuotaResetSettingsRow(agent: agent, quota: quota[agent],
+                                                  label: r.agentLabels[agent] ?? AgentColors.defaultLabels[agent] ?? agent,
+                                                  calendar: cal)
                         }
                     }
                 }
@@ -169,6 +162,12 @@ struct SettingsView: View {
             }
             note(L10n.tr("settings.quota_note"))
         }
+    }
+
+    private func quotaAgentList(report r: UsageReport) -> [String] {
+        let subs = r.subscriptions ?? [:]
+        let quota = r.quotaWindows ?? [:]
+        return subscriptionAgentList(report: r).filter { subs[$0] != nil || quota[$0] != nil }
     }
 
     private func subscriptionAgentList(report r: UsageReport) -> [String] {
@@ -219,24 +218,7 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder private func quotaCell(_ q: QuotaWindow?, cal: Calendar) -> some View {
-        if let q, let reset = ReportDates.parseTimestamp(q.weeklyResetsAt) {
-            let start = RangeEngine.windowStart(q, now: Date())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(Self.stamp(reset, cal)).font(.system(size: 11.5)).monospacedDigit()
-                if let start {
-                    Text(L10n.tr("settings.quota_window_since", Self.stamp(start, cal), q.weeklyWindowHours))
-                        .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
-                }
-            }
-        } else if q != nil {
-            Text(L10n.tr("settings.unreadable")).font(.system(size: 11.5)).foregroundStyle(AgentPalette.warnInk)
-        } else {
-            Text(L10n.tr("settings.no_reset_info")).font(.system(size: 11.5)).foregroundStyle(.tertiary)
-        }
-    }
-
-    private static func stamp(_ d: Date, _ cal: Calendar) -> String {
+    static func stamp(_ d: Date, _ cal: Calendar) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: L10n.currentLanguage)
         f.timeZone = cal.timeZone
@@ -509,6 +491,179 @@ private struct SubscriptionSettingsRow: View {
             removeManual()
         } else {
             saveAnchor(nil)
+        }
+    }
+}
+
+private struct QuotaResetSettingsRow: View {
+    @EnvironmentObject var store: ReportStore
+    let agent: String
+    let quota: QuotaWindow?
+    let label: String
+    let calendar: Calendar
+
+    @State private var weekday: String
+    @State private var time: String
+    @State private var saving = false
+    @State private var actionError: String?
+
+    private static let weekdays: [(key: String, label: String)] = [
+        ("mon", L10n.tr("weekday.mon")),
+        ("tue", L10n.tr("weekday.tue")),
+        ("wed", L10n.tr("weekday.wed")),
+        ("thu", L10n.tr("weekday.thu")),
+        ("fri", L10n.tr("weekday.fri")),
+        ("sat", L10n.tr("weekday.sat")),
+        ("sun", L10n.tr("weekday.sun")),
+    ]
+
+    private static let standardTimes: [String] = {
+        var res: [String] = []
+        for h in 0..<24 {
+            res.append(String(format: "%02d:00", h))
+            res.append(String(format: "%02d:30", h))
+        }
+        return res
+    }()
+
+    private var availableTimes: [String] {
+        var set = Set(Self.standardTimes)
+        set.insert(time)
+        return set.sorted()
+    }
+
+    init(agent: String, quota: QuotaWindow?, label: String, calendar: Calendar) {
+        self.agent = agent
+        self.quota = quota
+        self.label = label
+        self.calendar = calendar
+
+        let (initWeekday, initTime) = Self.parseWeekdayAndTime(quota: quota, calendar: calendar)
+        _weekday = State(initialValue: initWeekday)
+        _time = State(initialValue: initTime)
+    }
+
+    private static func parseWeekdayAndTime(quota: QuotaWindow?, calendar: Calendar) -> (String, String) {
+        if let quota, let date = ReportDates.parseTimestamp(quota.weeklyResetsAt) {
+            let weekdayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+            let wIdx = calendar.component(.weekday, from: date)
+            let wKey = (1...7).contains(wIdx) ? weekdayKeys[wIdx - 1] : "tue"
+            let h = calendar.component(.hour, from: date)
+            let m = calendar.component(.minute, from: date)
+            return (wKey, String(format: "%02d:%02d", h, m))
+        }
+        return ("tue", "05:00")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                AgentDot(agent: agent, size: 6)
+                Text(label).font(.system(size: 11.5)).lineLimit(1)
+                Spacer(minLength: 4)
+                Text(quota?.source ?? "none")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(quota == nil ? .tertiary : .secondary)
+            }
+
+            if let quota, let reset = ReportDates.parseTimestamp(quota.weeklyResetsAt) {
+                let start = RangeEngine.windowStart(quota, now: Date())
+                HStack(spacing: 4) {
+                    Text(SettingsView.stamp(reset, calendar))
+                        .font(.system(size: 10.5)).monospacedDigit()
+                    if let start {
+                        Text("· " + L10n.tr("settings.quota_window_since", SettingsView.stamp(start, calendar), quota.weeklyWindowHours))
+                            .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+                .padding(.leading, 11)
+            } else {
+                Text(L10n.tr("settings.no_reset_info"))
+                    .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+                    .padding(.leading, 11)
+            }
+
+            HStack(spacing: 6) {
+                Picker("", selection: $weekday) {
+                    ForEach(Self.weekdays, id: \.key) { w in
+                        Text(w.label).tag(w.key)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 68)
+
+                Picker("", selection: $time) {
+                    ForEach(availableTimes, id: \.self) { t in
+                        Text(t).tag(t)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 64)
+
+                Button(L10n.tr("common.apply")) {
+                    saveReset("\(weekday) \(time)")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button(L10n.tr("common.reset")) {
+                    clearReset()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(quota?.source != "manual")
+            }
+            .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+            .help(store.canEditSubscriptions ? "" : L10n.tr("settings.renews_day_disabled_help"))
+            .padding(.leading, 11)
+
+            if saving {
+                Text(L10n.tr("settings.saving"))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .padding(.leading, 11)
+            }
+
+            if let actionError {
+                StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
+                    Text(actionError).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+                .padding(.leading, 11)
+            }
+        }
+        .onChange(of: quota) { newQuota in
+            let (w, t) = Self.parseWeekdayAndTime(quota: newQuota, calendar: calendar)
+            weekday = w
+            time = t
+        }
+    }
+
+    private func saveReset(_ val: String) {
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.setWeeklyReset(agent: agent, reset: val)
+                saving = false
+            } catch {
+                saving = false
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func clearReset() {
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.setWeeklyReset(agent: agent, reset: nil)
+                saving = false
+            } catch {
+                saving = false
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
         }
     }
 }

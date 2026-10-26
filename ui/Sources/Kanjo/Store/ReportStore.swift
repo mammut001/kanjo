@@ -106,6 +106,17 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
+    func setWeeklyReset(agent: String, reset: String?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.setWeeklyReset(agent: agent, reset: reset) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
     func refresh() {
         // 先初始化磁盘缓存，并暂停尚未开始的预取，避免与用量导出同时启动。
         DiskStore.shared.cancelPrefetch()

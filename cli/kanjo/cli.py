@@ -272,9 +272,9 @@ def build_parser() -> argparse.ArgumentParser:
     common(p, threshold=False)
     p.set_defaults(func=cmd_doctor)
 
-    p = sub.add_parser("config", help="get, set or unset subscription overrides")
+    p = sub.add_parser("config", help="get, set or unset subscription and quota overrides")
     p.add_argument("config_cmd", choices=("get", "set", "unset", "path"))
-    p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field>")
+    p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field> or quota_windows.<agent>.weekly_reset")
     p.add_argument("value", nargs="?", help="override value (set only)")
     p.add_argument("--config", metavar="PATH", help="attribution config; overrides.json is stored beside it")
     p.set_defaults(func=cmd_config)

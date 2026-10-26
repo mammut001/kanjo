@@ -2,12 +2,15 @@
 
 Sources, per agent, highest priority first:
 
-1. ``[quota_windows.<agent>]`` in the user config (``source: "manual"``).
+1. ``[quota_windows.<agent>]`` in the user config (``source: "manual"``),
+   either ``weekly_reset = "tue 05:00"`` or ``weekly_resets_at = <ISO 8601>``.
 2. Tokei's caches in ``~/.tokei`` (``$KANJO_TOKEI_DIR``), ``source: "tokei"``:
    - Claude: ``claude_quota_swift_cache.json`` -> ``snapshot.q7Reset`` (weekly) and
      ``snapshot.q5Reset`` (5-hour), epoch seconds; freshness from ``snapshot.updated``.
    - Codex: ``codex_quota_cache.json`` -> ``limits.secondary`` (weekly, ``window_minutes``)
      and ``limits.primary`` (5-hour) ``resets_at``; freshness from ``fetched_at``.
+   - Grok: ``grok_quota_cache.json`` -> ``quota.reset`` (weekly, ``window``), freshness
+     from ``fetched_at``.
 
 A Tokei cache older than ``MAX_AGE_DAYS`` is ignored. Anything missing or malformed
 just leaves that agent out; this module never raises.
@@ -19,18 +22,73 @@ window only starts with the next use).
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import json
 import math
 import os
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
+from zoneinfo import ZoneInfo
 
-from .sources.base import iso_utc
+from .sources.base import iso_utc, local_timezone_name
 
 MAX_AGE_DAYS = 14
 DEFAULT_WEEKLY_HOURS = 168
 CLAUDE_FILE = "claude_quota_swift_cache.json"
 CODEX_FILE = "codex_quota_cache.json"
+GROK_FILE = "grok_quota_cache.json"
+
+WEEKDAYS = {
+    "mon": 0, "monday": 0,
+    "tue": 1, "tues": 1, "tuesday": 1,
+    "wed": 2, "wednesday": 2,
+    "thu": 3, "thur": 3, "thurs": 3, "thursday": 3,
+    "fri": 4, "friday": 4,
+    "sat": 5, "saturday": 5,
+    "sun": 6, "sunday": 6,
+}
+WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def parse_weekly_reset(value: str, where: str = "weekly_reset") -> Tuple[str, int, int, int]:
+    """Parse 'tue 05:00' -> (normalized_str, weekday_idx, hour, minute)."""
+    if not isinstance(value, str):
+        raise ValueError(f"{where} must be a string like 'tue 05:00'")
+    parts = value.strip().split()
+    if len(parts) != 2:
+        raise ValueError(f"{where} must be '<weekday> <HH:MM>' (e.g. 'tue 05:00')")
+    w_part = parts[0].lower()
+    if w_part not in WEEKDAYS:
+        raise ValueError(f"{where}: unknown weekday {parts[0]!r}")
+    weekday_idx = WEEKDAYS[w_part]
+    t_sub = parts[1].split(":")
+    if len(t_sub) != 2:
+        raise ValueError(f"{where}: invalid time {parts[1]!r} (use HH:MM)")
+    try:
+        hour = int(t_sub[0])
+        minute = int(t_sub[1])
+    except ValueError:
+        raise ValueError(f"{where}: invalid time {parts[1]!r} (use HH:MM)")
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"{where}: time {parts[1]!r} out of range (hour 0-23, minute 0-59)")
+    normalized = f"{WEEKDAY_NAMES[weekday_idx]} {hour:02d}:{minute:02d}"
+    return normalized, weekday_idx, hour, minute
+
+
+def next_occurrence(weekly_reset: str, now: float, tz_name: Optional[str] = None) -> float:
+    """Next occurrence of weekly_reset ('tue 05:00') strictly after now, in tz_name."""
+    tz = ZoneInfo(tz_name or local_timezone_name())
+    now_dt = datetime.fromtimestamp(now, tz=tz)
+    _, target_weekday, hour, minute = parse_weekly_reset(weekly_reset)
+
+    candidate = datetime(now_dt.year, now_dt.month, now_dt.day, hour, minute, tzinfo=tz)
+    days_ahead = (target_weekday - now_dt.weekday()) % 7
+    if days_ahead == 0 and candidate.timestamp() <= now:
+        days_ahead = 7
+
+    target_date = now_dt.date() + timedelta(days=days_ahead)
+    target_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute, tzinfo=tz)
+    return target_dt.timestamp()
 
 
 def tokei_dir() -> str:
@@ -106,14 +164,36 @@ def _codex(directory: str, now: float) -> Optional[dict]:
     return window(weekly, hours or DEFAULT_WEEKLY_HOURS, _num(primary.get("resets_at")), "tokei", now)
 
 
-TOKEI_READERS = {"claude": _claude, "codex": _codex}
+def _grok(directory: str, now: float) -> Optional[dict]:
+    path = os.path.join(directory, GROK_FILE)
+    data = _load(path)
+    if not isinstance(data, dict):
+        return None
+    quota = data.get("quota")
+    if not isinstance(quota, dict):
+        return None
+    reset = _num(quota.get("reset"))
+    if reset is None or not _fresh(_num(data.get("fetched_at")), path, now):
+        return None
+    win_str = quota.get("window")
+    if win_str in (None, "", "week"):
+        hours = DEFAULT_WEEKLY_HOURS
+    elif win_str == "day":
+        hours = 24
+    else:
+        return None
+    return window(reset, hours, None, "tokei", now)
+
+
+TOKEI_READERS = {"claude": _claude, "codex": _codex, "grok": _grok}
 
 
 def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[str] = None,
-                  now: Optional[float] = None) -> Dict[str, dict]:
+                  now: Optional[float] = None, timezone_name: Optional[str] = None) -> Dict[str, dict]:
     """agent -> contract ``quota_windows`` entry. ``manual`` is ``Config.quota_windows``."""
     now = time.time() if now is None else now
     directory = directory or tokei_dir()
+    tz_name = timezone_name or local_timezone_name()
     out: Dict[str, dict] = {}
     for agent, reader in TOKEI_READERS.items():
         try:
@@ -123,6 +203,12 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         if entry:
             out[agent] = entry
     for agent, spec in (manual or {}).items():
-        out[agent] = window(spec["weekly_resets_at"], spec["weekly_window_hours"],
-                            spec.get("five_hour_resets_at"), "manual", now)
+        if "weekly_reset" in spec:
+            weekly = next_occurrence(spec["weekly_reset"], now, tz_name)
+        elif "weekly_resets_at" in spec:
+            weekly = spec["weekly_resets_at"]
+        else:
+            continue
+        hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
+        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now)
     return {agent: out[agent] for agent in sorted(out)}

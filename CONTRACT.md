@@ -38,9 +38,10 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "weekly_resets_at": "2026-10-27T10:00:00Z",   // 下次周重置，ISO 8601 UTC
       "weekly_window_hours": 168,
       "five_hour_resets_at": "2026-10-24T09:30:00Z", // 可为 null
-      "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存）或 manual
+      "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存：Claude, Codex, Grok）或 manual（配置 weekly_reset / weekly_resets_at）
     },
-    "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" }
+    "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" },
+    "grok":  { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": null, "source": "tokei" }
   },
   "subscriptions": {                          // 各 agent 的订阅档位，供 UI 的「Subscription value」卡和「This billing cycle」范围用；拿不到的 agent 不出现
     "claude": {
