@@ -34,25 +34,25 @@ KNOWN = [
     ("antigravity", "google_ai_pro", "Google AI Pro", 19.99),
     ("antigravity", "google_ai_ultra", "Google AI Ultra", 249.99),
     ("grok", "supergrok", "SuperGrok", 30.0),
+    ("grok", "supergrok_lite", "SuperGrok Lite", 10.0),
     ("grok", "supergrok_heavy", "SuperGrok Heavy", 300.0),
     ("grok", "premium", "X Premium", 8.0),
-    ("grok", "premium_plus", "X Premium+", 16.0),
     ("copilot", "free", "Copilot Free", 0.0),
     ("copilot", "pro", "Copilot Pro", 10.0),
     ("copilot", "pro_plus", "Copilot Pro+", 39.0),
     ("copilot", "business", "Copilot Business", 19.0),
     ("copilot", "enterprise", "Copilot Enterprise", 39.0),
-    ("minimax", "go", "MiniMax Coding Plan Go", 22.0),
-    ("minimax", "explore", "MiniMax Coding Plan Explore", 55.0),
-    ("minimax", "build", "MiniMax Coding Plan Build", 132.0),
-    ("qwen", "coding_plan", "Qwen Coding Plan", 50.0),
+    ("minimax", "starter", "MiniMax Coding Plan Starter", 10.0),
+    ("minimax", "coding_plan_starter", "MiniMax Coding Plan Starter", 10.0),
+    ("minimax", "plus", "MiniMax Coding Plan Plus", 20.0),
+    ("minimax", "coding_plan_plus", "MiniMax Coding Plan Plus", 20.0),
+    ("minimax", "max", "MiniMax Coding Plan Max", 50.0),
+    ("minimax", "coding_plan_max", "MiniMax Coding Plan Max", 50.0),
+    ("qwen", "coding_plan", "Qwen Coding Plan Pro", 50.0),
+    ("qwen", "pro", "Qwen Coding Plan Pro", 50.0),
     ("commandcode", "go", "Command Code Go", 1.0),
     ("commandcode", "goat", "Command Code GOAT", 10.0),
-    ("commandcode", "provider", "Command Code Provider", 15.0),
-    ("commandcode", "pro", "Command Code Pro", 20.0),
-    ("commandcode", "max", "Command Code Max", 100.0),
     ("opencode", "go", "OpenCode Go", 10.0),
-    ("opencode", "go_plus", "OpenCode Go Plus", 40.0),
 ]
 
 
@@ -278,6 +278,21 @@ class SubscriptionTest(unittest.TestCase):
             self.assertIsNone(sub["anchor_day"])
             self.assertFalse(sub["extra_usage_enabled"])
             check_subscriptions(self, found)
+
+    def test_unpriced_known_plans_require_price(self):
+        for agent, plan, label in [
+                ("commandcode", "provider", "Command Code Provider"),
+                ("commandcode", "pro", "Command Code Pro"),
+                ("commandcode", "max", "Command Code Max"),
+                ("grok", "premium_plus", "X Premium+"),
+        ]:
+            with self.assertRaises(ConfigError):
+                config.from_dict({"subscriptions": {agent: {"plan": plan}}})
+            cfg = config.from_dict({"subscriptions": {agent: {"plan": plan, "monthly_price_usd": 25.0}}})
+            found = self.collect(cfg.subscriptions)
+            sub = found[agent]
+            self.assertEqual(sub["plan_label"], label)
+            self.assertEqual(sub["monthly_price_usd"], 25.0)
 
     def test_manual_overrides_detection(self):
         self.write_claude(extra=True)

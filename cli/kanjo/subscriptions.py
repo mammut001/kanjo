@@ -47,11 +47,13 @@ GROK_FILE = "grok_quota_cache.json"
 
 # Claude keys are also substring needles and must stay longest-first.
 KNOWN_PLANS = {
+    # https://claude.ai/pricing
     "claude": {
         "max_20x": ("Claude Max 20x", 200.0),
         "max_5x": ("Claude Max 5x", 100.0),
         "pro": ("Claude Pro", 20.0),
     },
+    # https://openai.com/chatgpt/pricing
     "codex": {
         "free": ("ChatGPT Free", 0.0),
         "go": ("ChatGPT Go", 8.0),
@@ -60,16 +62,20 @@ KNOWN_PLANS = {
         "team": ("ChatGPT Team", 30.0),
         "business": ("ChatGPT Business", 30.0),
     },
+    # https://one.google.com/subscriptions
     "antigravity": {
         "google_ai_pro": ("Google AI Pro", 19.99),
         "google_ai_ultra": ("Google AI Ultra", 249.99),
     },
+    # https://x.com/settings/premium / https://grok.com
     "grok": {
         "supergrok": ("SuperGrok", 30.0),
+        "supergrok_lite": ("SuperGrok Lite", 10.0),
         "supergrok_heavy": ("SuperGrok Heavy", 300.0),
         "premium": ("X Premium", 8.0),
-        "premium_plus": ("X Premium+", 16.0),
+        "premium_plus": ("X Premium+", None),
     },
+    # https://github.com/features/copilot/plans
     "copilot": {
         "free": ("Copilot Free", 0.0),
         "pro": ("Copilot Pro", 10.0),
@@ -78,27 +84,31 @@ KNOWN_PLANS = {
         "business": ("Copilot Business", 19.0),
         "enterprise": ("Copilot Enterprise", 39.0),
     },
+    # https://platform.minimax.io/docs/guides/pricing-coding-plan
     "minimax": {
-        "go": ("MiniMax Coding Plan Go", 22.0),
-        "coding_plan_go": ("MiniMax Coding Plan Go", 22.0),
-        "explore": ("MiniMax Coding Plan Explore", 55.0),
-        "coding_plan_explore": ("MiniMax Coding Plan Explore", 55.0),
-        "build": ("MiniMax Coding Plan Build", 132.0),
-        "coding_plan_build": ("MiniMax Coding Plan Build", 132.0),
+        "starter": ("MiniMax Coding Plan Starter", 10.0),
+        "coding_plan_starter": ("MiniMax Coding Plan Starter", 10.0),
+        "plus": ("MiniMax Coding Plan Plus", 20.0),
+        "coding_plan_plus": ("MiniMax Coding Plan Plus", 20.0),
+        "max": ("MiniMax Coding Plan Max", 50.0),
+        "coding_plan_max": ("MiniMax Coding Plan Max", 50.0),
     },
+    # https://dashscope.console.aliyun.com (Alibaba Cloud Model Studio Coding Plan)
     "qwen": {
-        "coding_plan": ("Qwen Coding Plan", 50.0),
+        "coding_plan": ("Qwen Coding Plan Pro", 50.0),
+        "pro": ("Qwen Coding Plan Pro", 50.0),
     },
+    # https://commandcode.ai
     "commandcode": {
         "go": ("Command Code Go", 1.0),
         "goat": ("Command Code GOAT", 10.0),
-        "provider": ("Command Code Provider", 15.0),
-        "pro": ("Command Code Pro", 20.0),
-        "max": ("Command Code Max", 100.0),
+        "provider": ("Command Code Provider", None),
+        "pro": ("Command Code Pro", None),
+        "max": ("Command Code Max", None),
     },
+    # https://opencode.ai
     "opencode": {
         "go": ("OpenCode Go", 10.0),
-        "go_plus": ("OpenCode Go Plus", 40.0),
     },
 }
 
@@ -121,15 +131,17 @@ def known_monthly_price(agent: str, plan: str) -> Optional[float]:
     return None if found is None else found[2]
 
 
-def _known(agent: str, plan: str) -> Optional[Tuple[str, str, float]]:
+def _known(agent: str, plan: str) -> Optional[Tuple[str, str, Optional[float]]]:
     table = KNOWN_PLANS.get(agent, {})
     if plan in table:
         row = table[plan]
-        return plan, row[0], float(row[1])
+        price = None if row[1] is None else float(row[1])
+        return plan, row[0], price
     norm = plan.strip().lower().replace("-", "_").replace(" ", "_")
     if norm in table:
         row = table[norm]
-        return norm, row[0], float(row[1])
+        price = None if row[1] is None else float(row[1])
+        return norm, row[0], price
     return None
 
 
