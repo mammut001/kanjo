@@ -54,20 +54,57 @@ public enum Fmt {
         }
     }
 
-    /// token：k / M / B 缩写，一位小数。
+    /// token：按语言本地化单位。
+    /// en: k / M / B 缩写，一位小数（如 1.0k、12.3k、188.0M、23.5B）。
+    /// zh-Hans: 万 / 亿 / 万亿 进位，<10,000 无分组纯数字，一位小数去尾部 .0（如 9999、1.2万、1.9亿、235亿、1.2万亿）。
+    /// fr: k / M / Md 缩写，逗号小数，单位前无空格，去尾部 ,0（如 12,3k、188M、23,5Md）。
     public static func tokens(_ n: Int) -> String {
-        let v = Double(abs(n))
+        tokens(n, language: L10n.currentLanguage)
+    }
+
+    public static func tokens(_ n: Int, language: String) -> String {
+        let v = abs(Double(n))
         let sign = n < 0 ? "-" : ""
-        if v < 1000 { return sign + String(Int(v)) }
-        let units: [(Double, String)] = [(1e3, "k"), (1e6, "M"), (1e9, "B")]
-        for (i, (base, suffix)) in units.enumerated() {
-            let scaled = v / base
-            let rounded = (scaled * 10).rounded() / 10
-            if rounded < 1000 || i == units.count - 1 {
-                return sign + String(format: "%.1f", rounded) + suffix
+
+        if language.hasPrefix("zh") {
+            if v < 10_000 { return sign + String(Int(v)) }
+            let units: [(Double, String)] = [(1e4, "万"), (1e8, "亿"), (1e12, "万亿")]
+            for (i, (base, suffix)) in units.enumerated() {
+                let scaled = v / base
+                let rounded = (scaled * 10).rounded() / 10
+                if rounded < 10_000 || i == units.count - 1 {
+                    let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                    let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+                    return sign + body + suffix
+                }
             }
+            return sign + String(Int(v))
+        } else if language.hasPrefix("fr") {
+            if v < 1000 { return sign + String(Int(v)) }
+            let units: [(Double, String)] = [(1e3, "k"), (1e6, "M"), (1e9, "Md")]
+            for (i, (base, suffix)) in units.enumerated() {
+                let scaled = v / base
+                let rounded = (scaled * 10).rounded() / 10
+                if rounded < 1000 || i == units.count - 1 {
+                    let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                    let withComma = s.replacingOccurrences(of: ".", with: ",")
+                    let body = withComma.hasSuffix(",0") ? String(withComma.dropLast(2)) : withComma
+                    return sign + body + suffix
+                }
+            }
+            return sign + String(Int(v))
+        } else {
+            if v < 1000 { return sign + String(Int(v)) }
+            let units: [(Double, String)] = [(1e3, "k"), (1e6, "M"), (1e9, "B")]
+            for (i, (base, suffix)) in units.enumerated() {
+                let scaled = v / base
+                let rounded = (scaled * 10).rounded() / 10
+                if rounded < 1000 || i == units.count - 1 {
+                    return sign + String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded) + suffix
+                }
+            }
+            return sign + String(Int(v))
         }
-        return sign + String(Int(v))
     }
 
     /// 月费：`$100/mo`。整数美元不带小数；价格未知时为「—」。
@@ -207,8 +244,8 @@ public enum MenuBarText {
     }
 
     /// 菜单栏文本（Token）：Token 优先，固定窗口显示后缀（如 `23.5B · 30d`）；其他范围无后缀。
-    public static func make(tokens: Int, range: TimeRange) -> String {
-        let formatted = Fmt.tokens(tokens)
+    public static func make(tokens: Int, range: TimeRange, language: String? = nil) -> String {
+        let formatted = language.map { Fmt.tokens(tokens, language: $0) } ?? Fmt.tokens(tokens)
         guard let suffix = range.menuBarSuffix, !suffix.isEmpty else {
             return formatted
         }
@@ -216,12 +253,12 @@ public enum MenuBarText {
     }
 
     /// 统一入口，支持按模式格式化。
-    public static func make(mode: MenuBarMode, cost: Double, tokens: Int, currency: String = "USD", range: TimeRange) -> String {
+    public static func make(mode: MenuBarMode, cost: Double, tokens: Int, currency: String = "USD", range: TimeRange, language: String? = nil) -> String {
         switch mode {
         case .cost:
             return make(cost: cost, currency: currency, range: range)
         case .tokens:
-            return make(tokens: tokens, range: range)
+            return make(tokens: tokens, range: range, language: language)
         }
     }
 }

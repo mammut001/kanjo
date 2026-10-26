@@ -73,9 +73,78 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.tokens(999), "999")
         XCTAssertEqual(Fmt.tokens(1000), "1.0k")
         XCTAssertEqual(Fmt.tokens(12_345), "12.3k")
+        XCTAssertEqual(Fmt.tokens(999_950), "1.0M")
         XCTAssertEqual(Fmt.tokens(999_960), "1.0M")
         XCTAssertEqual(Fmt.tokens(4_560_000), "4.6M")
+        XCTAssertEqual(Fmt.tokens(188_000_000), "188.0M")
         XCTAssertEqual(Fmt.tokens(2_500_000_000), "2.5B")
+        XCTAssertEqual(Fmt.tokens(23_500_000_000), "23.5B")
+        XCTAssertEqual(Fmt.tokens(-12_345), "-12.3k")
+    }
+
+    func testTokensZh() {
+        // < 10,000 plain digits with no grouping
+        XCTAssertEqual(Fmt.tokens(0, language: "zh-Hans"), "0")
+        XCTAssertEqual(Fmt.tokens(999, language: "zh-Hans"), "999")
+        XCTAssertEqual(Fmt.tokens(9999, language: "zh-Hans"), "9999")
+
+        // 10,000 boundary -> 1万
+        XCTAssertEqual(Fmt.tokens(10_000, language: "zh-Hans"), "1万")
+        XCTAssertEqual(Fmt.tokens(12_345, language: "zh-Hans"), "1.2万")
+
+        // 99,995,000 stays in 万 (9999.5万); 99,999,600 rounds to 10000.0万 and rolls over to 1亿
+        XCTAssertEqual(Fmt.tokens(99_995_000, language: "zh-Hans"), "9999.5万")
+        XCTAssertEqual(Fmt.tokens(99_999_600, language: "zh-Hans"), "1亿")
+
+        // 1e8 boundary
+        XCTAssertEqual(Fmt.tokens(100_000_000, language: "zh-Hans"), "1亿")
+        XCTAssertEqual(Fmt.tokens(188_000_000, language: "zh-Hans"), "1.9亿")
+        XCTAssertEqual(Fmt.tokens(23_500_000_000, language: "zh-Hans"), "235亿")
+
+        // 1e12 boundary
+        XCTAssertEqual(Fmt.tokens(1_000_000_000_000, language: "zh-Hans"), "1万亿")
+        XCTAssertEqual(Fmt.tokens(1_234_567_890_123, language: "zh-Hans"), "1.2万亿")
+
+        // Negative values
+        XCTAssertEqual(Fmt.tokens(-9999, language: "zh-Hans"), "-9999")
+        XCTAssertEqual(Fmt.tokens(-12_345, language: "zh-Hans"), "-1.2万")
+        XCTAssertEqual(Fmt.tokens(-188_000_000, language: "zh-Hans"), "-1.9亿")
+
+        // Matches when language prefix is zh
+        XCTAssertEqual(Fmt.tokens(12_345, language: "zh"), "1.2万")
+
+        // Automatically follows L10n.currentLanguage
+        UserDefaults.standard.set(AppLanguage.zhHans.rawValue, forKey: SettingsKeys.appLanguage)
+        XCTAssertEqual(Fmt.tokens(9999), "9999")
+        XCTAssertEqual(Fmt.tokens(12_345), "1.2万")
+        XCTAssertEqual(Fmt.tokens(23_500_000_000), "235亿")
+        XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .all), "235亿")
+    }
+
+    func testTokensFr() {
+        XCTAssertEqual(Fmt.tokens(0, language: "fr"), "0")
+        XCTAssertEqual(Fmt.tokens(999, language: "fr"), "999")
+        XCTAssertEqual(Fmt.tokens(1000, language: "fr"), "1k")
+        XCTAssertEqual(Fmt.tokens(9999, language: "fr"), "10k")
+        XCTAssertEqual(Fmt.tokens(10_000, language: "fr"), "10k")
+        XCTAssertEqual(Fmt.tokens(12_345, language: "fr"), "12,3k")
+        XCTAssertEqual(Fmt.tokens(999_950, language: "fr"), "1M")
+        XCTAssertEqual(Fmt.tokens(99_995_000, language: "fr"), "100M")
+        XCTAssertEqual(Fmt.tokens(100_000_000, language: "fr"), "100M")
+        XCTAssertEqual(Fmt.tokens(188_000_000, language: "fr"), "188M")
+        XCTAssertEqual(Fmt.tokens(23_500_000_000, language: "fr"), "23,5Md")
+        XCTAssertEqual(Fmt.tokens(1_000_000_000_000, language: "fr"), "1000Md")
+
+        // Negative values
+        XCTAssertEqual(Fmt.tokens(-12_345, language: "fr"), "-12,3k")
+        XCTAssertEqual(Fmt.tokens(-188_000_000, language: "fr"), "-188M")
+
+        // Automatically follows L10n.currentLanguage
+        UserDefaults.standard.set(AppLanguage.fr.rawValue, forKey: SettingsKeys.appLanguage)
+        XCTAssertEqual(Fmt.tokens(12_345), "12,3k")
+        XCTAssertEqual(Fmt.tokens(188_000_000), "188M")
+        XCTAssertEqual(Fmt.tokens(23_500_000_000), "23,5Md")
+        XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .all), "23,5Md")
     }
 
     func testPerMonthAndMultiple() {
