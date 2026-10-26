@@ -513,7 +513,7 @@ private struct SubscriptionSettingsRow: View {
         day = min(28, max(1, sub?.anchorDay ?? 1))
         let plans = agentKnownPlans ?? []
         if let currentPlan = sub?.plan, !currentPlan.isEmpty {
-            if let matching = plans.first(where: { $0.key == currentPlan }) {
+            if let matching = plans.first(where: { $0.key == currentPlan }) ?? plans.first(where: { $0.label == sub?.planLabel }) {
                 selectedPlanKey = matching.key
                 customPlanText = ""
             } else {
