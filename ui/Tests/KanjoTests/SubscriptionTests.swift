@@ -60,7 +60,46 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(SubscriptionValue.billingPage(for: "claude")?.absoluteString, "https://claude.ai/settings/billing")
         XCTAssertEqual(SubscriptionValue.billingPage(for: "codex")?.absoluteString, "https://chatgpt.com/settings/billing")
         XCTAssertEqual(SubscriptionValue.billingPage(for: "antigravity")?.absoluteString, "https://one.google.com/subscriptions")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "copilot")?.absoluteString, "https://github.com/settings/copilot")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "grok")?.absoluteString, "https://x.com/settings/premium")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "minimax")?.absoluteString, "https://platform.minimax.io")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "qwen")?.absoluteString, "https://dashscope.console.aliyun.com")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "commandcode")?.absoluteString, "https://commandcode.ai")
+        XCTAssertEqual(SubscriptionValue.billingPage(for: "opencode")?.absoluteString, "https://opencode.ai")
         XCTAssertNil(SubscriptionValue.billingPage(for: "future-agent"))
+    }
+
+    func testRowsForArbitraryAgentKeys() throws {
+        var r = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
+        let customSubs: [String: Subscription] = [
+            "grok": Subscription(plan: "supergrok", planLabel: "SuperGrok", monthlyPriceUsd: 30,
+                                 cycleStart: "2026-09-24T16:00:00Z", cycleEnd: "2026-10-24T16:00:00Z",
+                                 anchorDay: nil, cycleSource: "rolling_30d", extraUsageEnabled: false, source: "detected"),
+            "copilot": Subscription(plan: "pro", planLabel: "Copilot Pro", monthlyPriceUsd: 10,
+                                    cycleStart: "2026-09-24T16:00:00Z", cycleEnd: "2026-10-24T16:00:00Z",
+                                    anchorDay: 15, cycleSource: "manual", extraUsageEnabled: false, source: "manual"),
+            "minimax": Subscription(plan: "go", planLabel: "MiniMax Coding Plan Go", monthlyPriceUsd: 22,
+                                    cycleStart: "2026-09-24T16:00:00Z", cycleEnd: "2026-10-24T16:00:00Z",
+                                    anchorDay: nil, cycleSource: "rolling_30d", extraUsageEnabled: false, source: "manual"),
+            "qwen": Subscription(plan: "coding_plan", planLabel: "Qwen Coding Plan", monthlyPriceUsd: 50,
+                                 cycleStart: "2026-09-24T16:00:00Z", cycleEnd: "2026-10-24T16:00:00Z",
+                                 anchorDay: nil, cycleSource: "rolling_30d", extraUsageEnabled: false, source: "manual"),
+            "custom_bot": Subscription(plan: "special", planLabel: "Custom Bot", monthlyPriceUsd: 15,
+                                       cycleStart: "2026-09-24T16:00:00Z", cycleEnd: "2026-10-24T16:00:00Z",
+                                       anchorDay: 1, cycleSource: "manual", extraUsageEnabled: false, source: "manual"),
+        ]
+        r.subscriptions = customSubs
+        let rows = SubscriptionValue.rows(of: r)
+        XCTAssertEqual(Set(rows.map { $0.agent }), Set(customSubs.keys))
+        // Verify all 5 arbitrary agents have corresponding rows built
+        XCTAssertEqual(rows.count, 5)
+        for row in rows {
+            let expected = customSubs[row.agent]!
+            XCTAssertEqual(row.planLabel, expected.planLabel)
+            XCTAssertEqual(row.monthlyPriceUsd, expected.monthlyPriceUsd)
+        }
+        // Unsubscribed agent is absent
+        XCTAssertFalse(rows.contains { $0.agent == "unsubscribed_agent" })
     }
 
     func testNudgeDismissalAndNewRollingAgent() {

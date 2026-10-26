@@ -5,16 +5,17 @@ import os
 import tempfile
 
 from .config import ConfigError, _subscriptions, config_paths, load, read_overrides, subscription_value
+from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions
 
-AGENTS = ("claude", "codex", "antigravity")
+AGENTS = tuple(AGENT_LABELS.keys())
 FIELDS = ("anchor_day", "plan", "monthly_price_usd")
 
 
 def _key(text):
     parts = (text or "").split(".")
     if len(parts) != 3 or parts[0] != "subscriptions" or parts[1] not in AGENTS or parts[2] not in FIELDS:
-        raise ConfigError("key must be subscriptions.<claude|codex|antigravity>.<anchor_day|plan|monthly_price_usd>")
+        raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd>")
     return parts[1], parts[2]
 
 

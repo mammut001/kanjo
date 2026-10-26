@@ -377,7 +377,7 @@ private struct SubscriptionValueCard: View {
     }
 
     private func line(_ row: SubscriptionRow) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 AgentDot(agent: row.agent, size: 6)
                     .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
@@ -433,7 +433,7 @@ private struct SubscriptionValueCard: View {
         }
         .monospacedDigit()
         .padding(.horizontal, Metrics.listInset)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 
     private func help(_ row: SubscriptionRow) -> String {

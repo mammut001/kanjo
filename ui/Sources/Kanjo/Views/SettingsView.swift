@@ -171,19 +171,44 @@ struct SettingsView: View {
         }
     }
 
+    private func subscriptionAgentList(report r: UsageReport) -> [String] {
+        let ctx = RangeContext(report: r, raw: TimeRange.all.rawValue)
+        let subs = r.subscriptions ?? [:]
+        var agentList: [String] = []
+        var seen = Set<String>()
+        for a in ctx.agentOrder where subs[a] != nil {
+            agentList.append(a)
+            seen.insert(a)
+        }
+        for a in subs.keys.sorted() where !seen.contains(a) {
+            agentList.append(a)
+            seen.insert(a)
+        }
+        for a in ctx.agentOrder where !seen.contains(a) {
+            agentList.append(a)
+            seen.insert(a)
+        }
+        let knownOrder = ["claude", "codex", "antigravity", "grok", "copilot", "minimax", "qwen", "commandcode", "opencode"]
+        for a in knownOrder where !seen.contains(a) {
+            agentList.append(a)
+            seen.insert(a)
+        }
+        return agentList
+    }
+
     /// 各 agent 的订阅档位（subscriptions），供总览的 Subscription value 卡和 Billing cycle 范围用。
     private var subscriptionsSection: some View {
         PanelSection(L10n.tr("settings.section.subscriptions"), inset: true) {
             if let r = store.report {
-                let ctx = RangeContext(report: r, raw: TimeRange.all.rawValue)
                 let subs = r.subscriptions ?? [:]
+                let agents = subscriptionAgentList(report: r)
                 VStack(alignment: .leading, spacing: 8) {
-                    // ForEach 的标识也用滚动 anchor，确保 ScrollViewReader 能找到嵌套的行。
-                    ForEach(ctx.agentOrder.map { (agent: $0, anchor: SubscriptionSettingsRoute.anchor(for: $0)) },
+                    ForEach(agents.map { (agent: $0, anchor: SubscriptionSettingsRoute.anchor(for: $0)) },
                             id: \.anchor) { item in
                         let agent = item.agent
                         SubscriptionSettingsRow(agent: agent, sub: subs[agent],
-                                                label: r.agentLabels[agent] ?? agent, currency: r.currency)
+                                                label: r.agentLabels[agent] ?? AgentColors.defaultLabels[agent] ?? agent,
+                                                currency: r.currency)
                             .id(item.anchor)
                     }
                 }
@@ -265,7 +290,11 @@ private struct SubscriptionSettingsRow: View {
     let sub: Subscription?
     let label: String
     let currency: String
+
     @State private var day: Int
+    @State private var isEditing = false
+    @State private var inputPlan: String = ""
+    @State private var inputPrice: String = ""
     @State private var saving = false
     @State private var actionError: String?
 
@@ -275,6 +304,13 @@ private struct SubscriptionSettingsRow: View {
         self.label = label
         self.currency = currency
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
+        _inputPlan = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
+        if let price = sub?.monthlyPriceUsd {
+            let s = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+            _inputPrice = State(initialValue: s)
+        } else {
+            _inputPrice = State(initialValue: "")
+        }
     }
 
     var body: some View {
@@ -284,38 +320,12 @@ private struct SubscriptionSettingsRow: View {
                 Text(label).font(.system(size: 11.5)).lineLimit(1)
                 Spacer(minLength: 8)
             }
-            if let sub {
-                Text("\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency))")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .padding(.leading, 11)
-                HStack(spacing: 8) {
-                    Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
-                        .font(.system(size: 11)).monospacedDigit()
-                        .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-                        .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
-                    Button(L10n.tr("common.apply")) { save(day) }
-                    Button(L10n.tr("common.reset")) { save(nil) }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-                .padding(.leading, 11)
-                Text(saving ? L10n.tr("settings.saving") : SubscriptionValue.anchorSource(sub))
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .padding(.leading, 11)
-                if let url = SubscriptionValue.billingPage(for: agent) {
-                    Button(L10n.tr("settings.open_billing_page")) { NSWorkspace.shared.open(url) }
-                        .buttonStyle(.link)
-                        .font(.system(size: 11))
-                        .padding(.leading, 11)
-                    Text(L10n.tr("settings.billing_page_hint"))
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 11)
-                }
+            if isEditing {
+                editingForm
+            } else if let sub {
+                displaySub(sub)
             } else {
-                Text(L10n.tr("settings.no_subscription_info")).font(.system(size: 10)).foregroundStyle(.tertiary)
-                    .padding(.leading, 11)
+                displayEmpty
             }
             if let actionError {
                 StatusBlock(kind: .bad, icon: "xmark.octagon.fill") {
@@ -326,9 +336,119 @@ private struct SubscriptionSettingsRow: View {
         .onChange(of: sub?.anchorDay) { value in
             day = min(28, max(1, value ?? 1))
         }
+        .onChange(of: sub) { newSub in
+            inputPlan = newSub?.plan ?? newSub?.planLabel ?? ""
+            if let price = newSub?.monthlyPriceUsd {
+                inputPrice = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+            } else {
+                inputPrice = ""
+            }
+        }
     }
 
-    private func save(_ value: Int?) {
+    @ViewBuilder
+    private func displaySub(_ sub: Subscription) -> some View {
+        Text("\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency))")
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .padding(.leading, 11)
+        HStack(spacing: 8) {
+            Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
+                .font(.system(size: 11)).monospacedDigit()
+                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                .help(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+            Button(L10n.tr("common.apply")) { saveAnchor(day) }
+            Button(L10n.tr("common.reset")) { resetAll() }
+            Button(L10n.tr("settings.edit")) {
+                syncInputs()
+                isEditing = true
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+        .padding(.leading, 11)
+        Text(saving ? L10n.tr("settings.saving") : SubscriptionValue.anchorSource(sub))
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .padding(.leading, 11)
+        if let url = SubscriptionValue.billingPage(for: agent) {
+            Button(L10n.tr("settings.open_billing_page")) { NSWorkspace.shared.open(url) }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
+                .padding(.leading, 11)
+            Text(L10n.tr("settings.billing_page_hint"))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 11)
+        }
+    }
+
+    @ViewBuilder
+    private var displayEmpty: some View {
+        HStack(spacing: 8) {
+            Text(L10n.tr("settings.no_subscription_info"))
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+            Button(L10n.tr("settings.add_subscription")) {
+                syncInputs()
+                isEditing = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+        }
+        .padding(.leading, 11)
+        if let url = SubscriptionValue.billingPage(for: agent) {
+            Button(L10n.tr("settings.open_billing_page")) { NSWorkspace.shared.open(url) }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
+                .padding(.leading, 11)
+        }
+    }
+
+    @ViewBuilder
+    private var editingForm: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                TextField(L10n.tr("settings.plan"), text: $inputPlan)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11))
+                    .frame(width: 140)
+                TextField(L10n.tr("settings.monthly_price_usd"), text: $inputPrice)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(width: 80)
+                Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
+                    .font(.system(size: 11)).monospacedDigit()
+                Button(L10n.tr("common.apply")) { applyManual() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                Button(L10n.tr("common.cancel")) {
+                    isEditing = false
+                    syncInputs()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                if sub != nil {
+                    Button(L10n.tr("settings.remove_subscription")) { removeManual() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+            .disabled(saving || store.isLoading)
+        }
+        .padding(.leading, 11)
+    }
+
+    private func syncInputs() {
+        day = min(28, max(1, sub?.anchorDay ?? 1))
+        inputPlan = sub?.plan ?? sub?.planLabel ?? ""
+        if let price = sub?.monthlyPriceUsd {
+            inputPrice = price.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", price) : String(price)
+        } else {
+            inputPrice = ""
+        }
+    }
+
+    private func saveAnchor(_ value: Int?) {
         saving = true
         actionError = nil
         Task {
@@ -339,6 +459,56 @@ private struct SubscriptionSettingsRow: View {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             saving = false
+        }
+    }
+
+    private func applyManual() {
+        let plan = inputPlan.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !plan.isEmpty else {
+            actionError = L10n.tr("settings.error.plan_required")
+            return
+        }
+        let priceStr = inputPrice.trimmingCharacters(in: .whitespacesAndNewlines)
+        var price: Double? = nil
+        if !priceStr.isEmpty {
+            guard let p = Double(priceStr), p >= 0, p.isFinite else {
+                actionError = L10n.tr("settings.error.invalid_price")
+                return
+            }
+            price = p
+        }
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.setSubscription(agent: agent, plan: plan, monthlyPriceUsd: price, anchorDay: day)
+                isEditing = false
+            } catch {
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            saving = false
+        }
+    }
+
+    private func removeManual() {
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.removeSubscription(agent: agent)
+                isEditing = false
+            } catch {
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            saving = false
+        }
+    }
+
+    private func resetAll() {
+        if sub?.source == "manual" {
+            removeManual()
+        } else {
+            saveAnchor(nil)
         }
     }
 }

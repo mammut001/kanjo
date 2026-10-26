@@ -22,6 +22,12 @@ public enum SubscriptionValue {
         case "claude": return URL(string: "https://claude.ai/settings/billing")
         case "codex": return URL(string: "https://chatgpt.com/settings/billing")
         case "antigravity": return URL(string: "https://one.google.com/subscriptions")
+        case "copilot": return URL(string: "https://github.com/settings/copilot")
+        case "grok": return URL(string: "https://x.com/settings/premium")
+        case "minimax": return URL(string: "https://platform.minimax.io")
+        case "qwen": return URL(string: "https://dashscope.console.aliyun.com")
+        case "commandcode": return URL(string: "https://commandcode.ai")
+        case "opencode": return URL(string: "https://opencode.ai")
         default: return nil
         }
     }

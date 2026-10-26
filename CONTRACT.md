@@ -44,7 +44,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
   },
   "subscriptions": {                          // 各 agent 的订阅档位，供 UI 的「Subscription value」卡和「This billing cycle」范围用；拿不到的 agent 不出现
     "claude": {
-      "plan": "max_5x",                       // 内部 key：claude 用 pro | max_5x | max_20x；codex 用 free | go | plus | pro | team；antigravity 用 google_ai_pro | google_ai_ultra；未知档位原样给出
+      "plan": "max_5x",                       // 内部 key：claude 用 pro | max_5x | max_20x；codex 用 free | go | plus | pro | team | business；antigravity 用 google_ai_pro | google_ai_ultra；grok 用 supergrok | supergrok_heavy | premium | premium_plus；copilot 用 free | pro | pro_plus | business | enterprise；minimax 用 go | explore | build；qwen 用 coding_plan；commandcode 用 go | goat | provider | pro | max；opencode 用 go | go_plus；未知档位原样给出
       "plan_label": "Claude Max 5x",          // 显示名
       "monthly_price_usd": 100.0,             // 档位未知时为 null
       "cycle_start": "2026-10-25T00:00:00Z",  // 当前账期起点，ISO 8601 UTC（按 anchor_day 在报告 timezone 的 00:00 折算）

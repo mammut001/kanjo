@@ -115,6 +115,13 @@
 "settings.unreadable" = "illisible";
 "settings.no_reset_info" = "Aucune info de réinit.";
 "settings.no_subscription_info" = "Aucune info d'abonnement";
+"settings.add_subscription" = "Ajouter un abonnement";
+"settings.edit" = "Modifier";
+"settings.plan" = "Forfait";
+"settings.monthly_price_usd" = "Prix mensuel ($)";
+"settings.remove_subscription" = "Supprimer";
+"settings.error.plan_required" = "Le nom du forfait est requis.";
+"settings.error.invalid_price" = "Le prix doit être un nombre positif ou nul.";
 "settings.saving" = "Enregistrement…";
 "settings.source.not_set" = "non défini · 30 derniers jours";
 "settings.source.manual" = "manuel";

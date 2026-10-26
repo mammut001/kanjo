@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+from .sources.base import AGENT_LABELS
 from .subscriptions import known_monthly_price
 
 DEFAULT_THRESHOLD = 0.8
@@ -275,6 +276,8 @@ def _subscriptions(raw) -> Dict[str, dict]:
         raise ConfigError("[subscriptions] must be a table")
     out = {}
     for agent, spec in raw.items():
+        if agent not in AGENT_LABELS:
+            raise ConfigError("unknown agent in [subscriptions]: %r" % agent)
         where = "subscriptions.%s" % agent
         if not isinstance(spec, dict):
             raise ConfigError("[%s] must be a table" % where)

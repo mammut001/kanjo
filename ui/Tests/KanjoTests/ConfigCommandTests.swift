@@ -35,4 +35,17 @@ final class ConfigCommandTests: KanjoTestCase {
             XCTAssertThrowsError(try ConfigCommand.command(from: command, agent: "codex", anchorDay: 8), command)
         }
     }
+
+    func testFieldArgumentsForArbitraryAgents() throws {
+        for agent in ["grok", "copilot", "minimax", "qwen", "commandcode", "opencode", "custom_agent"] {
+            XCTAssertEqual(try ConfigCommand.fieldArguments(agent: agent, field: "plan", value: "pro"),
+                           ["config", "set", "subscriptions.\(agent).plan", "pro"])
+            XCTAssertEqual(try ConfigCommand.fieldArguments(agent: agent, field: "monthly_price_usd", value: "20"),
+                           ["config", "set", "subscriptions.\(agent).monthly_price_usd", "20"])
+            XCTAssertEqual(try ConfigCommand.fieldArguments(agent: agent, field: "plan", value: nil),
+                           ["config", "unset", "subscriptions.\(agent).plan"])
+        }
+        XCTAssertThrowsError(try ConfigCommand.fieldArguments(agent: "grok", field: "invalid_field", value: "x"))
+        XCTAssertThrowsError(try ConfigCommand.fieldArguments(agent: "bad;agent", field: "plan", value: "x"))
+    }
 }
