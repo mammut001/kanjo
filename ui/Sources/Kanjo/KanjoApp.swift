@@ -76,22 +76,19 @@ struct MenuBarLabel: View {
     var body: some View {
         if store.report == nil && store.error != nil {
             Image(systemName: "exclamationmark.triangle")
-            if showAmount { Text("$—") }
+            if showAmount { Text("$—").monospacedDigit() }
+        } else if showAmount, let r = store.report {
+            Text(amount(r)).monospacedDigit()
         } else {
             Image(systemName: "dollarsign.circle")
-            if showAmount, let r = store.report {
-                Text(amount(r))
-            }
         }
     }
 
-    /// 当前范围过滤后的总额（和总览 hero 同一个数）；All 下就是报告总额，不加前缀。
+    /// 当前范围过滤后的总额（和总览 hero 同一个数）；All 下就是报告总额，不加后缀。
     /// Since reset / Billing cycle 在报告没有对应数据时按 All 处理（RangeContext）。
     private func amount(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
-        guard let prefix = ctx.range.menuBarPrefix else {
-            return Fmt.money(r.totals.cost, currency: r.currency)
-        }
-        return "\(prefix) \(Fmt.money(ctx.filtered().cost, currency: r.currency))"
+        let cost = ctx.isAll ? r.totals.cost : ctx.filtered().cost
+        return MenuBarText.make(cost: cost, currency: r.currency, range: ctx.range)
     }
 }
