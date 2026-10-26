@@ -12,12 +12,12 @@ public enum TimeRange: String, CaseIterable, Identifiable {
     /// 分段控件上的短名。
     public var shortLabel: String {
         switch self {
-        case .all: return "All"
-        case .days7: return "7d"
-        case .days30: return "30d"
-        case .lastWeek: return "Last week"
-        case .sinceReset: return "Since reset"
-        case .billingCycle: return "Cycle"
+        case .all: return L10n.tr("timerange.all.short")
+        case .days7: return L10n.tr("timerange.days7.short")
+        case .days30: return L10n.tr("timerange.days30.short")
+        case .lastWeek: return L10n.tr("timerange.lastWeek.short")
+        case .sinceReset: return L10n.tr("timerange.sinceReset.short")
+        case .billingCycle: return L10n.tr("timerange.billingCycle.short")
         }
     }
 
@@ -35,12 +35,12 @@ public enum TimeRange: String, CaseIterable, Identifiable {
 
     public var longLabel: String {
         switch self {
-        case .all: return "All time"
-        case .days7: return "Last 7 days"
-        case .days30: return "Last 30 days"
-        case .lastWeek: return "Last week"
-        case .sinceReset: return "Since reset"
-        case .billingCycle: return "Billing cycle"
+        case .all: return L10n.tr("timerange.all.long")
+        case .days7: return L10n.tr("timerange.days7.long")
+        case .days30: return L10n.tr("timerange.days30.long")
+        case .lastWeek: return L10n.tr("timerange.lastWeek.long")
+        case .sinceReset: return L10n.tr("timerange.sinceReset.long")
+        case .billingCycle: return L10n.tr("timerange.billingCycle.long")
         }
     }
 }

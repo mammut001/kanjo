@@ -35,7 +35,9 @@ struct DayChart: View {
                         + Text(Fmt.money(h.cost, currency: currency)).fontWeight(.semibold)
                         + Text(" · \(Fmt.tokens(h.tokens)) tokens")
                 } else {
-                    Text("\(pts.count) active day\(pts.count == 1 ? "" : "s") · hover a bar for daily cost")
+                    Text(pts.count == 1
+                         ? L10n.tr("chart.active_day.singular", pts.count)
+                         : L10n.tr("chart.active_day.plural", pts.count))
                         .foregroundColor(.secondary)
                 }
             }
@@ -43,7 +45,7 @@ struct DayChart: View {
             .monospacedDigit()
 
             if pts.isEmpty {
-                Text("No daily data.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(L10n.tr("chart.no_data")).font(.system(size: 11)).foregroundStyle(.secondary)
             } else {
                 chart(pts)
                     .frame(height: 110)

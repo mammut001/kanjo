@@ -281,7 +281,7 @@ struct ShowAllButton: View {
         Button {
             withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
         } label: {
-            Text(expanded ? "Show fewer" : "Show all \(total) \(noun)")
+            Text(expanded ? L10n.tr("common.show_fewer") : L10n.tr("common.show_all", total, noun))
                 .font(.system(size: 11))
                 .foregroundStyle(Color.accentColor)
                 .contentShape(Rectangle())
@@ -317,8 +317,8 @@ enum ShortDate {
     static func relative(_ s: String?) -> String {
         guard let s, let d = ReportDates.parseDay(s) else { return Fmt.day(s) }
         let cal = Calendar.current
-        if cal.isDateInToday(d) { return "today" }
-        if cal.isDateInYesterday(d) { return "yesterday" }
+        if cal.isDateInToday(d) { return L10n.tr("common.today") }
+        if cal.isDateInYesterday(d) { return L10n.tr("common.yesterday") }
         return day(s)
     }
 

@@ -98,7 +98,7 @@ extension MosaicView.Tile {
     var names: [String] {
         switch kind {
         case .project(let p): return [p.name]
-        case .more(let ps): return ["+\(ps.count) more", "+\(ps.count)"]
+        case .more(let ps): return [L10n.tr("mosaic.more.format", ps.count), "+\(ps.count)"]
         }
     }
 
@@ -112,10 +112,10 @@ extension MosaicView.Tile {
     func help(currency: String) -> String {
         switch kind {
         case .project(let p):
-            let lead = dominantAgent(p.byAgent).map { " · mostly \($0.label) (\(Fmt.percent($0.share)))" } ?? ""
+            let lead = dominantAgent(p.byAgent).map { L10n.tr("mosaic.mostly", $0.label, Fmt.percent($0.share)) } ?? ""
             return "\(p.name) · \(Fmt.money(p.cost, currency: currency))\(lead)"
         case .more(let ps):
-            return "\(ps.count) smaller projects · \(Fmt.money(cost, currency: currency))\n"
+            return L10n.tr("mosaic.smaller_projects", ps.count, Fmt.money(cost, currency: currency))
                 + ps.map { "\($0.name)  \(Fmt.money($0.cost, currency: currency))" }.joined(separator: "\n")
         }
     }

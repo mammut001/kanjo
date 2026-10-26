@@ -8,21 +8,21 @@ public enum AttributionInfo {
         let pct = "\(Int((threshold * 100).rounded()))%"
         switch value {
         case "dominant":
-            return "Dominant: ≥\(pct) of this session's file-operation signals pointed at this project, so the whole session is counted here."
+            return L10n.tr("attribution.dominant", pct)
         case "split":
-            return "Split: no project reached \(pct) of file-operation signals, so the cost is divided between projects in proportion to their signals. Share shows this project's part."
+            return L10n.tr("attribution.split", pct)
         case "cwd":
-            return "cwd: the session touched no project files; it is attributed by its working directory."
+            return L10n.tr("attribution.cwd")
         case "scratchpad":
-            return "Scratchpad: the session touched no project files; it is attributed by the project path encoded in its scratchpad directory."
+            return L10n.tr("attribution.scratchpad")
         case "override":
-            return "Override: a path-prefix rule in your attribution config forces this session onto this project."
+            return L10n.tr("attribution.override")
         case "none":
-            return "Unattributed: no file signals, and neither cwd nor scratchpad maps to a project."
+            return L10n.tr("attribution.none")
         case "excluded":
-            return "Excluded: the session matched an exclude path in your config and is not counted toward any project."
+            return L10n.tr("attribution.excluded")
         default:
-            return "Unknown attribution value \"\(value)\" (not in the data contract)."
+            return L10n.tr("attribution.unknown", value)
         }
     }
 }

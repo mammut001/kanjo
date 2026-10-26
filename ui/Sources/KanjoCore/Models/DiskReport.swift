@@ -174,14 +174,14 @@ public struct CleanResult: Codable, Equatable {
 public enum DiskBlock {
     public static func short(_ reason: String) -> String {
         switch reason {
-        case "not_imported": return "not imported"
-        case "uncommitted_changes": return "uncommitted changes"
-        case "active": return "active"
+        case "not_imported": return L10n.tr("disk.block.not_imported")
+        case "uncommitted_changes": return L10n.tr("disk.block.uncommitted_changes")
+        case "active": return L10n.tr("disk.block.active")
         default: return reason.replacingOccurrences(of: "_", with: " ")
         }
     }
 
-    public static func title(_ reason: String) -> String { "Blocked: \(short(reason))" }
+    public static func title(_ reason: String) -> String { L10n.tr("disk.blocked_reason", short(reason)) }
 
     public static func explanation(_ reason: String) -> String {
         switch reason {

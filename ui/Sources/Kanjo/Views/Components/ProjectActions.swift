@@ -46,18 +46,18 @@ struct ProjectContextMenu: View {
         let existing = ProjectActions.existingPath(project)
         let path = ProjectActions.displayPath(project)
         if !hidden {
-            Button(pinned ? "Unpin" : "Pin", action: onTogglePin)
+            Button(pinned ? L10n.tr("context.unpin") : L10n.tr("context.pin"), action: onTogglePin)
         }
-        Button(hidden ? "Unhide" : "Hide", action: onToggleHidden)
+        Button(hidden ? L10n.tr("context.unhide") : L10n.tr("context.hide"), action: onToggleHidden)
         Divider()
-        Button("Open in Terminal") { existing.map(ProjectActions.openInTerminal) }
+        Button(L10n.tr("context.open_in_terminal")) { existing.map(ProjectActions.openInTerminal) }
             .disabled(existing == nil)
-        Button("Show in Finder") { existing.map(ProjectActions.showInFinder) }
+        Button(L10n.tr("context.show_in_finder")) { existing.map(ProjectActions.showInFinder) }
             .disabled(existing == nil)
         Divider()
-        Button("Copy path") { path.map(ProjectActions.copy) }
+        Button(L10n.tr("context.copy_path")) { path.map(ProjectActions.copy) }
             .disabled(path == nil)
-        Button("Copy remote") { project.remote.map(ProjectActions.copy) }
+        Button(L10n.tr("context.copy_remote")) { project.remote.map(ProjectActions.copy) }
             .disabled(project.remote == nil)
     }
 }

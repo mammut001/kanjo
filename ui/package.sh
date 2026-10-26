@@ -86,6 +86,13 @@ chmod 755 "$APP/Contents/MacOS/$APP_NAME"
 cp "$ICNS" "$APP/Contents/Resources/"
 # 示例数据：没装 CLI 时退回到它（DefaultPaths.sampleFixture 会在 .app 里找 sample.json）。
 cp fixtures/sample.json "$APP/Contents/Resources/sample.json"
+# 拷贝 SwiftPM 资源 bundle 到 Contents/Resources/，使 Bundle.module 在 .app 运行时正常加载
+BIN_DIR="$(swift build --scratch-path "$BUILD_DIR/swiftpm-${ARCHS[0]}" "${SWIFT_FLAGS[@]}" -c release --arch "${ARCHS[0]}" --show-bin-path)"
+for b in "$BIN_DIR"/*.bundle; do
+    if [[ -d "$b" ]]; then
+        cp -R "$b" "$APP/Contents/Resources/"
+    fi
+done
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -102,6 +109,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>${VERSION}</string>
     <key>CFBundleIconFile</key><string>${APP_NAME}</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+        <string>fr</string>
+    </array>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>LSUIElement</key><true/>
@@ -122,6 +135,11 @@ if [[ "$IDENTITY" != - ]]; then
     SIGN_FLAGS+=(--options runtime --timestamp)
 fi
 xattr -cr "$APP"
+for b in "$APP/Contents/Resources"/*.bundle; do
+    if [[ -d "$b" ]]; then
+        codesign "${SIGN_FLAGS[@]}" "$b"
+    fi
+done
 codesign "${SIGN_FLAGS[@]}" "$APP/Contents/MacOS/$APP_NAME"
 codesign "${SIGN_FLAGS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"

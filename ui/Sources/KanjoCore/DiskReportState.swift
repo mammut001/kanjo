@@ -26,13 +26,13 @@ public struct DiskReportState {
 public enum DiskScanCaption {
     public static func text(for report: DiskReport, now: Date = Date()) -> String {
         guard let date = ReportDates.parseTimestamp(report.scannedAt ?? report.generatedAt) else {
-            return "Scan time unknown"
+            return L10n.tr("disk.scan_time_unknown")
         }
         let seconds = max(0, now.timeIntervalSince(date))
-        if seconds < 60 { return "Scanned just now" }
-        if seconds < 3600 { return "Scanned \(Int(seconds / 60)) min ago" }
-        if seconds < 86400 { return "Scanned \(Int(seconds / 3600)) hr ago" }
+        if seconds < 60 { return L10n.tr("disk.scanned_just_now") }
+        if seconds < 3600 { return L10n.tr("disk.scanned_min_ago", Int(seconds / 60)) }
+        if seconds < 86400 { return L10n.tr("disk.scanned_hr_ago", Int(seconds / 3600)) }
         let days = Int(seconds / 86400)
-        return "Scanned \(days) \(days == 1 ? "day" : "days") ago"
+        return days == 1 ? L10n.tr("disk.scanned_day_ago", days) : L10n.tr("disk.scanned_days_ago", days)
     }
 }
