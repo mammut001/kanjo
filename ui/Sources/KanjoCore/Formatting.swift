@@ -107,6 +107,14 @@ public enum Fmt {
         }
     }
 
+    /// 统一金额与 token 格式化："$12.34 · 1.2亿 token"。
+    public static func costAndTokens(cost: Double, tokens: Int, currency: String = "USD", language: String? = nil) -> String {
+        let lang = language ?? L10n.currentLanguage
+        let c = money(cost, currency: currency)
+        let t = L10n.tr("overview.tokens_count", language: lang, Fmt.tokens(tokens, language: lang))
+        return "\(c) · \(t)"
+    }
+
     /// 月费：`$100/mo`。整数美元不带小数；价格未知时为「—」。
     public static func perMonth(_ v: Double?, currency: String = "USD") -> String {
         guard let v, v.isFinite else { return "—" }
@@ -214,11 +222,11 @@ public enum Fmt {
     }()
 
     /// "2026-10-22" → "Oct 22, 2026"；nil 或无法解析时原样/占位。
-    public static func day(_ s: String?) -> String {
+    public static func day(_ s: String?, language: String? = nil) -> String {
         guard let s else { return "—" }
         guard let d = ReportDates.parseDay(s) else { return s }
         let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.locale = Locale(identifier: language ?? L10n.currentLanguage)
         f.calendar = Calendar(identifier: .gregorian)
         f.setLocalizedDateFormatFromTemplate("yMMMd")
         return f.string(from: d)

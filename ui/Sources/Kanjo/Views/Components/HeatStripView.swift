@@ -56,13 +56,17 @@ struct HeatStripView: View {
         }
     }
 
-    /// "Oct 13–19 · $42.10"，下面每个 agent 一行 "Claude Code $30.00"，按 cost 降序。
+    /// "Oct 13–19 · $42.10 · 1.2亿 token"，下面每个 agent 一行 "● Claude Code  $30.00 · 9000万 token"，按 cost 降序。
     private func label(_ w: WeekCost) -> String {
-        var lines = ["\(HeatStrip.weekLabel(start: w.start)) · \(Fmt.money(w.cost, currency: currency))"]
-        for a in w.ranked where a.cost > 0 {
-            lines.append("\(agentLabels[a.agent] ?? a.agent) \(Fmt.money(a.cost, currency: currency))")
-        }
-        return lines.joined(separator: "\n")
+        TooltipBuilder.weekTooltip(
+            weekLabel: HeatStrip.weekLabel(start: w.start),
+            cost: w.cost,
+            tokens: w.tokens,
+            byAgent: w.byAgent,
+            byAgentTokens: w.byAgentTokens,
+            agentLabels: agentLabels,
+            currency: currency
+        )
     }
 }
 

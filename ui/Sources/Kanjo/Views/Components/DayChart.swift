@@ -10,6 +10,8 @@ struct DayChart: View {
         let date: Date
         let cost: Double
         let tokens: Int
+        var byAgent: [String: Double]? = nil
+        var byAgentTokens: [String: Int]? = nil
         var id: String { day }
     }
 
@@ -17,11 +19,15 @@ struct DayChart: View {
     let currency: String
     /// 柱子颜色：该项目主力 agent 的颜色；悬停的柱子满色，其余略淡。
     var color: Color = AgentPalette.chartBar
+    var agentLabels: [String: String] = [:]
     @State private var hovered: Point?
 
     private var points: [Point] {
         days.compactMap { d in
-            ReportDates.parseDay(d.day).map { Point(day: d.day, date: $0, cost: d.cost, tokens: d.tokens) }
+            ReportDates.parseDay(d.day).map {
+                Point(day: d.day, date: $0, cost: d.cost, tokens: d.tokens,
+                      byAgent: d.byAgent, byAgentTokens: d.byAgentTokens)
+            }
         }
         .sorted { $0.date < $1.date }
     }
@@ -104,6 +110,17 @@ struct DayChart: View {
                             hovered = nil
                         }
                     }
+                    .help(hovered.map {
+                        TooltipBuilder.dayTooltip(
+                            dayString: $0.day,
+                            cost: $0.cost,
+                            tokens: $0.tokens,
+                            byAgent: $0.byAgent,
+                            byAgentTokens: $0.byAgentTokens,
+                            agentLabels: agentLabels,
+                            currency: currency
+                        )
+                    } ?? "")
             }
         }
     }
