@@ -11,6 +11,7 @@ final class ReportStore: ObservableObject {
     @Published private(set) var knownPlans: [String: [KnownPlan]]?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
+    @Published private(set) var loadingStartedAt: Date?
     @Published private(set) var lastRefresh: Date?
     @Published private(set) var sourceDescription = ""
 
@@ -140,6 +141,9 @@ final class ReportStore: ObservableObject {
         let (source, desc) = makeSource()
         sourceDescription = desc
         isLoading = true
+        if loadingStartedAt == nil {
+            loadingStartedAt = Date()
+        }
         Task {
             do {
                 let r = try await source.load()
@@ -153,8 +157,10 @@ final class ReportStore: ObservableObject {
                 // 刷新失败时保留上一份报告，面板顶部显示错误。
                 self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
+            guard gen == generation else { return }
             lastRefresh = Date()
             isLoading = false
+            loadingStartedAt = nil
             DiskStore.shared.schedulePrefetch(delay: didScheduleDiskPrefetch ? 0 : 15)
             didScheduleDiskPrefetch = true
         }

@@ -8,6 +8,7 @@ enum Route: Equatable {
     case bucket(BucketKind)
     case disk
     case settings
+    case loading(TimeInterval)
 }
 
 enum BucketKind: String {
@@ -42,7 +43,12 @@ enum DevRoute {
         case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor, nil)
         case "disk": return (.disk, nil, nil)
         case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
+        case "loading": return (.loading(1.0), nil, nil)
         default: break
+        }
+        if raw.hasPrefix("loading:") {
+            let sec = Double(raw.dropFirst("loading:".count)) ?? 12.0
+            return (.loading(sec), nil, nil)
         }
         if QuotaCardRoute.agent(in: raw) != nil { return (.overview, raw, nil) }
         if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
@@ -182,6 +188,8 @@ struct MenuPanelView: View {
                 route = .overview
                 overviewAnchor = nil
             }, onSettings: { route = .settings })
+        case .loading(let elapsed):
+            InitialLoadingView(simulatedElapsed: elapsed, simulatedHasReport: false)
         default:
             if let r = store.report {
                 switch activeRoute {
@@ -205,10 +213,7 @@ struct MenuPanelView: View {
                 ErrorStateView(message: err, source: store.sourceDescription,
                                onRetry: { store.refresh() }, onSettings: { route = .settings })
             } else {
-                VStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L10n.tr("common.loading")).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                InitialLoadingView()
             }
         }
     }
@@ -327,6 +332,56 @@ struct ErrorStateView: View {
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
             }
             .padding(Metrics.pagePadding)
+        }
+    }
+}
+
+struct InitialLoadingView: View {
+    @EnvironmentObject var store: ReportStore
+    var simulatedElapsed: TimeInterval? = nil
+    var simulatedHasReport: Bool? = nil
+
+    @State private var viewAppearedAt = Date()
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+            let hasReport = simulatedHasReport ?? (store.report != nil)
+            let elapsed: TimeInterval = {
+                if let simulated = simulatedElapsed { return simulated }
+                let start = store.loadingStartedAt ?? viewAppearedAt
+                return max(0, timeline.date.timeIntervalSince(start))
+            }()
+            let showHint = FirstScanHint.shouldShow(hasReport: hasReport, elapsed: elapsed)
+            let elapsedSeconds = max(0, Int(elapsed))
+
+            VStack(spacing: 12) {
+                Spacer()
+                ProgressView().controlSize(.small)
+                Text(L10n.tr("common.loading"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                if showHint {
+                    VStack(spacing: 6) {
+                        Text(FirstScanHint.explanation())
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(FirstScanHint.elapsedText(seconds: elapsedSeconds))
+                            .font(.system(size: 10.5).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 28)
+                    .transition(.opacity)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 280, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.25), value: showHint)
         }
     }
 }

@@ -155,6 +155,10 @@
 "menu.error_title" = "Impossible de charger les données d'utilisation";
 "menu.open_settings" = "Ouvrir les réglages";
 "menu.expected_export_json" = "Fichier JSON produit par `kanjo export` attendu (voir CONTRACT.md).";
+"menu.first_scan_hint" = "Le premier lancement lit les journaux de tous les outils IA (environ 30 s) ; ensuite, quelques secondes.";
+"menu.first_scan_elapsed" = "%d s écoulées";
+"menu.first_run_hint" = "Le premier lancement lit les journaux de tous les outils IA (environ 30 s) ; ensuite, quelques secondes.";
+"menu.first_run_elapsed" = "%d s écoulées";
 
 /* Aperçu */
 "overview.total_cost" = "Coût total";
