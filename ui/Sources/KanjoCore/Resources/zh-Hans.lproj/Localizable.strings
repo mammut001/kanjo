@@ -16,6 +16,7 @@
 
 /* 时间范围 */
 "timerange.all.short" = "全部";
+"timerange.today.short" = "今天";
 "timerange.days7.short" = "7天";
 "timerange.days30.short" = "30天";
 "timerange.lastWeek.short" = "上周";
@@ -23,11 +24,14 @@
 "timerange.billingCycle.short" = "周期";
 
 "timerange.all.long" = "全部时间";
+"timerange.today.long" = "今天";
 "timerange.days7.long" = "最近 7 天";
 "timerange.days30.long" = "最近 30 天";
 "timerange.lastWeek.long" = "上周";
 "timerange.sinceReset.long" = "重置以来";
 "timerange.billingCycle.long" = "账单周期";
+
+"timerange.today.suffix" = "今天";
 
 "timerange.tooltip.no_reset_info" = "无重置信息";
 "timerange.tooltip.no_subscription_info" = "无订阅信息";

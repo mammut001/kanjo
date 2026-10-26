@@ -42,7 +42,8 @@ struct RangeContext {
     }
 
     /// 范围说明（All 下为 nil）。
-    /// 例：`Last 7 days · Oct 18 – Oct 24`；
+    /// 例：`Today · Oct 24`；
+    /// `Last 7 days · Oct 18 – Oct 24`；
     /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · Antigravity: no reset info`；
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
@@ -51,6 +52,9 @@ struct RangeContext {
         switch range {
         case .all:
             return nil
+        case .today:
+            guard let s = spec.start else { return range.longLabel }
+            return "\(range.longLabel) · \(md.string(from: s))"
         case .days7, .days30, .lastWeek:
             guard let s = spec.start, let e = spec.end else { return range.longLabel }
             // 区间是半开的：显示的最后一天是 end 前一刻所在的那天。
@@ -104,7 +108,7 @@ struct RangeContext {
     }
 }
 
-/// 紧凑的分段控件（自绘胶囊）：All · 7d · 30d · Last week · Since reset · Cycle。
+/// 紧凑的分段控件（自绘胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
 /// 「Since reset」不可用时画成三级色、不可点，tooltip「No reset info」；
 /// 「Cycle」同理，tooltip「No subscription info」。
 struct RangePicker: View {
@@ -134,9 +138,9 @@ struct RangePicker: View {
     @ViewBuilder private func segment(_ r: TimeRange) -> some View {
         let selected = r == effective
         let label = Text(r.shortLabel)
-            .font(.system(size: 10, weight: selected ? .semibold : .regular))
+            .font(.system(size: 9.5, weight: selected ? .semibold : .regular))
             .lineLimit(1)
-            .padding(.horizontal, 5).padding(.vertical, 2.5)
+            .padding(.horizontal, 4).padding(.vertical, 2.5)
             .background(Capsule().fill(selected ? Color.primary.opacity(0.13) : Color.clear))
             .contentShape(Capsule())
         if let reason = unavailable(r) {

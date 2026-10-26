@@ -45,6 +45,7 @@ final class FormattingTests: KanjoTestCase {
     func testMenuBarText() {
         // 金额模式：固定窗口有后缀，其余无后缀
         XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .all), "$3,057")
+        XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .today), "$3,057 · \(TimeRange.today.menuBarSuffix!)")
         XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .days7), "$3,057 · \(TimeRange.days7.shortLabel)")
         XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .days30), "$3,057 · \(TimeRange.days30.shortLabel)")
         XCTAssertEqual(MenuBarText.make(cost: 3056.88, currency: "USD", range: .lastWeek), "$3,057")
@@ -53,6 +54,7 @@ final class FormattingTests: KanjoTestCase {
 
         // Token 模式：固定窗口有后缀，其余无后缀
         XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .all), "23.5B")
+        XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .today), "23.5B · \(TimeRange.today.menuBarSuffix!)")
         XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .days7), "23.5B · \(TimeRange.days7.shortLabel)")
         XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .days30), "23.5B · \(TimeRange.days30.shortLabel)")
         XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .lastWeek), "23.5B")
@@ -60,6 +62,8 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(MenuBarText.make(tokens: 23_500_000_000, range: .billingCycle), "23.5B")
 
         // 统一模式入口
+        XCTAssertEqual(MenuBarText.make(mode: .cost, cost: 100, tokens: 500, range: .today), "$100 · today")
+        XCTAssertEqual(MenuBarText.make(mode: .tokens, cost: 100, tokens: 500, range: .today), "500 · today")
         XCTAssertEqual(MenuBarText.make(mode: .cost, cost: 100, tokens: 500, range: .days7), "$100 · \(TimeRange.days7.shortLabel)")
         XCTAssertEqual(MenuBarText.make(mode: .tokens, cost: 100, tokens: 500, range: .days7), "500 · \(TimeRange.days7.shortLabel)")
     }

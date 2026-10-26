@@ -16,6 +16,7 @@
 
 /* TimeRange */
 "timerange.all.short" = "All";
+"timerange.today.short" = "Today";
 "timerange.days7.short" = "7d";
 "timerange.days30.short" = "30d";
 "timerange.lastWeek.short" = "Last week";
@@ -23,11 +24,14 @@
 "timerange.billingCycle.short" = "Cycle";
 
 "timerange.all.long" = "All time";
+"timerange.today.long" = "Today";
 "timerange.days7.long" = "Last 7 days";
 "timerange.days30.long" = "Last 30 days";
 "timerange.lastWeek.long" = "Last week";
 "timerange.sinceReset.long" = "Since reset";
 "timerange.billingCycle.long" = "Billing cycle";
+
+"timerange.today.suffix" = "today";
 
 "timerange.tooltip.no_reset_info" = "No reset info";
 "timerange.tooltip.no_subscription_info" = "No subscription info";
