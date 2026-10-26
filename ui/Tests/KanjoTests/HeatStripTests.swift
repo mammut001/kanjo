@@ -85,6 +85,17 @@ final class HeatStripTests: KanjoTestCase {
         XCTAssertEqual(weekly([day("2026-10-13", 4)], fallback: "antigravity")[6].byAgent, ["antigravity": 4])
     }
 
+    func testAccumulatesTokensAndByAgentTokens() {
+        let d1 = DayCost(day: "2026-10-19", cost: 5.0, tokens: 50_000,
+                         byAgent: ["claude": 5.0], byAgentTokens: ["claude": 50_000])
+        let d2 = DayCost(day: "2026-10-20", cost: 2.0, tokens: 20_000,
+                         byAgent: nil, byAgentTokens: nil) // 回退到 fallbackAgent
+        let w = weekly([d1, d2], fallback: "codex")
+        XCTAssertEqual(w[7].cost, 7.0, accuracy: 1e-9)
+        XCTAssertEqual(w[7].tokens, 70_000)
+        XCTAssertEqual(w[7].byAgentTokens, ["claude": 50_000, "codex": 20_000])
+    }
+
     func testSegmentsOrderedByCostAndSharesSumToOne() {
         let s = HeatStrip.segments(week(["claude": 354, "antigravity": 164]))
         XCTAssertEqual(s.map(\.agent), ["claude", "antigravity"])

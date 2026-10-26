@@ -18,20 +18,26 @@ struct OverviewView: View {
 
     private var cur: String { report.currency }
 
-    /// 当前范围内有花费的所有 agent（按花费降序），用于图例。
-    private func legendAgents(in f: FilteredReport) -> [(key: String, label: String)] {
-        var cost: [String: Double] = [:], label: [String: String] = [:]
+    /// 当前范围内有花费或 token 的所有 agent（按花费降序），用于图例。
+    private func legendAgents(in f: FilteredReport) -> [Legend.Item] {
+        var cost: [String: Double] = [:], tokens: [String: Int] = [:], label: [String: String] = [:]
         for p in f.projects {
             for a in p.byAgent {
                 cost[a.agent, default: 0] += a.cost
+                tokens[a.agent, default: 0] += a.tokens.total
                 if label[a.agent] == nil || label[a.agent] == a.agent {
                     label[a.agent] = a.label
                 }
             }
         }
-        return cost.filter { $0.value > 0 }
-            .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
-            .map { ($0.key, label[$0.key] ?? report.agentLabels[$0.key] ?? $0.key) }
+        let keys = Set(cost.keys).union(tokens.keys)
+        return keys.filter { (cost[$0] ?? 0) > 0 || (tokens[$0] ?? 0) > 0 }
+            .sorted {
+                let c0 = cost[$0] ?? 0, c1 = cost[$1] ?? 0
+                return c0 != c1 ? c0 > c1 : $0 < $1
+            }
+            .map { Legend.Item(key: $0, label: label[$0] ?? report.agentLabels[$0] ?? $0,
+                               cost: cost[$0] ?? 0, tokens: tokens[$0] ?? 0) }
     }
 
     /// 列表里的项目都是按当前范围过滤后的值（`projected`）。
@@ -107,6 +113,14 @@ struct OverviewView: View {
         let sessCountStr = f.sessions == 1 ? L10n.tr("overview.count.session.singular", f.sessions) : L10n.tr("overview.count.session.plural", f.sessions)
         let counts = [projects, sessCountStr,
                       L10n.tr("overview.tokens_count", Fmt.tokens(f.tokens))].joined(separator: " · ")
+        let summaryLine = OverviewSummaryText.make(
+            range: ctx.range,
+            dateRange: range,
+            projectsCount: visible.count,
+            sessionsCount: f.sessions,
+            tokensCount: f.tokens,
+            hiddenCount: hiddenCount
+        )
         var help = [f.firstActive == nil ? L10n.tr("overview.help.no_usage_range") : "\(ShortDate.range(f.firstActive, f.lastActive)).",
                     ctx.isAll ? L10n.tr("overview.help.cache_reads", Fmt.tokens(t.tokens.cacheRead))
                               : L10n.tr("overview.help.daily_summed")]
@@ -141,13 +155,15 @@ struct OverviewView: View {
             HeroAmount(value: Fmt.money(f.cost, currency: cur))
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {
-                Text("\(range) · \(counts)").font(.system(size: 11)).lineLimit(1).fixedSize()
-                Text("\(range) · \(counts)").font(.system(size: 10.5)).lineLimit(1).fixedSize()
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(range).lineLimit(1)
-                    Text(counts).lineLimit(1)
+                Text(summaryLine).font(.system(size: 11)).lineLimit(1).fixedSize()
+                Text(summaryLine).font(.system(size: 10.5)).lineLimit(1).fixedSize()
+                if ctx.range != .today {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(range).lineLimit(1)
+                        Text(counts).lineLimit(1)
+                    }
+                    .font(.system(size: 11))
                 }
-                .font(.system(size: 11))
             }
             .foregroundStyle(.secondary).monospacedDigit()
             .help(help.joined(separator: "\n"))
@@ -159,13 +175,13 @@ struct OverviewView: View {
     }
 
     private func projectsSection(visible: [Project], hidden: [Project], idle: Int, isAll: Bool,
-                                 legendAgents: [(key: String, label: String)]) -> some View {
+                                 legendAgents: [Legend.Item]) -> some View {
         let pinned = ProjectPrefs.parse(pinnedRaw)
         let end = report.heatEndDate
         let labels = report.agentLabels
         return PanelSection(L10n.tr("settings.section.projects"), flat: true) {
             if !legendAgents.isEmpty {
-                Legend(agents: legendAgents)
+                Legend(items: legendAgents, currency: cur)
                     .padding(.horizontal, Metrics.listInset)
                     .padding(.top, 2)
                     .padding(.bottom, 6)
@@ -298,7 +314,7 @@ struct OverviewView: View {
         }
         .padding(.horizontal, Metrics.listInset)
         .padding(.vertical, 6)
-        .help("\(m.model) (\(m.agent))")
+        .help(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
     }
 
     private func bucketsSection(_ f: FilteredReport) -> some View {
@@ -480,7 +496,7 @@ struct ProjectRow: View {
                                 .help(L10n.tr("overview.badge.pinned"))
                         }
                         Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                        AgentDots(agents: project.byAgent)
+                        AgentDots(agents: project.byAgent, currency: currency)
                         if project.pathMissing {
                             Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
                                   help: L10n.tr("overview.badge.path_missing_help"))
