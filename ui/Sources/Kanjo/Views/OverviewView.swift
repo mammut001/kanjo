@@ -69,7 +69,9 @@ struct OverviewView: View {
                         hero(ctx, f, visible: lists.visible, hiddenCount: lists.hidden.count)
                         // 订阅价值紧挨 hero（cost note 下面、马赛克上面）。始终按各 agent 自己的账期，不跟当前范围走。
                         if !(report.subscriptions ?? [:]).isEmpty {
-                            SubscriptionValueCard(report: report, onSetRenewalDay: onSetRenewalDay)
+                            SubscriptionValueCard(report: report, pinnedQuotaAgent: QuotaCardRoute.agent(in: scrollAnchor),
+                                                  onSetRenewalDay: onSetRenewalDay)
+                                .zIndex(1) // 额度卡浮在下面的马赛克之上
                         }
                         if lists.visible.contains(where: { $0.cost > 0 }) {
                             MosaicView(projects: lists.visible, currency: cur) { onSelect(.project($0)) }
@@ -346,7 +348,10 @@ struct OverviewView: View {
 /// 没有新的卡片描边，和总览其他节一样直接放在面板上。底部那句说明固定显示。
 private struct SubscriptionValueCard: View {
     let report: UsageReport
+    var pinnedQuotaAgent: String? = nil
     let onSetRenewalDay: (String) -> Void
+    @State private var hoveredAgent: String?
+    @State private var hoverTask: Task<Void, Never>?
     @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
 
     private var cur: String { report.currency }
@@ -357,7 +362,8 @@ private struct SubscriptionValueCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
-                    line(row)
+                    quotaHover(line(row), row: row)
+                        .zIndex(shownQuotaAgent == row.agent ? 1 : 0)
                 }
                 Text(L10n.tr("overview.subscription_value.explanation"))
                     .font(.system(size: 10.5))
@@ -460,6 +466,32 @@ private struct SubscriptionValueCard: View {
         .padding(.vertical, 4)
     }
 
+    private var shownQuotaAgent: String? { pinnedQuotaAgent ?? hoveredAgent }
+
+    /// 悬停 0.35 秒后在行下方（放不下时在上方）浮出额度卡；移出即收起。没有额度数据的 agent 不出卡片。
+    private func quotaHover(_ content: some View, row: SubscriptionRow) -> some View {
+        let quota = SubscriptionValue.quotaRows(report.quotaWindows?[row.agent],
+                                                timezone: RangeEngine.timezone(of: report))
+        return content
+            .onHover { inside in
+                hoverTask?.cancel()
+                guard !quota.isEmpty else { return }
+                if inside {
+                    hoverTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        if !Task.isCancelled { withAnimation(.easeOut(duration: 0.12)) { hoveredAgent = row.agent } }
+                    }
+                } else if hoveredAgent == row.agent {
+                    withAnimation(.easeIn(duration: 0.08)) { hoveredAgent = nil }
+                }
+            }
+            .overlay(alignment: .top) {
+                if shownQuotaAgent == row.agent, !quota.isEmpty {
+                    QuotaPlacement(card: QuotaCard(agent: row.agent, planLabel: row.planLabel, rows: quota))
+                }
+            }
+    }
+
     private func help(_ row: SubscriptionRow) -> String {
         let price = Fmt.perMonth(row.monthlyPriceUsd, currency: cur)
         let usage = Fmt.money(row.usage, currency: cur)
@@ -467,6 +499,112 @@ private struct SubscriptionValueCard: View {
             return L10n.tr("overview.sub_help_multiplier", row.planLabel, price, usage, Fmt.multiple(m))
         }
         return L10n.tr("overview.sub_help_unknown", row.planLabel, usage)
+    }
+}
+
+/// `--route overview:quota:<agent>`：额度卡固定展开，供截图检查（不用悬停）。
+enum QuotaCardRoute {
+    static let prefix = "overview:quota:"
+    static func agent(in anchor: String?) -> String? {
+        guard let a = anchor, a.hasPrefix(prefix) else { return nil }
+        let agent = String(a.dropFirst(prefix.count))
+        return agent.isEmpty ? nil : agent
+    }
+}
+
+/// 把卡片放在行的正下方；按全局坐标判断会超出面板底部时翻到行的上方。
+private struct QuotaPlacement: View {
+    let card: QuotaCard
+    @State private var cardHeight: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let frame = geo.frame(in: .global)
+            let gap: CGFloat = 4
+            let panelBottom = MenuPanelView.size.height - 8
+            let upward = frame.maxY + gap + cardHeight > panelBottom && frame.minY - gap - cardHeight > 8
+            card
+                .background(GeometryReader { c in
+                    Color.clear.onAppear { cardHeight = c.size.height }
+                        .onChange(of: c.size.height) { cardHeight = $0 }
+                })
+                .frame(width: geo.size.width - 2 * Metrics.listInset)
+                .offset(x: Metrics.listInset, y: upward ? -(cardHeight + gap) : frame.height + gap)
+        }
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+}
+
+/// 额度卡：agent 色点 + 档位名做标题；每个窗口一行：细进度条、右对齐百分比、重置时间。
+private struct QuotaCard: View {
+    let agent: String
+    let planLabel: String
+    let rows: [QuotaRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 6) {
+                AgentDot(agent: agent, size: 7)
+                Text(planLabel).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            }
+            ForEach(rows) { r in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(r.title).font(.system(size: 11, weight: .medium))
+                        Spacer(minLength: 8)
+                        Text(r.percent.map { "\(Int($0.rounded()))%" } ?? "—")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(r.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                    }
+                    QuotaBar(fraction: (r.percent ?? 0) / 100, color: barColor(r.percent))
+                    Text(r.detail)
+                        .font(.system(size: 10))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.regularMaterial)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+
+    private func barColor(_ percent: Double?) -> Color {
+        switch SubscriptionValue.level(percent) {
+        case .normal: return AgentPalette.color(for: agent)
+        case .warning: return AgentPalette.quotaWarn
+        case .critical: return AgentPalette.bad
+        }
+    }
+}
+
+private struct QuotaBar: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08))
+                if fraction > 0 {
+                    Capsule().fill(color).frame(width: max(4, geo.size.width * min(fraction, 1)))
+                }
+            }
+        }
+        .frame(height: 4)
     }
 }
 

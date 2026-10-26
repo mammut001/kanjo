@@ -17,6 +17,18 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertTrue((6...8).contains(r.projects.count))
     }
 
+    func testQuotaWindowUsageDecodes() throws {
+        let q = try XCTUnwrap(try loadFixture().quotaWindows?["claude"])
+        XCTAssertEqual(q.weeklyUsedPercent, 57)
+        XCTAssertEqual(q.fiveHourUsedPercent, 13)
+        XCTAssertEqual(q.fiveHourWindowHours, 5)
+        // 旧导出没有这些字段：仍能解码，值为 nil
+        let old = #"{"weekly_resets_at":"2026-10-27T14:00:00Z","weekly_window_hours":168,"five_hour_resets_at":null,"source":"tokei"}"#
+        let w = try JSONDecoder().decode(QuotaWindow.self, from: Data(old.utf8))
+        XCTAssertNil(w.weeklyUsedPercent)
+        XCTAssertNil(w.fiveHourWindowHours)
+    }
+
     func testCostNoteDisplayText() throws {
         var r = try loadFixture()
         r.costNote = "API-equivalent cost estimated from public API prices. Not actual subscription spend."

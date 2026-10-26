@@ -104,6 +104,22 @@ cd ui && swift run Kanjo
 
 Running from source uses the `cli/` directory next to it automatically.
 
+### Build a notarized release
+
+Release builds can be notarized with Apple’s notary service.
+
+1. Store credentials once in your macOS keychain (generate an app-specific password at [appleid.apple.com](https://appleid.apple.com)):
+   ```bash
+   xcrun notarytool store-credentials kanjo-notary --apple-id <your-apple-id> --team-id Z5D5N7CU6L
+   ```
+2. Build, sign, and notarize:
+   ```bash
+   cd ui && KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
+   # or pass --notarize (defaults to profile 'kanjo-notary'):
+   cd ui && ./package.sh --notarize
+   ```
+This submits the app zip to Apple, staples the ticket to `Kanjo.app`, rebuilds the zip and DMG, signs the DMG, notarizes the DMG, and staples it.
+
 ## Configuration
 
 Optional, at `~/.config/kanjo/attribution.toml`:
@@ -202,6 +218,22 @@ MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上�
 git clone https://github.com/mammut001/kanjo.git
 cd kanjo && ./install.sh
 ```
+
+### 构建公证发布包
+
+发布包支持通过 Apple 公证服务进行公证。
+
+1. 在 macOS 钥匙串中保存一次凭据（在 [appleid.apple.com](https://appleid.apple.com) 生成 App 专用密码）：
+   ```bash
+   xcrun notarytool store-credentials kanjo-notary --apple-id <你的-apple-id> --team-id Z5D5N7CU6L
+   ```
+2. 打包、签名并公证：
+   ```bash
+   cd ui && KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
+   # 或使用 --notarize 参数（默认使用 'kanjo-notary' profile）：
+   cd ui && ./package.sh --notarize
+   ```
+该流程会将应用提交至 Apple 公证服务，装订（staple）公证票据至 `Kanjo.app`，重新构建 zip 与 DMG，对 DMG 签名并完成公证与装订。
 
 ### 和 Tokei 的关系
 

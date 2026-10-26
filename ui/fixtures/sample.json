@@ -12,13 +12,19 @@
     "claude": {
       "weekly_resets_at": "2026-10-27T10:00:00Z",
       "weekly_window_hours": 168,
+      "weekly_used_percent": 57.0,
       "five_hour_resets_at": "2026-10-23T04:30:00Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 13.0,
       "source": "tokei"
     },
     "codex": {
       "weekly_resets_at": "2026-10-28T08:00:00Z",
       "weekly_window_hours": 168,
+      "weekly_used_percent": null,
       "five_hour_resets_at": null,
+      "five_hour_window_hours": null,
+      "five_hour_used_percent": null,
       "source": "manual"
     }
   },

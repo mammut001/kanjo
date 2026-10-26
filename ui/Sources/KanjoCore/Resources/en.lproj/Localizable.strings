@@ -198,6 +198,14 @@
 "overview.dismiss_renewal_reminder" = "Dismiss renewal day reminder";
 "overview.renewal_day_unknown_help" = "Renewal day unknown; set it in Settings";
 "overview.sub_help_multiplier" = "%@ is %@ flat. %@ is the API-equivalent cost this billing cycle, %@ the flat fee. Not an extra charge.";
+"overview.quota.five_hour" = "5-hour";
+"overview.quota.weekly" = "Weekly";
+"overview.quota.hours" = "%d-hour";
+"overview.quota.resets_in" = "Resets in %@ · %@";
+"overview.quota.ended" = "Window ended";
+"overview.quota.rel_m" = "%d min";
+"overview.quota.rel_hm" = "%dh %dm";
+"overview.quota.rel_dh" = "%dd %dh";
 "overview.sub_help_unknown" = "%@: monthly price unknown. %@ is the API-equivalent cost this billing cycle. Not an extra charge.";
 "overview.badge.pinned" = "Pinned";
 "overview.badge.path_missing" = "path missing";
