@@ -12,19 +12,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Six new agents.** Reads logs from Grok CLI (`~/.grok/sessions`), Qwen Code (`~/.qwen`), Command Code
   (`~/.commandcode/projects`), MiniMax (`~/.minimax/sqlite.db`), OpenCode (`~/.local/share/opencode/opencode.db`),
-  and Copilot CLI (`~/.copilot`, `~/.copilot-cli`). MiniMax and OpenCode shared sessions are identified
+  and Copilot CLI (`~/.copilot`). MiniMax and OpenCode shared sessions are identified
   and counted only once. Brand colors and a wrapping legend support all nine tools.
 - **Subscriptions for all agents.** Grok plans are detected automatically from Tokei's cache
   (`grok_quota_cache.json`), joining Claude and Codex. Built-in list prices for standard plans across
-  all nine supported agents. Manage subscriptions directly in Settings (plan name, monthly price in USD,
-  and renewal day 1–28) or via `kanjo config set subscriptions.<agent>.<field>`, with vendor billing
+  all nine supported agents. Manage subscriptions directly in Settings or via
+  `kanjo config set subscriptions.<agent>.<field>`, with renewal day settings (1–28) and vendor billing
   page links for each service.
+- Settings lets you pick a subscription plan from a list of known plans with list prices (or Other… for
+  a custom plan).
 - **Localization (Simplified Chinese and French).** Complete UI localization in 简体中文 (`zh-Hans`)
   and Français (`fr`) alongside English, with an in-app language picker in Settings that switches
   immediately without restarting.
 - **Localized token units.** Token counts format according to the active language: `k` / `M` / `B` in
-  English, 4-digit groups with `万` / `亿` / `万亿` in Simplified Chinese, and `k` / `M` / `Md` with decimal
-  commas in French.
+  English, plain digits below 10,000, then `万` / `亿` / `万亿` with one decimal (e.g. 1.2万, 258.9亿)
+  in Simplified Chinese, and `k` / `M` / `Md` with decimal commas in French.
 - **Today time range.** New `Today` segment in the time range picker covering `[today 00:00, now)` in
   the report timezone, with a `· today` menu bar suffix and single-date formatting for one-day ranges.
 - **Menu bar tokens mode.** Settings toggle to display either cost (`$`) or total token counts in the

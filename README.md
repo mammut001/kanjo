@@ -63,7 +63,7 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | Command Code | `~/.commandcode/projects/**/*.jsonl` | files touched, cwd |
 | MiniMax | `~/.minimax/sqlite.db` | files touched, workspace |
 | OpenCode | `~/.local/share/opencode/opencode.db` | files touched, directory / worktree |
-| Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot-cli/session-store.db` | files touched, cwd |
+| Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot/session-store.db` | files touched, cwd |
 
 MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
@@ -183,7 +183,7 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 | Command Code | `~/.commandcode/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |
 | MiniMax | `~/.minimax/sqlite.db` | 碰过的文件、工作区 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | 碰过的文件、目录／worktree |
-| Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot-cli/session-store.db` | 碰过的文件、当前工作目录 |
+| Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot/session-store.db` | 碰过的文件、当前工作目录 |
 
 MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 
