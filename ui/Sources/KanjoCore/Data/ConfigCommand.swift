@@ -91,24 +91,33 @@ public struct ConfigDataSource {
             if let cached = Self.cachedPlans {
                 return cached
             }
-            throw DataSourceError.launchFailed("Known plans fetch failed previously")
+            return KnownPlan.fallbackPlans
         }
         let args = ConfigCommand.plansArguments()
-        let command = try ConfigCommand.command(from: cliCommand, arguments: args)
-        let cwd = workingDirectory
-        let timeout = self.timeout
-        let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
-        }.value
-        if useCache { Self.didAttemptFetch = true }
-        if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
-        guard status == 0 else {
-            throw DataSourceError.commandFailed(command: command, status: status,
-                                                stderr: String(decoding: err, as: UTF8.self))
+        let command: String
+        let cwd: URL?
+        if let cmd = try? ConfigCommand.command(from: cliCommand, arguments: args) {
+            command = cmd
+            cwd = workingDirectory
+        } else {
+            command = (try? ConfigCommand.command(from: CLIDataSource.defaultCommand, arguments: args)) ?? "python3 -m kanjo config plans --json"
+            cwd = workingDirectory ?? DefaultPaths.resolvedCLIDirectory()
         }
-        let decoded = try JSONDecoder().decode([String: [KnownPlan]].self, from: out)
-        if useCache { Self.cachedPlans = decoded }
-        return decoded
+        let timeout = self.timeout
+        let (status, out, _, timedOut) = (try? await Task.detached(priority: .utility) {
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
+        }.value) ?? (-1, Data(), Data(), false)
+        if useCache { Self.didAttemptFetch = true }
+        if timedOut || status != 0 {
+            if useCache { Self.cachedPlans = KnownPlan.fallbackPlans }
+            return KnownPlan.fallbackPlans
+        }
+        if let decoded = try? JSONDecoder().decode([String: [KnownPlan]].self, from: out) {
+            if useCache { Self.cachedPlans = decoded }
+            return decoded
+        }
+        if useCache { Self.cachedPlans = KnownPlan.fallbackPlans }
+        return KnownPlan.fallbackPlans
     }
 
     private func execute(args: [String]) async throws {

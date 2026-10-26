@@ -127,6 +127,10 @@ final class SubscriptionTests: KanjoTestCase {
         }
         XCTAssertEqual(SubscriptionSettingsRoute.editAgent(from: "settings:subscriptions:codex:edit"), "codex")
         XCTAssertEqual(SubscriptionSettingsRoute.editAgent(from: "settings:subscriptions:future-agent:edit"), "future-agent")
+        XCTAssertEqual(SubscriptionSettingsRoute.parse("settings:subscriptions:minimax:edit")?.agent, "minimax")
+        XCTAssertEqual(SubscriptionSettingsRoute.parse("settings:subscriptions:minimax:edit")?.isEdit, true)
+        XCTAssertEqual(SubscriptionSettingsRoute.parse("settings:subscriptions:minimax")?.agent, "minimax")
+        XCTAssertEqual(SubscriptionSettingsRoute.parse("settings:subscriptions:minimax")?.isEdit, false)
         for raw in ["settings", "settings-bottom", "settings:subscriptions:codex", "settings:subscriptions:codex:extra",
                     "settings:subscriptions::edit", "settings:subscriptions:codex:edit:extra"] {
             XCTAssertNil(SubscriptionSettingsRoute.editAgent(from: raw), raw)

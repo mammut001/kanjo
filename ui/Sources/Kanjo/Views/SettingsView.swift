@@ -111,7 +111,7 @@ struct SettingsView: View {
                 }
 
                 quotaSection
-                subscriptionsSection
+                subscriptionsSection(proxy: proxy)
 
                 VStack(alignment: .trailing, spacing: 8) {
                     Button(L10n.tr("settings.apply_refresh")) { store.applySettings() }
@@ -129,10 +129,18 @@ struct SettingsView: View {
             .padding(.horizontal, Metrics.pagePadding)
             .padding(.top, 12).padding(.bottom, 10)
         }
-        .task(id: store.report == nil ? nil : scrollTo) {
-            guard let a = scrollTo else { return }
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            proxy.scrollTo(a, anchor: a == Self.bottomAnchor ? .bottom : .top)
+        .task(id: store.report?.generatedAt ?? (store.report == nil ? "" : "loaded")) {
+            guard store.report != nil, let a = scrollTo else { return }
+            scroll(to: a, with: proxy)
+        }
+        .onChange(of: store.report) { report in
+            guard report != nil, let a = scrollTo else { return }
+            scroll(to: a, with: proxy)
+        }
+        .onAppear {
+            if let a = scrollTo {
+                scroll(to: a, with: proxy)
+            }
         }
         }
         .onChange(of: refreshMinutes) { _ in store.restartTimer() }
@@ -200,8 +208,24 @@ struct SettingsView: View {
         return agentList
     }
 
+    private func scroll(to anchor: String, with proxy: ScrollViewProxy) {
+        let align: UnitPoint = anchor == Self.bottomAnchor ? .bottom : .top
+        DispatchQueue.main.async {
+            proxy.scrollTo(anchor, anchor: align)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            proxy.scrollTo(anchor, anchor: align)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            proxy.scrollTo(anchor, anchor: align)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            proxy.scrollTo(anchor, anchor: align)
+        }
+    }
+
     /// 各 agent 的订阅档位（subscriptions），供总览的 Subscription value 卡和 Billing cycle 范围用。
-    private var subscriptionsSection: some View {
+    private func subscriptionsSection(proxy: ScrollViewProxy) -> some View {
         PanelSection(L10n.tr("settings.section.subscriptions"), inset: true) {
             if let r = store.report {
                 let subs = r.subscriptions ?? [:]
@@ -215,6 +239,11 @@ struct SettingsView: View {
                                                 currency: r.currency,
                                                 initiallyEditing: agent == initiallyEditingAgent)
                             .id(item.anchor)
+                            .onAppear {
+                                if item.anchor == scrollTo {
+                                    scroll(to: item.anchor, with: proxy)
+                                }
+                            }
                     }
                 }
             } else {
@@ -309,7 +338,7 @@ private struct SubscriptionSettingsRow: View {
     }
 
     private var agentKnownPlans: [KnownPlan]? {
-        store.knownPlans?[agent]
+        store.knownPlans?[agent] ?? KnownPlan.fallbackPlans[agent]
     }
 
     private var hasKnownPlans: Bool {
@@ -337,8 +366,17 @@ private struct SubscriptionSettingsRow: View {
             }
         }
         .onAppear {
+            if initiallyEditing {
+                isEditing = true
+            }
             syncInputs()
             Task { await store.loadKnownPlans() }
+        }
+        .onChange(of: initiallyEditing) { editing in
+            if editing {
+                isEditing = true
+                syncInputs()
+            }
         }
         .onChange(of: sub?.anchorDay) { value in
             day = min(28, max(1, value ?? 1))

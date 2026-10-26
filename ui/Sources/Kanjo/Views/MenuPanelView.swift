@@ -38,13 +38,8 @@ enum DevRoute {
         case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         default: break
         }
-        if let agent = SubscriptionSettingsRoute.editAgent(from: raw) {
-            guard report != nil else { return nil }
-            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), agent)
-        }
-        if let agent = SubscriptionSettingsRoute.agent(from: raw) {
-            guard report != nil else { return nil }
-            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), nil)
+        if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
+            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), isEdit ? agent : nil)
         }
         guard let r = report else { return nil }
         if raw.hasPrefix("project:") {

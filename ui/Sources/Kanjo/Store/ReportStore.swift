@@ -78,14 +78,13 @@ final class ReportStore: ObservableObject {
 
     func loadKnownPlans() async {
         guard knownPlans == nil else { return }
-        guard canEditSubscriptions else { return }
         let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
                                       workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
         do {
             let plans = try await source.fetchKnownPlans()
             self.knownPlans = plans
         } catch {
-            self.knownPlans = nil
+            self.knownPlans = KnownPlan.fallbackPlans
         }
     }
 
