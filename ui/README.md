@@ -71,11 +71,11 @@ The panel is 360 pt wide; its background is Liquid Glass on macOS 26+ and `.regu
 
 ## Time range
 
-A compact segmented control — All · 7d · 30d · Last week · Since reset · Cycle — sits right of "Total cost" on the overview
+A compact segmented control — All · Today · 7d · 30d · Last week · Since reset · Cycle — sits right of "Total cost" on the overview
 and under the name on the project page (one shared choice, `@AppStorage("timeRange")`, default `all`).
 Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` (pure, tested in `TimeRangeTests`):
 
-- **7d / 30d** — `[today − 6 (29) days 00:00, now)`; **Last week** — previous Monday 00:00 to this Monday 00:00;
+- **Today** — `[today 00:00, now)`; **7d / 30d** — `[today − 6 (29) days 00:00, now)`; **Last week** — previous Monday 00:00 to this Monday 00:00;
   days are cut in the report's `timezone` (falls back to the Mac's).
 - **Since reset** — each agent from the start of its own weekly window in `quota_windows`
   (`weekly_resets_at − weekly_window_hours`, shifted by whole windows so that start ≤ now < start + window).
@@ -97,7 +97,7 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
 - Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
   (`tokei` / `manual` / `none`); reset times can be set by hand in `~/.config/kanjo/attribution.toml`.
 
-Screenshot tip: `-timeRange days7` (or `all`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
+Screenshot tip: `-timeRange days7` (or `all`, `today`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
 Preferences can be preset for one launch without persisting them, through the
 `NSArgumentDomain`, e.g. `.build/debug/Kanjo --window -hiddenProjects $'github.com/a/b\ngithub.com/c/d'`.
 
