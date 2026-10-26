@@ -424,4 +424,46 @@ final class TimeRangeTests: KanjoTestCase {
             }
         }
     }
+
+    func testFilterSessionBucketUsesInRangeShare() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let todayStart = cal.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 0, minute: 0, second: 0))!
+        let todayEnd = cal.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 0, minute: 0, second: 0))!
+        let todaySpec = RangeSpec(range: .today, calendar: cal, start: todayStart, end: todayEnd)
+
+        // 会话 1：带 byDay，跨两天（昨天 $30/3000 tokens，今天 $10/1000 tokens）
+        let sWithByDay = Session(
+            id: "s1", agent: "claude", label: "Claude Code",
+            started: "2026-10-21T18:00:00Z", ended: "2026-10-22T06:00:00Z",
+            cwd: nil, branch: nil, models: ["opus"],
+            cost: 40.0, tokens: Tokens(total: 4000), share: 1, attribution: "none", subagents: 0,
+            byDay: [
+                DayCost(day: "2026-10-21", cost: 30.0, tokens: 3000),
+                DayCost(day: "2026-10-22", cost: 10.0, tokens: 1000)
+            ]
+        )
+
+        // 会话 2：不带 byDay，跨 12 小时（昨天 18:00 到今天 06:00，刚好今天占 50%）
+        let sOverlap = Session(
+            id: "s2", agent: "codex", label: "Codex CLI",
+            started: "2026-10-21T18:00:00Z", ended: "2026-10-22T06:00:00Z",
+            cwd: nil, branch: nil, models: ["codex"],
+            cost: 20.0, tokens: Tokens(total: 2000), share: 1, attribution: "none", subagents: 0
+        )
+
+        let bucket = SessionBucket(
+            cost: 60.0, tokens: Tokens(total: 6000), sessions: 2,
+            firstActive: "2026-10-21", lastActive: "2026-10-22",
+            sessionsDetail: [sWithByDay, sOverlap]
+        )
+
+        let filtered = RangeEngine.filter(bucket, range: todaySpec)
+        XCTAssertEqual(filtered.sessions, 2)
+        // sWithByDay 的今天份额为 $10 / 1000 tokens；sOverlap 的今天时间重叠份额为 50% = $10 / 1000 tokens
+        // 合计在 Today 下应为 $20.00 / 2000 tokens，而非全量的 $60.00 / 6000 tokens
+        XCTAssertEqual(filtered.cost, 20.0, accuracy: 1e-4)
+        XCTAssertEqual(filtered.tokens, 2000)
+    }
 }

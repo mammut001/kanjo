@@ -105,6 +105,12 @@ struct SnapshotConfig {
     }
 }
 
+private final class SnapshotWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
+}
+
 @MainActor
 enum SnapshotRunner {
     static func runCLI() {
@@ -210,7 +216,6 @@ enum SnapshotRunner {
         }
 
         let standardSize = MenuPanelView.size
-        let initialRect = NSRect(origin: .zero, size: standardSize)
 
         let hosting = NSHostingView(rootView: view)
         if let app = config.appearance {
@@ -218,8 +223,13 @@ enum SnapshotRunner {
             hosting.appearance = NSAppearance(named: appearanceName)
         }
 
-        let window = NSWindow(
-            contentRect: initialRect,
+        let fit = hosting.fittingSize
+        let renderHeight = max(standardSize.height, ceil(fit.height))
+        let renderSize = NSSize(width: standardSize.width, height: renderHeight)
+        let renderRect = NSRect(origin: .zero, size: renderSize)
+
+        let window = SnapshotWindow(
+            contentRect: renderRect,
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -232,16 +242,18 @@ enum SnapshotRunner {
             window.appearance = NSAppearance(named: appearanceName)
         }
         window.contentView = hosting
-
+        hosting.frame = renderRect
         hosting.layoutSubtreeIfNeeded()
 
-        let fit = hosting.fittingSize
-        let renderHeight = max(standardSize.height, ceil(fit.height))
-
-        let renderSize = NSSize(width: standardSize.width, height: renderHeight)
-        window.setContentSize(renderSize)
-        hosting.frame = NSRect(origin: .zero, size: renderSize)
-        hosting.layoutSubtreeIfNeeded()
+        let fitAfter = hosting.fittingSize
+        let finalHeight = max(renderHeight, ceil(fitAfter.height))
+        if finalHeight != renderHeight {
+            let finalSize = NSSize(width: standardSize.width, height: finalHeight)
+            let finalRect = NSRect(origin: .zero, size: finalSize)
+            window.setFrame(finalRect, display: true)
+            hosting.frame = finalRect
+            hosting.layoutSubtreeIfNeeded()
+        }
 
         try? await Task.sleep(nanoseconds: 50_000_000)
         hosting.layoutSubtreeIfNeeded()

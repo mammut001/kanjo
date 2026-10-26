@@ -105,7 +105,8 @@ public enum SubscriptionValue {
             if !costs.isEmpty { byProject[p.id] = costs }
         }
         for s in filtered.unattributed.sessionsDetail + filtered.excluded.sessionsDetail {
-            totals[s.agent, default: 0] += s.cost
+            let (c, _) = spec.inRangeCostAndTokens(for: s)
+            totals[s.agent, default: 0] += c
         }
         return CycleUsage(totalByAgent: totals, projectAgentCost: byProject)
     }

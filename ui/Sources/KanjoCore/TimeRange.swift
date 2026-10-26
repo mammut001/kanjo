@@ -128,6 +128,53 @@ public struct RangeSpec: Equatable {
         if let end = w.end, sessionStart >= end { return false }
         return true
     }
+
+    /// 计算会话在当前范围内的花费与 token 份额。
+    /// 1. 优先使用会话的按日数据（若有）；
+    /// 2. 否则按会话时间区间 [started, ended] 与范围窗口的重叠比例（timeShare）缩放。
+    public func inRangeCostAndTokens(for session: Session) -> (cost: Double, tokens: Int) {
+        if isAll {
+            return (session.cost, session.tokens.total)
+        }
+        guard includes(session) else {
+            return (0.0, 0)
+        }
+        if let byDay = session.byDay, !byDay.isEmpty {
+            var c: Double = 0
+            var t: Int = 0
+            for d in byDay {
+                guard let d0 = HeatStrip.parseDay(d.day, calendar: calendar),
+                      let d1 = calendar.date(byAdding: .day, value: 1, to: d0) else { continue }
+                if includes(dayStart: d0, dayEnd: d1, agent: session.agent) {
+                    c += d.cost
+                    t += d.tokens
+                }
+            }
+            return (c, t)
+        }
+        guard let s = session.startedDate ?? session.endedDate,
+              let e = session.endedDate ?? session.startedDate else {
+            return (session.cost, session.tokens.total)
+        }
+        let s0 = min(s, e)
+        let s1 = max(s, e)
+        let dur = s1.timeIntervalSince(s0)
+        guard dur > 0 else {
+            return (session.cost, session.tokens.total)
+        }
+        guard let w = window(for: session.agent) else {
+            return (0.0, 0)
+        }
+        let r0 = w.start ?? s0
+        let r1 = w.end ?? s1
+        let overlap0 = max(s0, r0)
+        let overlap1 = min(s1, r1)
+        if overlap1 <= overlap0 {
+            return (0.0, 0)
+        }
+        let share = min(1.0, max(0.0, overlap1.timeIntervalSince(overlap0) / dur))
+        return (session.cost * share, Int(round(Double(session.tokens.total) * share)))
+    }
 }
 
 /// 一个项目在范围内的数字。`projected` 是把这些数字填回去的 Project（tokens 只有 total；by_model / by_branch 不过滤），
@@ -348,9 +395,14 @@ public enum RangeEngine {
         let days: [String] = ss.flatMap { s -> [String] in
             [s.startedDate, s.endedDate].compactMap { $0.map { dayString($0, calendar: cal) } }
         }
-        let cost: Double = ss.reduce(0.0) { $0 + $1.cost }
-        let tokens: Int = ss.reduce(0) { $0 + $1.tokens.total }
-        return FilteredBucket(cost: cost, tokens: tokens, sessions: ss.count, sessionsDetail: ss,
+        var totalCost: Double = 0
+        var totalTokens: Int = 0
+        for s in ss {
+            let (c, t) = spec.inRangeCostAndTokens(for: s)
+            totalCost += c
+            totalTokens += t
+        }
+        return FilteredBucket(cost: totalCost, tokens: totalTokens, sessions: ss.count, sessionsDetail: ss,
                               firstActive: days.min(), lastActive: days.max())
     }
 
