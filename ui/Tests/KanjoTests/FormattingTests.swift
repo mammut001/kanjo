@@ -22,9 +22,9 @@ final class FormattingTests: XCTestCase {
         // 100 ..< 10,000：无小数，千分位分组
         XCTAssertEqual(Fmt.menuBarMoney(100), "$100")
         XCTAssertEqual(Fmt.menuBarMoney(3056.88), "$3,057")
-        XCTAssertEqual(Fmt.menuBarMoney(9999.6), "$10,000")
 
-        // >= 10,000：紧凑 K/M 一位小数，去尾部 .0
+        // >= 10,000：紧凑 K/M 一位小数，去尾部 .0（四舍五入 >= 10,000 也进位到此档）
+        XCTAssertEqual(Fmt.menuBarMoney(9999.6), "$10K")
         XCTAssertEqual(Fmt.menuBarMoney(10000), "$10K")
         XCTAssertEqual(Fmt.menuBarMoney(12345), "$12.3K")
         XCTAssertEqual(Fmt.menuBarMoney(1_234_567), "$1.2M")

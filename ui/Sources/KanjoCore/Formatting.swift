@@ -27,7 +27,7 @@ public enum Fmt {
 
         if mag < 100 {
             return money(v, currency: currency)
-        } else if mag < 10_000 {
+        } else if mag.rounded() < 10_000 {
             let f = NumberFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
             f.numberStyle = .decimal
@@ -37,7 +37,7 @@ public enum Fmt {
             f.minimumFractionDigits = 0
             f.maximumFractionDigits = 0
             f.roundingMode = .halfUp
-            let body = f.string(from: NSNumber(value: mag)) ?? String(Int(mag.rounded()))
+            let body = f.string(from: NSNumber(value: mag.rounded())) ?? String(Int(mag.rounded()))
             return sign + symbol + body
         } else {
             let units: [(Double, String)] = [(1e3, "K"), (1e6, "M"), (1e9, "B"), (1e12, "T")]

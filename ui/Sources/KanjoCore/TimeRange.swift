@@ -33,9 +33,6 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 菜单栏范围后缀（与 menuBarPrefix 相同缩写）；All 为 nil。
-    public var menuBarSuffix: String? { menuBarPrefix }
-
     public var longLabel: String {
         switch self {
         case .all: return "All time"
