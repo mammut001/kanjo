@@ -1,0 +1,11 @@
+{
+  "info": {
+    "id": "grok-sub-1",
+    "cwd": "/Users/alice/Documents/GitHub/FocusApp"
+  },
+  "head_branch": "feature/ui",
+  "generated_title": "Search codebase",
+  "created_at": "2026-10-15T12:02:00Z",
+  "parent_session_id": "grok-sess-1",
+  "session_kind": "subagent"
+}

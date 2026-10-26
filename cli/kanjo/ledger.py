@@ -117,7 +117,7 @@ def _all_missing(entry: dict) -> bool:
     paths = paths_of(entry)
     if not paths:
         return True
-    return all(not os.path.exists(path) for path in paths)
+    return all(not os.path.exists(path.split("::", 1)[0] if "::" in path else path) for path in paths)
 
 
 class Ledger:

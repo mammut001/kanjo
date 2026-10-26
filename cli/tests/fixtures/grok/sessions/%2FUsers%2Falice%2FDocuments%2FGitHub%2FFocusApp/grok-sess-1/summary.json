@@ -1,0 +1,12 @@
+{
+  "info": {
+    "id": "grok-sess-1",
+    "cwd": "/Users/alice/Documents/GitHub/FocusApp"
+  },
+  "head_branch": "feature/ui",
+  "generated_title": "Fix settings toggle",
+  "created_at": "2026-10-15T12:00:00Z",
+  "session_kind": "main",
+  "git_root_dir": "/Users/alice/Documents/GitHub/FocusApp",
+  "git_remotes": ["git@github.com:alice/FocusApp.git"]
+}

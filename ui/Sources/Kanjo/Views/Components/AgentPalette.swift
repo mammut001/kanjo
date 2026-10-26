@@ -1,25 +1,20 @@
 import AppKit
 import SwiftUI
+import KanjoCore
 
 /// 全部颜色在这里定义。原则：
 /// - 文字只用系统语义色（.primary / .secondary），这里的颜色只给色块、细条、图表用；
-/// - 三个 agent 各一个有辨识度的颜色（浅深两套），颜色跟着 agent 走，不跟名次走；
+/// - 各 agent 有辨识度的颜色（浅深两套，由 KanjoCore.AgentColors 提供），颜色跟着 agent 走，不跟名次走；
 ///   treemap 方块、热力条、详情页柱状图、agent 色点都用同一组；
 /// - 合并的「+N more」和未知 agent 用中性灰；
 /// - 状态色（警告 / 错误）只在真的出问题时出现。
 enum AgentPalette {
-    private static let known: [String: (UInt32, UInt32)] = [
-        "claude": (0xD97757, 0xE8926F),       // clay
-        "codex": (0x3E79D6, 0x6FA0F0),        // blue
-        "antigravity": (0x7A6AD8, 0x9B8DF0),  // violet
-    ]
-
     /// 合并的「+N more」方块、未知 agent、没有花费的项目。
-    static let neutral = dynamic(light: 0x9A9A9A, dark: 0x6E6E73)
+    static let neutral = dynamic(light: AgentColors.neutral.light, dark: AgentColors.neutral.dark)
 
     static func color(for agent: String) -> Color {
-        guard let pair = known[agent] else { return neutral }
-        return dynamic(light: pair.0, dark: pair.1)
+        let pair = AgentColors.pair(for: agent)
+        return dynamic(light: pair.light, dark: pair.dark)
     }
 
     static func dynamic(light: UInt32, dark: UInt32, lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {

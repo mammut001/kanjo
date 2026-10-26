@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from . import disk_cache
 from .ledger import Ledger, paths_of
-from .sources import antigravity, claude, codex
+from .sources import antigravity, claude, codex, copilot, minimax, opencode
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
 ACTIVE_SECONDS = 24 * 60 * 60
@@ -42,10 +42,16 @@ NOTES = {
     "other": "Not deleted.",
 }
 LABELS = dict(AGENT_LABELS)
-LABELS["grok"] = "Grok"
 LABELS["claude-desktop"] = "Claude Desktop"
-AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "claude-desktop"]
-_PARSERS = {"claude": claude, "codex": codex, "antigravity": antigravity}
+AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax", "opencode", "copilot", "claude-desktop"]
+_PARSERS = {
+    "claude": claude,
+    "codex": codex,
+    "antigravity": antigravity,
+    "minimax": minimax,
+    "opencode": opencode,
+    "copilot": copilot,
+}
 _OLDER = re.compile(r"^(\d+)d$")
 
 
@@ -77,9 +83,14 @@ def default_roots() -> dict:
         "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%d" % os.getuid())),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", ["~/.gemini/antigravity-cli/conversations"]),
-        "grok": os.path.expanduser(os.environ.get("KANJO_GROK_DIR") or "~/.grok"),
+        "grok": os.path.expanduser(os.environ["KANJO_GROK_DIR"]) if os.environ.get("KANJO_GROK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.grok")),
+        "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
+        "commandcode": os.path.expanduser(os.environ["KANJO_COMMANDCODE_DIR"]) if os.environ.get("KANJO_COMMANDCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.commandcode")),
         "claude_app": os.path.expanduser(
             os.environ.get("KANJO_CLAUDE_APP_CACHE") or "~/Library/Application Support/Claude"),
+        "minimax": os.path.expanduser(os.environ["KANJO_MINIMAX_DIR"]) if os.environ.get("KANJO_MINIMAX_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.minimax")),
+        "opencode": os.path.expanduser(os.environ["KANJO_OPENCODE_DIR"]) if os.environ.get("KANJO_OPENCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/opencode")),
+        "copilot": os.path.expanduser(os.environ["KANJO_COPILOT_DIR"]) if os.environ.get("KANJO_COPILOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.copilot")),
     }
 
 
@@ -284,7 +295,7 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             n += 1
         return "%s:%d" % (eid, n)
 
-    def add(agent: str, eid: str, kind: str, path: str, blocked=None, note=None, exclude=None) -> None:
+    def add(agent: str, eid: str, kind: str, path: str, blocked=None, note=None, exclude=None, deletable=None) -> None:
         used.add(eid)
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
         dirty = executor.submit(_worktree_dirty, path) if kind == "worktrees" else None
@@ -298,7 +309,7 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             shallow = measure(path, now, _submit=submit)
         else:
             parts.append(executor.submit(measure, path, now, exclude))
-        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts))
+        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts, deletable))
 
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
@@ -347,10 +358,27 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         sessions = os.path.join(grok, "sessions")
         if _isdir(sessions):
             add("grok", take_id("grok:sessions"), "sessions", sessions, ["not_imported"],
-                note="Grok sessions. Kanjo does not parse Grok yet, so this stays not_imported.")
+                note="Grok sessions.")
         bundled = os.path.join(grok, "bundled")
         if _isdir(bundled):
             add("grok", take_id("grok:bundled"), "other", bundled)
+
+    qwen = roots.get("qwen")
+    if qwen:
+        usage = os.path.join(qwen, "usage")
+        if _isdir(usage):
+            add("qwen", take_id("qwen:sessions"), "sessions", usage, ["not_imported"],
+                note="Qwen Code monthly usage logs.")
+        projects = os.path.join(qwen, "projects")
+        if _isdir(projects):
+            add("qwen", take_id("qwen:projects"), "other", projects)
+
+    cmd = roots.get("commandcode")
+    if cmd:
+        projects = os.path.join(cmd, "projects")
+        if _isdir(projects):
+            add("commandcode", take_id("commandcode:sessions"), "sessions", projects, ["not_imported"],
+                note="Command Code project sessions.")
 
     app = roots.get("claude_app")
     if app:
@@ -363,8 +391,33 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             if _isdir(path):
                 add("claude-desktop", take_id(eid), "cache", path, note=note)
 
+    minimax_root = roots.get("minimax")
+    if minimax_root and (_isdir(minimax_root) or os.path.isfile(minimax_root)):
+        db = os.path.join(minimax_root, "sqlite.db") if _isdir(minimax_root) else minimax_root
+        if os.path.isfile(db):
+            add("minimax", take_id("minimax:sessions"), "sessions", minimax_root,
+                note="MiniMax SQLite database. DB-backed sessions are never deleted by disk clean.",
+                deletable="never")
+
+    opencode_root = roots.get("opencode")
+    if opencode_root and (_isdir(opencode_root) or os.path.isfile(opencode_root)):
+        db = os.path.join(opencode_root, "opencode.db") if _isdir(opencode_root) else opencode_root
+        if os.path.isfile(db):
+            add("opencode", take_id("opencode:sessions"), "sessions", opencode_root,
+                note="OpenCode SQLite database. DB-backed sessions are never deleted by disk clean.",
+                deletable="never")
+
+    copilot_root = roots.get("copilot")
+    if copilot_root and _isdir(copilot_root):
+        state_dir = os.path.join(copilot_root, "session-state")
+        if _isdir(state_dir):
+            add("copilot", take_id("copilot:sessions"), "sessions", state_dir)
+        elif os.path.isfile(os.path.join(copilot_root, "session-store.db")):
+            add("copilot", take_id("copilot:sessions"), "sessions", copilot_root,
+                note="Copilot CLI session database.", deletable="never")
+
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
-    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts in pending:
+    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable in pending:
         measured = _sum_measurements(([shallow] if shallow is not None else [])
                                      + [part.result() for part in parts], now)
         if dirty is not None and dirty.result():
@@ -379,7 +432,7 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             elif imported_files < log_files:
                 blocked.append("not_imported")
         entry = _make(eid, kind, path, measured, blocked, note=note,
-                      log_files=log_files, imported_files=imported_files)
+                      log_files=log_files, imported_files=imported_files, deletable=deletable)
         grouped.setdefault(agent, []).append(entry)
     return grouped
 
@@ -399,7 +452,7 @@ def _sum_measurements(parts: List[dict], now: float) -> dict:
 
 
 def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], note: Optional[str] = None,
-         log_files: Optional[int] = None, imported_files: Optional[int] = None) -> dict:
+         log_files: Optional[int] = None, imported_files: Optional[int] = None, deletable: Optional[str] = None) -> dict:
     entry = {
         "id": eid,
         "kind": kind,
@@ -408,7 +461,7 @@ def _make(eid: str, kind: str, path: str, measured: dict, blocked: List[str], no
         "files": measured["files"],
         "oldest": local_day(measured["oldest"]) if measured["oldest"] is not None else None,
         "newest": local_day(measured["newest"]) if measured["newest"] is not None else None,
-        "deletable": DELETABLE[kind],
+        "deletable": deletable or DELETABLE[kind],
         "blocked": list(blocked),
         "note": note or NOTES[kind],
         "skipped_errors": measured["errors"],
@@ -600,6 +653,8 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     root = entry["path"]
     if not os.path.exists(root):
         return [], 0, "not_found", []
+    if agent in ("minimax", "opencode"):
+        return [], 0, "never", []
     if days is None:
         if do_it:
             dest = os.path.join(trash_root, entry["id"], os.path.basename(os.path.normpath(root)))

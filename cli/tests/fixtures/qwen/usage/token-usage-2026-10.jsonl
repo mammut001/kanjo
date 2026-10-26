@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"req-qwen-1","timestamp":"2026-10-15T14:00:00Z","sessionId":"qwen-sess-1","model":"qwen3.8-max","inputTokens":1200,"outputTokens":300,"cachedTokens":500,"thoughtsTokens":80,"totalTokens":1500}

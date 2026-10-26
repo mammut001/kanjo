@@ -82,6 +82,9 @@ FAMILY_FALLBACK = [
     ("glm", "z-ai/glm-5.2"),
     ("mimo", "xiaomi/mimo-v2.5-pro"),
     ("hy3", "tencent/hy3"),
+    ("minimax", "minimax/minimax-m3"),
+    ("kat", "kwaipilot/kat-coder-pro-v2.5"),
+    ("kwaipilot", "kwaipilot/kat-coder-pro-v2.5"),
     # vendor-only: most expensive tier of the vendor
     ("claude", "anthropic/claude-fable-5.1"),
     ("gpt", "openai/gpt-6-astra"),
@@ -96,6 +99,9 @@ AGENT_DEFAULT = {
     "claude": "anthropic/claude-fable-5.1",
     "codex": "openai/gpt-6-astra",
     "antigravity": GEMINI_PRO,
+    "minimax": "minimax/minimax-m3",
+    "opencode": "deepseek/deepseek-v4-pro",
+    "copilot": "anthropic/claude-haiku-4.5",
 }
 GLOBAL_DEFAULT = "anthropic/claude-fable-5.1"
 
@@ -189,6 +195,8 @@ class PriceBook:
         if seg.startswith("muse-"):
             return "meta/" + seg
         if "/" in m:
+            if m.startswith("xai/"):
+                return "x-ai/" + m[4:]
             return m
         if m.startswith("claude"):
             m = re.sub(r"-(?:\d{8}|latest)$", "", m)
@@ -198,7 +206,7 @@ class PriceBook:
             return "openai/" + m
         for prefix, vendor in (("gemini", "google"), ("grok", "x-ai"), ("qwen", "qwen"),
                                ("deepseek", "deepseek"), ("glm", "z-ai"), ("mimo", "xiaomi"),
-                               ("minimax", "minimax")):
+                               ("minimax", "minimax"), ("ling", "inclusionai")):
             if m.startswith(prefix):
                 return vendor + "/" + m
         return m

@@ -1,0 +1,16 @@
+{
+  "sessionId": "grok-sub-1",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "endedAt": "2026-10-15T12:02:30Z",
+      "inputTokens": 500,
+      "outputTokens": 100,
+      "cachedReadTokens": 100,
+      "cacheCreationTokens": 0,
+      "reasoningTokens": 20,
+      "totalTokens": 600,
+      "primaryModelId": "grok-4.5"
+    }
+  ]
+}
