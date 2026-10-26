@@ -25,7 +25,7 @@ public enum L10n {
 
     /// 当前有效语言代码（"en" / "zh-Hans" / "fr"）
     public static var currentLanguage: String {
-        effectiveLanguage(for: UserDefaults.standard.string(forKey: SettingsKeys.appLanguage))
+        effectiveLanguage(for: AppDefaults.store.string(forKey: SettingsKeys.appLanguage))
     }
 
     /// 根据用户设置项（或系统语言回退）计算出的有效语言代码

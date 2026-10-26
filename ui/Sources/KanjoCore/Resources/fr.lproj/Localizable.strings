@@ -39,6 +39,8 @@
 "timerange.caption.reset" = "%@ réinit. %@";
 "timerange.caption.no_reset_info" = "%@ : aucune info de réinit.";
 "timerange.caption.no_subscription" = "%@ : aucun abonnement";
+"timerange.caption.no_reset_info_others" = "%d autres sans info de réinitialisation (non comptés)";
+"timerange.caption.no_subscription_others" = "%d autres sans abonnement (non comptés)";
 
 /* Formatage et cycle */
 "fmt.cycle_dates_unavailable" = "Dates de cycle indisponibles";
@@ -101,10 +103,17 @@
 "settings.grid.next_reset" = "Prochaine réinit. hebdomadaire";
 "settings.grid.source" = "Source";
 "settings.no_data_loaded" = "Aucune donnée chargée pour le moment.";
-"settings.quota_note" = "Lu depuis le cache tokei (~/.tokei) si disponible. Pour définir ou modifier manuellement une heure de réinitialisation, ajoutez-la à ~/.config/kanjo/attribution.toml. Les agents sans information de réinitialisation sont exclus de la période Depuis réinitialisation.";
+"settings.quota_note" = "Lu depuis le cache tokei (~/.tokei) si disponible. « Appliquer » définit une réinitialisation hebdomadaire manuelle ; « Réinitialiser » l'efface. Les agents sans information de réinitialisation sont exclus de la période Depuis réinitialisation.";
+"weekday.mon" = "lun.";
+"weekday.tue" = "mar.";
+"weekday.wed" = "mer.";
+"weekday.thu" = "jeu.";
+"weekday.fri" = "ven.";
+"weekday.sat" = "sam.";
+"weekday.sun" = "dim.";
 "settings.section.subscriptions" = "Abonnements";
 "settings.subscriptions_note" = "« Appliquer » enregistre le jour de renouvellement via le CLI ; « Réinitialiser » restaure la détection. Les agents sans abonnement sont exclus de la période Cycle de facturation.";
-"settings.renews_on_day" = "Renouvellement le %d du mois";
+"settings.renews_on_day" = "Renouv. le %d";
 "settings.renews_day_help" = "Jour du mois (1–28)";
 "settings.renews_day_disabled_help" = "La modification nécessite la source de données CLI";
 "settings.open_billing_page" = "Ouvrir la page de facturation";
@@ -118,9 +127,11 @@
 "settings.add_subscription" = "Ajouter un abonnement";
 "settings.edit" = "Modifier";
 "settings.plan" = "Forfait";
+"settings.plan_other" = "Autre…";
 "settings.monthly_price_usd" = "Prix mensuel ($)";
 "settings.remove_subscription" = "Supprimer";
 "settings.error.plan_required" = "Le nom du forfait est requis.";
+"settings.error.price_required" = "Le prix est requis pour ce forfait.";
 "settings.error.invalid_price" = "Le prix doit être un nombre positif ou nul.";
 "settings.saving" = "Enregistrement…";
 "settings.source.not_set" = "non défini · 30 derniers jours";

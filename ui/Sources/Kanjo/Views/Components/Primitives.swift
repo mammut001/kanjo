@@ -74,6 +74,16 @@ extension View {
                 .fill(AgentPalette.groupFill))
             .clipShape(RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous))
     }
+
+    /// 当文本非空时附加 .help tooltip。
+    @ViewBuilder
+    func helpIfPresent(_ text: String?) -> some View {
+        if let text, !text.isEmpty {
+            self.help(text)
+        } else {
+            self
+        }
+    }
 }
 
 /// 行与行之间的缩进 hairline。`trailing` 给直接放在面板上的列表用（两端都与文字对齐）。
@@ -186,21 +196,20 @@ struct AgentDot: View {
 }
 
 /// 项目用过的 agent：1–3 个色点，按花费降序（契约要求的「能看出用了哪些 agent 的标记」）。
-/// tooltip 列出全部 agent 和占比。
+/// tooltip 列出全部 agent 和花费、token。
 struct AgentDots: View {
     let agents: [AgentCost]
+    var currency: String = "USD"
     var size: CGFloat = 6
 
     var body: some View {
-        let used = agents.filter { $0.sessions > 0 || $0.cost > 0 }.sorted { $0.cost > $1.cost }
-        let total = used.reduce(0) { $0 + $1.cost }
+        let used = agents.filter { $0.sessions > 0 || $0.cost > 0 || $0.tokens.total > 0 }.sorted { $0.cost > $1.cost }
         if !used.isEmpty {
+            let helpText = TooltipBuilder.agentLines(agents: used, currency: currency).joined(separator: "\n")
             HStack(spacing: 3) {
                 ForEach(used.prefix(3)) { a in AgentDot(agent: a.agent, size: size) }
             }
-            .help(used.map { a in
-                total > 0 ? "\(a.label) \(Fmt.percent(a.cost / total))" : a.label
-            }.joined(separator: " · "))
+            .help(helpText)
         }
     }
 }
@@ -212,6 +221,7 @@ struct HBarRow: View {
     let fraction: Double
     let value: String
     var detail: String? = nil
+    var help: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -230,6 +240,7 @@ struct HBarRow: View {
             }
             .frame(height: 3)
         }
+        .helpIfPresent(help)
     }
 }
 
@@ -331,11 +342,37 @@ struct FlowLayout: Layout {
 
 /// agent 图例：每个 agent 显示色点 + 名称，使用流式折行，按花费降序排列。
 struct Legend: View {
-    let agents: [(key: String, label: String)]
+    struct Item: Identifiable {
+        let key: String
+        let label: String
+        var cost: Double = 0
+        var tokens: Int = 0
+        var id: String { key }
+
+        init(key: String, label: String, cost: Double = 0, tokens: Int = 0) {
+            self.key = key
+            self.label = label
+            self.cost = cost
+            self.tokens = tokens
+        }
+    }
+
+    let agents: [Item]
+    var currency: String = "USD"
+
+    init(agents: [(key: String, label: String)], currency: String = "USD") {
+        self.agents = agents.map { Item(key: $0.key, label: $0.label) }
+        self.currency = currency
+    }
+
+    init(items: [Item], currency: String = "USD") {
+        self.agents = items
+        self.currency = currency
+    }
 
     var body: some View {
         FlowLayout(spacing: 9, lineSpacing: 4) {
-            ForEach(agents, id: \.key) { a in
+            ForEach(agents) { a in
                 HStack(spacing: 4) {
                     AgentDot(agent: a.key, size: 6)
                     Text(a.label)
@@ -343,9 +380,16 @@ struct Legend: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .help(a.label)
+                .help(helpText(for: a))
             }
         }
+    }
+
+    private func helpText(for a: Item) -> String {
+        if a.cost > 0 || a.tokens > 0 {
+            return TooltipBuilder.agentLine(label: a.label, cost: a.cost, tokens: a.tokens, currency: currency)
+        }
+        return a.label
     }
 }
 

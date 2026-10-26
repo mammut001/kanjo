@@ -19,24 +19,41 @@ Development helpers:
 ```bash
 swift run Kanjo --data /path/to/data.json     # use this file (overrides Settings)
 KANJO_DATA=/path/to/data.json swift run Kanjo
-swift run Kanjo --window                      # also show the panel in a transparent normal window (screenshots/debugging)
+swift run Kanjo --window                      # preview window; isolated automatically into "kanjo-preview" suite
 swift run Kanjo --window --route project:0    # open straight on a page (for screenshots)
 swift run Kanjo --window --route project:0:locations   # project page scrolled to the bottom, Locations expanded
 swift run Kanjo --window --route disk --disk-data fixtures/disk-sample.json
 swift run Kanjo --window --route disk:expanded --disk-data fixtures/disk-sample.json
+swift run Kanjo --snapshot /path/to/out.png   # headless offscreen snapshot; works while screen is locked
+swift run Kanjo --snapshot /path/to/out.png --route settings:subscriptions:codex:edit
+swift run Kanjo --snapshot /path/to/out.png --snapshot-scale 2 --snapshot-appearance dark
+swift run Kanjo --defaults-suite kanjo-test   # isolate settings into a custom UserDefaults suite
+KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 ```
+
+`--snapshot <out.png> [--route <route>] [--snapshot-scale 2] [--snapshot-appearance light|dark]`: renders `MenuPanelView` completely offscreen with `ImageRenderer`, writes the PNG, prints the output path, and exits `0` (or exits non-zero on failure/timeout). No `NSWindow`, Dock icon, or menu bar extra is displayed, allowing screenshots to run in automated pipelines and while the screen is locked.
+- Snapshot mode implies isolation: it defaults to the `"kanjo-preview"` defaults suite (unless overridden by `--defaults-suite` or `KANJO_DEFAULTS_SUITE`), and `-key value` launch overrides continue to apply via `NSArgumentDomain`.
+- Data loading waits for the report store (and disk store if the route needs it) to finish loading with a timeout of ~20 seconds.
+- `--snapshot-scale <number>` sets the render scale (defaults to `2`).
+- `--snapshot-appearance light|dark` forces light or dark appearance.
+- **Scrollable routes**: In snapshot mode, scrollable routes (overview, settings, project routes, disk, and routes with scroll targets) render from the top, full content height (**TALL**, not clipped to the 620 pt panel height).
+
+`--defaults-suite <name>` (or env `KANJO_DEFAULTS_SUITE`): routes all settings reads and writes to `UserDefaults(suiteName: name)` instead of `UserDefaults.standard`.
+`--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
 
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
 `project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),
 `project:<index>:locations` (bottom, with Locations expanded), `bucket:unattributed`, `bucket:excluded`,
-`disk`, `disk:expanded` (disk page with every agent expanded, for screenshots), `settings`, `settings-bottom` (Settings scrolled to the bottom).
+`disk`, `disk:expanded` (disk page with every agent expanded, for screenshots), `settings`, `settings-bottom` (Settings scrolled to the bottom),
+`settings:subscriptions:<agent>` (Settings scrolled to that agent's Subscriptions row),
+`settings:subscriptions:<agent>:edit` (Settings scrolled to that agent's Subscriptions row and put into editing mode with the plan picker loaded).
 
 `--disk-data <path>` loads that disk-report JSON instead of running the CLI. It does not change the usage source (`--data` / Settings).
 
 ## Overview: mosaic, heat strips, hide / pin
 
 The overview reads top to bottom as text → graphic → list: the total (with one summary line —
-date range · projects · sessions · tokens — and the cost note), the mosaic, then the project list.
+date range · projects · sessions · tokens — and the API-equivalent cost note in an ⓘ tooltip next to Total cost), the mosaic, then the project list.
 The panel is 360 pt wide; its background is Liquid Glass on macOS 26+ and `.regularMaterial` on 13–25.
 
 - **Colors** — one color per agent, light / dark (`Views/Components/AgentPalette.swift`): Claude clay
@@ -86,16 +103,17 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
   Without any `subscriptions` the segment is greyed out with the tooltip "No subscription info".
 - Project cost / tokens add up `by_day[].by_agent` / `by_agent_tokens` for every day that overlaps the range
   (per agent for Since reset); days without those fields count fully toward the project's dominant agent.
-  Session counts use `sessions_detail[].started`. Buckets have no daily data, so they are filtered by session start.
+  Session counts count sessions with usage in the range (per-day data if available, else [started, ended] overlapping the range). Buckets have no daily data, so they are filtered by session overlap.
 - Outside All: the hero, summary line, mosaic, rows (amount, sessions, tokens, heat strip), buckets and
   "N hidden · $X" use filtered values; projects with no usage in the range are dropped, with
-  "N projects with no usage in this range" under the list; a caption under the summary explains the range;
-  the reconciliation line is shown only for All; the cost note always. On the project page the token type
+  "N projects with no usage in this range" under the list; captions under the summary explain Since reset and
+  Billing cycle ranges (fixed ranges omit redundant date captions); the reconciliation line is shown only for All;
+  the cost note always in an ⓘ tooltip. On the project page the token type
   breakdown is hidden (only the total is known per day), and By model / By branch keep all-time numbers with an "All time" tag.
 - The menu bar amount follows the range too: the filtered total with a tiny prefix — `7d $…`, `30d $…`,
   `wk $…` (Last week), `rst $…` (Since reset), `cyc $…` (Billing cycle) — and the plain report total for All.
 - Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
-  (`tokei` / `manual` / `none`); reset times can be set by hand in `~/.config/kanjo/attribution.toml`.
+  (`tokei` / `manual` / `none`); reset times can be set by hand in Settings or in `~/.config/kanjo/attribution.toml`.
 
 Screenshot tip: `-timeRange days7` (or `all`, `today`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
 Preferences can be preset for one launch without persisting them, through the
@@ -105,7 +123,7 @@ Preferences can be preset for one launch without persisting them, through the
 
 Under the total (above the mosaic) when `subscriptions` is non-empty: one row per subscribed agent, sorted by this cycle's API-equivalent cost — plan, monthly price, usage from that agent's `cycle_start` through now across every project and both buckets, and the multiple of the flat fee (`usage ÷ monthly_price_usd`, shown as `15.7×`, or `—` when the price is null). An "extra usage on" badge appears when `extra_usage_enabled` is true. The rows ignore the selected range. The block always includes: "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing." On a project, under By agent: "This repo: N% of your <plan> usage this cycle" (skipped when that agent's cycle total is zero). Known renewal days show cycle dates in the report timezone and a renewal countdown; project share lines show the cycle on hover.
 
-When the day is unknown (`rolling_30d`, `anchor_day: null`), the row shows "Last 30 days · set renewal day for exact cycle". Clicking the caption opens Settings at that agent's Subscriptions row (`--route settings:subscriptions:codex` also works). The Cycle range explains these agents as "last 30 days (day not set)". Settings → Subscriptions starts an unknown day at 1 with "not set · using last 30 days", lets you apply a renewal day (1–28) or reset it through the configured CLI, and provides an "Open billing page" link to find the renewal date. Editing is disabled for JSON file sources; billing links remain available. A quiet "Renewal days not set … · Set now" reminder under the card opens the same row. Dismissing it stores the agent keys as a comma-separated list in `@AppStorage("renewalNudgeDismissed")`; only newly appearing rolling agents trigger another reminder.
+When the day is unknown (`rolling_30d`, `anchor_day: null`), the row shows "Last 30 days · set renewal day for exact cycle". Clicking the caption opens Settings at that agent's Subscriptions row (`--route settings:subscriptions:codex` also works, or `--route settings:subscriptions:codex:edit` to open directly into editing mode). The Cycle range explains these agents as "last 30 days (day not set)". Settings → Subscriptions starts an unknown day at 1 with "not set · using last 30 days", lets you apply a renewal day (1–28) or reset it through the configured CLI, and provides an "Open billing page" link to find the renewal date. Editing is disabled for JSON file sources; billing links remain available. A quiet "Renewal days not set … · Set now" reminder under the card opens the same row. Dismissing it stores the agent keys as a comma-separated list in `@AppStorage("renewalNudgeDismissed")`; only newly appearing rolling agents trigger another reminder.
 
 ## Disk
 
@@ -145,7 +163,7 @@ If `schema_version` is newer than 1, a warning appears and the app keeps renderi
 
 ```bash
 ./package.sh            # version from ../VERSION
-./package.sh 0.2.0      # explicit version
+./package.sh 0.3.0      # explicit version
 ./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
 ```
 

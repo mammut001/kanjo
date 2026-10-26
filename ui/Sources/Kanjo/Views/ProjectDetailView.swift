@@ -79,7 +79,7 @@ struct DetailPage<Content: View>: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            OptionalScrollView {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     BackButton(title: backTitle, action: onBack)
                         .padding(.leading, Metrics.rowInset - 4)
@@ -107,12 +107,20 @@ struct ProjectDetailView: View {
     var devAnchor: String? = nil
     let onBack: () -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @State private var showAllModels = false
     @State private var showAllBranches = false
     @State private var showLocations = false
     private let collapsedLimit = 8
+
+    init(project: Project, report: UsageReport, devAnchor: String? = nil, onBack: @escaping () -> Void) {
+        self.project = project
+        self.report = report
+        self.devAnchor = devAnchor
+        self.onBack = onBack
+        _showLocations = State(initialValue: devAnchor == Self.locationsOpenAnchor)
+    }
 
     private var cur: String { report.currency }
     private var devScrollTarget: String? {
@@ -131,7 +139,7 @@ struct ProjectDetailView: View {
             agentsSection(shown)
             modelsSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.by_day"), inset: true) {
-                DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown))
+                DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown), agentLabels: report.agentLabels)
             }
             branchesSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.sessions", shown.sessionsDetail.count), inset: true) {
@@ -144,7 +152,7 @@ struct ProjectDetailView: View {
         .onAppear { if devAnchor == Self.locationsOpenAnchor { showLocations = true } }
     }
 
-    // hero：项目名 + 范围控件 + 金额；日期、范围说明、cost_note、remote 是小字注脚。本地路径放在页面最底部的 Locations。
+    // hero：项目名 + 范围控件 + 金额（含 cost_note tooltip 和 info 图标）；日期、范围说明、remote 是小字注脚。本地路径放在页面最底部的 Locations。
     private func header(_ ctx: RangeContext, _ shown: Project) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -161,7 +169,16 @@ struct ProjectDetailView: View {
                         cycleAvailable: ctx.cycleAvailable)
                 .padding(.top, 4).padding(.bottom, 2)
             HStack(alignment: .bottom, spacing: 10) {
-                HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
+                    if let note = report.costNoteDisplayText {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .help(note)
+                    }
+                }
+                .helpIfPresent(report.costNoteDisplayText)
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(L10n.tr("project.last_8_weeks")).font(.system(size: 9.5)).foregroundStyle(.secondary)
@@ -172,13 +189,16 @@ struct ProjectDetailView: View {
                 .padding(.bottom, 5)
             }
             let usageStr = shown.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(shown.firstActive, shown.lastActive)
-            let sessKey = shown.sessions == 1 ? "project.subtitle.singular" : "project.subtitle.plural"
-            Text(L10n.tr(sessKey, shown.sessions, usageStr))
+            let subtitleText = ProjectSubtitleText.make(
+                range: ctx.range,
+                sessions: shown.sessions,
+                usageDate: usageStr
+            )
+            Text(subtitleText)
                 .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
             if let caption = ctx.caption {
-                RangeCaption(text: caption).padding(.top, 1)
+                RangeCaption(text: caption, help: ctx.captionHelp).padding(.top, 1)
             }
-            CostNote(text: report.costNote).padding(.top, 2)
 
             Group {
                 if let r = project.remote {
@@ -284,7 +304,8 @@ struct ProjectDetailView: View {
     }
 
     private func tok(_ label: String, _ v: Int, _ color: Color?, _ help: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        let fullHelp = help + " · " + L10n.tr("overview.tokens_count", Fmt.tokens(v))
+        return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 if let color { Circle().fill(color).frame(width: 6, height: 6) }
                 else { Circle().strokeBorder(Color.secondary, lineWidth: 1).frame(width: 6, height: 6) }
@@ -293,26 +314,35 @@ struct ProjectDetailView: View {
             Text(Fmt.tokens(v)).font(.system(size: 13, weight: .medium, design: .rounded).monospacedDigit())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(help)
+        .help(fullHelp)
     }
 
     /// 四类计费 token 的构成条（thinking 是 output 子集，不单列）。
     private func tokenBar(_ t: Tokens) -> some View {
-        let parts: [(Int, Color)] = [(t.input, AgentPalette.tokenInput), (t.output, AgentPalette.tokenOutput),
-                                     (t.cacheRead, AgentPalette.tokenCacheRead), (t.cacheWrite, AgentPalette.tokenCacheWrite)]
-        let total = max(parts.reduce(0) { $0 + $1.0 }, 1)
+        let parts: [(tokens: Int, color: Color, label: String)] = [
+            (t.input, AgentPalette.tokenInput, L10n.tr("project.token.input")),
+            (t.output, AgentPalette.tokenOutput, L10n.tr("project.token.output")),
+            (t.cacheRead, AgentPalette.tokenCacheRead, L10n.tr("project.token.cache_read")),
+            (t.cacheWrite, AgentPalette.tokenCacheWrite, L10n.tr("project.token.cache_write"))
+        ]
+        let total = max(parts.reduce(0) { $0 + $1.tokens }, 1)
+        let barHelp = parts.filter { $0.tokens > 0 }.map { tok in
+            "● \(tok.label)  \(Fmt.tokens(tok.tokens)) (\(Fmt.percent(Double(tok.tokens) / Double(total))))"
+        }.joined(separator: "\n")
         return GeometryReader { geo in
-            let visible = parts.filter { $0.0 > 0 }
+            let visible = parts.filter { $0.tokens > 0 }
             let avail = max(geo.size.width - CGFloat(max(visible.count - 1, 0)), 0)
             HStack(spacing: 1) {
                 ForEach(Array(visible.enumerated()), id: \.offset) { _, p in
-                    Rectangle().fill(p.1)
-                        .frame(width: max(avail * CGFloat(p.0) / CGFloat(total), 2))
+                    Rectangle().fill(p.color)
+                        .frame(width: max(avail * CGFloat(p.tokens) / CGFloat(total), 2))
+                        .help("● \(p.label)  \(Fmt.tokens(p.tokens)) (\(Fmt.percent(Double(p.tokens) / Double(total))))")
                 }
             }
             .clipShape(Capsule())
         }
         .frame(height: 4)
+        .help(barHelp)
     }
 
     private func agentsSection(_ shown: Project) -> some View {
@@ -328,7 +358,8 @@ struct ProjectDetailView: View {
                     HBarRow(label: a.label, color: AgentPalette.color(for: a.agent),
                             fraction: maxCost > 0 ? a.cost / maxCost : 0,
                             value: Fmt.money(a.cost, currency: cur),
-                            detail: L10n.tr("project.agent_detail", a.sessions, Fmt.tokens(a.tokens.total), Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0)))
+                            detail: L10n.tr("project.agent_detail", a.sessions, Fmt.tokens(a.tokens.total), Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0)),
+                            help: TooltipBuilder.agentLine(label: a.label, cost: a.cost, tokens: a.tokens.total, currency: cur))
                 }
                 if !shares.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
@@ -376,7 +407,7 @@ struct ProjectDetailView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .help("\(m.model) (\(m.agent))")
+                        .help(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
                         Text(Fmt.tokens(m.tokens.total)).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                         Text(Fmt.money(m.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
                     }
@@ -403,14 +434,20 @@ struct ProjectDetailView: View {
                     }
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     ForEach(shown) { b in
+                        let branchSessions = project.sessionsDetail.filter {
+                            b.branch == "(unknown)" ? ($0.branch == nil || $0.branch == "" || $0.branch == "(unknown)") : ($0.branch == b.branch)
+                        }
+                        let branchTokens = branchSessions.reduce(0) { $0 + $1.tokens.total }
+                        let branchHelp = "\(b.branch) · \(Fmt.costAndTokens(cost: b.cost, tokens: branchTokens, currency: cur))"
                         GridRow {
                             Text(b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch)
                                 .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                                 .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .help(b.branch)
+                                .help(branchHelp)
                             Text("\(b.sessions)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                             Text(Fmt.money(b.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                                .help(branchHelp)
                         }
                     }
                 }
@@ -445,8 +482,8 @@ struct BucketDetailView: View {
     let report: UsageReport
     let onBack: () -> Void
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
 
     // 桶没有 by_day：范围下按会话的 started 过滤，金额是这些会话之和。
     var body: some View {
@@ -456,15 +493,27 @@ struct BucketDetailView: View {
         DetailPage(backTitle: L10n.tr("disk.navigation.overview"), onBack: onBack) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(kind == .unattributed ? L10n.tr("overview.unattributed") : L10n.tr("overview.excluded")).font(.system(size: 15, weight: .semibold))
-                HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
+                    if let note = report.costNoteDisplayText {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .help(note)
+                    }
+                }
+                .helpIfPresent(report.costNoteDisplayText)
                 let usageStr = b.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(b.firstActive, b.lastActive)
-                let sessKey = b.sessions == 1 ? "project.subtitle.singular" : "project.subtitle.plural"
-                Text(L10n.tr(sessKey, b.sessions, usageStr))
+                let subtitleText = ProjectSubtitleText.make(
+                    range: ctx.range,
+                    sessions: b.sessions,
+                    usageDate: usageStr
+                )
+                Text(subtitleText)
                     .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 if let caption = ctx.caption {
-                    RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start")).padding(.top, 1)
+                    RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start"), help: ctx.captionHelp).padding(.top, 1)
                 }
-                CostNote(text: report.costNote).padding(.top, 2)
                 Text(AttributionInfo.explanation(kind == .unattributed ? "none" : "excluded",
                                                  threshold: report.config.dominantThreshold))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)

@@ -37,6 +37,23 @@ public struct UsageReport: Codable, Equatable {
 
     /// schema_version 高于本 UI 支持的版本：显示警告，继续渲染。
     public var isNewerSchema: Bool { schemaVersion > supportedSchemaVersion }
+
+    /// 报告里所有 agent 的显示名（agent key → label）。
+    public var agentLabels: [String: String] {
+        var out: [String: String] = [:]
+        for p in projects { for a in p.byAgent { out[a.agent] = a.label } }
+        return out
+    }
+
+    /// 格式化后的 cost_note 文本。若为空或纯空白返回 nil；若为默认英文字符串则返回本地化文案；否则返回原文。
+    public var costNoteDisplayText: String? {
+        let trimmed = costNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        if trimmed == "API-equivalent cost estimated from public API prices. Not actual subscription spend." {
+            return L10n.tr("common.cost_note_default")
+        }
+        return trimmed
+    }
 }
 
 public struct ReportConfig: Codable, Equatable {
@@ -249,6 +266,46 @@ public struct Session: Codable, Equatable, Identifiable {
     public var attribution: String
     public var subagents: Int
     public var title: String?
+    public var byDay: [DayCost]? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, agent, label, started, ended, cwd, branch, models, cost, tokens, share, attribution, subagents, title
+        case byDay = "by_day"
+    }
+
+    public init(
+        id: String,
+        agent: String,
+        label: String,
+        started: String,
+        ended: String,
+        cwd: String? = nil,
+        branch: String? = nil,
+        models: [String] = [],
+        cost: Double,
+        tokens: Tokens,
+        share: Double,
+        attribution: String,
+        subagents: Int,
+        title: String? = nil,
+        byDay: [DayCost]? = nil
+    ) {
+        self.id = id
+        self.agent = agent
+        self.label = label
+        self.started = started
+        self.ended = ended
+        self.cwd = cwd
+        self.branch = branch
+        self.models = models
+        self.cost = cost
+        self.tokens = tokens
+        self.share = share
+        self.attribution = attribution
+        self.subagents = subagents
+        self.title = title
+        self.byDay = byDay
+    }
 
     public var startedDate: Date? { ReportDates.parseTimestamp(started) }
     public var endedDate: Date? { ReportDates.parseTimestamp(ended) }

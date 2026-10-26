@@ -6,18 +6,29 @@ import Foundation
 public struct WeekCost: Equatable {
     public var start: Date
     public var cost: Double
+    public var tokens: Int
     public var byAgent: [String: Double]
+    public var byAgentTokens: [String: Int]
 
-    public init(start: Date, cost: Double, byAgent: [String: Double]) {
+    public init(start: Date, cost: Double, tokens: Int = 0, byAgent: [String: Double] = [:], byAgentTokens: [String: Int] = [:]) {
         self.start = start
         self.cost = cost
+        self.tokens = tokens
         self.byAgent = byAgent
+        self.byAgentTokens = byAgentTokens
     }
 
     /// 按 cost 降序（相同 cost 按 key 排，保证稳定）。
     public var ranked: [(agent: String, cost: Double)] {
         byAgent.map { (agent: $0.key, cost: $0.value) }
             .sorted { $0.cost != $1.cost ? $0.cost > $1.cost : $0.agent < $1.agent }
+    }
+
+    /// 包含 tokens 的排序列表（按 cost 降序，相同 cost 按 tokens 降序，再按 key 排）。
+    public var rankedWithTokens: [(agent: String, cost: Double, tokens: Int)] {
+        let keys = Set(byAgent.keys).union(byAgentTokens.keys)
+        return keys.map { (agent: $0, cost: byAgent[$0, default: 0], tokens: byAgentTokens[$0, default: 0]) }
+            .sorted { $0.cost != $1.cost ? $0.cost > $1.cost : ($0.tokens != $1.tokens ? $0.tokens > $1.tokens : $0.agent < $1.agent) }
     }
 
     /// 那周花费最多的 agent；没有正花费时为 nil。
@@ -48,7 +59,7 @@ public enum HeatStrip {
     public static func weekly(_ days: [DayCost], endingOn end: Date, weeks: Int = defaultWeeks,
                               fallbackAgent: String, calendar: Calendar = .current) -> [WeekCost] {
         let starts = weekStarts(endingOn: end, weeks: weeks, calendar: calendar)
-        var out = starts.map { WeekCost(start: $0, cost: 0, byAgent: [:]) }
+        var out = starts.map { WeekCost(start: $0, cost: 0, tokens: 0, byAgent: [:], byAgentTokens: [:]) }
         guard let first = starts.first else { return out }
         for d in days {
             guard let date = parseDay(d.day, calendar: calendar) else { continue }
@@ -56,10 +67,16 @@ public enum HeatStrip {
             let idx = n / 7
             guard idx < out.count else { continue }
             out[idx].cost += d.cost
+            out[idx].tokens += d.tokens
             if let split = d.byAgent, !split.isEmpty {
                 for (agent, cost) in split { out[idx].byAgent[agent, default: 0] += cost }
             } else {
                 out[idx].byAgent[fallbackAgent, default: 0] += d.cost
+            }
+            if let splitTokens = d.byAgentTokens, !splitTokens.isEmpty {
+                for (agent, tokens) in splitTokens { out[idx].byAgentTokens[agent, default: 0] += tokens }
+            } else {
+                out[idx].byAgentTokens[fallbackAgent, default: 0] += d.tokens
             }
         }
         return out

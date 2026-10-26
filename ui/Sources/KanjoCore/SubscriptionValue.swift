@@ -105,7 +105,8 @@ public enum SubscriptionValue {
             if !costs.isEmpty { byProject[p.id] = costs }
         }
         for s in filtered.unattributed.sessionsDetail + filtered.excluded.sessionsDetail {
-            totals[s.agent, default: 0] += s.cost
+            let (c, _) = spec.inRangeCostAndTokens(for: s)
+            totals[s.agent, default: 0] += c
         }
         return CycleUsage(totalByAgent: totals, projectAgentCost: byProject)
     }
@@ -137,10 +138,25 @@ public enum RenewalNudge {
 public enum SubscriptionSettingsRoute {
     public static func anchor(for agent: String) -> String { "settings:subscriptions:\(agent)" }
 
-    public static func agent(from raw: String) -> String? {
+    public static func parse(_ raw: String) -> (agent: String, isEdit: Bool)? {
         let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0] == "settings", parts[1] == "subscriptions", !parts[2].isEmpty else { return nil }
-        return String(parts[2])
+        guard parts.count == 3 || parts.count == 4 else { return nil }
+        guard parts[0].lowercased() == "settings", parts[1].lowercased() == "subscriptions", !parts[2].isEmpty else { return nil }
+        if parts.count == 4 {
+            guard parts[3].lowercased() == "edit" else { return nil }
+            return (String(parts[2]).lowercased(), true)
+        }
+        return (String(parts[2]).lowercased(), false)
+    }
+
+    public static func agent(from raw: String) -> String? {
+        guard let (agent, isEdit) = parse(raw), !isEdit else { return nil }
+        return agent
+    }
+
+    public static func editAgent(from raw: String) -> String? {
+        guard let (agent, isEdit) = parse(raw), isEdit else { return nil }
+        return agent
     }
 }
 

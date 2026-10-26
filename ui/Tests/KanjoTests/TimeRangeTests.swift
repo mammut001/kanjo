@@ -103,10 +103,12 @@ final class TimeRangeTests: KanjoTestCase {
 
     func testSinceResetPerAgentStarts() {
         let quota = ["claude": QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z"),
-                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z", source: "manual")]
+                     "codex": QuotaWindow(weeklyResetsAt: "2026-10-28T08:00:00Z", source: "manual"),
+                     "grok": QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", source: "tokei")]
         let s = spec(.sinceReset, quota: quota)
         XCTAssertEqual(s.agentStarts["claude"], ts("2026-10-20T10:00:00Z"))
         XCTAssertEqual(s.agentStarts["codex"], ts("2026-10-21T08:00:00Z"))
+        XCTAssertEqual(s.agentStarts["grok"], ts("2026-10-20T05:00:00Z"))
         XCTAssertNil(s.window(for: "antigravity"))
         XCTAssertFalse(s.includes(now, agent: "antigravity"))
         XCTAssertTrue(s.includes(ts("2026-10-20T10:00:00Z"), agent: "claude"))
@@ -125,6 +127,8 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(RangeEngine.windowStart(stale, now: now), ts("2026-10-22T07:00:00Z"))
         let fiveHour = QuotaWindow(weeklyResetsAt: "2026-10-24T09:00:00Z", weeklyWindowHours: 5)
         XCTAssertEqual(RangeEngine.windowStart(fiveHour, now: now), ts("2026-10-24T04:00:00Z"))
+        let grokDay = QuotaWindow(weeklyResetsAt: "2026-10-25T05:00:00Z", weeklyWindowHours: 24)
+        XCTAssertEqual(RangeEngine.windowStart(grokDay, now: now), ts("2026-10-24T05:00:00Z"))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "garbage"), now: now))
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z", weeklyWindowHours: 0), now: now))
     }
@@ -282,6 +286,74 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(f.byAgent.first?.cost ?? 0, 20, accuracy: 1e-9)
     }
 
+    func testSessionCountingRangeOverlap() {
+        let todaySpec = spec(.today)
+
+        // 1. 会话昨天开始、今天仍在用 -> 计入 Today
+        let sessionActiveToday = Session(
+            id: "s1", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertTrue(todaySpec.includes(sessionActiveToday))
+
+        // 2. 会话在范围前已结束 -> 不计入 Today
+        let sessionEndedBefore = Session(
+            id: "s2", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-23T15:59:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertFalse(todaySpec.includes(sessionEndedBefore))
+
+        // 3. 有按日数据：优先使用按日数据
+        // 跨天会话，但按日数据表明今天没有用量（仅昨天有用量） -> 不计入 Today
+        let sessionWithYesterdayOnly = Session(
+            id: "s3", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [DayCost(day: "2026-10-23", cost: 5, tokens: 50)]
+        )
+        XCTAssertFalse(todaySpec.includes(sessionWithYesterdayOnly))
+
+        // 有今天用量 -> 计入 Today
+        let sessionWithTodayUsage = Session(
+            id: "s4", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [
+                DayCost(day: "2026-10-23", cost: 3, tokens: 30),
+                DayCost(day: "2026-10-24", cost: 2, tokens: 20)
+            ]
+        )
+        XCTAssertTrue(todaySpec.includes(sessionWithTodayUsage))
+
+        // 4. 项目过滤验证（project row / overview summary）
+        let dayToday = DayCost(day: "2026-10-24", cost: 2, tokens: 20, byAgent: ["claude": 2], byAgentTokens: ["claude": 20])
+        let p = Project(
+            id: "proj1", name: "proj1", remote: nil, paths: [], pathMissing: false,
+            cost: 7, tokens: Tokens(total: 70), sessions: 2,
+            firstActive: "2026-10-23", lastActive: "2026-10-24",
+            byAgent: [AgentCost(agent: "claude", label: "Claude", cost: 7, tokens: Tokens(total: 70), sessions: 2)],
+            byModel: [], byDay: [dayToday], byBranch: [],
+            sessionsDetail: [sessionActiveToday, sessionEndedBefore]
+        )
+        let filteredProject = RangeEngine.filter(p, range: todaySpec, fallbackAgent: "claude")
+        XCTAssertEqual(filteredProject.sessions, 1)
+        XCTAssertEqual(filteredProject.sessionsDetail.count, 1)
+        XCTAssertEqual(filteredProject.sessionsDetail.first?.id, "s1")
+
+        // 5. 桶过滤验证
+        let bucket = SessionBucket(
+            cost: 10, tokens: Tokens(total: 100), sessions: 2,
+            firstActive: "2026-10-23", lastActive: "2026-10-24",
+            sessionsDetail: [sessionActiveToday, sessionEndedBefore]
+        )
+        let filteredBucket = RangeEngine.filter(bucket, range: todaySpec)
+        XCTAssertEqual(filteredBucket.sessions, 1)
+        XCTAssertEqual(filteredBucket.sessionsDetail.count, 1)
+        XCTAssertEqual(filteredBucket.sessionsDetail.first?.id, "s1")
+    }
+
     // MARK: - 夹具
 
     private func fixture() throws -> UsageReport {
@@ -351,5 +423,47 @@ final class TimeRangeTests: KanjoTestCase {
                 }
             }
         }
+    }
+
+    func testFilterSessionBucketUsesInRangeShare() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let todayStart = cal.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 0, minute: 0, second: 0))!
+        let todayEnd = cal.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 0, minute: 0, second: 0))!
+        let todaySpec = RangeSpec(range: .today, calendar: cal, start: todayStart, end: todayEnd)
+
+        // 会话 1：带 byDay，跨两天（昨天 $30/3000 tokens，今天 $10/1000 tokens）
+        let sWithByDay = Session(
+            id: "s1", agent: "claude", label: "Claude Code",
+            started: "2026-10-21T18:00:00Z", ended: "2026-10-22T06:00:00Z",
+            cwd: nil, branch: nil, models: ["opus"],
+            cost: 40.0, tokens: Tokens(total: 4000), share: 1, attribution: "none", subagents: 0,
+            byDay: [
+                DayCost(day: "2026-10-21", cost: 30.0, tokens: 3000),
+                DayCost(day: "2026-10-22", cost: 10.0, tokens: 1000)
+            ]
+        )
+
+        // 会话 2：不带 byDay，跨 12 小时（昨天 18:00 到今天 06:00，刚好今天占 50%）
+        let sOverlap = Session(
+            id: "s2", agent: "codex", label: "Codex CLI",
+            started: "2026-10-21T18:00:00Z", ended: "2026-10-22T06:00:00Z",
+            cwd: nil, branch: nil, models: ["codex"],
+            cost: 20.0, tokens: Tokens(total: 2000), share: 1, attribution: "none", subagents: 0
+        )
+
+        let bucket = SessionBucket(
+            cost: 60.0, tokens: Tokens(total: 6000), sessions: 2,
+            firstActive: "2026-10-21", lastActive: "2026-10-22",
+            sessionsDetail: [sWithByDay, sOverlap]
+        )
+
+        let filtered = RangeEngine.filter(bucket, range: todaySpec)
+        XCTAssertEqual(filtered.sessions, 2)
+        // sWithByDay 的今天份额为 $10 / 1000 tokens；sOverlap 的今天时间重叠份额为 50% = $10 / 1000 tokens
+        // 合计在 Today 下应为 $20.00 / 2000 tokens，而非全量的 $60.00 / 6000 tokens
+        XCTAssertEqual(filtered.cost, 20.0, accuracy: 1e-4)
+        XCTAssertEqual(filtered.tokens, 2000)
     }
 }

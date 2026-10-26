@@ -12,6 +12,7 @@ public enum SettingsKeys {
     public static let hiddenProjects = "hiddenProjects"      // 换行分隔的 project id（ProjectPrefs）
     public static let pinnedProjects = "pinnedProjects"      // 同上
     public static let timeRange = "timeRange"                // TimeRange.rawValue；默认 all
+    public static let renewalNudgeDismissed = "renewalNudgeDismissed"
 }
 
 public enum SourceKind: String, CaseIterable, Identifiable {

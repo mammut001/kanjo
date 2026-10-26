@@ -29,7 +29,7 @@ struct DiskView: View {
     let onBack: () -> Void
     var onSettings: () -> Void = {}
 
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
     @EnvironmentObject private var disk: DiskStore
     @State private var expanded: Set<String> = []
     @State private var selected: Set<String> = []
@@ -39,6 +39,15 @@ struct DiskView: View {
     @State private var pending: CleanResult?
     @State private var finished: CleanResult?
     @State private var actionError: String?
+
+    init(expandAll: Bool = false, onBack: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
+        self.expandAll = expandAll
+        self.onBack = onBack
+        self.onSettings = onSettings
+        if expandAll, let r = DiskStore.shared.report {
+            _expanded = State(initialValue: Set(r.agents.map(\.agent)))
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -111,7 +120,7 @@ struct DiskView: View {
                 }
                 .padding(.horizontal, Metrics.pagePadding).padding(.top, 10)
             }
-            ScrollView {
+            OptionalScrollView {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     back
                     hero(report).padding(.horizontal, Metrics.rowInset)
@@ -423,7 +432,7 @@ struct DiskView: View {
     }
 
     private func failure(_ message: String) -> some View {
-        ScrollView {
+        OptionalScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 back
                 Label(L10n.tr("disk.error_title"), systemImage: "xmark.octagon.fill")

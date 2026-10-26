@@ -7,8 +7,10 @@ import SwiftUI
 /// 面板根背景：macOS 26+ 是一整块 Liquid Glass，13–25 是 `.regularMaterial`。
 /// 玻璃画在内容后面（background），内容本身不进玻璃，文字不受 vibrancy 影响。
 struct PanelBackground: ViewModifier {
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
+
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), !isSnapshotMode {
             content.background(Color.clear.glassEffect(.regular, in: Rectangle()).ignoresSafeArea())
         } else {
             content.background(Rectangle().fill(.regularMaterial).ignoresSafeArea())
@@ -22,10 +24,11 @@ extension View {
 
 struct GlassSurface: ViewModifier {
     var cornerRadius: CGFloat
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), !isSnapshotMode {
             content.glassEffect(.regular, in: shape)
         } else {
             content.background(shape.fill(AgentPalette.groupFill))
@@ -46,10 +49,11 @@ struct MosaicTile: ViewModifier {
     var color: Color
     static let cornerRadius: CGFloat = 4
     @Environment(\.self) private var environment
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), !isSnapshotMode {
             // 玻璃的 tint 不跟随动态 NSColor，先按当前外观解析成静态颜色。
             let resolved = Color(color.resolve(in: environment))
             content.glassEffect(.regular.tint(resolved.opacity(0.9)), in: shape)

@@ -131,6 +131,25 @@ def known_monthly_price(agent: str, plan: str) -> Optional[float]:
     return None if found is None else found[2]
 
 
+def known_plans_payload() -> Dict[str, list]:
+    """Mapping of {agent: [{key, label, monthly_price_usd}]} in stable table order.
+
+    Omits alias keys whose (label, price) equals an earlier entry for the same agent.
+    """
+    payload = {}
+    for agent, plans in KNOWN_PLANS.items():
+        seen = set()
+        agent_plans = []
+        for key, (label, price) in plans.items():
+            pair = (label, price)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            agent_plans.append({"key": key, "label": label, "monthly_price_usd": price})
+        payload[agent] = agent_plans
+    return payload
+
+
 def _known(agent: str, plan: str) -> Optional[Tuple[str, str, Optional[float]]]:
     table = KNOWN_PLANS.get(agent, {})
     if plan in table:

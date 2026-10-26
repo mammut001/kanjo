@@ -38,9 +38,10 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "weekly_resets_at": "2026-10-27T10:00:00Z",   // 下次周重置，ISO 8601 UTC
       "weekly_window_hours": 168,
       "five_hour_resets_at": "2026-10-24T09:30:00Z", // 可为 null
-      "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存）或 manual
+      "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存：Claude, Codex, Grok）或 manual（配置 weekly_reset / weekly_resets_at）
     },
-    "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" }
+    "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": "...", "source": "tokei" },
+    "grok":  { "weekly_resets_at": "...", "weekly_window_hours": 168, "five_hour_resets_at": null, "source": "tokei" }
   },
   "subscriptions": {                          // 各 agent 的订阅档位，供 UI 的「Subscription value」卡和「This billing cycle」范围用；拿不到的 agent 不出现
     "claude": {
@@ -226,7 +227,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`30d`、`Last week`（上一个周一到周日）、
 `Since reset`（各 agent 自己的周窗口起点 = `weekly_resets_at - weekly_window_hours`，缺 `quota_windows` 的 agent 在该范围下不计入并在 UI 标明）、
 `Billing cycle`（各 agent 自己的 `subscriptions[agent].cycle_start` 到现在，缺 `subscriptions` 的 agent 不计入并标明）。
-范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出，sessions 数按 `sessions_detail[].started` 落在范围内计数。
+范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出；sessions 数按会话在该范围内有用量计入（优先使用会话的按日数据，否则以 [started, ended] 与范围区间有重叠即计入）。非 All 范围下的 By model 及桶的花费与 tokens 仅计入范围内的份额（优先使用会话按日数据，否则按范围用量比例与区间重叠缩放，使得模型行总 token 数与总览 hero 保持严格一致）。
 对账行只在 `All` 下显示。`cost_note` 在任何范围下都显示。
 
 ## 7. UI 必须展示的内容

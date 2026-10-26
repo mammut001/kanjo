@@ -30,6 +30,18 @@ public enum ConfigCommand {
         return ["config", "set", key, val.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
 
+    public static func quotaResetArguments(agent: String, weeklyReset: String?) throws -> [String] {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+        guard !agent.isEmpty, agent.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            throw DataSourceError.launchFailed("Invalid agent: \(agent)")
+        }
+        let key = "quota_windows.\(agent).weekly_reset"
+        guard let val = weeklyReset, !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ["config", "unset", key]
+        }
+        return ["config", "set", key, val.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
     /// 和 DiskCommand 一样只替换最后一个 export，保留 PATH 等 shell 前缀。
     public static func command(from cliCommand: String, arguments: [String]) throws -> String {
         let trimmed = cliCommand.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -45,9 +57,25 @@ public enum ConfigCommand {
         let args = try arguments(agent: agent, anchorDay: anchorDay)
         return try command(from: cliCommand, arguments: args)
     }
+
+    public static func plansArguments() -> [String] {
+        ["config", "plans", "--json"]
+    }
+
+    public static func plansCommand(from cliCommand: String) throws -> String {
+        try command(from: cliCommand, arguments: plansArguments())
+    }
 }
 
 public struct ConfigDataSource {
+    private static var cachedPlans: [String: [KnownPlan]]?
+    private static var didAttemptFetch = false
+
+    public static func resetCacheForTesting() {
+        cachedPlans = nil
+        didAttemptFetch = false
+    }
+
     public let cliCommand: String
     public let workingDirectory: URL?
     public let timeout: TimeInterval
@@ -56,6 +84,40 @@ public struct ConfigDataSource {
         self.cliCommand = cliCommand
         self.workingDirectory = workingDirectory
         self.timeout = timeout
+    }
+
+    public func fetchKnownPlans(useCache: Bool = true) async throws -> [String: [KnownPlan]] {
+        if useCache && Self.didAttemptFetch {
+            if let cached = Self.cachedPlans {
+                return cached
+            }
+            return KnownPlan.fallbackPlans
+        }
+        let args = ConfigCommand.plansArguments()
+        let command: String
+        let cwd: URL?
+        if let cmd = try? ConfigCommand.command(from: cliCommand, arguments: args) {
+            command = cmd
+            cwd = workingDirectory
+        } else {
+            command = (try? ConfigCommand.command(from: CLIDataSource.defaultCommand, arguments: args)) ?? "python3 -m kanjo config plans --json"
+            cwd = workingDirectory ?? DefaultPaths.resolvedCLIDirectory()
+        }
+        let timeout = self.timeout
+        let (status, out, _, timedOut) = (try? await Task.detached(priority: .utility) {
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
+        }.value) ?? (-1, Data(), Data(), false)
+        if useCache { Self.didAttemptFetch = true }
+        if timedOut || status != 0 {
+            if useCache { Self.cachedPlans = KnownPlan.fallbackPlans }
+            return KnownPlan.fallbackPlans
+        }
+        if let decoded = try? JSONDecoder().decode([String: [KnownPlan]].self, from: out) {
+            if useCache { Self.cachedPlans = decoded }
+            return decoded
+        }
+        if useCache { Self.cachedPlans = KnownPlan.fallbackPlans }
+        return KnownPlan.fallbackPlans
     }
 
     private func execute(args: [String]) async throws {
@@ -87,6 +149,10 @@ public struct ConfigDataSource {
             let args = try ConfigCommand.fieldArguments(agent: agent, field: "plan", value: plan)
             try await execute(args: args)
         }
+        if monthlyPriceUsd == nil {
+            let args = try ConfigCommand.fieldArguments(agent: agent, field: "monthly_price_usd", value: nil)
+            try await execute(args: args)
+        }
         if let day = anchorDay {
             let args = try ConfigCommand.arguments(agent: agent, anchorDay: day)
             try await execute(args: args)
@@ -97,5 +163,10 @@ public struct ConfigDataSource {
         try await execute(args: try ConfigCommand.fieldArguments(agent: agent, field: "plan", value: nil))
         try await execute(args: try ConfigCommand.fieldArguments(agent: agent, field: "monthly_price_usd", value: nil))
         try await execute(args: try ConfigCommand.arguments(agent: agent, anchorDay: nil))
+    }
+
+    public func setWeeklyReset(agent: String, reset: String?) async throws {
+        let args = try ConfigCommand.quotaResetArguments(agent: agent, weeklyReset: reset)
+        try await execute(args: args)
     }
 }

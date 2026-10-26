@@ -112,11 +112,18 @@ extension MosaicView.Tile {
     func help(currency: String) -> String {
         switch kind {
         case .project(let p):
-            let lead = dominantAgent(p.byAgent).map { L10n.tr("mosaic.mostly", $0.label, Fmt.percent($0.share)) } ?? ""
-            return "\(p.name) · \(Fmt.money(p.cost, currency: currency))\(lead)"
+            return TooltipBuilder.projectTileTooltip(
+                name: p.name,
+                cost: p.cost,
+                tokens: p.tokens.total,
+                agents: p.byAgent,
+                currency: currency
+            )
         case .more(let ps):
-            return L10n.tr("mosaic.smaller_projects", ps.count, Fmt.money(cost, currency: currency))
-                + ps.map { "\($0.name)  \(Fmt.money($0.cost, currency: currency))" }.joined(separator: "\n")
+            return TooltipBuilder.mergedTileTooltip(
+                projects: ps,
+                currency: currency
+            )
         }
     }
 }

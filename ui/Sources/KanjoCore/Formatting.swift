@@ -56,7 +56,7 @@ public enum Fmt {
 
     /// token：按语言本地化单位。
     /// en: k / M / B 缩写，一位小数（如 1.0k、12.3k、188.0M、23.5B）。
-    /// zh-Hans: 万 / 亿 / 万亿 进位，<10,000 无分组纯数字，一位小数去尾部 .0（如 9999、1.2万、1.9亿、235亿、1.2万亿）。
+    /// zh-Hans: 万 / 亿 / 万亿 进位，<10,000 无分组纯数字；≥1000万/亿 无小数；其余一位小数去尾部 .0（如 9999、1.2万、101.1万、7514万、1.9亿、235亿、1235亿、1.2万亿）。
     /// fr: k / M / Md 缩写，逗号小数，单位前无空格，去尾部 ,0（如 12,3k、188M、23,5Md）。
     public static func tokens(_ n: Int) -> String {
         tokens(n, language: L10n.currentLanguage)
@@ -71,11 +71,26 @@ public enum Fmt {
             let units: [(Double, String)] = [(1e4, "万"), (1e8, "亿"), (1e12, "万亿")]
             for (i, (base, suffix)) in units.enumerated() {
                 let scaled = v / base
-                let rounded = (scaled * 10).rounded() / 10
-                if rounded < 10_000 || i == units.count - 1 {
-                    let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
-                    let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
-                    return sign + body + suffix
+                if scaled >= 1000 {
+                    let rounded = scaled.rounded()
+                    if rounded < 10_000 || i == units.count - 1 {
+                        return sign + String(Int(rounded)) + suffix
+                    }
+                    continue
+                } else {
+                    let rounded = (scaled * 10).rounded() / 10
+                    if rounded >= 1000 {
+                        let roundedInt = scaled.rounded()
+                        if roundedInt < 10_000 || i == units.count - 1 {
+                            return sign + String(Int(roundedInt)) + suffix
+                        }
+                        continue
+                    }
+                    if rounded < 10_000 || i == units.count - 1 {
+                        let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+                        let body = s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+                        return sign + body + suffix
+                    }
                 }
             }
             return sign + String(Int(v))
@@ -105,6 +120,14 @@ public enum Fmt {
             }
             return sign + String(Int(v))
         }
+    }
+
+    /// 统一金额与 token 格式化："$12.34 · 1.2亿 token"。
+    public static func costAndTokens(cost: Double, tokens: Int, currency: String = "USD", language: String? = nil) -> String {
+        let lang = language ?? L10n.currentLanguage
+        let c = money(cost, currency: currency)
+        let t = L10n.tr("overview.tokens_count", language: lang, Fmt.tokens(tokens, language: lang))
+        return "\(c) · \(t)"
     }
 
     /// 月费：`$100/mo`。整数美元不带小数；价格未知时为「—」。
@@ -180,17 +203,18 @@ public enum Fmt {
         return cycleDates(sub, timezone: timezone) + " · " + renewal(sub.cycleEnd, timezone: timezone, now: now)
     }
 
-    public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone) -> String {
+    public static func cycleRangeCaption(_ sub: Subscription, timezone: TimeZone, language: String? = nil) -> String {
+        let lang = language ?? L10n.currentLanguage
         if SubscriptionValue.needsRenewalDay(sub) {
-            return L10n.tr("fmt.cycle_range_needs_renewal_day", sub.planLabel)
+            return L10n.tr("fmt.cycle_range_needs_renewal_day", language: lang, sub.planLabel)
         }
         guard let start = ReportDates.parseTimestamp(sub.cycleStart) else { return sub.planLabel }
         let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.locale = Locale(identifier: lang)
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = timezone
         f.setLocalizedDateFormatFromTemplate("MMMd")
-        return L10n.tr("fmt.cycle_range_since", sub.planLabel, f.string(from: start))
+        return L10n.tr("fmt.cycle_range_since", language: lang, sub.planLabel, f.string(from: start))
     }
 
     private static let shortDay: DateFormatter = {
@@ -213,11 +237,11 @@ public enum Fmt {
     }()
 
     /// "2026-10-22" → "Oct 22, 2026"；nil 或无法解析时原样/占位。
-    public static func day(_ s: String?) -> String {
+    public static func day(_ s: String?, language: String? = nil) -> String {
         guard let s else { return "—" }
         guard let d = ReportDates.parseDay(s) else { return s }
         let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.locale = Locale(identifier: language ?? L10n.currentLanguage)
         f.calendar = Calendar(identifier: .gregorian)
         f.setLocalizedDateFormatFromTemplate("yMMMd")
         return f.string(from: d)

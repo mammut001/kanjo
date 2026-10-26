@@ -268,4 +268,117 @@ final class ModelAggregationTests: KanjoTestCase {
         // 不变量：模型行的总 token 数严格等于总览 hero 的总 token 数
         XCTAssertEqual(sumOfModelTokens, heroTokens)
     }
+
+    /// 验证跨天（例如昨天 -> 今天）会话在非 All 范围下只计入范围内的份额，不变量依然严格成立且不会把历史全量带入。
+    func testSumInvariantHoldsWithSessionSpanningYesterdayToToday() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let todayStart = cal.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 0, minute: 0, second: 0))!
+        let todayEnd = cal.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 0, minute: 0, second: 0))!
+        let todaySpec = RangeSpec(range: .today, calendar: cal, start: todayStart, end: todayEnd)
+
+        // 会话从昨天 18:00 到今天 06:00，全量历史数值非常大（$558.42, 1,880,000 token）
+        let spanningSession = Session(
+            id: "s_spanning",
+            agent: "claude",
+            label: "Claude Code",
+            started: "2026-10-21T18:00:00Z",
+            ended: "2026-10-22T06:00:00Z",
+            cwd: nil,
+            branch: nil,
+            models: ["claude-opus-5-5"],
+            cost: 558.42,
+            tokens: makeTokens(input: 400_000, output: 480_000, cacheRead: 500_000, cacheWrite: 500_000), // total = 1,880,000
+            share: 1,
+            attribution: "dominant",
+            subagents: 0,
+            title: "spanning session"
+        )
+
+        // 今天在项目按日数据中，该项目今天的实际用量只有 $91.00 与 91,000 token
+        let todayDayCost = DayCost(day: "2026-10-22", cost: 91.00, tokens: 91_000)
+        let fp = FilteredProject(
+            project: makeProject(id: "p_today", models: []),
+            cost: todayDayCost.cost,
+            tokens: todayDayCost.tokens,
+            sessions: 1,
+            byAgent: [AgentCost(agent: "claude", label: "Claude Code", cost: 91.00, tokens: Tokens(total: 91_000), sessions: 1)],
+            byDay: [todayDayCost],
+            sessionsDetail: [spanningSession]
+        )
+
+        let report = FilteredReport(
+            spec: todaySpec,
+            projects: [fp],
+            unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            cost: 91.00,
+            tokens: 91_000,
+            sessions: 1,
+            firstActive: "2026-10-22",
+            lastActive: "2026-10-22"
+        )
+
+        let models = ModelAggregation.aggregate(in: report)
+        XCTAssertEqual(models.count, 1)
+
+        let opus = try? XCTUnwrap(models.first { $0.model == "claude-opus-5-5" })
+        // 绝不能是全量 1,880,000 / $558.42，而必须严格等于今天范围内的 hero 总额 91,000 / $91.00
+        XCTAssertEqual(opus?.tokens.total, 91_000)
+        XCTAssertEqual(opus?.cost ?? 0, 91.00, accuracy: 1e-4)
+
+        let sumOfModelTokens = models.reduce(0) { $0 + $1.tokens.total }
+        XCTAssertEqual(sumOfModelTokens, report.tokens)
+
+        // 进一步验证：若会话自带 per-session byDay 数据
+        let sessionWithByDay = Session(
+            id: "s_by_day",
+            agent: "claude",
+            label: "Claude Code",
+            started: "2026-10-21T18:00:00Z",
+            ended: "2026-10-22T06:00:00Z",
+            cwd: nil,
+            branch: nil,
+            models: ["claude-opus-5-5"],
+            cost: 50.0,
+            tokens: makeTokens(input: 1000, output: 1000, cacheRead: 1000, cacheWrite: 1000), // total 4000
+            share: 1,
+            attribution: "dominant",
+            subagents: 0,
+            title: "session with by day",
+            byDay: [
+                DayCost(day: "2026-10-21", cost: 40.0, tokens: 3200),
+                DayCost(day: "2026-10-22", cost: 10.0, tokens: 800)
+            ]
+        )
+
+        let fpWithByDay = FilteredProject(
+            project: makeProject(id: "p_by_day", models: []),
+            cost: 10.0,
+            tokens: 800,
+            sessions: 1,
+            byAgent: [],
+            byDay: [DayCost(day: "2026-10-22", cost: 10.0, tokens: 800)],
+            sessionsDetail: [sessionWithByDay]
+        )
+
+        let reportWithByDay = FilteredReport(
+            spec: todaySpec,
+            projects: [fpWithByDay],
+            unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            cost: 10.0,
+            tokens: 800,
+            sessions: 1,
+            firstActive: "2026-10-22",
+            lastActive: "2026-10-22"
+        )
+
+        let modelsWithByDay = ModelAggregation.aggregate(in: reportWithByDay)
+        XCTAssertEqual(modelsWithByDay.count, 1)
+        XCTAssertEqual(modelsWithByDay.first?.tokens.total, 800)
+        XCTAssertEqual(modelsWithByDay.first?.cost ?? 0, 10.0, accuracy: 1e-4)
+        XCTAssertEqual(modelsWithByDay.reduce(0) { $0 + $1.tokens.total }, reportWithByDay.tokens)
+    }
 }

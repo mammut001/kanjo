@@ -39,6 +39,8 @@
 "timerange.caption.reset" = "%@ reset %@";
 "timerange.caption.no_reset_info" = "%@: no reset info";
 "timerange.caption.no_subscription" = "%@: no subscription";
+"timerange.caption.no_reset_info_others" = "%d others have no reset info (not counted)";
+"timerange.caption.no_subscription_others" = "%d others have no subscription (not counted)";
 
 /* Formatting & Cycle */
 "fmt.cycle_dates_unavailable" = "Cycle dates unavailable";
@@ -101,7 +103,14 @@
 "settings.grid.next_reset" = "Next weekly reset";
 "settings.grid.source" = "Source";
 "settings.no_data_loaded" = "No data loaded yet.";
-"settings.quota_note" = "Read from the tokei cache (~/.tokei) when available. To set or override a reset time by hand, add it to ~/.config/kanjo/attribution.toml. Agents without reset info are left out of the Since reset range.";
+"settings.quota_note" = "Read from the tokei cache (~/.tokei) when available. Apply sets a manual weekly reset; Reset clears it. Agents without reset info are left out of the Since reset range.";
+"weekday.mon" = "Mon";
+"weekday.tue" = "Tue";
+"weekday.wed" = "Wed";
+"weekday.thu" = "Thu";
+"weekday.fri" = "Fri";
+"weekday.sat" = "Sat";
+"weekday.sun" = "Sun";
 "settings.section.subscriptions" = "Subscriptions";
 "settings.subscriptions_note" = "Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.";
 "settings.renews_on_day" = "Renews on day %d";
@@ -118,9 +127,11 @@
 "settings.add_subscription" = "Add subscription";
 "settings.edit" = "Edit";
 "settings.plan" = "Plan";
+"settings.plan_other" = "Other…";
 "settings.monthly_price_usd" = "Monthly price ($)";
 "settings.remove_subscription" = "Remove";
 "settings.error.plan_required" = "Plan name is required.";
+"settings.error.price_required" = "Price is required for this plan.";
 "settings.error.invalid_price" = "Price must be a non-negative number.";
 "settings.saving" = "Saving…";
 "settings.source.not_set" = "not set · using last 30 days";

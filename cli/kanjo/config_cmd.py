@@ -1,25 +1,38 @@
-"""Read effective subscription fields and atomically edit overrides.json."""
+"""Read effective subscription and quota fields and atomically edit overrides.json."""
 
 import json
 import os
 import tempfile
 
-from .config import ConfigError, _subscriptions, config_paths, load, read_overrides, subscription_value
+from .config import ConfigError, _subscriptions, config_paths, load, quota_value, read_overrides, subscription_value
+from .quota import parse_weekly_reset
 from .sources.base import AGENT_LABELS
-from .subscriptions import subscriptions
+from .subscriptions import known_plans_payload, subscriptions
 
 AGENTS = tuple(AGENT_LABELS.keys())
-FIELDS = ("anchor_day", "plan", "monthly_price_usd")
+SUBSCRIPTION_FIELDS = ("anchor_day", "plan", "monthly_price_usd")
+QUOTA_FIELDS = ("weekly_reset",)
 
 
 def _key(text):
     parts = (text or "").split(".")
-    if len(parts) != 3 or parts[0] != "subscriptions" or parts[1] not in AGENTS or parts[2] not in FIELDS:
-        raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd>")
-    return parts[1], parts[2]
+    if len(parts) == 3:
+        section, agent, field = parts[0], parts[1], parts[2]
+        if section == "subscriptions" and agent in AGENTS and field in SUBSCRIPTION_FIELDS:
+            return section, agent, field
+        if section == "quota_windows" and agent in AGENTS and field in QUOTA_FIELDS:
+            return section, agent, field
+    raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd> or quota_windows.<agent>.weekly_reset")
 
 
-def _value(agent, key, text):
+def _value(section, agent, key, text):
+    if section == "quota_windows":
+        if key == "weekly_reset":
+            try:
+                norm, _, _, _ = parse_weekly_reset(text, "weekly_reset")
+                return norm
+            except ValueError as exc:
+                raise ConfigError(str(exc))
     try:
         if key == "anchor_day":
             value = int(text)
@@ -60,14 +73,34 @@ def cmd_config(args):
     if args.config_cmd == "path":
         if args.key is not None or args.value is not None:
             raise ConfigError("config path takes no key or value")
+        if getattr(args, "json", False):
+            raise ConfigError("config path does not accept --json")
         print(primary)
         print(path)
         return 0
-    agent, key = _key(args.key)
+    if args.config_cmd == "plans":
+        if args.key is not None or args.value is not None:
+            raise ConfigError("config plans takes no key or value")
+        import sys
+        payload = known_plans_payload()
+        if getattr(args, "json", False):
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        lines = []
+        for agent, plans in payload.items():
+            lines.append("%s:" % agent)
+            for p in plans:
+                price = "$%.2f" % p["monthly_price_usd"] if p["monthly_price_usd"] is not None else "unknown"
+                lines.append("  %-16s %s (%s)" % (p["key"], p["label"], price))
+        sys.stdout.write("\n".join(lines) + "\n")
+        return 0
+    if getattr(args, "json", False):
+        raise ConfigError("config %s does not accept --json" % args.config_cmd)
+    section, agent, key = _key(args.key)
     if args.config_cmd == "set":
         if args.value is None:
             raise ConfigError("config set requires a value")
-        value = _value(agent, key, args.value)
+        value = _value(section, agent, key, args.value)
     elif args.value is not None:
         raise ConfigError("config %s takes no value" % args.config_cmd)
 
@@ -75,12 +108,12 @@ def cmd_config(args):
         cfg = load(args.config)
     else:
         data = read_overrides(path)
-        raw = data.setdefault("subscriptions", {})
+        raw = data.setdefault(section, {})
         if not isinstance(raw, dict):
-            raise ConfigError("overrides subscriptions must be an object")
+            raise ConfigError("overrides %s must be an object" % section)
         spec = raw.setdefault(agent, {})
         if not isinstance(spec, dict):
-            raise ConfigError("overrides subscriptions.%s must be an object" % agent)
+            raise ConfigError("overrides %s.%s must be an object" % (section, agent))
         if args.config_cmd == "set":
             spec[key] = value
         else:
@@ -89,9 +122,17 @@ def cmd_config(args):
                 raw.pop(agent)
         cfg = load(args.config, overrides=data)
         _write(path, data)
-    value, origin = subscription_value(cfg, agent, key, subscriptions(cfg.subscriptions))
-    if key == "anchor_day" and value is None:
-        print("%s = unset (rolling 30 days)" % args.key)
+
+    if section == "subscriptions":
+        value, origin = subscription_value(cfg, agent, key, subscriptions(cfg.subscriptions))
+        if key == "anchor_day" and value is None:
+            print("%s = unset (rolling 30 days)" % args.key)
+        else:
+            print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
     else:
-        print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
+        value, origin = quota_value(cfg, agent, key)
+        if value is None:
+            print("%s = unset (%s)" % (args.key, origin))
+        else:
+            print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
     return 0

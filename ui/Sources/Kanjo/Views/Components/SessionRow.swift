@@ -36,6 +36,7 @@ struct SessionRow: View {
             }
             .font(.system(size: 10.5))
             .foregroundStyle(.secondary)
+            .help(TooltipBuilder.agentLine(label: session.label, cost: session.cost, tokens: session.tokens.total, currency: currency))
 
             HStack(spacing: 5) {
                 Badge(text: session.attribution,

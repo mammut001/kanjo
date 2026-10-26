@@ -18,47 +18,53 @@ enum BucketKind: String {
 /// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
 /// `project:<index>:bottom`（详情页滚到底部）、`project:<index>:locations`（滚到底部并展开 Locations）、
 /// `bucket:unattributed` / `bucket:excluded`、`disk`、`disk:expanded`（磁盘页展开每个 agent，仅供截图）、
-/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`。
+/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`、
+/// `settings:subscriptions:<agent>:edit`（滚到该 agent 的订阅行并直接进入编辑态，加载 plan picker）。
 enum DevRoute {
-    static let requested: String? = {
-        let args = CommandLine.arguments
-        guard let i = args.firstIndex(of: "--route"), i + 1 < args.count else { return nil }
-        return args[i + 1]
-    }()
+    static func requestedRoute(from args: [String] = CommandLine.arguments) -> String? {
+        if let i = args.firstIndex(of: "--route"), i + 1 < args.count {
+            return args[i + 1]
+        }
+        if let arg = args.first(where: { $0.hasPrefix("--route=") }) {
+            return String(arg.dropFirst("--route=".count))
+        }
+        return nil
+    }
+
+    static let requested: String? = requestedRoute()
 
     /// 需要数据才能解析的取值在 report 为 nil 时返回 nil（等数据到了再解析）。
-    static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?)? {
+    static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?, editingAgent: String?)? {
         switch raw {
-        case "settings": return (.settings, nil)
-        case "settings-bottom": return (.settings, SettingsView.bottomAnchor)
-        case "overview": return (.overview, nil)
-        case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor)
-        case "disk": return (.disk, nil)
-        case "disk:expanded": return (.disk, DiskView.expandedAnchor)
+        case "settings": return (.settings, nil, nil)
+        case "settings-bottom": return (.settings, SettingsView.bottomAnchor, nil)
+        case "overview": return (.overview, nil, nil)
+        case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor, nil)
+        case "disk": return (.disk, nil, nil)
+        case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         default: break
         }
-        if let agent = SubscriptionSettingsRoute.agent(from: raw) {
-            guard report != nil else { return nil }
-            return (.settings, SubscriptionSettingsRoute.anchor(for: agent))
+        if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
+            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), isEdit ? agent : nil)
         }
         guard let r = report else { return nil }
         if raw.hasPrefix("project:") {
             let parts = raw.dropFirst("project:".count).split(separator: ":", maxSplits: 1)
-            guard let first = parts.first, let i = Int(first) else { return (.overview, nil) }
+            guard let first = parts.first, let i = Int(first) else { return (.overview, nil, nil) }
             let sorted = r.projects.sorted { $0.cost > $1.cost }
-            guard sorted.indices.contains(i) else { return (.overview, nil) }
+            guard sorted.indices.contains(i) else { return (.overview, nil, nil) }
             let anchor: String?
             switch parts.count > 1 ? String(parts[1]) : "" {
             case "bottom": anchor = ProjectDetailView.bottomAnchor
             case "locations": anchor = ProjectDetailView.locationsOpenAnchor
             default: anchor = nil
             }
-            return (.project(sorted[i].id), anchor)
+            return (.project(sorted[i].id), anchor, nil)
         }
         if raw.hasPrefix("bucket:"), let k = BucketKind(rawValue: String(raw.dropFirst("bucket:".count))) {
-            return (.bucket(k), nil)
+            return (.bucket(k), nil, nil)
         }
-        return (.overview, nil)
+        return (.overview, nil, nil)
     }
 }
 
@@ -67,19 +73,49 @@ struct MenuPanelView: View {
 
     @EnvironmentObject var store: ReportStore
     @EnvironmentObject var disk: DiskStore
-    @AppStorage(SettingsKeys.appLanguage) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
+    @State private var editingSubscriptionAgent: String?
+    var initialRoute: Route? = nil
+    var initialAnchor: String? = nil
+    var initialEditingAgent: String? = nil
+    var isTall: Bool = false
+
+    private var activeRoute: Route { initialRoute ?? route }
+    private var activeAnchor: String? { initialAnchor ?? overviewAnchor }
+    private var activeEditingAgent: String? { initialEditingAgent ?? editingSubscriptionAgent }
+
+    init(
+        route: Route = .overview,
+        anchor: String? = nil,
+        editingAgent: String? = nil,
+        pendingDevRoute: String? = DevRoute.requested,
+        isTall: Bool = false
+    ) {
+        self.initialRoute = (route != .overview || anchor != nil || editingAgent != nil) ? route : nil
+        self.initialAnchor = anchor
+        self.initialEditingAgent = editingAgent
+        _route = State(initialValue: route)
+        _overviewAnchor = State(initialValue: anchor)
+        _editingSubscriptionAgent = State(initialValue: editingAgent)
+        _pendingDevRoute = State(initialValue: pendingDevRoute)
+        self.isTall = isTall
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             banners
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scrollDisabled(isTall)
+                .frame(maxWidth: .infinity, maxHeight: isTall ? nil : .infinity, alignment: .top)
+                .clipped()
             footer
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width)
+        .frame(minHeight: isTall ? Self.size.height : nil)
+        .frame(height: isTall ? nil : Self.size.height)
         .panelBackground()
         .onAppear { applyDevRoute(report: store.report) }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
@@ -87,10 +123,11 @@ struct MenuPanelView: View {
 
     /// `disk` 不依赖用量报告，出现时就能打开；项目页要等报告到了再解析。
     private func applyDevRoute(report: UsageReport?) {
-        guard let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: report) else { return }
+        guard initialRoute == nil, let raw = pendingDevRoute, let resolved = DevRoute.resolve(raw, report: report) else { return }
         pendingDevRoute = nil
         route = resolved.route
         overviewAnchor = resolved.anchor
+        editingSubscriptionAgent = resolved.editingAgent
     }
 
     // 只在出问题时出现：schema 版本过新（警告）、刷新失败但还有旧数据（错误）。
@@ -131,24 +168,25 @@ struct MenuPanelView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch route {
+        switch activeRoute {
         case .settings:
-            SettingsView(scrollTo: overviewAnchor, onBack: {
+            SettingsView(scrollTo: activeAnchor, initiallyEditingAgent: activeEditingAgent, onBack: {
                 route = .overview
                 overviewAnchor = nil
+                editingSubscriptionAgent = nil
                 store.applySettings()
             })
         case .disk:
-            DiskView(expandAll: overviewAnchor == DiskView.expandedAnchor, onBack: {
+            DiskView(expandAll: activeAnchor == DiskView.expandedAnchor, onBack: {
                 route = .overview
                 overviewAnchor = nil
             }, onSettings: { route = .settings })
         default:
             if let r = store.report {
-                switch route {
+                switch activeRoute {
                 case .project(let id):
                     if let p = r.projects.first(where: { $0.id == id }) {
-                        ProjectDetailView(project: p, report: r, devAnchor: overviewAnchor,
+                        ProjectDetailView(project: p, report: r, devAnchor: activeAnchor,
                                           onBack: { route = .overview; overviewAnchor = nil })
                     } else {
                         missing(L10n.tr("menu.project_missing"))
@@ -156,7 +194,7 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    OverviewView(report: r, scrollAnchor: overviewAnchor, onSelect: { route = $0 },
+                    OverviewView(report: r, scrollAnchor: activeAnchor, onSelect: { route = $0 },
                                  onSetRenewalDay: { agent in
                         overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
                         route = .settings
@@ -262,7 +300,7 @@ struct ErrorStateView: View {
     let onSettings: () -> Void
 
     var body: some View {
-        ScrollView {
+        OptionalScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Label(L10n.tr("menu.error_title"), systemImage: "xmark.octagon.fill")
                     .font(.system(size: 14, weight: .semibold))

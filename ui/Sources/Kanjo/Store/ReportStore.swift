@@ -8,6 +8,7 @@ final class ReportStore: ObservableObject {
 
     @Published private(set) var needsCommandLineTools = false
     @Published private(set) var report: UsageReport?
+    @Published private(set) var knownPlans: [String: [KnownPlan]]?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
     @Published private(set) var lastRefresh: Date?
@@ -19,9 +20,10 @@ final class ReportStore: ObservableObject {
     private var timer: Timer?
     private var generation = 0
     private var didScheduleDiskPrefetch = false
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = AppDefaults.store) {
+        self.defaults = defaults
         // 默认直接跑 CLI：优先内置 CLI，其次源码和安装目录。
         let defaultKind: SourceKind = DefaultPaths.cliDirectoryExists ? .cli : .file
         defaults.register(defaults: [
@@ -33,6 +35,7 @@ final class ReportStore: ObservableObject {
             SettingsKeys.showAmountInMenuBar: true,
         ])
         Task { await checkPython() }
+        Task { await loadKnownPlans() }
         refresh()
         restartTimer()
     }
@@ -73,6 +76,18 @@ final class ReportStore: ObservableObject {
         dataOverride == nil && defaults.string(forKey: SettingsKeys.sourceKind) == SourceKind.cli.rawValue
     }
 
+    func loadKnownPlans() async {
+        guard knownPlans == nil else { return }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do {
+            let plans = try await source.fetchKnownPlans()
+            self.knownPlans = plans
+        } catch {
+            self.knownPlans = KnownPlan.fallbackPlans
+        }
+    }
+
     func setAnchorDay(agent: String, day: Int?) async throws {
         guard canEditSubscriptions else {
             throw DataSourceError.launchFailed("Editing needs the CLI data source")
@@ -102,6 +117,17 @@ final class ReportStore: ObservableObject {
         let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
                                       workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
         do { try await source.removeSubscription(agent: agent) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
+    func setWeeklyReset(agent: String, reset: String?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.setWeeklyReset(agent: agent, reset: reset) }
         catch { await checkPython(); throw error }
         refresh()
     }
@@ -148,18 +174,19 @@ final class ReportStore: ObservableObject {
     func applySettings() {
         restartTimer()
         DiskStore.shared.applySettings()
+        Task { await loadKnownPlans() }
         refresh()
     }
 }
 
 /// 设置里的 CLI 命令和工作目录。用量导出和磁盘报告共用。
 enum CLILaunch {
-    static func command(defaults: UserDefaults = .standard) -> String {
+    static func command(defaults: UserDefaults = AppDefaults.store) -> String {
         let cmd = (defaults.string(forKey: SettingsKeys.cliCommand) ?? "").trimmingCharacters(in: .whitespaces)
         return cmd.isEmpty ? CLIDataSource.defaultCommand : cmd
     }
 
-    static func workingDirectory(defaults: UserDefaults = .standard) -> URL? {
+    static func workingDirectory(defaults: UserDefaults = AppDefaults.store) -> URL? {
         let dir = (defaults.string(forKey: SettingsKeys.cliWorkingDirectory) ?? "").trimmingCharacters(in: .whitespaces)
         if dir.isEmpty { return DefaultPaths.resolvedCLIDirectory() }
         return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath)

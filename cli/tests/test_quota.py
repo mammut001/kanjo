@@ -49,6 +49,14 @@ def codex_cache(fetched, weekly, five, window_minutes=10080):
             "plan": "plus", "account_key": "0" * 64, "auth_key": "1" * 64, "source": "live"}
 
 
+def grok_cache(fetched, reset, window="week", plan="SuperGrok", pct=42.0, stale=False):
+    # structure of ~/.tokei/grok_quota_cache.json
+    quota_dict = {"reset": reset, "plan": plan, "pct": pct, "stale": stale}
+    if window is not None:
+        quota_dict["window"] = window
+    return {"fetched_at": fetched, "quota": quota_dict}
+
+
 class QuotaTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="kanjo-tokei-")
@@ -64,6 +72,10 @@ class QuotaTest(unittest.TestCase):
         self.write(quota.CLAUDE_FILE, claude_cache(NOW - age, ts("2026-10-27T14:00:00Z"), ts("2026-10-24T16:30:00Z")))
         self.write(quota.CODEX_FILE, codex_cache(NOW - age, ts("2026-10-31T04:53:24Z"), ts("2026-10-24T17:05:49Z")))
 
+    def write_all(self, age=HOUR):
+        self.write_both(age=age)
+        self.write(quota.GROK_FILE, grok_cache(NOW - age, ts("2026-10-27T05:00:00Z")))
+
     def test_tokei_files_present(self):
         self.write_both()
         qw = quota.quota_windows(directory=self.dir, now=NOW)
@@ -74,6 +86,89 @@ class QuotaTest(unittest.TestCase):
                       "five_hour_resets_at": "2026-10-24T17:05:49Z", "source": "tokei"},
         })
         check_quota_windows(self, qw)
+
+    def test_grok_tokei_cache(self):
+        self.write_all()
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertEqual(qw["grok"], {
+            "weekly_resets_at": "2026-10-27T05:00:00Z",
+            "weekly_window_hours": 168,
+            "five_hour_resets_at": None,
+            "source": "tokei",
+        })
+        check_quota_windows(self, qw)
+
+    def test_grok_window_mapping(self):
+        # "day" -> 24h
+        self.write(quota.GROK_FILE, grok_cache(NOW - HOUR, ts("2026-10-25T05:00:00Z"), window="day"))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertEqual(qw["grok"]["weekly_window_hours"], 24)
+        self.assertEqual(qw["grok"]["weekly_resets_at"], "2026-10-25T05:00:00Z")
+
+        # None / missing window -> default 168h
+        self.write(quota.GROK_FILE, grok_cache(NOW - HOUR, ts("2026-10-27T05:00:00Z"), window=None))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertEqual(qw["grok"]["weekly_window_hours"], 168)
+
+        # "month" -> skipped
+        self.write(quota.GROK_FILE, grok_cache(NOW - HOUR, ts("2026-10-27T05:00:00Z"), window="month"))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertNotIn("grok", qw)
+
+    def test_grok_staleness_and_age(self):
+        # stale: true but fresh (1 day old) -> NOT dropped
+        self.write(quota.GROK_FILE, grok_cache(NOW - DAY, ts("2026-10-27T05:00:00Z"), stale=True))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertIn("grok", qw)
+
+        # stale: true and older than MAX_AGE_DAYS (15 days) -> dropped
+        self.write(quota.GROK_FILE, grok_cache(NOW - 15 * DAY, ts("2026-10-27T05:00:00Z"), stale=True))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertNotIn("grok", qw)
+
+        # stale: false and older than MAX_AGE_DAYS (15 days) -> dropped
+        self.write(quota.GROK_FILE, grok_cache(NOW - 15 * DAY, ts("2026-10-27T05:00:00Z"), stale=False))
+        qw = quota.quota_windows(directory=self.dir, now=NOW)
+        self.assertNotIn("grok", qw)
+
+    def test_manual_weekly_reset_and_dst(self):
+        # Saturday Oct 24, 2026 at 12:00 UTC
+        # Config weekly_reset = "tue 05:00" in report timezone America/New_York (EDT, UTC-4)
+        # Saturday Oct 24 12:00 UTC is 08:00 EDT.
+        # Next Tuesday is Oct 27 at 05:00 EDT = 09:00 UTC (2026-10-27T09:00:00Z).
+        cfg = config.from_dict({"quota_windows": {"grok": {"weekly_reset": "tue 05:00"}}})
+        qw = quota.quota_windows(cfg.quota_windows, directory=self.dir, now=NOW, timezone_name="America/New_York")
+        self.assertEqual(qw["grok"], {
+            "weekly_resets_at": "2026-10-27T09:00:00Z",
+            "weekly_window_hours": 168,
+            "five_hour_resets_at": None,
+            "source": "manual",
+        })
+
+        # Manual beats Tokei
+        self.write_all()
+        qw_both = quota.quota_windows(cfg.quota_windows, directory=self.dir, now=NOW, timezone_name="America/New_York")
+        self.assertEqual(qw_both["grok"]["source"], "manual")
+        self.assertEqual(qw_both["claude"]["source"], "tokei")
+
+        # DST transition test:
+        # America/New_York falls back on Sunday Nov 1, 2026 (EDT UTC-4 -> EST UTC-5).
+        # Suppose now is Saturday Oct 31, 2026 12:00 UTC (08:00 EDT).
+        # Target weekly reset is "tue 05:00" which falls on Tuesday Nov 3, 2026 (AFTER the fallback, in EST).
+        # 05:00 EST = 10:00 UTC (2026-11-03T10:00:00Z).
+        now_pre_dst = datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc).timestamp()
+        qw_dst = quota.quota_windows(cfg.quota_windows, directory=self.dir, now=now_pre_dst, timezone_name="America/New_York")
+        self.assertEqual(qw_dst["grok"]["weekly_resets_at"], "2026-11-03T10:00:00Z")
+        from zoneinfo import ZoneInfo
+        dt_local = datetime.fromisoformat(qw_dst["grok"]["weekly_resets_at"].replace("Z", "+00:00")).astimezone(ZoneInfo("America/New_York"))
+        self.assertEqual((dt_local.hour, dt_local.minute), (5, 0))
+
+        # Europe/Paris falls back on Sunday Oct 25, 2026 (CEST UTC+2 -> CET UTC+1).
+        # Tuesday Oct 27 at 05:00 CET = 04:00 UTC.
+        qw_paris = quota.quota_windows(cfg.quota_windows, directory=self.dir, now=NOW, timezone_name="Europe/Paris")
+        self.assertEqual(qw_paris["grok"]["weekly_resets_at"], "2026-10-27T04:00:00Z")
+        dt_paris = datetime.fromisoformat(qw_paris["grok"]["weekly_resets_at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Paris"))
+        self.assertEqual((dt_paris.hour, dt_paris.minute), (5, 0))
 
     def test_tokei_missing(self):
         self.assertEqual(quota.quota_windows(directory=self.dir, now=NOW), {})
@@ -142,9 +237,20 @@ class QuotaTest(unittest.TestCase):
         for bad in ({"claude": {"weekly_window_hours": 168}},
                     {"claude": {"weekly_resets_at": "next tuesday"}},
                     {"claude": {"weekly_resets_at": "2026-10-27T10:00:00Z", "weekly_window_hours": 0}},
-                    {"claude": "2026-10-27T10:00:00Z"}):
+                    {"claude": "2026-10-27T10:00:00Z"},
+                    {"claude": {"weekly_reset": "someday 05:00"}},
+                    {"claude": {"weekly_reset": "tue 25:00"}},
+                    {"claude": {"weekly_reset": "tue 5:60"}},
+                    {"claude": {"weekly_reset": 123}},
+                    {"unknown_agent": {"weekly_reset": "tue 05:00"}}):
             with self.assertRaises(ConfigError):
                 config.from_dict({"quota_windows": bad})
+
+        # weekly_reset parsed correctly in toml
+        text_wr = ('[quota_windows.grok]\n'
+                   'weekly_reset = "tue 05:00"\n')
+        cfg_wr = config.from_dict(config.parse_toml_subset(text_wr))
+        self.assertEqual(cfg_wr.quota_windows["grok"]["weekly_reset"], "tue 05:00")
 
     def test_export_and_env_override(self):
         self.write_both()

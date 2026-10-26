@@ -2,59 +2,93 @@ import AppKit
 import SwiftUI
 import KanjoCore
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var debugWindow: NSWindow?
+@main
+enum KanjoAppLauncher {
+    private static var windowPreviewDelegate: WindowPreviewAppDelegate?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        if CommandLine.arguments.contains("--window") {
-            // 开发用：把面板放进普通窗口（便于截图 / 调试），同时保留菜单栏图标。
-            NSApp.setActivationPolicy(.regular)
-            // 窗口本身透明，底下垫一层 popover 材质（behind-window），和菜单栏弹出面板一样能透出桌面，
-            // 截图里能看到面板的玻璃效果。只影响这个调试窗口。
-            let size = MenuPanelView.size
-            let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
-                             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
-                             backing: .buffered, defer: false)
-            w.title = "Kanjo"
-            w.isOpaque = false
-            w.backgroundColor = .clear
-            w.titlebarAppearsTransparent = true
-            let effect = NSVisualEffectView()
-            effect.material = .popover
-            effect.blendingMode = .behindWindow
-            effect.state = .active
-            let host = NSHostingView(rootView: MenuPanelView()
-                .environmentObject(ReportStore.shared)
-                .environmentObject(DiskStore.shared))
-            host.translatesAutoresizingMaskIntoConstraints = false
-            effect.addSubview(host)
-            w.contentView = effect
-            // 面板放在标题栏下面（标题栏透明，材质铺满整个窗口）。
-            let titlebar = w.frame.height - w.contentLayoutRect.height
-            NSLayoutConstraint.activate([
-                host.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
-                host.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
-                host.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
-                host.topAnchor.constraint(equalTo: effect.topAnchor, constant: titlebar),
-            ])
-            w.setContentSize(NSSize(width: size.width, height: size.height + titlebar))
-            w.center()
-            w.makeKeyAndOrderFront(nil)
-            debugWindow = w
-            NSApp.activate(ignoringOtherApps: true)
+    static func main() {
+        if SnapshotConfig.isSnapshotMode {
+            SnapshotRunner.runCLI()
+        } else if CommandLine.arguments.contains("--window") {
+            let app = NSApplication.shared
+            let delegate = WindowPreviewAppDelegate()
+            windowPreviewDelegate = delegate
+            app.delegate = delegate
+            app.run()
         } else {
-            // 纯菜单栏应用：不占 Dock。
-            NSApp.setActivationPolicy(.accessory)
+            KanjoMenuBarApp.main()
         }
     }
 }
 
-@main
-struct KanjoApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
+    private var debugWindow: NSWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 开发用：把面板放进普通窗口（便于截图 / 调试）。
+        // 预览模式下不创建 NSStatusItem / MenuBarExtra，避免污染用户的状态栏与偏好设置。
+        NSApp.setActivationPolicy(.regular)
+
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+        let appMenu = NSMenu()
+        appMenuItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Quit Kanjo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        NSApp.mainMenu = mainMenu
+
+        // 窗口本身透明，底下垫一层 popover 材质（behind-window），和菜单栏弹出面板一样能透出桌面，
+        // 截图里能看到面板的玻璃效果。只影响这个调试窗口。
+        let size = MenuPanelView.size
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                         styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                         backing: .buffered, defer: false)
+        w.title = "Kanjo"
+        w.isOpaque = false
+        w.backgroundColor = .clear
+        w.titlebarAppearsTransparent = true
+        let effect = NSVisualEffectView()
+        effect.material = .popover
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        let host = NSHostingView(rootView: MenuPanelView()
+            .environmentObject(ReportStore.shared)
+            .environmentObject(DiskStore.shared))
+        host.translatesAutoresizingMaskIntoConstraints = false
+        effect.addSubview(host)
+        w.contentView = effect
+        // 面板放在标题栏下面（标题栏透明，材质铺满整个窗口）。
+        let titlebar = w.frame.height - w.contentLayoutRect.height
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+            host.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
+            host.topAnchor.constraint(equalTo: effect.topAnchor, constant: titlebar),
+        ])
+        w.setContentSize(NSSize(width: size.width, height: size.height + titlebar))
+        w.center()
+        w.makeKeyAndOrderFront(nil)
+        debugWindow = w
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+
+final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 纯菜单栏应用：不占 Dock。
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
+
+struct KanjoMenuBarApp: App {
+    @NSApplicationDelegateAdaptor(MenuBarAppDelegate.self) private var appDelegate
     @StateObject private var store = ReportStore.shared
     @StateObject private var disk = DiskStore.shared
-    @AppStorage(SettingsKeys.showAmountInMenuBar) private var showAmount = true
+    @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
 
     var body: some Scene {
         MenuBarExtra {
@@ -71,8 +105,8 @@ struct KanjoApp: App {
 struct MenuBarLabel: View {
     @ObservedObject var store: ReportStore
     let showAmount: Bool
-    @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
-    @AppStorage(SettingsKeys.menuBarMode) private var menuBarMode = MenuBarMode.cost.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
 
     private var mode: MenuBarMode {
         MenuBarMode(rawValue: menuBarMode) ?? .cost
