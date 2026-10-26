@@ -12,6 +12,9 @@ AGENT_LABELS = {
     "claude": "Claude Code",
     "antigravity": "Antigravity CLI",
     "codex": "Codex CLI",
+    "grok": "Grok CLI",
+    "qwen": "Qwen Code",
+    "commandcode": "Command Code",
 }
 
 
