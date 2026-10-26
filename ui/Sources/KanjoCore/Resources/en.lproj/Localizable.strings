@@ -198,7 +198,6 @@
 "overview.dismiss_renewal_reminder" = "Dismiss renewal day reminder";
 "overview.renewal_day_unknown_help" = "Renewal day unknown; set it in Settings";
 "overview.sub_help_multiplier" = "%@ is %@ flat. %@ is the API-equivalent cost this billing cycle, %@ the flat fee. Not an extra charge.";
-"overview.quota.title" = "Quota";
 "overview.quota.five_hour" = "5-hour";
 "overview.quota.weekly" = "Weekly";
 "overview.quota.hours" = "%d-hour";

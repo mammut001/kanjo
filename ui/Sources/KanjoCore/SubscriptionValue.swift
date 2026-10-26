@@ -16,6 +16,11 @@ public struct QuotaRow: Equatable, Identifiable {
     public var detail: String      // 重置文案，或「窗口已结束」
 }
 
+/// 进度条色调：≥ 80% 警示，≥ 95% 才用红色。
+public enum QuotaLevel: Equatable {
+    case normal, warning, critical
+}
+
 public enum SubscriptionValue {
     public static var assumedDayHelp: String {
         L10n.tr("overview.renewal_day_unknown_help")
@@ -94,6 +99,11 @@ public enum SubscriptionValue {
         if minutes < 60 { return L10n.tr("overview.quota.rel_m", minutes) }
         if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", minutes / 60, minutes % 60) }
         return L10n.tr("overview.quota.rel_dh", minutes / 1440, minutes % 1440 / 60)
+    }
+
+    public static func level(_ percent: Double?) -> QuotaLevel {
+        guard let p = percent else { return .normal }
+        return p >= 95 ? .critical : p >= 80 ? .warning : .normal
     }
 
     private static func clampPercent(_ p: Double?) -> Double? {

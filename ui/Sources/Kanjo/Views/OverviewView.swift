@@ -528,7 +528,7 @@ private struct QuotaPlacement: View {
                     Color.clear.onAppear { cardHeight = c.size.height }
                         .onChange(of: c.size.height) { cardHeight = $0 }
                 })
-                .frame(maxWidth: geo.size.width - 2 * Metrics.listInset, alignment: .leading)
+                .frame(width: geo.size.width - 2 * Metrics.listInset)
                 .offset(x: Metrics.listInset, y: upward ? -(cardHeight + gap) : frame.height + gap)
         }
         .allowsHitTesting(false)
@@ -536,32 +536,75 @@ private struct QuotaPlacement: View {
     }
 }
 
-/// 额度卡：和马赛克等处的系统 tooltip 同一个样子（浅灰底、细边、tooltip 字体、「●」列表），
-/// 但它是视图本身，所以能延迟出现、放得下时贴在行下方，也能在截图路由里固定展开。
+/// 额度卡：agent 色点 + 档位名做标题；每个窗口一行：细进度条、右对齐百分比、重置时间。
 private struct QuotaCard: View {
     let agent: String
     let planLabel: String
     let rows: [QuotaRow]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(planLabel) · \(L10n.tr("overview.quota.title"))")
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 6) {
+                AgentDot(agent: agent, size: 7)
+                Text(planLabel).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            }
             ForEach(rows) { r in
-                Text("● \(r.title)  \(r.percent.map { "\(Int($0.rounded()))%" } ?? "—") · \(r.detail)")
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(r.title).font(.system(size: 11, weight: .medium))
+                        Spacer(minLength: 8)
+                        Text(r.percent.map { "\(Int($0.rounded()))%" } ?? "—")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(r.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                    }
+                    QuotaBar(fraction: (r.percent ?? 0) / 100, color: barColor(r.percent))
+                    Text(r.detail)
+                        .font(.system(size: 10))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
             }
         }
-        .font(Font(NSFont.toolTipsFont(ofSize: 0)))
-        .monospacedDigit()
-        .lineLimit(1)
-        .foregroundStyle(Color(nsColor: .labelColor))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .fixedSize()
-        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
-            .fill(Color(nsColor: .windowBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.regularMaterial)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+
+    private func barColor(_ percent: Double?) -> Color {
+        switch SubscriptionValue.level(percent) {
+        case .normal: return AgentPalette.color(for: agent)
+        case .warning: return AgentPalette.quotaWarn
+        case .critical: return AgentPalette.bad
+        }
+    }
+}
+
+private struct QuotaBar: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08))
+                if fraction > 0 {
+                    Capsule().fill(color).frame(width: max(4, geo.size.width * min(fraction, 1)))
+                }
+            }
+        }
+        .frame(height: 4)
     }
 }
 

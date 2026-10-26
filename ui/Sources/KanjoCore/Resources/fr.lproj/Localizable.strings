@@ -198,7 +198,6 @@
 "overview.dismiss_renewal_reminder" = "Ignorer le rappel du jour de renouvellement";
 "overview.renewal_day_unknown_help" = "Jour de renouvellement inconnu ; définissez-le dans Réglages";
 "overview.sub_help_multiplier" = "%@ est au forfait de %@. %@ est le coût équivalent API ce cycle, soit %@ le forfait. Ce n'est pas un coût supplémentaire.";
-"overview.quota.title" = "Quota";
 "overview.quota.five_hour" = "5 heures";
 "overview.quota.weekly" = "Hebdomadaire";
 "overview.quota.hours" = "%d heures";

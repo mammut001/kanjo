@@ -53,12 +53,17 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(SubscriptionValue.quotaRows(nil, timezone: utc), [])
     }
 
-    func testRelativeReset() {
+    func testRelativeResetAndLevels() {
         let now = ReportDates.parseTimestamp("2026-10-24T12:00:00Z")!
         XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(10)), "1 min")
         XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(59 * 60)), "59 min")
         XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(3600)), "1h 0m")
         XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(86400 + 2 * 3600)), "1d 2h")
+        XCTAssertEqual(SubscriptionValue.level(nil), .normal)
+        XCTAssertEqual(SubscriptionValue.level(79.9), .normal)
+        XCTAssertEqual(SubscriptionValue.level(80), .warning)
+        XCTAssertEqual(SubscriptionValue.level(94.9), .warning)
+        XCTAssertEqual(SubscriptionValue.level(95), .critical)
     }
 
     func testResetTextZhHans() {

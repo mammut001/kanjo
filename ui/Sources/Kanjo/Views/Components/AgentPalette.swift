@@ -54,6 +54,7 @@ enum AgentPalette {
     static let goodFill = dynamic(light: 0x2E7D4A, dark: 0x74C98F, lightAlpha: 0.14, darkAlpha: 0.20)
     static let bad = dynamic(light: 0xB3261E, dark: 0xFF8A80)
     static let badFill = dynamic(light: 0xE5484D, dark: 0xE5484D, lightAlpha: 0.10, darkAlpha: 0.18)
+    static let quotaWarn = dynamic(light: 0xD08A12, dark: 0xF0B248)
     static let warnInk = dynamic(light: 0x6E5512, dark: 0xE8CF94)
     static let warnFill = dynamic(light: 0xD9A53A, dark: 0xD9A53A, lightAlpha: 0.16, darkAlpha: 0.18)
 }
