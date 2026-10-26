@@ -18,8 +18,12 @@ struct MosaicView: View {
 
     let projects: [Project]
     let currency: String
+    var pinnedTile: Int? = nil
     let onSelect: (String) -> Void
     @State private var hovered: String?
+    @State private var carded: String?          // 悬停 0.35 秒后才出卡片
+    @State private var cardTask: Task<Void, Never>?
+    @State private var cardHeight: CGFloat = 0
 
     struct Tile: Identifiable {
         enum Kind { case project(Project), more([Project]) }
@@ -38,6 +42,15 @@ struct MosaicView: View {
                         MosaicTileView(tile: t, currency: currency, onSelect: onSelect,
                                        onHover: { h in
                                            if h { hovered = t.id } else if hovered == t.id { hovered = nil }
+                                           cardTask?.cancel()
+                                           if h {
+                                               cardTask = Task { @MainActor in
+                                                   try? await Task.sleep(nanoseconds: 350_000_000)
+                                                   if !Task.isCancelled { withAnimation(.easeOut(duration: 0.12)) { carded = t.id } }
+                                               }
+                                           } else if carded == t.id {
+                                               withAnimation(.easeIn(duration: 0.08)) { carded = nil }
+                                           }
                                        })
                             .frame(width: t.rect.width, height: t.rect.height)
                             .position(x: t.rect.midX, y: t.rect.midY)
@@ -60,9 +73,39 @@ struct MosaicView: View {
                 }
                 .allowsHitTesting(false)
                 .animation(.easeOut(duration: 0.12), value: hovered)
+                if let t = cardTile(tiles) {
+                    card(for: t, in: geo)
+                }
             }
         }
         .frame(height: Self.height)
+    }
+
+    private func cardTile(_ tiles: [Tile]) -> Tile? {
+        if let i = pinnedTile {
+            let sorted = tiles.sorted { $0.cost > $1.cost }
+            return sorted.indices.contains(i) ? sorted[i] : nil
+        }
+        return carded.flatMap { id in tiles.first { $0.id == id } }
+    }
+
+    /// 卡片贴在方块下方，左边与方块对齐（不超出马赛克左右边）；超出面板底部时放到方块上方。
+    private func card(for t: Tile, in geo: GeometryProxy) -> some View {
+        let width = min(geo.size.width, 300)
+        let x = min(max(t.rect.minX, 0), geo.size.width - width)
+        let globalY = geo.frame(in: .global).minY
+        let below = t.rect.maxY + 4
+        let fitsBelow = globalY + below + cardHeight <= MenuPanelView.size.height - 8
+        let y = fitsBelow || t.rect.minY - 4 - cardHeight + globalY < 8 ? below : t.rect.minY - 4 - cardHeight
+        return MosaicHoverCard(tile: t, currency: currency)
+            .frame(width: width)
+            .background(GeometryReader { c in
+                Color.clear.onAppear { cardHeight = c.size.height }
+                    .onChange(of: c.size.height) { cardHeight = $0 }
+            })
+            .offset(x: x, y: y)
+            .allowsHitTesting(false)
+            .transition(.opacity)
     }
 
     private static let moreID = "\u{0}more"
@@ -150,7 +193,7 @@ private struct MosaicTileView: View {
         }
         .mosaicTile(color: tile.color)
         .onHover(perform: onHover)
-        .help(tile.help(currency: currency))
+        .accessibilityLabel(tile.help(currency: currency))
     }
 }
 

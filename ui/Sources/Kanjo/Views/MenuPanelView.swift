@@ -44,7 +44,7 @@ enum DevRoute {
         case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         default: break
         }
-        if QuotaCardRoute.agent(in: raw) != nil { return (.overview, raw, nil) }
+        if QuotaCardRoute.agent(in: raw) != nil || MosaicCardRoute.index(in: raw) != nil { return (.overview, raw, nil) }
         if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
             return (.settings, SubscriptionSettingsRoute.anchor(for: agent), isEdit ? agent : nil)
         }

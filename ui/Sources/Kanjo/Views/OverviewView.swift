@@ -74,10 +74,13 @@ struct OverviewView: View {
                                 .zIndex(1) // 额度卡浮在下面的马赛克之上
                         }
                         if lists.visible.contains(where: { $0.cost > 0 }) {
-                            MosaicView(projects: lists.visible, currency: cur) { onSelect(.project($0)) }
+                            MosaicView(projects: lists.visible, currency: cur,
+                                       pinnedTile: MosaicCardRoute.index(in: scrollAnchor)) { onSelect(.project($0)) }
                                 .padding(.horizontal, Metrics.listInset - Metrics.flatPagePadding)
+                                .zIndex(lists.visible.isEmpty ? 0 : 0.5)
                         }
                     }
+                    .zIndex(1) // 悬停卡可以盖到下面的项目列表上
                     projectsSection(visible: lists.visible, hidden: lists.hidden, idle: lists.idle,
                                     isAll: ctx.isAll, legendAgents: legendAgents(in: f))
                     modelsSection(f)
@@ -512,6 +515,15 @@ enum QuotaCardRoute {
     }
 }
 
+/// `--route overview:tile:<n>`：马赛克第 n 块（按花费降序）的悬停卡固定展开。
+enum MosaicCardRoute {
+    static let prefix = "overview:tile:"
+    static func index(in anchor: String?) -> Int? {
+        guard let a = anchor, a.hasPrefix(prefix) else { return nil }
+        return Int(a.dropFirst(prefix.count))
+    }
+}
+
 /// 把卡片放在行的正下方；按全局坐标判断会超出面板底部时翻到行的上方。
 private struct QuotaPlacement: View {
     let card: QuotaCard
@@ -568,18 +580,8 @@ private struct QuotaCard: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.regularMaterial)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
-        )
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .hoverCard()
     }
 
     private func barColor(_ percent: Double?) -> Color {
@@ -588,23 +590,6 @@ private struct QuotaCard: View {
         case .warning: return AgentPalette.quotaWarn
         case .critical: return AgentPalette.bad
         }
-    }
-}
-
-private struct QuotaBar: View {
-    let fraction: Double
-    let color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.08))
-                if fraction > 0 {
-                    Capsule().fill(color).frame(width: max(4, geo.size.width * min(fraction, 1)))
-                }
-            }
-        }
-        .frame(height: 4)
     }
 }
 
