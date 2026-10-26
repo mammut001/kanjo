@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
             shift
             case "${1:-}" in arm64|x86_64) ARCHS=("$1") ;; *) echo "expected arm64 or x86_64" >&2; exit 1 ;; esac ;;
         --notarize)
-            if [[ $# -gt 1 && ! "$2" =~ ^- && ! "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ $# -gt 1 && ! "$2" =~ ^- && ! "$2" =~ ^v?[0-9] ]]; then
                 shift
                 NOTARY_PROFILE="$1"
             else
@@ -42,8 +42,20 @@ if [[ -z "$VERSION" ]]; then
     [[ -f ../VERSION ]] || { echo "no version given and ../VERSION not found" >&2; exit 1; }
     VERSION="$(tr -d '[:space:]' < ../VERSION)"
 fi
+VERSION="${VERSION#v}"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "invalid version (expected X.Y.Z): $VERSION" >&2
+    exit 1
+fi
+
+IDENTITY="${KANJO_CODESIGN_IDENTITY:-}"
+if [[ -z "$IDENTITY" ]]; then
+    IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+    IDENTITY="$(echo "$IDENTITIES" | sed -nE 's/^[[:space:]]*[0-9]+\) [0-9A-F]+ "(Developer ID Application[^"]+)".*/\1/p' | head -n 1)"
+    IDENTITY="${IDENTITY:--}"
+fi
+if [[ -n "$NOTARY_PROFILE" && "$IDENTITY" == "-" ]]; then
+    echo "notarization needs a Developer ID identity" >&2
     exit 1
 fi
 
@@ -138,12 +150,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
-IDENTITY="${KANJO_CODESIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]]; then
-    IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
-    IDENTITY="$(echo "$IDENTITIES" | sed -nE 's/^[[:space:]]*[0-9]+\) [0-9A-F]+ "(Developer ID Application[^"]+)".*/\1/p' | head -n 1)"
-    IDENTITY="${IDENTITY:--}"
-fi
 SIGN_FLAGS=(--force --sign "$IDENTITY")
 if [[ "$IDENTITY" != - ]]; then
     SIGN_FLAGS+=(--options runtime --timestamp)
