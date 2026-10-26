@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 from .base import (
     Message,
@@ -139,6 +139,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         except sqlite3.Error as exc:
             raise ParseError("failed to query token_usage for session %s: %s" % (sid, exc))
 
+        seen_turn_ids: Set[str] = set()
         for row in usage_rows:
             ts = (row["ts"] / 1000.0) if row["ts"] else None
             model = row["model"] or "unknown"
@@ -148,7 +149,12 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             cache_read = int(row["cache_read_tokens"] or 0)
             cache_write = int(row["cache_write_tokens"] or 0)
             turn_id = row["turn_id"] or str(row["id"])
-            key = f"minimax:{sid}:{turn_id}"
+            row_id = row["id"]
+            if turn_id in seen_turn_ids:
+                key = f"minimax:{sid}:{turn_id}:{row_id}"
+            else:
+                key = f"minimax:{sid}:{turn_id}"
+                seen_turn_ids.add(turn_id)
 
             session.note_time(ts)
             session.messages.append(

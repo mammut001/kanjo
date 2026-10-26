@@ -133,6 +133,39 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertNil(RangeEngine.windowStart(QuotaWindow(weeklyResetsAt: "2026-10-27T10:00:00Z", weeklyWindowHours: 0), now: now))
     }
 
+    func testWindowStartAcrossDST() {
+        let ny = TimeZone(identifier: "America/New_York")!
+        let calNY = RangeEngine.calendar(timezone: ny)
+
+        // 1. Spring forward: 2026-03-08 02:00 NY turns UTC-5 into UTC-4.
+        // Stale reset is Sunday 10:00 AM EST (15:00:00Z).
+        // 1 calendar week later is Sunday 10:00 AM EDT (14:00:00Z).
+        // A fixed 168h step would drift to 15:00:00Z (11:00 AM EDT).
+        let staleSpring = QuotaWindow(weeklyResetsAt: "2026-03-01T15:00:00Z")
+        let nowSpring = ts("2026-03-10T15:00:00Z") // Tuesday after DST
+        let startSpring = RangeEngine.windowStart(staleSpring, now: nowSpring, calendar: calNY)
+        XCTAssertEqual(startSpring, ts("2026-03-08T14:00:00Z"))
+
+        // Date interval with report timezone flows to windowStart
+        let specSpring = RangeEngine.dateInterval(for: .sinceReset, now: nowSpring, timezone: ny,
+                                                  quota: ["claude": staleSpring])
+        XCTAssertEqual(specSpring.agentStarts["claude"], ts("2026-03-08T14:00:00Z"))
+
+        // 2. Fall back: 2026-11-01 02:00 NY turns UTC-4 into UTC-5.
+        // Stale reset is Sunday 10:00 AM EDT (14:00:00Z).
+        // 1 calendar week later is Sunday 10:00 AM EST (15:00:00Z).
+        // A fixed 168h step would drift to 14:00:00Z (09:00 AM EST).
+        let staleFall = QuotaWindow(weeklyResetsAt: "2026-10-25T14:00:00Z")
+        let nowFall = ts("2026-11-04T15:00:00Z") // Wednesday after DST
+        let startFall = RangeEngine.windowStart(staleFall, now: nowFall, calendar: calNY)
+        XCTAssertEqual(startFall, ts("2026-11-01T15:00:00Z"))
+
+        // 3. Non-168h window keeps fixed steps
+        let dayWindow = QuotaWindow(weeklyResetsAt: "2026-03-08T06:00:00Z", weeklyWindowHours: 24)
+        let dayStart = RangeEngine.windowStart(dayWindow, now: ts("2026-03-09T08:00:00Z"), calendar: calNY)
+        XCTAssertEqual(dayStart, ts("2026-03-09T06:00:00Z"))
+    }
+
     func testBillingCyclePerAgentStarts() {
         let subs = ["claude": sub(start: "2026-09-24T16:00:00Z"),
                     "codex": sub(plan: "plus", label: "ChatGPT Plus", price: 20,
