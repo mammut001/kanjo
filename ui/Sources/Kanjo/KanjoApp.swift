@@ -5,7 +5,25 @@ import KanjoCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugWindow: NSWindow?
 
+    override init() {
+        super.init()
+        if SnapshotConfig.isSnapshotMode {
+            _ = NSApp?.setActivationPolicy(.prohibited)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let config = SnapshotConfig.parse() {
+            _ = NSApp.setActivationPolicy(.prohibited)
+            if NSApp.activationPolicy() != .prohibited {
+                NSApp.setActivationPolicy(.accessory)
+            }
+            Task { @MainActor in
+                await SnapshotRunner.run(config: config)
+            }
+            return
+        }
+
         if CommandLine.arguments.contains("--window") {
             // 开发用：把面板放进普通窗口（便于截图 / 调试），同时保留菜单栏图标。
             NSApp.setActivationPolicy(.regular)
@@ -55,9 +73,16 @@ struct KanjoApp: App {
     @StateObject private var store = ReportStore.shared
     @StateObject private var disk = DiskStore.shared
     @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
+    @State private var isMenuBarInserted = !SnapshotConfig.isSnapshotMode
+
+    init() {
+        if SnapshotConfig.isSnapshotMode {
+            _ = NSApplication.shared.setActivationPolicy(.prohibited)
+        }
+    }
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $isMenuBarInserted) {
             MenuPanelView()
                 .environmentObject(store)
                 .environmentObject(disk)

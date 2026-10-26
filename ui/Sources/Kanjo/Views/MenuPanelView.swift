@@ -21,11 +21,17 @@ enum BucketKind: String {
 /// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`、
 /// `settings:subscriptions:<agent>:edit`（滚到该 agent 的订阅行并直接进入编辑态，加载 plan picker）。
 enum DevRoute {
-    static let requested: String? = {
-        let args = CommandLine.arguments
-        guard let i = args.firstIndex(of: "--route"), i + 1 < args.count else { return nil }
-        return args[i + 1]
-    }()
+    static func requestedRoute(from args: [String] = CommandLine.arguments) -> String? {
+        if let i = args.firstIndex(of: "--route"), i + 1 < args.count {
+            return args[i + 1]
+        }
+        if let arg = args.first(where: { $0.hasPrefix("--route=") }) {
+            return String(arg.dropFirst("--route=".count))
+        }
+        return nil
+    }
+
+    static let requested: String? = requestedRoute()
 
     /// 需要数据才能解析的取值在 report 为 nil 时返回 nil（等数据到了再解析）。
     static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?, editingAgent: String?)? {
@@ -72,15 +78,34 @@ struct MenuPanelView: View {
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
     @State private var editingSubscriptionAgent: String?
+    var isTall: Bool = false
+
+    init(
+        route: Route = .overview,
+        anchor: String? = nil,
+        editingAgent: String? = nil,
+        pendingDevRoute: String? = DevRoute.requested,
+        isTall: Bool = false
+    ) {
+        _route = State(initialValue: route)
+        _overviewAnchor = State(initialValue: anchor)
+        _editingSubscriptionAgent = State(initialValue: editingAgent)
+        _pendingDevRoute = State(initialValue: pendingDevRoute)
+        self.isTall = isTall
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             banners
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scrollDisabled(isTall)
+                .frame(maxWidth: .infinity, maxHeight: isTall ? nil : .infinity, alignment: .top)
+                .clipped()
             footer
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width)
+        .frame(minHeight: isTall ? Self.size.height : nil)
+        .frame(height: isTall ? nil : Self.size.height)
         .panelBackground()
         .onAppear { applyDevRoute(report: store.report) }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
@@ -265,7 +290,7 @@ struct ErrorStateView: View {
     let onSettings: () -> Void
 
     var body: some View {
-        ScrollView {
+        OptionalScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Label(L10n.tr("menu.error_title"), systemImage: "xmark.octagon.fill")
                     .font(.system(size: 14, weight: .semibold))

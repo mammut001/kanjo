@@ -79,7 +79,7 @@ struct DetailPage<Content: View>: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            OptionalScrollView {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     BackButton(title: backTitle, action: onBack)
                         .padding(.leading, Metrics.rowInset - 4)
@@ -113,6 +113,14 @@ struct ProjectDetailView: View {
     @State private var showAllBranches = false
     @State private var showLocations = false
     private let collapsedLimit = 8
+
+    init(project: Project, report: UsageReport, devAnchor: String? = nil, onBack: @escaping () -> Void) {
+        self.project = project
+        self.report = report
+        self.devAnchor = devAnchor
+        self.onBack = onBack
+        _showLocations = State(initialValue: devAnchor == Self.locationsOpenAnchor)
+    }
 
     private var cur: String { report.currency }
     private var devScrollTarget: String? {

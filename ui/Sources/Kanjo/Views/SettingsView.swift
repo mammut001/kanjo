@@ -25,7 +25,7 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-        ScrollView {
+        OptionalScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 8) {
                     BackButton(title: L10n.tr("common.done"), action: onBack)

@@ -57,7 +57,7 @@ struct OverviewView: View {
         let f = ctx.filtered()
         let lists = arrange(f, isAll: ctx.isAll)
         ScrollViewReader { proxy in
-            ScrollView {
+            OptionalScrollView {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     VStack(alignment: .leading, spacing: 14) {
                         hero(ctx, f, visible: lists.visible, hiddenCount: lists.hidden.count)

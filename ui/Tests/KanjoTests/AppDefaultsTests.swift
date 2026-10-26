@@ -29,6 +29,17 @@ final class AppDefaultsTests: XCTestCase {
         XCTAssertEqual(AppDefaults.suiteName(arguments: argsWithOtherFlags, environment: [:]), "kanjo-preview")
     }
 
+    func testSnapshotDefaultsToKanjoPreview() {
+        let args = ["--snapshot", "out.png"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: args, environment: [:]), "kanjo-preview")
+
+        let argsEqual = ["--snapshot=out.png"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: argsEqual, environment: [:]), "kanjo-preview")
+
+        let argsWithOtherFlags = ["--snapshot", "out.png", "--route", "overview", "--snapshot-scale", "2"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: argsWithOtherFlags, environment: [:]), "kanjo-preview")
+    }
+
     func testDefaultsSuiteOverridesWindow() {
         let args = ["--window", "--defaults-suite", "explicit-preview"]
         XCTAssertEqual(AppDefaults.suiteName(arguments: args, environment: [:]), "explicit-preview")
@@ -39,6 +50,18 @@ final class AppDefaultsTests: XCTestCase {
         let argsWindowWithEnv = ["--window"]
         let env = ["KANJO_DEFAULTS_SUITE": "env-suite"]
         XCTAssertEqual(AppDefaults.suiteName(arguments: argsWindowWithEnv, environment: env), "env-suite")
+    }
+
+    func testDefaultsSuiteOverridesSnapshot() {
+        let args = ["--snapshot", "out.png", "--defaults-suite", "explicit-preview"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: args, environment: [:]), "explicit-preview")
+
+        let argsReversed = ["--defaults-suite", "explicit-preview", "--snapshot", "out.png"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: argsReversed, environment: [:]), "explicit-preview")
+
+        let argsSnapshotWithEnv = ["--snapshot", "out.png"]
+        let env = ["KANJO_DEFAULTS_SUITE": "env-suite"]
+        XCTAssertEqual(AppDefaults.suiteName(arguments: argsSnapshotWithEnv, environment: env), "env-suite")
     }
 
     func testReturnsNilWhenAbsent() {

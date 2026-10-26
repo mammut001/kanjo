@@ -2,13 +2,14 @@ import Foundation
 
 /// 应用设置存储（UserDefaults / @AppStorage 统一访问入口）。
 ///
-/// 避免开发调试 / 截图窗口（`--window`）直接读写用户的真实偏好设置（UserDefaults.standard），
-/// 支持通过命令行参数 `--defaults-suite <name>`、环境变量 `KANJO_DEFAULTS_SUITE` 或 `--window` 切换到独立的 settings suite。
+/// 避免开发调试 / 截图窗口（`--window`、`--snapshot`）直接读写用户的真实偏好设置（UserDefaults.standard），
+/// 支持通过命令行参数 `--defaults-suite <name>`、环境变量 `KANJO_DEFAULTS_SUITE` 或 `--window` / `--snapshot` 切换到独立的 settings suite。
 public enum AppDefaults {
     public static let previewSuiteName = "kanjo-preview"
     public static let suiteArgument = "--defaults-suite"
     public static let suiteEnvironmentKey = "KANJO_DEFAULTS_SUITE"
     public static let windowArgument = "--window"
+    public static let snapshotArgument = "--snapshot"
 
     /// 单例存储，根据进程启动参数与环境变量自动选择使用隔离 suite 还是 UserDefaults.standard。
     public static let store: UserDefaults = resolveStore()
@@ -16,7 +17,7 @@ public enum AppDefaults {
     /// 解析当前应使用的 UserDefaults suite 名称：
     /// 1. `--defaults-suite <name>`（或 `--defaults-suite=<name>`）命令行参数
     /// 2. `KANJO_DEFAULTS_SUITE` 环境变量
-    /// 3. `--window` 启动参数 -> 自动默认使用 `"kanjo-preview"`
+    /// 3. `--window` 或 `--snapshot` 启动参数 -> 自动默认使用 `"kanjo-preview"`
     /// 4. 否则返回 `nil`（表示使用 `UserDefaults.standard`）
     public static func suiteName(
         arguments: [String] = CommandLine.arguments,
@@ -41,7 +42,9 @@ public enum AppDefaults {
         if let env = environment[suiteEnvironmentKey]?.trimmingCharacters(in: .whitespaces), !env.isEmpty {
             return env
         }
-        if arguments.contains(windowArgument) {
+        if arguments.contains(windowArgument)
+            || arguments.contains(snapshotArgument)
+            || arguments.contains(where: { $0.hasPrefix("\(snapshotArgument)=") }) {
             return previewSuiteName
         }
         return nil

@@ -24,9 +24,19 @@ swift run Kanjo --window --route project:0    # open straight on a page (for scr
 swift run Kanjo --window --route project:0:locations   # project page scrolled to the bottom, Locations expanded
 swift run Kanjo --window --route disk --disk-data fixtures/disk-sample.json
 swift run Kanjo --window --route disk:expanded --disk-data fixtures/disk-sample.json
+swift run Kanjo --snapshot /path/to/out.png   # headless offscreen snapshot; works while screen is locked
+swift run Kanjo --snapshot /path/to/out.png --route settings:subscriptions:codex:edit
+swift run Kanjo --snapshot /path/to/out.png --snapshot-scale 2 --snapshot-appearance dark
 swift run Kanjo --defaults-suite kanjo-test   # isolate settings into a custom UserDefaults suite
 KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 ```
+
+`--snapshot <out.png> [--route <route>] [--snapshot-scale 2] [--snapshot-appearance light|dark]`: renders `MenuPanelView` completely offscreen with `ImageRenderer`, writes the PNG, prints the output path, and exits `0` (or exits non-zero on failure/timeout). No `NSWindow`, Dock icon, or menu bar extra is displayed, allowing screenshots to run in automated pipelines and while the screen is locked.
+- Snapshot mode implies isolation: it defaults to the `"kanjo-preview"` defaults suite (unless overridden by `--defaults-suite` or `KANJO_DEFAULTS_SUITE`), and `-key value` launch overrides continue to apply via `NSArgumentDomain`.
+- Data loading waits for the report store (and disk store if the route needs it) to finish loading with a timeout of ~20 seconds.
+- `--snapshot-scale <number>` sets the render scale (defaults to `2`).
+- `--snapshot-appearance light|dark` forces light or dark appearance.
+- **Scrolled routes**: `ImageRenderer` does not render `ScrollView` offsets, so for snapshot mode scrolled routes (routes with a scroll target, such as `overview-bottom`, `settings-bottom`, `settings:subscriptions:<agent>`, `settings:subscriptions:<agent>:edit`, `project:<index>:bottom`, `project:<index>:locations`, and `disk:expanded`) render the panel content unscrolled but **TALL** (full content height, not clipped to the 620 pt panel height).
 
 `--defaults-suite <name>` (or env `KANJO_DEFAULTS_SUITE`): routes all settings reads and writes to `UserDefaults(suiteName: name)` instead of `UserDefaults.standard`.
 `--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
