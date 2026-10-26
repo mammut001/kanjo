@@ -14,7 +14,6 @@ import json
 import os
 import tempfile
 import time
-from dataclasses import asdict
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .sources.base import Message, ParseError, Session
@@ -50,16 +49,47 @@ def _signature(path: str) -> Optional[list]:
 
 
 def _dump_session(s: Session) -> dict:
-    d = asdict(s)
-    d["messages"] = [[getattr(m, f) for f in _MSG_FIELDS] for m in s.messages]
-    return d
+    return {
+        "id": s.id,
+        "agent": s.agent,
+        "file": s.file,
+        "started": s.started,
+        "ended": s.ended,
+        "origin_ts": s.origin_ts,
+        "cwd": s.cwd,
+        "branch": s.branch,
+        "messages": [
+            [
+                m.ts,
+                m.model,
+                m.input,
+                m.output,
+                m.cache_read,
+                m.cache_write,
+                m.cache_write_1h,
+                m.thinking,
+                m.cwd,
+                m.branch,
+                m.key,
+            ]
+            for m in s.messages
+        ],
+        "tool_paths": s.tool_paths,
+        "subagent_of": s.subagent_of,
+        "title": s.title,
+        "cwd_counts": s.cwd_counts,
+        "remote_hints": s.remote_hints,
+    }
 
 
 def _load_session(d: dict) -> Session:
     d = dict(d)
     msgs = d.pop("messages", [])
     s = Session(**d)
-    s.messages = [Message(**dict(zip(_MSG_FIELDS, row))) for row in msgs]
+    s.messages = [
+        Message(*row) if len(row) == 11 else Message(**dict(zip(_MSG_FIELDS, row)))
+        for row in msgs
+    ]
     return s
 
 

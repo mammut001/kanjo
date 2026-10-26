@@ -55,12 +55,12 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                         LEFT JOIN session_peers p ON s.session_id = p.session_id
                         ORDER BY s.created_at
                     """)
-                    for sid, parent in cur.fetchall():
+                    for sid, parent in cur:
                         found.append((f"{db}::{sid}", parent or None))
                 except sqlite3.Error:
                     # Fallback if session_peers does not exist
                     cur.execute("SELECT session_id FROM sessions ORDER BY created_at")
-                    for (sid,) in cur.fetchall():
+                    for (sid,) in cur:
                         found.append((f"{db}::{sid}", None))
         except (ParseError, sqlite3.Error):
             continue
@@ -135,12 +135,11 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 """,
                 (sid,),
             )
-            usage_rows = cur.fetchall()
         except sqlite3.Error as exc:
             raise ParseError("failed to query token_usage for session %s: %s" % (sid, exc))
 
         seen_turn_ids: Set[str] = set()
-        for row in usage_rows:
+        for row in cur:
             ts = (row["ts"] / 1000.0) if row["ts"] else None
             model = row["model"] or "unknown"
             inp = int(row["input_tokens"] or 0)
@@ -175,10 +174,10 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         # Query tool file changes for attribution
         try:
             cur.execute(
-                "SELECT workspace_dir, paths_json FROM session_turn_file_change_journal WHERE session_id = ? ORDER BY created_at",
+                "SELECT workspace_dir, paths_json FROM session_turn_file_change_journal WHERE session_id = ? AND paths_json IS NOT NULL ORDER BY created_at",
                 (sid,),
             )
-            for jrow in cur.fetchall():
+            for jrow in cur:
                 pj = jrow["paths_json"]
                 jws = jrow["workspace_dir"] or cwd
                 if not pj:
