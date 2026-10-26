@@ -202,6 +202,14 @@ public struct ModelCost: Codable, Equatable, Identifiable {
     public var tokens: Tokens
     public var estimated: Bool
     public var id: String { agent + "/" + model }
+
+    public init(model: String, agent: String, cost: Double, tokens: Tokens, estimated: Bool = false) {
+        self.model = model
+        self.agent = agent
+        self.cost = cost
+        self.tokens = tokens
+        self.estimated = estimated
+    }
 }
 
 public struct DayCost: Codable, Equatable, Identifiable {

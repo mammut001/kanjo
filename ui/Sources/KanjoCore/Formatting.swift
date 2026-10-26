@@ -197,12 +197,31 @@ public enum Fmt {
 
 /// 菜单栏文本生成器：纯逻辑，方便测试。
 public enum MenuBarText {
-    /// 菜单栏文本：金额优先，范围作为后缀以中点连接（如 `$3,057 · 30d`）；.all 时无后缀。
+    /// 菜单栏文本（金额）：金额优先，固定窗口显示后缀（如 `$3,057 · 30d`）；其他范围无后缀。
     public static func make(cost: Double, currency: String = "USD", range: TimeRange) -> String {
         let amount = Fmt.menuBarMoney(cost, currency: currency)
-        guard let suffix = range.menuBarPrefix, !suffix.isEmpty else {
+        guard let suffix = range.menuBarSuffix, !suffix.isEmpty else {
             return amount
         }
         return "\(amount) · \(suffix)"
+    }
+
+    /// 菜单栏文本（Token）：Token 优先，固定窗口显示后缀（如 `23.5B · 30d`）；其他范围无后缀。
+    public static func make(tokens: Int, range: TimeRange) -> String {
+        let formatted = Fmt.tokens(tokens)
+        guard let suffix = range.menuBarSuffix, !suffix.isEmpty else {
+            return formatted
+        }
+        return "\(formatted) · \(suffix)"
+    }
+
+    /// 统一入口，支持按模式格式化。
+    public static func make(mode: MenuBarMode, cost: Double, tokens: Int, currency: String = "USD", range: TimeRange) -> String {
+        switch mode {
+        case .cost:
+            return make(cost: cost, currency: currency, range: range)
+        case .tokens:
+            return make(tokens: tokens, range: range)
+        }
     }
 }

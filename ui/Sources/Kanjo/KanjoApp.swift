@@ -72,15 +72,25 @@ struct MenuBarLabel: View {
     @ObservedObject var store: ReportStore
     let showAmount: Bool
     @AppStorage(SettingsKeys.timeRange) private var rangeRaw = TimeRange.all.rawValue
+    @AppStorage(SettingsKeys.menuBarMode) private var menuBarMode = MenuBarMode.cost.rawValue
+
+    private var mode: MenuBarMode {
+        MenuBarMode(rawValue: menuBarMode) ?? .cost
+    }
 
     var body: some View {
         if store.report == nil && store.error != nil {
             Image(systemName: "exclamationmark.triangle")
-            if showAmount { Text("$—").monospacedDigit() }
+            if showAmount { Text(mode == .tokens ? "—" : "$—").monospacedDigit() }
         } else if showAmount, let r = store.report {
-            Text(amount(r)).monospacedDigit()
+            if mode == .tokens {
+                Image(systemName: "circle.hexagongrid")
+                Text(tokensText(r)).monospacedDigit()
+            } else {
+                Text(amount(r)).monospacedDigit()
+            }
         } else {
-            Image(systemName: "dollarsign.circle")
+            Image(systemName: mode == .tokens ? "circle.hexagongrid" : "dollarsign.circle")
         }
     }
 
@@ -90,5 +100,12 @@ struct MenuBarLabel: View {
         let ctx = RangeContext(report: r, raw: rangeRaw)
         let cost = ctx.isAll ? r.totals.cost : ctx.filtered().cost
         return MenuBarText.make(cost: cost, currency: r.currency, range: ctx.range)
+    }
+
+    /// 当前范围过滤后的总 token 数（和总览 hero 同一个数）；All 下就是报告总 token 数。
+    private func tokensText(_ r: UsageReport) -> String {
+        let ctx = RangeContext(report: r, raw: rangeRaw)
+        let tokens = ctx.isAll ? r.totals.tokens.total : ctx.filtered().tokens
+        return MenuBarText.make(tokens: tokens, range: ctx.range)
     }
 }

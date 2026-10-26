@@ -21,16 +21,19 @@ public enum TimeRange: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 菜单栏金额前的极短缩写；All 为 nil（不加前缀）。
-    public var menuBarPrefix: String? {
+    /// 菜单栏范围后缀：仅固定时间窗口（7d / 30d）显示本地化短标签，其他范围（All、Last week、Since reset、Billing cycle）无后缀。
+    public var menuBarSuffix: String? {
         switch self {
-        case .all: return nil
-        case .days7: return "7d"
-        case .days30: return "30d"
-        case .lastWeek: return "wk"
-        case .sinceReset: return "rst"
-        case .billingCycle: return "cyc"
+        case .days7, .days30:
+            return shortLabel
+        case .all, .lastWeek, .sinceReset, .billingCycle:
+            return nil
         }
+    }
+
+    /// 兼容旧调用。
+    public var menuBarPrefix: String? {
+        menuBarSuffix
     }
 
     public var longLabel: String {
