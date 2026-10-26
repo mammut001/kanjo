@@ -1,10 +1,11 @@
 #!/bin/bash
 # 构建内置 CLI 的通用 Kanjo.app、zip 和 DMG，产物留在 build/。
-# 只用 SwiftPM + 系统自带工具（iconutil / sips / codesign / ditto），不需要 Xcode 工程。
+# 只用 SwiftPM + 系统自带工具（iconutil / sips / codesign / ditto / notarytool / stapler），不需要 Xcode 工程。
 #
-# 用法：./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64]
+# 用法：./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]]
 #   version  默认读仓库顶层的 VERSION 文件
 #   --icon   重新生成 Resources/Kanjo.png 和 Kanjo.icns（缺失时也会自动生成）
+#   --notarize [profile]  公证产物（默认 keychain profile 为 'kanjo-notary'，亦可设环境变量 KANJO_NOTARY_PROFILE）
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -12,6 +13,7 @@ VERSION=""
 REGEN_ICON=0
 ARCHS=(arm64 x86_64)
 MAKE_DMG=1
+NOTARY_PROFILE="${KANJO_NOTARY_PROFILE:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --icon) REGEN_ICON=1 ;;
@@ -19,7 +21,18 @@ while [[ $# -gt 0 ]]; do
         --arch)
             shift
             case "${1:-}" in arm64|x86_64) ARCHS=("$1") ;; *) echo "expected arm64 or x86_64" >&2; exit 1 ;; esac ;;
-        -h|--help) echo "Usage: ./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64]"; exit 0 ;;
+        --notarize)
+            if [[ $# -gt 1 && ! "$2" =~ ^- && ! "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                shift
+                NOTARY_PROFILE="$1"
+            else
+                NOTARY_PROFILE="${NOTARY_PROFILE:-kanjo-notary}"
+            fi
+            ;;
+        --notarize=*)
+            NOTARY_PROFILE="${1#*=}"
+            ;;
+        -h|--help) echo "Usage: ./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]]"; exit 0 ;;
         -*) echo "unknown option: $1" >&2; exit 1 ;;
         *) VERSION="$1" ;;
     esac
@@ -39,6 +52,7 @@ BUNDLE_ID="com.lanshuagent.kanjo"
 BUILD_DIR="build"
 APP="$BUILD_DIR/$APP_NAME.app"
 ZIP="$BUILD_DIR/$APP_NAME-$VERSION-macos.zip"
+DMG="$BUILD_DIR/$APP_NAME-$VERSION-macos.dmg"
 ICON_PNG="Resources/$APP_NAME.png"
 ICNS="Resources/$APP_NAME.icns"
 
@@ -144,22 +158,80 @@ codesign "${SIGN_FLAGS[@]}" "$APP/Contents/MacOS/$APP_NAME"
 codesign "${SIGN_FLAGS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
 
+create_dmg() {
+    rm -f "$DMG"
+    local stage
+    stage="$(mktemp -d "$BUILD_DIR/dmg.XXXXXX")"
+    trap 'rm -rf "$stage"' EXIT
+    ditto "$APP" "$stage/$APP_NAME.app"
+    ln -s /Applications "$stage/Applications"
+    hdiutil create -volname "Kanjo $VERSION" -srcfolder "$stage" -ov -format UDZO "$DMG"
+    if [[ "$IDENTITY" != - ]]; then
+        codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+        codesign --verify --strict "$DMG"
+    fi
+    rm -rf "$stage"
+    trap - EXIT
+}
+
+notarize_artifact() {
+    local target="$1"
+    echo "==> notarizing $target with profile '$NOTARY_PROFILE'"
+    local tmp_log
+    tmp_log="$(mktemp "$BUILD_DIR/notary.XXXXXX")"
+    trap 'rm -f "$tmp_log"' EXIT
+    local status=0
+    set +e
+    xcrun notarytool submit "$target" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | tee "$tmp_log"
+    status="${PIPESTATUS[0]}"
+    set -e
+    if [[ $status -ne 0 ]]; then
+        local sub_id
+        sub_id="$(grep -oE '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' "$tmp_log" | head -n 1 || true)"
+        rm -f "$tmp_log"
+        trap - EXIT
+        echo "==> notarization failed for $target" >&2
+        if [[ -n "$sub_id" ]]; then
+            echo "notarytool log command: xcrun notarytool log $sub_id --keychain-profile $NOTARY_PROFILE" >&2
+        else
+            echo "notarytool log command: xcrun notarytool log <submission-id> --keychain-profile $NOTARY_PROFILE" >&2
+        fi
+        exit "$status"
+    fi
+    rm -f "$tmp_log"
+    trap - EXIT
+}
+
 rm -f "$ZIP"
 ditto -c -k --keepParent --norsrc --noextattr "$APP" "$ZIP"
 if [[ "$MAKE_DMG" == 1 ]]; then
-    DMG="$BUILD_DIR/$APP_NAME-$VERSION-macos.dmg"
-    STAGE="$(mktemp -d "$BUILD_DIR/dmg.XXXXXX")"
-    trap 'rm -rf "$STAGE"' EXIT
-    ditto "$APP" "$STAGE/$APP_NAME.app"
-    ln -s /Applications "$STAGE/Applications"
-    hdiutil create -volname "Kanjo $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
-    codesign "${SIGN_FLAGS[@]}" "$DMG"
-    codesign --verify --strict "$DMG"
-    rm -rf "$STAGE"
-    trap - EXIT
+    create_dmg
 fi
+
+if [[ -n "$NOTARY_PROFILE" ]]; then
+    notarize_artifact "$ZIP"
+    echo "==> stapling $APP"
+    xcrun stapler staple "$APP"
+    echo "==> rebuilding $ZIP"
+    rm -f "$ZIP"
+    ditto -c -k --keepParent --norsrc --noextattr "$APP" "$ZIP"
+    if [[ "$MAKE_DMG" == 1 ]]; then
+        echo "==> rebuilding $DMG"
+        create_dmg
+        echo "==> notarizing $DMG"
+        notarize_artifact "$DMG"
+        echo "==> stapling $DMG"
+        xcrun stapler staple "$DMG"
+    fi
+else
+    echo "notarization skipped (set KANJO_NOTARY_PROFILE)"
+fi
+
 echo "Architectures: ${ARCHS[*]}"
 echo "Signing identity: $IDENTITY"
+if [[ -n "$NOTARY_PROFILE" ]]; then
+    echo "Notary profile: $NOTARY_PROFILE"
+fi
 echo "App: $(pwd)/$APP"
 echo "Zip: $(pwd)/$ZIP"
 ls -lh "$ZIP"
