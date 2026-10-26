@@ -201,9 +201,11 @@
 "overview.quota.five_hour" = "5 heures";
 "overview.quota.weekly" = "Hebdomadaire";
 "overview.quota.hours" = "%d heures";
-"overview.quota.used_resets" = "%@ : %@ utilisé · réinit. %@";
-"overview.quota.resets" = "%@ : réinit. %@";
-"overview.quota.none" = "Aucune donnée de quota";
+"overview.quota.resets_in" = "Réinit. dans %@ · %@";
+"overview.quota.ended" = "Fenêtre terminée";
+"overview.quota.rel_m" = "%d min";
+"overview.quota.rel_hm" = "%d h %d min";
+"overview.quota.rel_dh" = "%d j %d h";
 "overview.sub_help_unknown" = "%@ : prix mensuel inconnu. %@ est le coût équivalent API ce cycle. Ce n'est pas un coût supplémentaire.";
 "overview.badge.pinned" = "Épinglé";
 "overview.badge.path_missing" = "chemin manquant";

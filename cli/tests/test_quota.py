@@ -112,7 +112,7 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(c["weekly_resets_at"], "2026-10-27T14:00:00Z")
         self.assertIsNone(c["weekly_used_percent"])
         self.assertIsNone(c["five_hour_resets_at"])
-        self.assertIsNone(c["five_hour_window_hours"])
+        self.assertEqual(c["five_hour_window_hours"], 5)  # ended, not absent
         self.assertIsNone(c["five_hour_used_percent"])
         # codex: real percents, clamped; malformed -> null
         data = codex_cache(NOW - HOUR, ts("2026-10-31T04:53:24Z"), ts("2026-10-24T17:05:49Z"))

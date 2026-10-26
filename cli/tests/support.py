@@ -162,7 +162,8 @@ def check_quota_windows(tc, qw):
         tc.assertGreater(w["weekly_window_hours"], 0, where)
         tc.assertTrue(w["five_hour_resets_at"] is None or ISO_UTC.match(w["five_hour_resets_at"]), where)
         tc.assertIn(w["source"], {"tokei", "manual"}, where)
-        tc.assertEqual(w["five_hour_window_hours"] is None, w["five_hour_resets_at"] is None, where)
+        if w["five_hour_resets_at"] is not None:
+            tc.assertIsInstance(w["five_hour_window_hours"], int, where)
         if w["five_hour_resets_at"] is None:
             tc.assertIsNone(w["five_hour_used_percent"], where)
         for key in ("weekly_used_percent", "five_hour_used_percent"):

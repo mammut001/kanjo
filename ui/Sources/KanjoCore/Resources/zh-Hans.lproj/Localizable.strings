@@ -201,9 +201,11 @@
 "overview.quota.five_hour" = "5 小时";
 "overview.quota.weekly" = "每周";
 "overview.quota.hours" = "%d 小时";
-"overview.quota.used_resets" = "%@：已用 %@ · %@ 重置";
-"overview.quota.resets" = "%@：%@ 重置";
-"overview.quota.none" = "无额度数据";
+"overview.quota.resets_in" = "%@后重置 · %@";
+"overview.quota.ended" = "窗口已结束";
+"overview.quota.rel_m" = "%d 分钟";
+"overview.quota.rel_hm" = "%d 小时 %d 分";
+"overview.quota.rel_dh" = "%d 天 %d 小时";
 "overview.sub_help_unknown" = "%@：月费未知。%@ 为本账期 API 等价用量。并非额外收费。";
 "overview.badge.pinned" = "已置顶";
 "overview.badge.path_missing" = "路径缺失";

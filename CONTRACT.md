@@ -39,7 +39,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "weekly_window_hours": 168,
       "weekly_used_percent": 57.0,                   // 本周窗口已用百分比 0–100；缓存没有、manual 来源或缓存里的窗口已过时为 null
       "five_hour_resets_at": "2026-10-24T09:30:00Z", // 可为 null
-      "five_hour_window_hours": 5,                   // five_hour_resets_at 为 null 时为 null
+      "five_hour_window_hours": 5,                   // agent 没有 5 小时窗口时为 null；窗口已结束（five_hour_resets_at 为 null）时仍保留，UI 据此显示「窗口已结束」
       "five_hour_used_percent": 13.0,                // 5 小时窗口已用百分比；five_hour_resets_at 为 null 时为 null
       "source": "tokei"                              // 数据来源：tokei（读 ~/.tokei 缓存：Claude, Codex, Grok）或 manual（配置 weekly_reset / weekly_resets_at）
     },
@@ -239,7 +239,7 @@ UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`3
 2. 项目列表，按 cost 降序，每行：name、cost、sessions、last_active，以及能看出用了哪些 agent 的标记（色点、色块或小条形均可）。
 3. 项目详情：by_agent、by_model、by_day 时间线、by_branch、sessions_detail 表。
 4. 三个桶各一行，显示数量和金额，即使为 0。
-4.1 **Subscription value 卡**（`subscriptions` 非空时）：每个有订阅的 agent 一行：plan_label、月费、本账期 API 等价用量、倍数（用量 ÷ 月费，月费为 null 时不显示倍数）、`extra_usage_enabled` 为 true 时标「extra usage on」。悬停一行时，提示里附上该 agent 的 `quota_windows`：5 小时窗口和周窗口各一行（已用百分比，如有；重置时间），没有该 agent 的窗口时显示「No quota data」。卡片固定一句说明：
+4.1 **Subscription value 卡**（`subscriptions` 非空时）：每个有订阅的 agent 一行：plan_label、月费、本账期 API 等价用量、倍数（用量 ÷ 月费，月费为 null 时不显示倍数）、`extra_usage_enabled` 为 true 时标「extra usage on」。悬停一行时浮出额度卡（该 agent 有 `quota_windows` 时）：5 小时窗口和周窗口各一行，进度条（≥ 80% 警示色，≥ 95% 红色）、已用百分比、「X 后重置 · 绝对时间」；窗口已结束时显示「—」和「Window ended」。没有额度数据的 agent 不出卡片。卡片固定一句说明：
    「You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.」不可隐藏。
    项目详情页：对每个有订阅的 agent 显示一行「This repo: N% of your <plan_label> usage this cycle」。
 5. 对账行：`totals.cost` 与各项之和，差异超过 0.01 时高亮。

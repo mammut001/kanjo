@@ -30,21 +30,49 @@ final class SubscriptionTests: KanjoTestCase {
         lines.map { $0.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ") }
     }
 
-    func testQuotaLines() {
+    func testQuotaRows() {
         let utc = TimeZone(secondsFromGMT: 0)!
         let now = ReportDates.parseTimestamp("2026-10-24T12:00:00Z")!
         let codex = QuotaWindow(weeklyResetsAt: "2026-10-31T04:53:24Z", weeklyUsedPercent: 24.4,
-                                fiveHourResetsAt: "2026-10-24T17:05:49Z", fiveHourWindowHours: 5, fiveHourUsedPercent: 8)
-        XCTAssertEqual(plain(SubscriptionValue.quotaLines(codex, timezone: utc, now: now, language: "en_US")),
-                       ["5-hour: 8% used · resets 5:05 PM", "Weekly: 24% used · resets Sat, Oct 31 at 4:53 AM"])
-        // 5 小时窗口已过 → 只剩周窗口；没有百分比 → 只给重置时间
-        let past = QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", fiveHourResetsAt: "2026-10-24T11:00:00Z")
-        XCTAssertEqual(plain(SubscriptionValue.quotaLines(past, timezone: utc, now: now, language: "en_US")),
-                       ["Weekly: resets Tue, Oct 27 at 5:00 AM"])
-        let day = QuotaWindow(weeklyResetsAt: "2026-10-25T05:00:00Z", weeklyWindowHours: 24, weeklyUsedPercent: 42)
-        XCTAssertEqual(plain(SubscriptionValue.quotaLines(day, timezone: utc, now: now, language: "en_US")),
-                       ["24-hour: 42% used · resets Sun, Oct 25 at 5:00 AM"])
-        XCTAssertEqual(SubscriptionValue.quotaLines(nil, timezone: utc), ["No quota data"])
+                                fiveHourResetsAt: "2026-10-24T17:05:49Z", fiveHourWindowHours: 5, fiveHourUsedPercent: 108)
+        let rows = SubscriptionValue.quotaRows(codex, timezone: utc, now: now, language: "en_US")
+        XCTAssertEqual(rows.map(\.title), ["5-hour", "Weekly"])
+        XCTAssertEqual(rows.map(\.percent), [100, 24.4])
+        XCTAssertEqual(plain(rows.map(\.detail)), ["Resets in 5h 6m · 5:05 PM", "Resets in 6d 16h · Sat 4:53 AM"])
+        // 5 小时窗口已结束 → 「—」+ Window ended；没有 5 小时窗口（Grok）→ 只有周一行
+        let ended = QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", weeklyUsedPercent: 40,
+                                fiveHourResetsAt: nil, fiveHourWindowHours: 5)
+        let e = SubscriptionValue.quotaRows(ended, timezone: utc, now: now, language: "en_US")
+        XCTAssertEqual(e.first?.percent, nil)
+        XCTAssertEqual(e.first?.detail, "Window ended")
+        let grok = QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", weeklyUsedPercent: 42)
+        XCTAssertEqual(SubscriptionValue.quotaRows(grok, timezone: utc, now: now).map(\.id), ["weekly"])
+        // 周重置已过（导出旧了）→ 也是已结束
+        let stale = QuotaWindow(weeklyResetsAt: "2026-10-24T11:00:00Z", weeklyUsedPercent: 90)
+        XCTAssertEqual(SubscriptionValue.quotaRows(stale, timezone: utc, now: now).first?.percent, nil)
+        XCTAssertEqual(SubscriptionValue.quotaRows(nil, timezone: utc), [])
+    }
+
+    func testRelativeResetAndLevels() {
+        let now = ReportDates.parseTimestamp("2026-10-24T12:00:00Z")!
+        XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(10)), "1 min")
+        XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(59 * 60)), "59 min")
+        XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(3600)), "1h 0m")
+        XCTAssertEqual(SubscriptionValue.relative(from: now, to: now.addingTimeInterval(86400 + 2 * 3600)), "1d 2h")
+        XCTAssertEqual(SubscriptionValue.level(nil), .normal)
+        XCTAssertEqual(SubscriptionValue.level(79.9), .normal)
+        XCTAssertEqual(SubscriptionValue.level(80), .warning)
+        XCTAssertEqual(SubscriptionValue.level(94.9), .warning)
+        XCTAssertEqual(SubscriptionValue.level(95), .critical)
+    }
+
+    func testResetTextZhHans() {
+        AppDefaults.store.set(AppLanguage.zhHans.rawValue, forKey: SettingsKeys.appLanguage)
+        let tz = TimeZone(identifier: "Asia/Shanghai")!
+        let now = ReportDates.parseTimestamp("2026-10-24T12:00:00Z")!
+        let reset = ReportDates.parseTimestamp("2026-10-27T02:00:00Z")!
+        XCTAssertEqual(plain([SubscriptionValue.resetText(reset, timezone: tz, now: now, language: "zh-Hans")]),
+                       ["2 天 14 小时后重置 · 周二 10:00"])
     }
 
     func testRenewalTodayTomorrowAndExpired() {

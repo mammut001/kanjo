@@ -20,7 +20,8 @@ just leaves that agent out; this module never raises.
 Reset points that are already past are moved forward: the weekly reset by whole
 windows (the cadence is fixed), the 5-hour reset becomes null (the next 5-hour
 window only starts with the next use). The used percent of a window that already ended
-is null too: the cache only knows the old window.
+is null too: the cache only knows the old window. ``five_hour_window_hours`` stays set
+for an ended 5-hour window (null only when the agent has none), so the UI can say so.
 """
 
 from __future__ import annotations
@@ -141,14 +142,13 @@ def window(weekly: float, hours: int, five: Optional[float], source: str, now: f
     if five is not None and five <= now:
         five = None
     if five is None:
-        five_pct = None
-        five_hours = None
+        five_pct = None  # five_hours stays: the agent has a 5-hour window, it just ended
     return {
         "weekly_resets_at": iso_utc(weekly),
         "weekly_window_hours": int(hours),
         "weekly_used_percent": _pct(weekly_pct),
         "five_hour_resets_at": iso_utc(five),
-        "five_hour_window_hours": None if five is None else (int(round(five_hours or 5)) or 5),
+        "five_hour_window_hours": int(round(five_hours)) if five_hours else None,
         "five_hour_used_percent": _pct(five_pct),
         "source": source,
     }
@@ -164,7 +164,7 @@ def _claude(directory: str, now: float) -> Optional[dict]:
     if weekly is None or not _fresh(_num(snap.get("updated")), path, now):
         return None
     return window(weekly, DEFAULT_WEEKLY_HOURS, _num(snap.get("q5Reset")), "tokei", now,
-                  snap.get("q7"), snap.get("q5"))
+                  snap.get("q7"), snap.get("q5"), 5 if _num(snap.get("q5Reset")) else None)
 
 
 def _codex(directory: str, now: float) -> Optional[dict]:
@@ -182,7 +182,7 @@ def _codex(directory: str, now: float) -> Optional[dict]:
     hours = int(round(minutes / 60)) if minutes else DEFAULT_WEEKLY_HOURS
     return window(weekly, hours or DEFAULT_WEEKLY_HOURS, _num(primary.get("resets_at")), "tokei", now,
                   secondary.get("used_percent"), primary.get("used_percent"),
-                  (_num(primary.get("window_minutes")) or 300) / 60)
+                  (_num(primary.get("window_minutes")) or 300) / 60 if _num(primary.get("resets_at")) else None)
 
 
 def _grok(directory: str, now: float) -> Optional[dict]:
@@ -231,5 +231,6 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         else:
             continue
         hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
-        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now)
+        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now,
+                             five_hours=5 if spec.get("five_hour_resets_at") is not None else None)
     return {agent: out[agent] for agent in sorted(out)}
