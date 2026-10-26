@@ -29,7 +29,7 @@ KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 ```
 
 `--defaults-suite <name>` (or env `KANJO_DEFAULTS_SUITE`): routes all settings reads and writes to `UserDefaults(suiteName: name)` instead of `UserDefaults.standard`.
-`--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences or leaking scratch paths. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
+`--window` preview launches are automatically isolated to the `"kanjo-preview"` suite unless `--defaults-suite` is specified, preventing preview sessions from modifying real user preferences. Launch-argument overrides (`-key value`, e.g. `-hiddenProjects ...` or `-refreshMinutes 10`) continue to apply on top of the isolated suite.
 
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
 `project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),
@@ -41,7 +41,7 @@ KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 ## Overview: mosaic, heat strips, hide / pin
 
 The overview reads top to bottom as text → graphic → list: the total (with one summary line —
-date range · projects · sessions · tokens — and the cost note), the mosaic, then the project list.
+date range · projects · sessions · tokens — and the API-equivalent cost note in an ⓘ tooltip next to Total cost), the mosaic, then the project list.
 The panel is 360 pt wide; its background is Liquid Glass on macOS 26+ and `.regularMaterial` on 13–25.
 
 - **Colors** — one color per agent, light / dark (`Views/Components/AgentPalette.swift`): Claude clay
@@ -94,13 +94,14 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
   Session counts use `sessions_detail[].started`. Buckets have no daily data, so they are filtered by session start.
 - Outside All: the hero, summary line, mosaic, rows (amount, sessions, tokens, heat strip), buckets and
   "N hidden · $X" use filtered values; projects with no usage in the range are dropped, with
-  "N projects with no usage in this range" under the list; a caption under the summary explains the range;
-  the reconciliation line is shown only for All; the cost note always. On the project page the token type
+  "N projects with no usage in this range" under the list; captions under the summary explain Since reset and
+  Billing cycle ranges (fixed ranges omit redundant date captions); the reconciliation line is shown only for All;
+  the cost note always in an ⓘ tooltip. On the project page the token type
   breakdown is hidden (only the total is known per day), and By model / By branch keep all-time numbers with an "All time" tag.
 - The menu bar amount follows the range too: the filtered total with a tiny prefix — `7d $…`, `30d $…`,
   `wk $…` (Last week), `rst $…` (Since reset), `cyc $…` (Billing cycle) — and the plain report total for All.
 - Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
-  (`tokei` / `manual` / `none`); reset times can be set by hand in `~/.config/kanjo/attribution.toml`.
+  (`tokei` / `manual` / `none`); reset times can be set by hand in Settings or in `~/.config/kanjo/attribution.toml`.
 
 Screenshot tip: `-timeRange days7` (or `all`, `today`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
 Preferences can be preset for one launch without persisting them, through the
@@ -150,7 +151,7 @@ If `schema_version` is newer than 1, a warning appears and the app keeps renderi
 
 ```bash
 ./package.sh            # version from ../VERSION
-./package.sh 0.2.0      # explicit version
+./package.sh 0.3.0      # explicit version
 ./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
 ```
 
