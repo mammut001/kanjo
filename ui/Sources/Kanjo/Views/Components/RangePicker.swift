@@ -41,25 +41,16 @@ struct RangeContext {
         RangeEngine.filter(p, range: spec, fallbackAgent: Self.fallbackAgent(p))
     }
 
-    /// 范围说明（All 下为 nil）。
-    /// 例：`Today · Oct 24`；
-    /// `Last 7 days · Oct 18 – Oct 24`；
+    /// 范围说明（仅 Since reset / Billing cycle 有值；All / Today / 7d / 30d / Last week 为 nil）。
+    /// 例：
     /// `Since Claude reset Oct 20 10:00 · Codex reset Oct 21 08:00 · Antigravity: no reset info`；
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
         let cal = spec.calendar
-        let md = templateFormatter("MMMd", cal), mdt = templateFormatter("MMMdHHmm", cal)
+        let mdt = templateFormatter("MMMdHHmm", cal)
         switch range {
-        case .all:
+        case .all, .today, .days7, .days30, .lastWeek:
             return nil
-        case .today:
-            guard let s = spec.start else { return range.longLabel }
-            return "\(range.longLabel) · \(md.string(from: s))"
-        case .days7, .days30, .lastWeek:
-            guard let s = spec.start, let e = spec.end else { return range.longLabel }
-            // 区间是半开的：显示的最后一天是 end 前一刻所在的那天。
-            let last = e.addingTimeInterval(-1)
-            return "\(range.longLabel) · \(md.string(from: s)) – \(md.string(from: last))"
         case .sinceReset:
             let withReset = agentOrder.filter { spec.agentStarts[$0] != nil }
             let without = agentOrder.filter { spec.agentStarts[$0] == nil }

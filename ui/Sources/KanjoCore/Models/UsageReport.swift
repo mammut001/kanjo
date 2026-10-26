@@ -37,6 +37,16 @@ public struct UsageReport: Codable, Equatable {
 
     /// schema_version 高于本 UI 支持的版本：显示警告，继续渲染。
     public var isNewerSchema: Bool { schemaVersion > supportedSchemaVersion }
+
+    /// 格式化后的 cost_note 文本。若为空或纯空白返回 nil；若为默认英文字符串则返回本地化文案；否则返回原文。
+    public var costNoteDisplayText: String? {
+        let trimmed = costNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        if trimmed == "API-equivalent cost estimated from public API prices. Not actual subscription spend." {
+            return L10n.tr("common.cost_note_default")
+        }
+        return trimmed
+    }
 }
 
 public struct ReportConfig: Codable, Equatable {

@@ -13,7 +13,23 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertFalse(r.isNewerSchema)
         XCTAssertEqual(r.currency, "USD")
         XCTAssertFalse(r.costNote.isEmpty)
+        XCTAssertEqual(r.costNoteDisplayText, L10n.tr("common.cost_note_default"))
         XCTAssertTrue((6...8).contains(r.projects.count))
+    }
+
+    func testCostNoteDisplayText() throws {
+        var r = try loadFixture()
+        r.costNote = "API-equivalent cost estimated from public API prices. Not actual subscription spend."
+        XCTAssertEqual(r.costNoteDisplayText, L10n.tr("common.cost_note_default"))
+
+        r.costNote = "   Custom cost note   "
+        XCTAssertEqual(r.costNoteDisplayText, "Custom cost note")
+
+        r.costNote = ""
+        XCTAssertNil(r.costNoteDisplayText)
+
+        r.costNote = "   \n\t  "
+        XCTAssertNil(r.costNoteDisplayText)
     }
 
     func testTopLevelInvariantHolds() throws {

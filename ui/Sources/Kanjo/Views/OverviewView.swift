@@ -95,8 +95,8 @@ struct OverviewView: View {
     }
 
     // 唯一的 hero：总金额（All 下是报告总额，对账也按它；其他范围是范围内各项之和）。
-    // 「Total cost」右侧是范围分段控件。下面一行小字汇总日期范围和三个计数；非 All 时再加一行范围说明；
-    // 最后是 cost_note（任何范围都显示）。
+    // 「Total cost」（含 cost_note tooltip 和 info 图标）右侧是范围分段控件。
+    // 下面一行小字汇总日期范围和三个计数；Since reset / Billing cycle 时加一行范围说明。
     private func hero(_ ctx: RangeContext, _ f: FilteredReport, visible: [Project], hiddenCount: Int) -> some View {
         let t = report.totals
         let failed = report.buckets.parseFailed.sessions
@@ -118,12 +118,21 @@ struct OverviewView: View {
         }
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 8) {
-                Text(L10n.tr("overview.total_cost"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                HStack(spacing: 4) {
+                    Text(L10n.tr("overview.total_cost"))
+                    if let note = report.costNoteDisplayText {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .help(note)
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .layoutPriority(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .helpIfPresent(report.costNoteDisplayText)
                 Spacer(minLength: 4)
                 RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
                             cycleAvailable: ctx.cycleAvailable)
@@ -145,7 +154,6 @@ struct OverviewView: View {
             if let caption = ctx.caption {
                 RangeCaption(text: caption).padding(.top, 1)
             }
-            CostNote(text: report.costNote).padding(.top, 4)
         }
         .padding(.horizontal, Metrics.listInset)
     }

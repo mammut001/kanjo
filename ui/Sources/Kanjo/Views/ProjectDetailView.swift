@@ -144,7 +144,7 @@ struct ProjectDetailView: View {
         .onAppear { if devAnchor == Self.locationsOpenAnchor { showLocations = true } }
     }
 
-    // hero：项目名 + 范围控件 + 金额；日期、范围说明、cost_note、remote 是小字注脚。本地路径放在页面最底部的 Locations。
+    // hero：项目名 + 范围控件 + 金额（含 cost_note tooltip 和 info 图标）；日期、范围说明、remote 是小字注脚。本地路径放在页面最底部的 Locations。
     private func header(_ ctx: RangeContext, _ shown: Project) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -161,7 +161,16 @@ struct ProjectDetailView: View {
                         cycleAvailable: ctx.cycleAvailable)
                 .padding(.top, 4).padding(.bottom, 2)
             HStack(alignment: .bottom, spacing: 10) {
-                HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HeroAmount(value: Fmt.money(shown.cost, currency: cur), size: 30)
+                    if let note = report.costNoteDisplayText {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .help(note)
+                    }
+                }
+                .helpIfPresent(report.costNoteDisplayText)
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(L10n.tr("project.last_8_weeks")).font(.system(size: 9.5)).foregroundStyle(.secondary)
@@ -178,7 +187,6 @@ struct ProjectDetailView: View {
             if let caption = ctx.caption {
                 RangeCaption(text: caption).padding(.top, 1)
             }
-            CostNote(text: report.costNote).padding(.top, 2)
 
             Group {
                 if let r = project.remote {
@@ -456,7 +464,16 @@ struct BucketDetailView: View {
         DetailPage(backTitle: L10n.tr("disk.navigation.overview"), onBack: onBack) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(kind == .unattributed ? L10n.tr("overview.unattributed") : L10n.tr("overview.excluded")).font(.system(size: 15, weight: .semibold))
-                HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HeroAmount(value: Fmt.money(b.cost, currency: report.currency), size: 30)
+                    if let note = report.costNoteDisplayText {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .help(note)
+                    }
+                }
+                .helpIfPresent(report.costNoteDisplayText)
                 let usageStr = b.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(b.firstActive, b.lastActive)
                 let sessKey = b.sessions == 1 ? "project.subtitle.singular" : "project.subtitle.plural"
                 Text(L10n.tr(sessKey, b.sessions, usageStr))
@@ -464,7 +481,6 @@ struct BucketDetailView: View {
                 if let caption = ctx.caption {
                     RangeCaption(text: caption + L10n.tr("project.bucket.by_session_start")).padding(.top, 1)
                 }
-                CostNote(text: report.costNote).padding(.top, 2)
                 Text(AttributionInfo.explanation(kind == .unattributed ? "none" : "excluded",
                                                  threshold: report.config.dominantThreshold))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
