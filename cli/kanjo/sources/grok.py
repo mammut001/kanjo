@@ -30,6 +30,8 @@ def roots() -> List[str]:
             else:
                 paths.append(exp)
         return paths
+    if os.environ.get("KANJO_DATA_DIR"):
+        return []
     return [os.path.expanduser("~/.grok/sessions")]
 
 

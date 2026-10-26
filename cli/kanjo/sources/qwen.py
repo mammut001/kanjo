@@ -32,10 +32,7 @@ _USAGE_CACHE: Dict[Tuple[str, int, int], List[dict]] = {}
 
 
 def roots() -> List[str]:
-    explicit = os.environ.get("KANJO_QWEN_DIR")
-    if explicit:
-        return [os.path.expanduser(p) for p in explicit.split(os.pathsep) if p]
-    return [os.path.expanduser("~/.qwen")]
+    return env_dirs("KANJO_QWEN_DIR", ["~/.qwen"])
 
 
 def _find_usage_files(root: str) -> List[str]:

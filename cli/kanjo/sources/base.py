@@ -232,6 +232,8 @@ def env_dirs(var: str, defaults: List[str]) -> List[str]:
     value = os.environ.get(var)
     if value:
         return [os.path.expanduser(p) for p in value.split(os.pathsep) if p]
+    if os.environ.get("KANJO_DATA_DIR"):
+        return []
     return [os.path.expanduser(p) for p in defaults]
 
 

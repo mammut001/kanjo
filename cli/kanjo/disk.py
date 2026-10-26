@@ -83,14 +83,14 @@ def default_roots() -> dict:
         "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%d" % os.getuid())),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", ["~/.gemini/antigravity-cli/conversations"]),
-        "grok": os.path.expanduser(os.environ.get("KANJO_GROK_DIR") or "~/.grok"),
+        "grok": os.path.expanduser(os.environ["KANJO_GROK_DIR"]) if os.environ.get("KANJO_GROK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.grok")),
         "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
         "commandcode": os.path.expanduser(os.environ["KANJO_COMMANDCODE_DIR"]) if os.environ.get("KANJO_COMMANDCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.commandcode")),
         "claude_app": os.path.expanduser(
             os.environ.get("KANJO_CLAUDE_APP_CACHE") or "~/Library/Application Support/Claude"),
-        "minimax": os.path.expanduser(os.environ.get("KANJO_MINIMAX_DIR") or "~/.minimax"),
-        "opencode": os.path.expanduser(os.environ.get("KANJO_OPENCODE_DIR") or "~/.local/share/opencode"),
-        "copilot": os.path.expanduser(os.environ.get("KANJO_COPILOT_DIR") or "~/.copilot"),
+        "minimax": os.path.expanduser(os.environ["KANJO_MINIMAX_DIR"]) if os.environ.get("KANJO_MINIMAX_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.minimax")),
+        "opencode": os.path.expanduser(os.environ["KANJO_OPENCODE_DIR"]) if os.environ.get("KANJO_OPENCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/opencode")),
+        "copilot": os.path.expanduser(os.environ["KANJO_COPILOT_DIR"]) if os.environ.get("KANJO_COPILOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.copilot")),
     }
 
 
