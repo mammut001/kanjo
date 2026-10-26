@@ -272,7 +272,7 @@ public enum RangeEngine {
         case .sinceReset:
             var starts: [String: Date] = [:]
             for (agent, q) in quota ?? [:] {
-                if let s = windowStart(q, now: now) { starts[agent] = s }
+                if let s = windowStart(q, now: now, calendar: cal) { starts[agent] = s }
             }
             return RangeSpec(range: .sinceReset, calendar: cal, end: now, agentStarts: starts)
         case .billingCycle:
@@ -299,11 +299,32 @@ public enum RangeEngine {
 
     /// 当前周窗口的起点：weekly_resets_at - window。起点在未来就再往前推整窗口；
     /// weekly_resets_at 已经过去（缓存过期）就往后推到最近一个 ≤ now 的起点。结果满足 start ≤ now < start + window。
-    public static func windowStart(_ q: QuotaWindow, now: Date) -> Date? {
+    public static func windowStart(_ q: QuotaWindow, now: Date, calendar: Calendar? = nil) -> Date? {
         guard q.weeklyWindowHours > 0, let reset = ReportDates.parseTimestamp(q.weeklyResetsAt) else { return nil }
-        let w = TimeInterval(q.weeklyWindowHours) * 3600
-        let k = (now.timeIntervalSince(reset) / w).rounded(.down)
-        return reset.addingTimeInterval(k * w)
+        if q.weeklyWindowHours == 168, let calendar = calendar {
+            var k = Int((now.timeIntervalSince(reset) / (7 * 86400)).rounded(.down))
+            guard var start = calendar.date(byAdding: .weekOfYear, value: k, to: reset) else {
+                return reset.addingTimeInterval(Double(k) * 7 * 86400)
+            }
+            while start > now {
+                k -= 1
+                guard let prev = calendar.date(byAdding: .weekOfYear, value: k, to: reset) else { break }
+                start = prev
+            }
+            while let next = calendar.date(byAdding: .weekOfYear, value: k + 1, to: reset), next <= now {
+                k += 1
+                start = next
+            }
+            return start
+        } else {
+            let w = TimeInterval(q.weeklyWindowHours) * 3600
+            let k = (now.timeIntervalSince(reset) / w).rounded(.down)
+            return reset.addingTimeInterval(k * w)
+        }
+    }
+
+    public static func windowStart(_ q: QuotaWindow, now: Date, timezone: TimeZone) -> Date? {
+        windowStart(q, now: now, calendar: calendar(timezone: timezone))
     }
 
     // MARK: - 过滤
