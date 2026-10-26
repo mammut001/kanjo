@@ -11,6 +11,8 @@
 "common.loading" = "Loading…";
 "common.show_fewer" = "Show fewer";
 "common.show_all" = "Show all %d %@";
+"common.unknown" = "(unknown)";
+"common.cost_note_default" = "API-equivalent cost estimated from public API prices. Not actual subscription spend.";
 
 /* TimeRange */
 "timerange.all.short" = "All";
@@ -44,6 +46,7 @@
 "fmt.cycle_needs_renewal_day" = "Last 30 days · set renewal day for exact cycle";
 "fmt.cycle_range_needs_renewal_day" = "%@ · last 30 days (day not set)";
 "fmt.cycle_range_since" = "%@ since %@";
+"fmt.per_month_suffix" = "/mo";
 
 /* Attribution */
 "attribution.dominant" = "Dominant: ≥%@ of this session's file-operation signals pointed at this project, so the whole session is counted here.";
@@ -102,6 +105,9 @@
 "settings.no_reset_info" = "No reset info";
 "settings.no_subscription_info" = "No subscription info";
 "settings.saving" = "Saving…";
+"settings.source.not_set" = "not set · using last 30 days";
+"settings.source.manual" = "manual";
+"settings.source.detected" = "detected";
 
 /* Menu Panel */
 "menu.python_needed" = "Kanjo's CLI needs Python 3 (included with the Xcode Command Line Tools)";
@@ -158,6 +164,7 @@
 "overview.renewal_not_set" = "Renewal days not set for %@ · ";
 "overview.set_now" = "Set now";
 "overview.dismiss_renewal_reminder" = "Dismiss renewal day reminder";
+"overview.renewal_day_unknown_help" = "Renewal day unknown; set it in Settings";
 "overview.sub_help_multiplier" = "%@ is %@ flat. %@ is the API-equivalent cost this billing cycle, %@ the flat fee. Not an extra charge.";
 "overview.sub_help_unknown" = "%@: monthly price unknown. %@ is the API-equivalent cost this billing cycle. Not an extra charge.";
 "overview.badge.pinned" = "Pinned";
@@ -275,6 +282,10 @@
 "disk.block.uncommitted_changes" = "uncommitted changes";
 "disk.block.active" = "active";
 "disk.blocked_reason" = "Blocked: %@";
+"disk.block.explanation.not_imported" = "The ledger has not imported every file here yet, so cleaning would drop numbers that are not saved.";
+"disk.block.explanation.uncommitted_changes" = "This git worktree has uncommitted changes, so it stays until those changes are committed or discarded.";
+"disk.block.explanation.active" = "Something wrote here in the last 24 hours, or a running process is using it.";
+"disk.block.explanation.default" = "The CLI will not move this entry until the block is cleared.";
 
 /* Session */
 "session.untitled" = "(untitled)";
@@ -307,8 +318,17 @@
 "chart.active_day.singular" = "%d active day · hover a bar for daily cost";
 "chart.active_day.plural" = "%d active days · hover a bar for daily cost";
 "chart.no_data" = "No daily data.";
+"chart.day" = "Day";
+"chart.cost" = "Cost";
 
 /* Mosaic */
 "mosaic.more.format" = "+%d more";
 "mosaic.mostly" = " · mostly %@ (%@)";
 "mosaic.smaller_projects" = "%d smaller projects · %@\n";
+
+/* Reconcile */
+"reconcile.cost_line" = "Total %@ vs projects %@ + unattributed %@ + excluded %@ = %@";
+"reconcile.tokens_line" = "Tokens %@ vs sum %@";
+"reconcile.sessions_line" = "Sessions %@ vs sum %@";
+"reconcile.diff" = " · diff %@";
+"reconcile.contract_invariant" = "Invariant from the data contract: totals = sum(projects) + unattributed + excluded (cost tolerance $0.01).";

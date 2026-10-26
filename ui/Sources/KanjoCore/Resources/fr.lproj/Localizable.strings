@@ -11,13 +11,15 @@
 "common.loading" = "Chargement…";
 "common.show_fewer" = "Moins afficher";
 "common.show_all" = "Tout afficher (%d %@)";
+"common.unknown" = "(inconnu)";
+"common.cost_note_default" = "Coût équivalent API estimé d'après les prix publics de l'API. Ne correspond pas aux dépenses réelles de l'abonnement.";
 
 /* Période */
 "timerange.all.short" = "Tout";
 "timerange.days7.short" = "7 j";
 "timerange.days30.short" = "30 j";
-"timerange.lastWeek.short" = "Sem. passée";
-"timerange.sinceReset.short" = "Dernière réinit.";
+"timerange.lastWeek.short" = "Sem. préc.";
+"timerange.sinceReset.short" = "Réinit.";
 "timerange.billingCycle.short" = "Cycle";
 
 "timerange.all.long" = "Toutes les dates";
@@ -44,6 +46,7 @@
 "fmt.cycle_needs_renewal_day" = "30 derniers jours · définir le jour de renouvellement pour le cycle exact";
 "fmt.cycle_range_needs_renewal_day" = "%@ · 30 derniers jours (jour non défini)";
 "fmt.cycle_range_since" = "%@ depuis le %@";
+"fmt.per_month_suffix" = "/mois";
 
 /* Attribution */
 "attribution.dominant" = "Dominant : ≥%@ des signaux de fichiers pointent vers ce projet, la session entière est comptabilisée ici.";
@@ -102,6 +105,9 @@
 "settings.no_reset_info" = "Aucune info de réinit.";
 "settings.no_subscription_info" = "Aucune info d'abonnement";
 "settings.saving" = "Enregistrement…";
+"settings.source.not_set" = "non défini · 30 derniers jours";
+"settings.source.manual" = "manuel";
+"settings.source.detected" = "détecté";
 
 /* Panneau de menu */
 "menu.python_needed" = "Le CLI de Kanjo nécessite Python 3 (inclus dans les Xcode Command Line Tools)";
@@ -158,6 +164,7 @@
 "overview.renewal_not_set" = "Jours de renouvellement non définis pour %@ · ";
 "overview.set_now" = "Définir maintenant";
 "overview.dismiss_renewal_reminder" = "Ignorer le rappel du jour de renouvellement";
+"overview.renewal_day_unknown_help" = "Jour de renouvellement inconnu ; définissez-le dans Réglages";
 "overview.sub_help_multiplier" = "%@ est au forfait de %@. %@ est le coût équivalent API ce cycle, soit %@ le forfait. Ce n'est pas un coût supplémentaire.";
 "overview.sub_help_unknown" = "%@ : prix mensuel inconnu. %@ est le coût équivalent API ce cycle. Ce n'est pas un coût supplémentaire.";
 "overview.badge.pinned" = "Épinglé";
@@ -275,6 +282,10 @@
 "disk.block.uncommitted_changes" = "modifications non validées";
 "disk.block.active" = "actif";
 "disk.blocked_reason" = "Bloqué : %@";
+"disk.block.explanation.not_imported" = "Le registre n'a pas encore importé tous les fichiers ici ; le nettoyage supprimerait des données non enregistrées.";
+"disk.block.explanation.uncommitted_changes" = "Cet arbre de travail Git a des modifications non validées ; il reste jusqu'à ce qu'elles soient validées ou abandonnées.";
+"disk.block.explanation.active" = "Une écriture a eu lieu au cours des 24 dernières heures, ou un processus en cours d'exécution l'utilise.";
+"disk.block.explanation.default" = "Le CLI ne déplacera pas cette entrée tant que le blocage n'est pas levé.";
 
 /* Session */
 "session.untitled" = "(sans titre)";
@@ -307,8 +318,17 @@
 "chart.active_day.singular" = "%d jour d'activité · survoler pour le coût quotidien";
 "chart.active_day.plural" = "%d jours d'activité · survoler pour le coût quotidien";
 "chart.no_data" = "Aucune donnée quotidienne.";
+"chart.day" = "Jour";
+"chart.cost" = "Coût";
 
 /* Mosaïque */
 "mosaic.more.format" = "+%d autres";
 "mosaic.mostly" = " · principalement %@ (%@)";
 "mosaic.smaller_projects" = "%d petits projets · %@\n";
+
+/* Rapprochement */
+"reconcile.cost_line" = "Total %@ vs projets %@ + non attribué %@ + exclu %@ = %@";
+"reconcile.tokens_line" = "Tokens %@ vs somme %@";
+"reconcile.sessions_line" = "Sessions %@ vs somme %@";
+"reconcile.diff" = " · écart %@";
+"reconcile.contract_invariant" = "Invariant du contrat de données : totaux = somme(projets) + non attribué + exclu (tolérance de coût 0,01 $).";

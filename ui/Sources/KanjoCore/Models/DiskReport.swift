@@ -186,13 +186,13 @@ public enum DiskBlock {
     public static func explanation(_ reason: String) -> String {
         switch reason {
         case "not_imported":
-            return "The ledger has not imported every file here yet, so cleaning would drop numbers that are not saved."
+            return L10n.tr("disk.block.explanation.not_imported")
         case "uncommitted_changes":
-            return "This git worktree has uncommitted changes, so it stays until those changes are committed or discarded."
+            return L10n.tr("disk.block.explanation.uncommitted_changes")
         case "active":
-            return "Something wrote here in the last 24 hours, or a running process is using it."
+            return L10n.tr("disk.block.explanation.active")
         default:
-            return "The CLI will not move this entry until the block is cleared."
+            return L10n.tr("disk.block.explanation.default")
         }
     }
 }

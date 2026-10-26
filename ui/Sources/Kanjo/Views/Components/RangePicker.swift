@@ -47,7 +47,7 @@ struct RangeContext {
     /// `Billing cycle · Claude Max 5x since Oct 25 · ChatGPT Plus since Nov 1 · Antigravity: no subscription`。
     var caption: String? {
         let cal = spec.calendar
-        let md = formatter("MMM d", cal), mdt = formatter("MMM d HH:mm", cal)
+        let md = templateFormatter("MMMd", cal), mdt = templateFormatter("MMMdHHmm", cal)
         switch range {
         case .all:
             return nil
@@ -94,12 +94,12 @@ struct RangeContext {
         return String(label.split(separator: " ").first ?? Substring(label))
     }
 
-    private func formatter(_ format: String, _ cal: Calendar) -> DateFormatter {
+    private func templateFormatter(_ template: String, _ cal: Calendar) -> DateFormatter {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.calendar = cal
         f.timeZone = cal.timeZone
-        f.dateFormat = format
+        f.setLocalizedDateFormatFromTemplate(template)
         return f
     }
 }

@@ -404,7 +404,8 @@ struct ProjectDetailView: View {
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     ForEach(shown) { b in
                         GridRow {
-                            Text(b.branch).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                            Text(b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch)
+                                .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                                 .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .help(b.branch)

@@ -108,19 +108,25 @@ struct OverviewView: View {
         }
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 8) {
-                Text(L10n.tr("overview.total_cost")).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(L10n.tr("overview.total_cost"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 4)
                 RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
                             cycleAvailable: ctx.cycleAvailable)
+                    .layoutPriority(0)
             }
             HeroAmount(value: Fmt.money(f.cost, currency: cur))
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {
-                Text("\(range) · \(counts)").font(.system(size: 11)).fixedSize()
-                Text("\(range) · \(counts)").font(.system(size: 10.5)).fixedSize()
+                Text("\(range) · \(counts)").font(.system(size: 11)).lineLimit(1).fixedSize()
+                Text("\(range) · \(counts)").font(.system(size: 10.5)).lineLimit(1).fixedSize()
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(range)
-                    Text(counts)
+                    Text(range).lineLimit(1)
+                    Text(counts).lineLimit(1)
                 }
                 .font(.system(size: 11))
             }
@@ -561,12 +567,15 @@ struct ReconciliationView: View {
     var body: some View {
         let rec = Reconciliation(report: report)
         let cur = report.currency
+        let diffCost = rec.cost.ok ? "" : L10n.tr("reconcile.diff", signedMoney(rec.cost.diff, cur))
+        let diffTokens = rec.tokens.ok ? "" : L10n.tr("reconcile.diff", "\(Int(rec.tokens.diff))")
+        let diffSessions = rec.sessions.ok ? "" : L10n.tr("reconcile.diff", "\(Int(rec.sessions.diff))")
         let lines = [
-            (rec.cost.ok, "Total \(Fmt.money(rec.cost.reported, currency: cur)) vs projects \(Fmt.money(rec.projectsCost, currency: cur)) + unattributed \(Fmt.money(rec.unattributedCost, currency: cur)) + excluded \(Fmt.money(rec.excludedCost, currency: cur)) = \(Fmt.money(rec.cost.summed, currency: cur))" + (rec.cost.ok ? "" : " · diff \(signedMoney(rec.cost.diff, cur))")),
-            (rec.tokens.ok, "Tokens \(Fmt.tokens(Int(rec.tokens.reported))) vs sum \(Fmt.tokens(Int(rec.tokens.summed)))" + (rec.tokens.ok ? "" : " · diff \(Int(rec.tokens.diff))")),
-            (rec.sessions.ok, "Sessions \(Int(rec.sessions.reported)) vs sum \(Int(rec.sessions.summed))" + (rec.sessions.ok ? "" : " · diff \(Int(rec.sessions.diff))")),
+            (rec.cost.ok, L10n.tr("reconcile.cost_line", Fmt.money(rec.cost.reported, currency: cur), Fmt.money(rec.projectsCost, currency: cur), Fmt.money(rec.unattributedCost, currency: cur), Fmt.money(rec.excludedCost, currency: cur), Fmt.money(rec.cost.summed, currency: cur)) + diffCost),
+            (rec.tokens.ok, L10n.tr("reconcile.tokens_line", Fmt.tokens(Int(rec.tokens.reported)), Fmt.tokens(Int(rec.tokens.summed))) + diffTokens),
+            (rec.sessions.ok, L10n.tr("reconcile.sessions_line", "\(Int(rec.sessions.reported))", "\(Int(rec.sessions.summed))") + diffSessions),
         ]
-        let contract = "Invariant from the data contract: totals = sum(projects) + unattributed + excluded (cost tolerance $0.01)."
+        let contract = L10n.tr("reconcile.contract_invariant")
 
         if rec.ok {
             HStack(alignment: .firstTextBaseline, spacing: 4) {

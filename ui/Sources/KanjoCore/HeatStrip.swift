@@ -98,20 +98,24 @@ public enum HeatStrip {
     public static func weekLabel(start: Date, calendar: Calendar = .current) -> String {
         guard let end = calendar.date(byAdding: .day, value: 6, to: start) else { return "" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.calendar = calendar
         f.timeZone = calendar.timeZone
         let c0 = calendar.dateComponents([.year, .month], from: start)
         let c1 = calendar.dateComponents([.year, .month], from: end)
         if c0.year != c1.year {
-            f.dateFormat = "MMM d, yyyy"
+            f.setLocalizedDateFormatFromTemplate("yMMMd")
             return "\(f.string(from: start))–\(f.string(from: end))"
         }
-        f.dateFormat = "MMM d"
+        f.setLocalizedDateFormatFromTemplate("MMMd")
         let a = f.string(from: start)
         if c0.month != c1.month { return "\(a)–\(f.string(from: end))" }
-        f.dateFormat = "d"
-        return "\(a)–\(f.string(from: end))"
+        let dFormatter = DateFormatter()
+        dFormatter.locale = Locale(identifier: L10n.currentLanguage)
+        dFormatter.calendar = calendar
+        dFormatter.timeZone = calendar.timeZone
+        dFormatter.setLocalizedDateFormatFromTemplate("d")
+        return "\(a)–\(dFormatter.string(from: end))"
     }
 
     /// "YYYY-MM-DD" → 该日在 `calendar` 时区的零点。

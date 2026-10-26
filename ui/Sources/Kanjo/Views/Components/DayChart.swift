@@ -33,7 +33,7 @@ struct DayChart: View {
                 if let h = hovered {
                     Text("\(Fmt.day(h.day)) · ")
                         + Text(Fmt.money(h.cost, currency: currency)).fontWeight(.semibold)
-                        + Text(" · \(Fmt.tokens(h.tokens)) tokens")
+                        + Text(" · " + L10n.tr("overview.tokens_count", Fmt.tokens(h.tokens)))
                 } else {
                     Text(pts.count == 1
                          ? L10n.tr("chart.active_day.singular", pts.count)
@@ -59,13 +59,13 @@ struct DayChart: View {
         let hi = cal.date(byAdding: .day, value: 1, to: pts.last!.date)!
         return Chart {
             ForEach(pts) { p in
-                BarMark(x: .value("Day", p.date, unit: .day),
-                        y: .value("Cost", p.cost))
+                BarMark(x: .value(L10n.tr("chart.day"), p.date, unit: .day),
+                        y: .value(L10n.tr("chart.cost"), p.cost))
                     .foregroundStyle(color.opacity(hovered == nil || hovered?.day == p.day ? 0.9 : 0.45))
                     .cornerRadius(1.5)
             }
             if let h = hovered {
-                RuleMark(x: .value("Day", h.date, unit: .day))
+                RuleMark(x: .value(L10n.tr("chart.day"), h.date, unit: .day))
                     .foregroundStyle(Color.primary.opacity(0.22))
                     .lineStyle(StrokeStyle(lineWidth: 1))
             }

@@ -206,9 +206,9 @@ struct SettingsView: View {
 
     private static func stamp(_ d: Date, _ cal: Calendar) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = Locale(identifier: L10n.currentLanguage)
         f.timeZone = cal.timeZone
-        f.dateFormat = "EEE MMM d HH:mm"
+        f.setLocalizedDateFormatFromTemplate("EEEMMMdHHmm")
         return f.string(from: d)
     }
 
