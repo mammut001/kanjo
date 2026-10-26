@@ -142,6 +142,12 @@ public enum SubscriptionSettingsRoute {
         guard parts.count == 3, parts[0] == "settings", parts[1] == "subscriptions", !parts[2].isEmpty else { return nil }
         return String(parts[2])
     }
+
+    public static func editAgent(from raw: String) -> String? {
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 4, parts[0] == "settings", parts[1] == "subscriptions", !parts[2].isEmpty, parts[3] == "edit" else { return nil }
+        return String(parts[2])
+    }
 }
 
 public struct SubscriptionRow: Equatable, Identifiable {

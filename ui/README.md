@@ -34,7 +34,9 @@ KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 `--route` values: `overview`, `overview-bottom` (overview scrolled to the buckets and reconciliation),
 `project:<index>` (0-based, in cost order), `project:<index>:bottom` (scrolled to the bottom),
 `project:<index>:locations` (bottom, with Locations expanded), `bucket:unattributed`, `bucket:excluded`,
-`disk`, `disk:expanded` (disk page with every agent expanded, for screenshots), `settings`, `settings-bottom` (Settings scrolled to the bottom).
+`disk`, `disk:expanded` (disk page with every agent expanded, for screenshots), `settings`, `settings-bottom` (Settings scrolled to the bottom),
+`settings:subscriptions:<agent>` (Settings scrolled to that agent's Subscriptions row),
+`settings:subscriptions:<agent>:edit` (Settings scrolled to that agent's Subscriptions row and put into editing mode with the plan picker loaded).
 
 `--disk-data <path>` loads that disk-report JSON instead of running the CLI. It does not change the usage source (`--data` / Settings).
 
@@ -111,7 +113,7 @@ Preferences can be preset for one launch without persisting them, through the
 
 Under the total (above the mosaic) when `subscriptions` is non-empty: one row per subscribed agent, sorted by this cycle's API-equivalent cost — plan, monthly price, usage from that agent's `cycle_start` through now across every project and both buckets, and the multiple of the flat fee (`usage ÷ monthly_price_usd`, shown as `15.7×`, or `—` when the price is null). An "extra usage on" badge appears when `extra_usage_enabled` is true. The rows ignore the selected range. The block always includes: "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing." On a project, under By agent: "This repo: N% of your <plan> usage this cycle" (skipped when that agent's cycle total is zero). Known renewal days show cycle dates in the report timezone and a renewal countdown; project share lines show the cycle on hover.
 
-When the day is unknown (`rolling_30d`, `anchor_day: null`), the row shows "Last 30 days · set renewal day for exact cycle". Clicking the caption opens Settings at that agent's Subscriptions row (`--route settings:subscriptions:codex` also works). The Cycle range explains these agents as "last 30 days (day not set)". Settings → Subscriptions starts an unknown day at 1 with "not set · using last 30 days", lets you apply a renewal day (1–28) or reset it through the configured CLI, and provides an "Open billing page" link to find the renewal date. Editing is disabled for JSON file sources; billing links remain available. A quiet "Renewal days not set … · Set now" reminder under the card opens the same row. Dismissing it stores the agent keys as a comma-separated list in `@AppStorage("renewalNudgeDismissed")`; only newly appearing rolling agents trigger another reminder.
+When the day is unknown (`rolling_30d`, `anchor_day: null`), the row shows "Last 30 days · set renewal day for exact cycle". Clicking the caption opens Settings at that agent's Subscriptions row (`--route settings:subscriptions:codex` also works, or `--route settings:subscriptions:codex:edit` to open directly into editing mode). The Cycle range explains these agents as "last 30 days (day not set)". Settings → Subscriptions starts an unknown day at 1 with "not set · using last 30 days", lets you apply a renewal day (1–28) or reset it through the configured CLI, and provides an "Open billing page" link to find the renewal date. Editing is disabled for JSON file sources; billing links remain available. A quiet "Renewal days not set … · Set now" reminder under the card opens the same row. Dismissing it stores the agent keys as a comma-separated list in `@AppStorage("renewalNudgeDismissed")`; only newly appearing rolling agents trigger another reminder.
 
 ## Disk
 

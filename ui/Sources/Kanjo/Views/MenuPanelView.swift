@@ -18,7 +18,8 @@ enum BucketKind: String {
 /// 取值：`overview`、`overview-bottom`（总览滚到底部）、`project:<index>`（按 cost 降序的第 index 个，从 0 开始）、
 /// `project:<index>:bottom`（详情页滚到底部）、`project:<index>:locations`（滚到底部并展开 Locations）、
 /// `bucket:unattributed` / `bucket:excluded`、`disk`、`disk:expanded`（磁盘页展开每个 agent，仅供截图）、
-/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`。
+/// `settings`、`settings-bottom`（设置页滚到最底部，含 Subscriptions）、`settings:subscriptions:<agent>`、
+/// `settings:subscriptions:<agent>:edit`（滚到该 agent 的订阅行并直接进入编辑态，加载 plan picker）。
 enum DevRoute {
     static let requested: String? = {
         let args = CommandLine.arguments
@@ -27,38 +28,42 @@ enum DevRoute {
     }()
 
     /// 需要数据才能解析的取值在 report 为 nil 时返回 nil（等数据到了再解析）。
-    static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?)? {
+    static func resolve(_ raw: String, report: UsageReport?) -> (route: Route, anchor: String?, editingAgent: String?)? {
         switch raw {
-        case "settings": return (.settings, nil)
-        case "settings-bottom": return (.settings, SettingsView.bottomAnchor)
-        case "overview": return (.overview, nil)
-        case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor)
-        case "disk": return (.disk, nil)
-        case "disk:expanded": return (.disk, DiskView.expandedAnchor)
+        case "settings": return (.settings, nil, nil)
+        case "settings-bottom": return (.settings, SettingsView.bottomAnchor, nil)
+        case "overview": return (.overview, nil, nil)
+        case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor, nil)
+        case "disk": return (.disk, nil, nil)
+        case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         default: break
+        }
+        if let agent = SubscriptionSettingsRoute.editAgent(from: raw) {
+            guard report != nil else { return nil }
+            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), agent)
         }
         if let agent = SubscriptionSettingsRoute.agent(from: raw) {
             guard report != nil else { return nil }
-            return (.settings, SubscriptionSettingsRoute.anchor(for: agent))
+            return (.settings, SubscriptionSettingsRoute.anchor(for: agent), nil)
         }
         guard let r = report else { return nil }
         if raw.hasPrefix("project:") {
             let parts = raw.dropFirst("project:".count).split(separator: ":", maxSplits: 1)
-            guard let first = parts.first, let i = Int(first) else { return (.overview, nil) }
+            guard let first = parts.first, let i = Int(first) else { return (.overview, nil, nil) }
             let sorted = r.projects.sorted { $0.cost > $1.cost }
-            guard sorted.indices.contains(i) else { return (.overview, nil) }
+            guard sorted.indices.contains(i) else { return (.overview, nil, nil) }
             let anchor: String?
             switch parts.count > 1 ? String(parts[1]) : "" {
             case "bottom": anchor = ProjectDetailView.bottomAnchor
             case "locations": anchor = ProjectDetailView.locationsOpenAnchor
             default: anchor = nil
             }
-            return (.project(sorted[i].id), anchor)
+            return (.project(sorted[i].id), anchor, nil)
         }
         if raw.hasPrefix("bucket:"), let k = BucketKind(rawValue: String(raw.dropFirst("bucket:".count))) {
-            return (.bucket(k), nil)
+            return (.bucket(k), nil, nil)
         }
-        return (.overview, nil)
+        return (.overview, nil, nil)
     }
 }
 
@@ -71,6 +76,7 @@ struct MenuPanelView: View {
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
+    @State private var editingSubscriptionAgent: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,6 +97,7 @@ struct MenuPanelView: View {
         pendingDevRoute = nil
         route = resolved.route
         overviewAnchor = resolved.anchor
+        editingSubscriptionAgent = resolved.editingAgent
     }
 
     // 只在出问题时出现：schema 版本过新（警告）、刷新失败但还有旧数据（错误）。
@@ -133,9 +140,10 @@ struct MenuPanelView: View {
     @ViewBuilder private var content: some View {
         switch route {
         case .settings:
-            SettingsView(scrollTo: overviewAnchor, onBack: {
+            SettingsView(scrollTo: overviewAnchor, initiallyEditingAgent: editingSubscriptionAgent, onBack: {
                 route = .overview
                 overviewAnchor = nil
+                editingSubscriptionAgent = nil
                 store.applySettings()
             })
         case .disk:

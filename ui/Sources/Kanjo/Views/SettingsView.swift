@@ -7,6 +7,7 @@ struct SettingsView: View {
 
     @EnvironmentObject var store: ReportStore
     var scrollTo: String? = nil     // 支持底部或具体订阅行
+    var initiallyEditingAgent: String? = nil
     let onBack: () -> Void
 
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
@@ -192,6 +193,10 @@ struct SettingsView: View {
             agentList.append(a)
             seen.insert(a)
         }
+        if let editing = initiallyEditingAgent, !seen.contains(editing) {
+            agentList.append(editing)
+            seen.insert(editing)
+        }
         return agentList
     }
 
@@ -207,7 +212,8 @@ struct SettingsView: View {
                         let agent = item.agent
                         SubscriptionSettingsRow(agent: agent, sub: subs[agent],
                                                 label: r.agentLabels[agent] ?? AgentColors.defaultLabels[agent] ?? agent,
-                                                currency: r.currency)
+                                                currency: r.currency,
+                                                initiallyEditing: agent == initiallyEditingAgent)
                             .id(item.anchor)
                     }
                 }
@@ -272,9 +278,10 @@ private struct SubscriptionSettingsRow: View {
     let sub: Subscription?
     let label: String
     let currency: String
+    let initiallyEditing: Bool
 
     @State private var day: Int
-    @State private var isEditing = false
+    @State private var isEditing: Bool
     @State private var selectedPlanKey: String = ""
     @State private var customPlanText: String = ""
     @State private var inputPrice: String = ""
@@ -283,11 +290,13 @@ private struct SubscriptionSettingsRow: View {
 
     private let otherPlanTag = "__custom_other__"
 
-    init(agent: String, sub: Subscription?, label: String, currency: String) {
+    init(agent: String, sub: Subscription?, label: String, currency: String, initiallyEditing: Bool = false) {
         self.agent = agent
         self.sub = sub
         self.label = label
         self.currency = currency
+        self.initiallyEditing = initiallyEditing
+        _isEditing = State(initialValue: initiallyEditing)
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
         _selectedPlanKey = State(initialValue: sub?.plan ?? "")
         _customPlanText = State(initialValue: sub?.plan ?? sub?.planLabel ?? "")
@@ -340,7 +349,7 @@ private struct SubscriptionSettingsRow: View {
             }
         }
         .onChange(of: store.knownPlans) { _ in
-            if !isEditing {
+            if !isEditing || initiallyEditing {
                 syncInputs()
             }
         }

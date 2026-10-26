@@ -122,8 +122,14 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(SubscriptionSettingsRoute.anchor(for: "codex"), "settings:subscriptions:codex")
         XCTAssertEqual(SubscriptionSettingsRoute.agent(from: "settings:subscriptions:future-agent"), "future-agent")
         for raw in ["settings", "settings-bottom", "settings:subscriptions:", "settings:subscriptions:codex:extra",
-                    "overview:subscriptions:codex"] {
+                    "settings:subscriptions:codex:edit", "overview:subscriptions:codex"] {
             XCTAssertNil(SubscriptionSettingsRoute.agent(from: raw), raw)
+        }
+        XCTAssertEqual(SubscriptionSettingsRoute.editAgent(from: "settings:subscriptions:codex:edit"), "codex")
+        XCTAssertEqual(SubscriptionSettingsRoute.editAgent(from: "settings:subscriptions:future-agent:edit"), "future-agent")
+        for raw in ["settings", "settings-bottom", "settings:subscriptions:codex", "settings:subscriptions:codex:extra",
+                    "settings:subscriptions::edit", "settings:subscriptions:codex:edit:extra"] {
+            XCTAssertNil(SubscriptionSettingsRoute.editAgent(from: raw), raw)
         }
     }
 
