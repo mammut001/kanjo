@@ -126,6 +126,10 @@ struct ProjectDetailView: View {
     private var devScrollTarget: String? {
         devAnchor == Self.bottomAnchor || devAnchor == Self.locationsOpenAnchor ? Self.bottomAnchor : nil
     }
+    private var projectIndex: Int {
+        let sorted = report.projects.sorted { $0.cost > $1.cost }
+        return sorted.firstIndex(where: { $0.id == project.id }) ?? 0
+    }
 
     // 范围下：金额、tokens（只有 total）、By agent、By day、热力条、Sessions 按范围；
     // By model / By branch 没有按天数据，不过滤，标题旁标「All time」。
@@ -139,12 +143,22 @@ struct ProjectDetailView: View {
             agentsSection(shown)
             modelsSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.by_day"), inset: true) {
-                DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown), agentLabels: report.agentLabels)
+                DayChart(
+                    days: shown.byDay,
+                    currency: cur,
+                    color: ProjectTint.color(of: shown),
+                    agentLabels: report.agentLabels,
+                    pinnedId: "project:\(projectIndex):hover:day"
+                )
             }
             branchesSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.sessions", shown.sessionsDetail.count), inset: true) {
-                SessionList(sessions: shown.sessionsDetail,
-                            threshold: report.config.dominantThreshold, currency: cur)
+                SessionList(
+                    sessions: shown.sessionsDetail,
+                    threshold: report.config.dominantThreshold,
+                    currency: cur,
+                    idPrefix: "project:\(projectIndex):hover"
+                )
             }
             locationsSection.id(Self.bottomAnchor)
         }
@@ -332,7 +346,7 @@ struct ProjectDetailView: View {
             .monospacedDigit()
             .hoverCard()
         }
-        .accessibilityLabel(fullHelp)
+        .accessibilityHint(fullHelp)
     }
 
     /// 四类计费 token 的构成条（thinking 是 output 子集，不单列）。
@@ -363,7 +377,7 @@ struct ProjectDetailView: View {
             .clipShape(Capsule())
         }
         .frame(height: 4)
-        .hoverCard {
+        .hoverCard(id: "project:\(projectIndex):hover:tokens") {
             TokensBreakdownHoverCard(tokens: t)
         }
         .accessibilityLabel(barHelp)
@@ -450,7 +464,7 @@ struct ProjectDetailView: View {
                     Text(L10n.tr("project.model")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.section.tokens")).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                 }
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
-                ForEach(shown) { m in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { j, m in
                     GridRow {
                         HStack(spacing: 5) {
                             AgentDot(agent: m.agent, size: 6)
@@ -461,10 +475,10 @@ struct ProjectDetailView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .hoverCard {
+                        .hoverCard(id: "project:\(projectIndex):hover:model:\(j)") {
                             ModelHoverCard(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens, currency: cur)
                         }
-                        .accessibilityLabel(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
+                        .accessibilityHint(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
                         Text(Fmt.tokens(m.tokens.total)).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                         Text(Fmt.money(m.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
                     }
@@ -490,7 +504,7 @@ struct ProjectDetailView: View {
                         Text(L10n.tr("project.branch")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.noun.sessions").capitalized).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                     }
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
-                    ForEach(shown) { b in
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { j, b in
                         let branchSessions = project.sessionsDetail.filter {
                             b.branch == "(unknown)" ? ($0.branch == nil || $0.branch == "" || $0.branch == "(unknown)") : ($0.branch == b.branch)
                         }
@@ -512,7 +526,7 @@ struct ProjectDetailView: View {
                                 .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                                 .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .hoverCard {
+                                .hoverCard(id: "project:\(projectIndex):hover:branch:\(j)") {
                                     AgentRowsHoverCard(
                                         title: b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch,
                                         cost: b.cost,
@@ -522,7 +536,7 @@ struct ProjectDetailView: View {
                                         subtitle: b.sessions == 1 ? L10n.tr("project.noun.sessions") + " 1" : "\(b.sessions) " + L10n.tr("project.noun.sessions")
                                     )
                                 }
-                                .accessibilityLabel(branchHelp)
+                                .accessibilityHint(branchHelp)
                             Text("\(b.sessions)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                             Text(Fmt.money(b.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
                                 .hoverCard {
@@ -535,7 +549,7 @@ struct ProjectDetailView: View {
                                         subtitle: b.sessions == 1 ? L10n.tr("project.noun.sessions") + " 1" : "\(b.sessions) " + L10n.tr("project.noun.sessions")
                                     )
                                 }
-                                .accessibilityLabel(branchHelp)
+                                .accessibilityHint(branchHelp)
                         }
                     }
                 }

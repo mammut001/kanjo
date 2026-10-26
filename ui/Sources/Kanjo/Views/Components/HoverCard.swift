@@ -92,6 +92,7 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
     @Environment(\.pinnedHoverId) private var envPinnedId
     @State private var isShowing = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var autoId = UUID().uuidString
 
     private var effectivePinned: Bool {
         if isPinned { return true }
@@ -125,7 +126,7 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
             .anchorPreference(key: HoverCardPreferenceKey.self, value: .bounds) { anchor in
                 guard shouldShow else { return nil }
                 return HoverCardPayload(
-                    id: id ?? UUID().uuidString,
+                    id: id ?? autoId,
                     anchor: anchor,
                     content: AnyView(cardContent())
                 )
@@ -154,7 +155,7 @@ extension View {
             self.hoverCard(id: id, isPinned: isPinned) {
                 PlainHoverCard(text: text)
             }
-            .accessibilityLabel(text)
+            .accessibilityHint(text)
         } else {
             self
         }

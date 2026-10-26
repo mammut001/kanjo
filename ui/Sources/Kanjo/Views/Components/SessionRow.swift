@@ -5,6 +5,7 @@ struct SessionRow: View {
     let session: Session
     let threshold: Double
     let currency: String
+    var agentHoverId: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -36,7 +37,7 @@ struct SessionRow: View {
             }
             .font(.system(size: 10.5))
             .foregroundStyle(.secondary)
-            .hoverCard {
+            .hoverCard(id: agentHoverId) {
                 AgentRowsHoverCard(
                     title: session.label,
                     titleDotColor: AgentPalette.color(for: session.agent),
@@ -47,7 +48,7 @@ struct SessionRow: View {
                     subtitle: Fmt.timestamp(session.started)
                 )
             }
-            .accessibilityLabel(TooltipBuilder.agentLine(label: session.label, cost: session.cost, tokens: session.tokens.total, currency: currency))
+            .accessibilityHint(TooltipBuilder.agentLine(label: session.label, cost: session.cost, tokens: session.tokens.total, currency: currency))
 
             HStack(spacing: 5) {
                 Badge(text: session.attribution,
@@ -82,7 +83,7 @@ struct SessionRow: View {
                         .monospacedDigit()
                         .hoverCard()
                     }
-                    .accessibilityLabel(session.models.joined(separator: ", "))
+                    .accessibilityHint(session.models.joined(separator: ", "))
             }
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
@@ -102,6 +103,7 @@ struct SessionList: View {
     let sessions: [Session]
     let threshold: Double
     let currency: String
+    var idPrefix: String? = nil
     @State private var sortKey: SortKey = .started
     @State private var descending = true
     @State private var showAll = false
@@ -146,7 +148,12 @@ struct SessionList: View {
             let shown = showAll ? list : Array(list.prefix(initialLimit))
             ForEach(Array(shown.enumerated()), id: \.offset) { i, s in
                 if i > 0 { Divider().opacity(0.6) }
-                SessionRow(session: s, threshold: threshold, currency: currency)
+                SessionRow(
+                    session: s,
+                    threshold: threshold,
+                    currency: currency,
+                    agentHoverId: idPrefix.map { "\($0):session:\(i)" }
+                )
             }
             if list.count > initialLimit {
                 ShowAllButton(expanded: $showAll, total: list.count, noun: L10n.tr("project.noun.sessions"))

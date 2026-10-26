@@ -12,6 +12,7 @@ struct HeatStripView: View {
     var cell = CGSize(width: 8, height: 16)
     var radius: CGFloat = 2
     var spacing: CGFloat = 2
+    var idPrefix: String? = nil
 
     /// 档位 1…4 的不透明度；0 档用中性 8% 底色。
     private static let opacities: [Double] = [0, 0.3, 0.52, 0.76, 1]
@@ -26,21 +27,22 @@ struct HeatStripView: View {
         HStack(spacing: spacing) {
             ForEach(0..<weeks.count, id: \.self) { i in
                 let w = weeks[i]
-                weekCell(w, peak: peak)
+                weekCell(w, index: i, peak: peak)
             }
         }
         .fixedSize()
     }
 
-    @ViewBuilder private func weekCell(_ w: WeekCost, peak: Double) -> some View {
+    @ViewBuilder private func weekCell(_ w: WeekCost, index: Int, peak: Double) -> some View {
         let rows = HoverCardRowBuilder.agentRows(
             agents: w.rankedWithTokens.map { item in
                 (agent: item.agent, label: agentLabels[item.agent] ?? item.agent, cost: item.cost, tokens: item.tokens)
             }
         )
+        let cellId = idPrefix.map { "\($0):\(index)" }
         cellView(w, level: HeatStrip.level(w.cost, max: peak))
             .frame(width: cell.width, height: cell.height)
-            .hoverCard {
+            .hoverCard(id: cellId) {
                 AgentRowsHoverCard(
                     title: HeatStrip.weekLabel(start: w.start),
                     cost: w.cost,

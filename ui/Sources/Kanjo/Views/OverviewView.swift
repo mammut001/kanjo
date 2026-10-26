@@ -197,7 +197,7 @@ struct OverviewView: View {
                 }
                 .hoverCard()
             }
-            .accessibilityLabel(help.joined(separator: "\n"))
+            .accessibilityHint(help.joined(separator: "\n"))
             if let caption = ctx.caption {
                 RangeCaption(text: caption, help: ctx.captionHelp).padding(.top, 1)
             }
@@ -228,6 +228,7 @@ struct OverviewView: View {
                 ProjectRow(project: p, currency: cur,
                            weeks: p.heatWeeks(endingOn: end), agentLabels: labels,
                            pinned: pinned.contains(p.id),
+                           projectIndex: i,
                            onOpen: { onSelect(.project(p.id)) },
                            onTogglePin: { pinnedRaw = ProjectPrefs.toggle(p.id, in: pinnedRaw) },
                            onHide: { hide(p.id) })
@@ -298,7 +299,7 @@ struct OverviewView: View {
             } else {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, m in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
-                    modelRow(m)
+                    modelRow(m, index: i)
                 }
                 if models.count > 8 {
                     RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
@@ -321,7 +322,7 @@ struct OverviewView: View {
         }
     }
 
-    private func modelRow(_ m: ModelCost) -> some View {
+    private func modelRow(_ m: ModelCost, index: Int) -> some View {
         HStack(alignment: .center, spacing: 6) {
             AgentDot(agent: m.agent, size: 6)
             Text(m.model)
@@ -345,10 +346,10 @@ struct OverviewView: View {
         }
         .padding(.horizontal, Metrics.listInset)
         .padding(.vertical, 6)
-        .hoverCard {
+        .hoverCard(id: "overview:hover:model:\(index)") {
             ModelHoverCard(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens, currency: cur)
         }
-        .accessibilityLabel(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
+        .accessibilityHint(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
     }
 
     private func bucketsSection(_ f: FilteredReport) -> some View {
@@ -478,7 +479,7 @@ private struct SubscriptionValueCard: View {
                     currency: cur
                 )
             }
-            .accessibilityLabel(help(row))
+            .accessibilityHint(help(row))
             if let sub = report.subscriptions?[row.agent] {
                 Group {
                     if SubscriptionValue.needsRenewalDay(sub) {
@@ -557,6 +558,7 @@ struct ProjectRow: View {
     let weeks: [WeekCost]
     let agentLabels: [String: String]
     let pinned: Bool
+    var projectIndex: Int = 0
     let onOpen: () -> Void
     let onTogglePin: () -> Void
     let onHide: () -> Void
@@ -565,7 +567,12 @@ struct ProjectRow: View {
     private static let padV: CGFloat = 7
 
     var body: some View {
-        let strip = HeatStripView(weeks: weeks, agentLabels: agentLabels, currency: currency)
+        let strip = HeatStripView(
+            weeks: weeks,
+            agentLabels: agentLabels,
+            currency: currency,
+            idPrefix: "overview:hover:heat:\(projectIndex)"
+        )
         ZStack(alignment: .bottomTrailing) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -577,7 +584,7 @@ struct ProjectRow: View {
                                 .hoverTip(L10n.tr("overview.badge.pinned"))
                         }
                         Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                        AgentDots(agents: project.byAgent, currency: currency)
+                        AgentDots(agents: project.byAgent, currency: currency, id: "overview:hover:dots:\(projectIndex)")
                         if project.pathMissing {
                             Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
                                   help: L10n.tr("overview.badge.path_missing_help"))
@@ -775,7 +782,7 @@ struct ReconciliationView: View {
                     contract: contract
                 )
             }
-            .accessibilityLabel(lines.map(\.1).joined(separator: "\n") + "\n\n" + contract)
+            .accessibilityHint(lines.map(\.1).joined(separator: "\n") + "\n\n" + contract)
         } else {
             StatusBlock(kind: .bad, icon: "exclamationmark.triangle.fill") {
                 Text(L10n.tr("overview.reconcile_failed")).font(.system(size: 12, weight: .semibold))
@@ -795,7 +802,7 @@ struct ReconciliationView: View {
                     contract: contract
                 )
             }
-            .accessibilityLabel(contract)
+            .accessibilityHint(contract)
         }
     }
 

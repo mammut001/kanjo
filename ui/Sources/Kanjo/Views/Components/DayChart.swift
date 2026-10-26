@@ -20,9 +20,21 @@ struct DayChart: View {
     /// 柱子颜色：该项目主力 agent 的颜色；悬停的柱子满色，其余略淡。
     var color: Color = AgentPalette.chartBar
     var agentLabels: [String: String] = [:]
+    var pinnedId: String? = nil
+
+    @Environment(\.pinnedHoverId) private var envPinnedId
     @State private var hovered: Point?
     @State private var carded: Point?
     @State private var cardTask: Task<Void, Never>?
+
+    private var isPinned: Bool {
+        guard let pinnedId, let envPinnedId else { return false }
+        return pinnedId == envPinnedId
+    }
+
+    private func pinnedPoint(in pts: [Point]) -> Point? {
+        pts.reversed().first { $0.cost > 0 || $0.tokens > 0 } ?? pts.last
+    }
 
     private var points: [Point] {
         days.compactMap { d in
@@ -36,9 +48,10 @@ struct DayChart: View {
 
     var body: some View {
         let pts = points
+        let activeHighlight = hovered ?? (isPinned ? pinnedPoint(in: pts) : nil)
         VStack(alignment: .leading, spacing: 6) {
             Group {
-                if let h = hovered {
+                if let h = activeHighlight {
                     Text("\(Fmt.day(h.day)) · ")
                         + Text(Fmt.money(h.cost, currency: currency)).fontWeight(.semibold)
                         + Text(" · " + L10n.tr("overview.tokens_count", Fmt.tokens(h.tokens)))
@@ -55,13 +68,13 @@ struct DayChart: View {
             if pts.isEmpty {
                 Text(L10n.tr("chart.no_data")).font(.system(size: 11)).foregroundStyle(.secondary)
             } else {
-                chart(pts)
+                chart(pts, activeHighlight: activeHighlight)
                     .frame(height: 110)
             }
         }
     }
 
-    private func chart(_ pts: [Point]) -> some View {
+    private func chart(_ pts: [Point], activeHighlight: Point?) -> some View {
         let cal = Calendar.current
         let lo = cal.date(byAdding: .day, value: -1, to: pts.first!.date)!
         let hi = cal.date(byAdding: .day, value: 1, to: pts.last!.date)!
@@ -69,10 +82,10 @@ struct DayChart: View {
             ForEach(pts) { p in
                 BarMark(x: .value(L10n.tr("chart.day"), p.date, unit: .day),
                         y: .value(L10n.tr("chart.cost"), p.cost))
-                    .foregroundStyle(color.opacity(hovered == nil || hovered?.day == p.day ? 0.9 : 0.45))
+                    .foregroundStyle(color.opacity(activeHighlight == nil || activeHighlight?.day == p.day ? 0.9 : 0.45))
                     .cornerRadius(1.5)
             }
-            if let h = hovered {
+            if let h = activeHighlight {
                 RuleMark(x: .value(L10n.tr("chart.day"), h.date, unit: .day))
                     .foregroundStyle(Color.primary.opacity(0.22))
                     .lineStyle(StrokeStyle(lineWidth: 1))
@@ -141,13 +154,14 @@ struct DayChart: View {
                                 }
                             }
                         }
-                        .accessibilityLabel(hovered.map { dayHelpText(for: $0) } ?? "")
+                        .accessibilityHint(hovered.map { dayHelpText(for: $0) } ?? "")
 
-                    if let c = carded, let x = proxy.position(forX: c.date) {
+                    let activePoint = carded ?? (isPinned ? pinnedPoint(in: pts) : nil)
+                    if let c = activePoint, let x = proxy.position(forX: c.date) {
                         Color.clear
                             .frame(width: 14, height: plotFrame.height)
                             .position(x: x + plotFrame.origin.x, y: plotFrame.midY)
-                            .hoverCard(isPinned: true) {
+                            .hoverCard(id: pinnedId, isPinned: isPinned || carded != nil) {
                                 dayHoverCard(for: c)
                             }
                     }

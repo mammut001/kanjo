@@ -44,7 +44,9 @@ enum DevRoute {
         case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         default: break
         }
-        if QuotaCardRoute.agent(in: raw) != nil || MosaicCardRoute.index(in: raw) != nil { return (.overview, raw, nil) }
+        if QuotaCardRoute.agent(in: raw) != nil || MosaicCardRoute.index(in: raw) != nil || raw.hasPrefix("overview:hover:") {
+            return report == nil ? nil : (.overview, raw, nil)
+        }
         if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
             return (.settings, SubscriptionSettingsRoute.anchor(for: agent), isEdit ? agent : nil)
         }
@@ -55,10 +57,20 @@ enum DevRoute {
             let sorted = r.projects.sorted { $0.cost > $1.cost }
             guard sorted.indices.contains(i) else { return (.overview, nil, nil) }
             let anchor: String?
-            switch parts.count > 1 ? String(parts[1]) : "" {
-            case "bottom": anchor = ProjectDetailView.bottomAnchor
-            case "locations": anchor = ProjectDetailView.locationsOpenAnchor
-            default: anchor = nil
+            if parts.count > 1 {
+                let rest = String(parts[1])
+                switch rest {
+                case "bottom": anchor = ProjectDetailView.bottomAnchor
+                case "locations": anchor = ProjectDetailView.locationsOpenAnchor
+                default:
+                    if rest.hasPrefix("hover:") {
+                        anchor = raw
+                    } else {
+                        anchor = nil
+                    }
+                }
+            } else {
+                anchor = nil
             }
             return (.project(sorted[i].id), anchor, nil)
         }

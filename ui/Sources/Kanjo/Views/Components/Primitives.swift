@@ -197,6 +197,7 @@ struct AgentDots: View {
     let agents: [AgentCost]
     var currency: String = "USD"
     var size: CGFloat = 6
+    var id: String? = nil
 
     var body: some View {
         let used = agents.filter { $0.sessions > 0 || $0.cost > 0 || $0.tokens.total > 0 }.sorted { $0.cost > $1.cost }
@@ -208,7 +209,7 @@ struct AgentDots: View {
             HStack(spacing: 3) {
                 ForEach(used.prefix(3)) { a in AgentDot(agent: a.agent, size: size) }
             }
-            .hoverCard {
+            .hoverCard(id: id) {
                 AgentRowsHoverCard(
                     title: L10n.tr("project.section.by_agent"),
                     cost: totalCost,
@@ -387,7 +388,7 @@ struct Legend: View {
 
     var body: some View {
         FlowLayout(spacing: 9, lineSpacing: 4) {
-            ForEach(agents) { a in
+            ForEach(Array(agents.enumerated()), id: \.element.id) { idx, a in
                 HStack(spacing: 4) {
                     AgentDot(agent: a.key, size: 6)
                     Text(a.label)
@@ -395,7 +396,7 @@ struct Legend: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .hoverCard {
+                .hoverCard(id: idx == 0 ? "overview:hover:legend" : "overview:hover:legend:\(a.key)") {
                     AgentRowsHoverCard(
                         title: a.label,
                         titleDotColor: AgentPalette.color(for: a.key),
@@ -405,7 +406,7 @@ struct Legend: View {
                         rows: [HoverCardRowItem(id: a.key, label: a.label, cost: a.cost, tokens: a.tokens, fraction: 1.0)]
                     )
                 }
-                .accessibilityLabel(helpText(for: a))
+                .accessibilityHint(helpText(for: a))
             }
         }
     }
