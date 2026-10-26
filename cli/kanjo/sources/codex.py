@@ -27,9 +27,11 @@ AGENT = "codex"
 PATH_KEYS = {"workdir", "path", "file_path", "cwd", "paths", "dir", "directory", "working_directory"}
 CMD_KEYS = {"cmd", "command"}
 _PATCH_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+?)\s*$|^\*\*\* Move to: (.+?)\s*$", re.M)
-_MARKERS = (b'"session_meta"', b'"turn_context"', b'"token_count"', b'"user_message"', b'"user"',
-            b'"instructions"', b'"instruction"',
-            b'"function_call"', b'"custom_tool_call"', b'"local_shell_call"')
+_MARKERS = (
+    b'"token_count"', b'"function_call"', b'"custom_tool_call"', b'"local_shell_call"',
+    b'"turn_context"', b'"session_meta"', b'"user_message"',
+    b'"role": "user"', b'"role":"user"', b'"instructions"', b'"instruction"',
+)
 
 
 def roots() -> List[str]:
@@ -105,8 +107,13 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         raise ParseError(str(exc))
     with handle:
         for raw in handle:
-            head = raw[:320]
-            if not any(marker in head for marker in _MARKERS):
+            head = raw[:512]
+            matched = False
+            for marker in _MARKERS:
+                if marker in head:
+                    matched = True
+                    break
+            if not matched:
                 if good == 0 and bad == 0 and raw.strip():
                     try:
                         json.loads(raw)

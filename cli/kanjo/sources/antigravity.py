@@ -29,7 +29,10 @@ import sqlite3
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote
 
-from .base import Message, ParseError, Session, env_dirs, extract_paths, paths_from_args, short_title, unique
+from .base import (
+    Message, ParseError, Session, env_dirs, extract_paths,
+    open_sqlite_ro, paths_from_args, short_title, unique,
+)
 
 AGENT = "antigravity"
 PATH_KEYS = {"absolutepath", "searchpath", "targetfile", "cwd", "directorypath", "path",
@@ -57,21 +60,26 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
 
 # ---- protobuf wire format (ported from Tokei) ---------------------------------
 def decode_varint(data: bytes, offset: int) -> Tuple[int, int]:
-    val = 0
-    shift = 0
-    for _ in range(10):
-        if offset >= len(data):
-            break
+    b = data[offset]
+    if b < 0x80:
+        return b, offset + 1
+    val = b & 0x7F
+    shift = 7
+    offset += 1
+    n = len(data)
+    while offset < n:
         b = data[offset]
         offset += 1
         val |= (b & 0x7F) << shift
-        if not b & 0x80:
+        if b < 0x80:
             return val, offset
         shift += 7
+        if shift > 63:
+            break
     raise ValueError("bad varint")
 
 
-def parse_fields(data) -> List[Tuple[int, int, object]]:
+def parse_fields(data, wanted=None) -> List[Tuple[int, int, object]]:
     """[(field number, wire type, value)]; stops quietly at the first bad byte."""
     fields = []
     if not data:
@@ -80,20 +88,47 @@ def parse_fields(data) -> List[Tuple[int, int, object]]:
     n = len(data)
     while i < n:
         try:
-            key, i = decode_varint(data, i)
+            b = data[i]
+            if b < 0x80:
+                key = b
+                i += 1
+            else:
+                key, i = decode_varint(data, i)
             fn, wt = key >> 3, key & 7
+            skip = (wanted is not None and fn not in wanted)
             if wt == 0:
-                val, i = decode_varint(data, i)
+                if skip:
+                    while i < n and data[i] >= 0x80:
+                        i += 1
+                    i += 1
+                    continue
+                b = data[i]
+                if b < 0x80:
+                    val = b
+                    i += 1
+                else:
+                    val, i = decode_varint(data, i)
             elif wt == 2:
-                length, i = decode_varint(data, i)
+                b = data[i]
+                if b < 0x80:
+                    length = b
+                    i += 1
+                else:
+                    length, i = decode_varint(data, i)
                 if i + length > n:
                     break
+                if skip:
+                    i += length
+                    continue
                 val = data[i:i + length]
                 i += length
             elif wt in (1, 5):
                 width = 8 if wt == 1 else 4
                 if i + width > n:
                     break
+                if skip:
+                    i += width
+                    continue
                 val = data[i:i + width]
                 i += width
             else:
@@ -112,7 +147,7 @@ def _first(fields, number, wire=2):
 
 
 def _text(value) -> Optional[str]:
-    if not isinstance(value, (bytes, bytearray)):
+    if not isinstance(value, (bytes, bytearray, memoryview)):
         return None
     try:
         return bytes(value).decode("utf-8")
@@ -124,10 +159,16 @@ def _packed(data) -> List[int]:
     values = []
     i = 0
     try:
-        while i < len(data):
-            v, i = decode_varint(data, i)
-            values.append(v)
-    except ValueError:
+        n = len(data)
+        while i < n:
+            b = data[i]
+            if b < 0x80:
+                values.append(b)
+                i += 1
+            else:
+                v, i = decode_varint(data, i)
+                values.append(v)
+    except (ValueError, IndexError):
         pass
     return values
 
@@ -149,11 +190,12 @@ def gen_record(record: bytes, fallback_ts=None):
     model = "unknown"
     inp = out = cached = thoughts = 0
     ts = None
-    for fn, wt, val in parse_fields(record):
+    root_cascade_id = None
+    for fn, wt, val in parse_fields(record, wanted={4, 9, 19, 20}):
         if fn == 19 and wt == 2:
             model = _text(val) or model
         elif fn == 4 and wt == 2:
-            for tfn, twt, tval in parse_fields(val):
+            for tfn, twt, tval in parse_fields(val, wanted={2, 3, 5, 9}):
                 if twt != 0:
                     continue
                 if tfn == 2:
@@ -165,28 +207,40 @@ def gen_record(record: bytes, fallback_ts=None):
                 elif tfn == 9:
                     thoughts = tval
         elif fn == 9 and wt == 2:
-            for tfn, twt, tval in parse_fields(val):
+            for tfn, twt, tval in parse_fields(val, wanted={4}):
                 if tfn == 4 and twt == 2:
-                    for sfn, swt, sval in parse_fields(tval):
+                    for sfn, swt, sval in parse_fields(tval, wanted={1}):
                         if sfn == 1 and swt == 0:
                             ts = sval
+        elif fn == 20 and wt == 2:
+            if root_cascade_id is None:
+                sub = parse_fields(val)
+                k = _text(_first(sub, 1))
+                if k == "root_cascade_id":
+                    root_cascade_id = _text(_first(sub, 2))
     if max(inp, out, cached, thoughts) > _MAX_TOKENS:
         return None
     if not (inp or out or cached or thoughts):
-        return {"empty": True}  # failed request (quota / capacity error), nothing billed
+        res = {"empty": True}
+        if root_cascade_id:
+            res["root_cascade_id"] = root_cascade_id
+        return res
     if not _valid_ts(ts):
         ts = fallback_ts
     if not _valid_ts(ts):
         return None
     if not model or len(model) > 120 or not model.isprintable():
         model = "unknown"
-    return {"model": model, "input": inp, "output": out, "cache_read": cached,
-            "thinking": min(thoughts, out) if out else thoughts, "ts": ts}
+    res = {"model": model, "input": inp, "output": out, "cache_read": cached,
+           "thinking": min(thoughts, out) if out else thoughts, "ts": ts}
+    if root_cascade_id:
+        res["root_cascade_id"] = root_cascade_id
+    return res
 
 
 def _kv(record: bytes) -> Dict[str, str]:
     out = {}
-    for fn, wt, val in parse_fields(record):
+    for fn, wt, val in parse_fields(record, wanted={20}):
         if fn == 20 and wt == 2:
             sub = parse_fields(val)
             k, v = _text(_first(sub, 1)), _text(_first(sub, 2))
@@ -196,140 +250,124 @@ def _kv(record: bytes) -> Dict[str, str]:
 
 
 def _open(path: str):
-    # Read-only. WAL databases without a -shm file cannot be opened with
-    # mode=ro (SQLite would have to create it), so fall back to immutable.
-    try:
-        conn = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=1)
-        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-        return conn
-    except sqlite3.Error:
-        pass
-    try:
-        conn = sqlite3.connect("file:%s?mode=ro&immutable=1" % path, uri=True, timeout=1)
-        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-        return conn
-    except sqlite3.Error as exc:
-        raise ParseError("cannot open database: %s" % exc)
+    return open_sqlite_ro(path)
 
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     sid = os.path.splitext(os.path.basename(path))[0]
     session = Session(id=sid, agent=AGENT, file=path)
-    conn = _open(path)
-    try:
+    with open_sqlite_ro(path) as conn:
+        # trajectory metadata: workspace, remote, branch
+        workspace = remote = branch = None
         try:
-            gen_rows = conn.execute("SELECT idx, data FROM gen_metadata ORDER BY idx").fetchall()
-            step_rows = conn.execute("SELECT idx, step_type, metadata FROM steps ORDER BY idx").fetchall()
+            for (blob,) in conn.execute("SELECT data FROM trajectory_metadata_blob WHERE data IS NOT NULL"):
+                top = parse_fields(blob, wanted={1, 2, 7})
+                ws_msg = _first(top, 1)
+                if ws_msg is not None:
+                    ws_fields = parse_fields(ws_msg, wanted={1, 3, 4})
+                    workspace = workspace or _uri_path(_text(_first(ws_fields, 1)))
+                    git = _first(ws_fields, 3)
+                    if git is not None:
+                        remote = remote or _text(_first(parse_fields(git, wanted={2}), 2))
+                    branch = branch or _text(_first(ws_fields, 4))
+                created = _first(top, 2)
+                if created is not None:
+                    secs = _first(parse_fields(created, wanted={1}), 1, 0)
+                    if _valid_ts(secs):
+                        session.origin_ts = float(secs)
+                        session.note_time(float(secs))
+                workspace = workspace or _uri_path(_text(_first(top, 7)))
+        except sqlite3.Error:
+            pass
+        session.branch = branch or None
+        if workspace:
+            session.note_cwd(workspace, 0)
+            session.cwd = workspace
+            if remote:
+                session.remote_hints[workspace] = remote
+
+        # steps: timestamps and tool calls
+        step_ts: Dict[int, int] = {}
+        try:
+            for idx, meta in conn.execute(
+                "SELECT idx, metadata FROM steps WHERE metadata IS NOT NULL ORDER BY idx"
+            ):
+                fields = parse_fields(meta, wanted={1, 4})
+                stamp = _first(fields, 1)
+                if stamp is not None:
+                    secs = _first(parse_fields(stamp, wanted={1}), 1, 0)
+                    if _valid_ts(secs):
+                        step_ts[int(idx)] = secs
+                        session.note_time(float(secs))
+                call = _first(fields, 4)
+                if call is None:
+                    continue
+                call_fields = parse_fields(call, wanted={3})
+                args_text = _text(_first(call_fields, 3))
+                if not args_text:
+                    continue
+                try:
+                    args = json.loads(args_text)
+                except ValueError:
+                    args = None
+                cwd = workspace
+                if isinstance(args, dict) and isinstance(args.get("Cwd"), str):
+                    cwd = args["Cwd"]
+                found = paths_from_args(args, cwd, PATH_KEYS, CMD_KEYS) if isinstance(args, dict) else extract_paths(args_text)
+                found = unique(found)
+                if found:
+                    session.tool_paths.append(found)
         except sqlite3.Error as exc:
             raise ParseError("unexpected schema: %s" % exc)
+
         try:
-            meta_rows = conn.execute("SELECT data FROM trajectory_metadata_blob").fetchall()
+            for (payload,) in conn.execute(
+                "SELECT step_payload FROM steps WHERE step_type = ? AND step_payload IS NOT NULL ORDER BY idx LIMIT 5",
+                (_USER_INPUT_STEP,),
+            ):
+                user = _first(parse_fields(payload, wanted={19}), 19)
+                if user is not None:
+                    session.title = short_title(_text(_first(parse_fields(user, wanted={2}), 2)))
+                    if session.title:
+                        break
         except sqlite3.Error:
-            meta_rows = []
+            pass
+
+        # generations: token usage
+        root = None
+        had_records = decoded_any = False
         try:
-            inputs = conn.execute(
-                "SELECT step_payload FROM steps WHERE step_type = ? ORDER BY idx LIMIT 5",
-                (_USER_INPUT_STEP,)).fetchall()
-        except sqlite3.Error:
-            inputs = []
-    finally:
-        conn.close()
+            for idx, data in conn.execute("SELECT idx, data FROM gen_metadata WHERE data IS NOT NULL ORDER BY idx"):
+                fields = parse_fields(data, wanted={1, 2})
+                refs = []
+                for fn, wt, val in fields:
+                    if fn == 2 and wt == 2:
+                        refs.extend(_packed(val))
+                fallback = next((step_ts[r] for r in refs if r in step_ts), None)
+                if fallback is None and session.started is not None:
+                    fallback = int(session.started)
+                record_index = 0
+                for fn, wt, val in fields:
+                    if fn != 1 or wt != 2:
+                        continue
+                    had_records = True
+                    rec = gen_record(val, fallback)
+                    if root is None and isinstance(rec, dict):
+                        root = rec.get("root_cascade_id")
+                    if rec is None:
+                        continue
+                    decoded_any = True
+                    if rec.get("empty"):
+                        continue
+                    session.messages.append(Message(
+                        ts=float(rec["ts"]), model=rec["model"], input=rec["input"], output=rec["output"],
+                        cache_read=rec["cache_read"], thinking=rec["thinking"], cwd=workspace, branch=branch,
+                        key="antigravity:%s:%s:%d" % (sid, idx, record_index)))
+                    session.note_time(float(rec["ts"]))
+                    record_index += 1
+        except sqlite3.Error as exc:
+            raise ParseError("unexpected schema: %s" % exc)
 
-    # trajectory metadata: workspace, remote, branch
-    workspace = remote = branch = None
-    for (blob,) in meta_rows:
-        top = parse_fields(blob)
-        ws_msg = _first(top, 1)
-        if ws_msg is not None:
-            ws_fields = parse_fields(ws_msg)
-            workspace = workspace or _uri_path(_text(_first(ws_fields, 1)))
-            git = _first(ws_fields, 3)
-            if git is not None:
-                remote = remote or _text(_first(parse_fields(git), 2))
-            branch = branch or _text(_first(ws_fields, 4))
-        created = _first(top, 2)
-        if created is not None:
-            secs = _first(parse_fields(created), 1, 0)
-            if _valid_ts(secs):
-                session.origin_ts = float(secs)
-                session.note_time(float(secs))
-        workspace = workspace or _uri_path(_text(_first(top, 7)))
-    session.branch = branch or None
-    if workspace:
-        session.note_cwd(workspace, 0)
-        session.cwd = workspace
-        if remote:
-            session.remote_hints[workspace] = remote
-
-    # steps: timestamps and tool calls
-    step_ts: Dict[int, int] = {}
-    for idx, _step_type, meta in step_rows:
-        fields = parse_fields(meta)
-        stamp = _first(fields, 1)
-        if stamp is not None:
-            secs = _first(parse_fields(stamp), 1, 0)
-            if _valid_ts(secs):
-                step_ts[int(idx)] = secs
-                session.note_time(float(secs))
-        call = _first(fields, 4)
-        if call is None:
-            continue
-        call_fields = parse_fields(call)
-        args_text = _text(_first(call_fields, 3))
-        if not args_text:
-            continue
-        try:
-            args = json.loads(args_text)
-        except ValueError:
-            args = None
-        cwd = workspace
-        if isinstance(args, dict) and isinstance(args.get("Cwd"), str):
-            cwd = args["Cwd"]
-        found = paths_from_args(args, cwd, PATH_KEYS, CMD_KEYS) if isinstance(args, dict) else extract_paths(args_text)
-        found = unique(found)
-        if found:
-            session.tool_paths.append(found)
-
-    for (payload,) in inputs:
-        user = _first(parse_fields(payload), 19)
-        if user is not None:
-            session.title = short_title(_text(_first(parse_fields(user), 2)))
-            if session.title:
-                break
-
-    # generations: token usage
-    root = None
-    had_records = decoded_any = False
-    for idx, data in gen_rows:
-        if not data:
-            continue
-        fields = parse_fields(data)
-        refs = []
-        for fn, wt, val in fields:
-            if fn == 2 and wt == 2:
-                refs.extend(_packed(val))
-        fallback = next((step_ts[r] for r in refs if r in step_ts), None)
-        if fallback is None and session.started is not None:
-            fallback = int(session.started)
-        record_index = 0
-        for fn, wt, val in fields:
-            if fn != 1 or wt != 2:
-                continue
-            had_records = True
-            rec = gen_record(val, fallback)
-            if root is None:
-                root = _kv(val).get("root_cascade_id")
-            if rec is None:
-                continue
-            decoded_any = True
-            if rec.get("empty"):
-                continue
-            session.messages.append(Message(
-                ts=float(rec["ts"]), model=rec["model"], input=rec["input"], output=rec["output"],
-                cache_read=rec["cache_read"], thinking=rec["thinking"], cwd=workspace, branch=branch,
-                key="antigravity:%s:%s:%d" % (sid, idx, record_index)))
-            session.note_time(float(rec["ts"]))
-            record_index += 1
     if had_records and not decoded_any:
         raise ParseError("gen_metadata present but no generation record could be decoded")
     if root and root != sid:

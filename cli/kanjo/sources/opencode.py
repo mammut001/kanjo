@@ -43,6 +43,9 @@ def _db_path(root: str) -> Optional[str]:
     return None
 
 
+_MM_CACHE: Dict[str, Tuple[int, Optional[Set[str]]]] = {}
+
+
 def _minimax_session_ids() -> Optional[Set[str]]:
     """Framework session ids recorded by MiniMax that OpenCode must exclude.
 
@@ -55,14 +58,34 @@ def _minimax_session_ids() -> Optional[Set[str]]:
         db = os.path.join(root, "sqlite.db") if os.path.isdir(root) else root
         if os.path.isfile(db):
             try:
+                st = os.stat(db)
+                cached = _MM_CACHE.get(db)
+                if cached is not None and cached[0] == st.st_mtime_ns:
+                    if cached[1] is None:
+                        return None
+                    sids.update(cached[1])
+                    continue
+            except OSError:
+                pass
+            try:
+                db_sids = set()
                 with open_sqlite_ro(db) as conn:
                     cur = conn.cursor()
                     cur.execute("SELECT framework_session_id FROM sessions WHERE framework_session_id IS NOT NULL")
-                    for (fid,) in cur.fetchall():
+                    for (fid,) in cur:
                         if fid:
-                            sids.add(fid)
+                            db_sids.add(fid)
+                try:
+                    _MM_CACHE[db] = (os.stat(db).st_mtime_ns, db_sids)
+                except OSError:
+                    pass
+                sids.update(db_sids)
             except (ParseError, sqlite3.Error, OSError) as exc:
                 print("warning: MiniMax db %s exists but cannot be read: %s; skipping OpenCode scan" % (db, exc), file=sys.stderr)
+                try:
+                    _MM_CACHE[db] = (os.stat(db).st_mtime_ns, None)
+                except OSError:
+                    pass
                 return None
     return sids
 
@@ -91,7 +114,7 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
                 cur.execute("SELECT id, parent_id, directory FROM session ORDER BY time_created")
-                for row in cur.fetchall():
+                for row in cur:
                     sid = row["id"]
                     directory = row["directory"]
                     parent = row["parent_id"]
@@ -168,13 +191,12 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
 
         # Query messages
         try:
-            cur.execute("SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id", (sid,))
-            msg_rows = cur.fetchall()
+            cur.execute("SELECT id, time_created, data FROM message WHERE session_id = ? AND data IS NOT NULL ORDER BY time_created, id", (sid,))
         except sqlite3.Error as exc:
             raise ParseError("failed to query messages for session %s: %s" % (sid, exc))
 
         user_title_candidate = None
-        for mrow in msg_rows:
+        for mrow in cur:
             raw_data = mrow["data"]
             if not raw_data:
                 continue
@@ -227,10 +249,10 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         # Query tool calls from part table
         try:
             cur.execute(
-                "SELECT data FROM part WHERE session_id = ? AND json_extract(data, '$.type') = 'tool' ORDER BY time_created",
+                "SELECT data FROM part WHERE session_id = ? AND data IS NOT NULL AND json_extract(data, '$.type') = 'tool' ORDER BY time_created",
                 (sid,),
             )
-            for prow in cur.fetchall():
+            for prow in cur:
                 raw_part = prow["data"]
                 if not raw_part:
                     continue

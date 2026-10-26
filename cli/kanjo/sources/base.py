@@ -455,6 +455,8 @@ short_title = clean_title
 _UNQUOTED_PATH = re.compile(r"""(?<![^\s"'`=(<>|&;,])((?:~|/)[^\s"'`;|&<>(){}$,]*)""")
 _QUOTED_PATH = re.compile(r"""(["'])((?:~|/)[^"'\n`;]*?)\1""")
 _TRAILING = ".,:;)]}\\"
+_VALID_SECOND_CHAR = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~-")
+_HOME = os.path.expanduser("~")
 
 
 def _finish(path: str, home: str) -> Optional[str]:
@@ -465,7 +467,7 @@ def _finish(path: str, home: str) -> Optional[str]:
         p = home + p[1:]
     if not p.startswith("/") or len(p) < 2 or p.startswith("//"):
         return None
-    if not re.match(r"^/[A-Za-z0-9._~\-]", p):
+    if p[1] not in _VALID_SECOND_CHAR:
         return None
     return os.path.normpath(p)
 
@@ -476,7 +478,7 @@ def extract_paths(text: str, home: Optional[str] = None) -> List[str]:
     not counted again."""
     if not text or not isinstance(text, str) or ("/" not in text and "~" not in text):
         return []
-    home = home or os.path.expanduser("~")
+    home = home or _HOME
     found: List[str] = []
     spans = []
     for m in _QUOTED_PATH.finditer(text):
@@ -485,7 +487,7 @@ def extract_paths(text: str, home: Optional[str] = None) -> List[str]:
         if p:
             found.append(p)
     for m in _UNQUOTED_PATH.finditer(text):
-        if any(a <= m.start() < b for a, b in spans):
+        if spans and any(a <= m.start() < b for a, b in spans):
             continue
         p = _finish(m.group(1), home)
         if p:
@@ -585,19 +587,44 @@ def git_branch(cwd: Optional[str]) -> Optional[str]:
 
 @contextlib.contextmanager
 def open_sqlite_ro(path: str):
-    """Open SQLite db in read-only mode, safely copying db + -wal + -shm to temp
-    so uncheckpointed WAL rows are accessible without write-locking or touching source files.
+    """Open SQLite db in read-only mode.
+    Tries direct connection with mode=ro first, avoiding copying. Falls back to
+    copying db + -wal + -shm to temp only on 'unable to open'/locked errors.
+    Never uses immutable=1 when a -wal exists.
     """
     if not os.path.isfile(path):
         raise ParseError("database file not found: %s" % path)
+
+    abs_path = os.path.abspath(path)
+    wal_exists = os.path.isfile(path + "-wal")
+    direct_conn = None
+    try:
+        c = sqlite3.connect(f"file:{abs_path}?mode=ro", uri=True, timeout=1)
+        c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        direct_conn = c
+    except sqlite3.Error:
+        if not wal_exists:
+            try:
+                c = sqlite3.connect(f"file:{abs_path}?mode=ro&immutable=1", uri=True, timeout=1)
+                c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+                direct_conn = c
+            except sqlite3.Error:
+                pass
+
+    if direct_conn is not None:
+        try:
+            yield direct_conn
+            return
+        finally:
+            direct_conn.close()
+
     tmp_dir = tempfile.mkdtemp(prefix="kanjo-db-")
     try:
         tmp_db = os.path.join(tmp_dir, os.path.basename(path))
         shutil.copy2(path, tmp_db)
-        wal_path = path + "-wal"
-        if os.path.isfile(wal_path):
+        if wal_exists:
             try:
-                shutil.copy2(wal_path, tmp_db + "-wal")
+                shutil.copy2(path + "-wal", tmp_db + "-wal")
             except OSError:
                 pass
         shm_path = path + "-shm"

@@ -81,7 +81,7 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                     with open_sqlite_ro(db_path) as conn:
                         cur = conn.cursor()
                         cur.execute("SELECT DISTINCT session_id FROM assistant_usage_events")
-                        for (sid,) in cur.fetchall():
+                        for (sid,) in cur:
                             target = f"{db_path}::{sid}"
                             if target not in seen:
                                 seen.add(target)
@@ -289,11 +289,10 @@ def _parse_db_session(path: str, subagent_of: Optional[str] = None) -> Session:
                 """,
                 (sid,),
             )
-            usage_rows = cur.fetchall()
         except sqlite3.Error as exc:
             raise ParseError("failed to query assistant_usage_events for session %s: %s" % (sid, exc))
 
-        for row in usage_rows:
+        for row in cur:
             ts = parse_iso(row["created_at"]) or 0.0
             model = row["model"] or "unknown"
             inp = int(row["input_tokens"] or 0)
