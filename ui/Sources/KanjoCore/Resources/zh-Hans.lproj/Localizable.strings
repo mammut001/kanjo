@@ -115,6 +115,13 @@
 "settings.unreadable" = "无法读取";
 "settings.no_reset_info" = "无重置信息";
 "settings.no_subscription_info" = "无订阅信息";
+"settings.add_subscription" = "添加订阅";
+"settings.edit" = "编辑";
+"settings.plan" = "套餐";
+"settings.monthly_price_usd" = "月费 ($)";
+"settings.remove_subscription" = "移除";
+"settings.error.plan_required" = "套餐名称为必填项。";
+"settings.error.invalid_price" = "金额必须为非负数。";
 "settings.saving" = "正在保存…";
 "settings.source.not_set" = "未设置 · 使用最近30天";
 "settings.source.manual" = "手动";

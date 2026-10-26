@@ -42,4 +42,20 @@ public enum AgentColors {
     public static func pair(for agent: String) -> AgentColorPair {
         all[agent] ?? neutral
     }
+
+    public static let defaultLabels: [String: String] = [
+        "claude": "Claude Code",
+        "antigravity": "Antigravity CLI",
+        "codex": "Codex CLI",
+        "grok": "Grok CLI",
+        "qwen": "Qwen Code",
+        "commandcode": "Command Code",
+        "minimax": "MiniMax",
+        "opencode": "OpenCode",
+        "copilot": "Copilot CLI",
+    ]
+
+    public static func label(for agent: String) -> String {
+        defaultLabels[agent] ?? agent
+    }
 }

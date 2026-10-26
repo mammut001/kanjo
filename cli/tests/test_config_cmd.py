@@ -181,6 +181,40 @@ class ConfigCommandTest(unittest.TestCase):
         self.assert_line(("set", "subscriptions.codex.plan", "custom"),
                          'subscriptions.codex.plan = "custom" (overrides)')
 
+    def test_config_all_new_agents_supported(self):
+        new_agents = {
+            "grok": ("supergrok", 30.0),
+            "copilot": ("pro", 10.0),
+            "minimax": ("starter", 10.0),
+            "qwen": ("coding_plan", 50.0),
+            "commandcode": ("goat", 10.0),
+            "opencode": ("go", 10.0),
+        }
+        for agent, (plan, price) in new_agents.items():
+            key = "subscriptions.%s.plan" % agent
+            self.assertEqual(self.run_cli("config", "set", key, plan)[0], 0)
+            self.assert_line(("get", "subscriptions.%s.monthly_price_usd" % agent),
+                             "subscriptions.%s.monthly_price_usd = %s (overrides)" % (agent, price))
+            day_key = "subscriptions.%s.anchor_day" % agent
+            self.assertEqual(self.run_cli("config", "set", day_key, "15")[0], 0)
+            self.assert_line(("get", day_key), "%s = 15 (overrides)" % day_key)
+            self.assertEqual(self.run_cli("config", "unset", key)[0], 0)
+            self.assertEqual(self.run_cli("config", "unset", day_key)[0], 0)
+
+    def test_unpriced_plans_require_price(self):
+        # Setting an unpriced plan directly without monthly_price_usd fails
+        self.assertEqual(self.run_cli("config", "set", "subscriptions.commandcode.plan", "provider")[0], 2)
+        # But setting price first works
+        self.assertEqual(self.run_cli("config", "set", "subscriptions.commandcode.monthly_price_usd", "15")[0], 0)
+        self.assertEqual(self.run_cli("config", "set", "subscriptions.commandcode.plan", "provider")[0], 0)
+        self.assert_line(("get", "subscriptions.commandcode.plan"),
+                         'subscriptions.commandcode.plan = "provider" (overrides)')
+        self.assert_line(("get", "subscriptions.commandcode.monthly_price_usd"),
+                         'subscriptions.commandcode.monthly_price_usd = 15.0 (overrides)')
+        # Clean up
+        self.run_cli("config", "unset", "subscriptions.commandcode.plan")
+        self.run_cli("config", "unset", "subscriptions.commandcode.monthly_price_usd")
+
     def test_paths_env_and_explicit_config_directory(self):
         self.assertEqual(self.run_cli("config", "path"), (0, self.toml + "\n" + self.overrides + "\n", ""))
         other = os.path.join(self.root, "other.toml")

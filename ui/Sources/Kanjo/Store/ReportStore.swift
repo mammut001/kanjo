@@ -84,6 +84,28 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
+    func setSubscription(agent: String, plan: String?, monthlyPriceUsd: Double?, anchorDay: Int?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.setSubscription(agent: agent, plan: plan, monthlyPriceUsd: monthlyPriceUsd, anchorDay: anchorDay) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
+    func removeSubscription(agent: String) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.removeSubscription(agent: agent) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
     func refresh() {
         // 先初始化磁盘缓存，并暂停尚未开始的预取，避免与用量导出同时启动。
         DiskStore.shared.cancelPrefetch()

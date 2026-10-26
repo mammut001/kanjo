@@ -33,6 +33,26 @@ KNOWN = [
     ("codex", "business", "ChatGPT Business", 30.0),
     ("antigravity", "google_ai_pro", "Google AI Pro", 19.99),
     ("antigravity", "google_ai_ultra", "Google AI Ultra", 249.99),
+    ("grok", "supergrok", "SuperGrok", 30.0),
+    ("grok", "supergrok_lite", "SuperGrok Lite", 10.0),
+    ("grok", "supergrok_heavy", "SuperGrok Heavy", 300.0),
+    ("grok", "premium", "X Premium", 8.0),
+    ("copilot", "free", "Copilot Free", 0.0),
+    ("copilot", "pro", "Copilot Pro", 10.0),
+    ("copilot", "pro_plus", "Copilot Pro+", 39.0),
+    ("copilot", "business", "Copilot Business", 19.0),
+    ("copilot", "enterprise", "Copilot Enterprise", 39.0),
+    ("minimax", "starter", "MiniMax Coding Plan Starter", 10.0),
+    ("minimax", "coding_plan_starter", "MiniMax Coding Plan Starter", 10.0),
+    ("minimax", "plus", "MiniMax Coding Plan Plus", 20.0),
+    ("minimax", "coding_plan_plus", "MiniMax Coding Plan Plus", 20.0),
+    ("minimax", "max", "MiniMax Coding Plan Max", 50.0),
+    ("minimax", "coding_plan_max", "MiniMax Coding Plan Max", 50.0),
+    ("qwen", "coding_plan", "Qwen Coding Plan Pro", 50.0),
+    ("qwen", "pro", "Qwen Coding Plan Pro", 50.0),
+    ("commandcode", "go", "Command Code Go", 1.0),
+    ("commandcode", "goat", "Command Code GOAT", 10.0),
+    ("opencode", "go", "OpenCode Go", 10.0),
 ]
 
 
@@ -71,6 +91,15 @@ class SubscriptionTest(unittest.TestCase):
         if plan_type is not None:
             data["limits"]["plan_type"] = plan_type
         with open(os.path.join(self.dir, quota.CODEX_FILE), "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+
+    def write_grok(self, plan="SuperGrok", fetched=None, in_quota=True):
+        data = {"fetched_at": NOW.timestamp() if fetched is None else fetched}
+        if in_quota:
+            data["quota"] = {"plan": plan, "reset": NOW.timestamp() + 86400 * 7}
+        else:
+            data["plan"] = plan
+        with open(os.path.join(self.dir, "grok_quota_cache.json"), "w", encoding="utf-8") as handle:
             json.dump(data, handle)
 
     def test_claude_known_tiers(self):
@@ -209,6 +238,35 @@ class SubscriptionTest(unittest.TestCase):
         os.utime(path, (NOW.timestamp(), NOW.timestamp()))
         self.assertEqual(self.collect()["codex"]["plan_label"], "ChatGPT Go")
 
+    def test_grok_detection(self):
+        self.write_grok("SuperGrok")
+        found = self.collect()
+        self.assertIn("grok", found)
+        sub = found["grok"]
+        self.assertEqual(sub["plan"], "supergrok")
+        self.assertEqual(sub["plan_label"], "SuperGrok")
+        self.assertEqual(sub["monthly_price_usd"], 30.0)
+        self.assertEqual(sub["source"], "detected")
+        self.assertEqual(sub["cycle_source"], "rolling_30d")
+        self.assertIsNone(sub["anchor_day"])
+        self.assertFalse(sub["extra_usage_enabled"])
+        check_subscriptions(self, found)
+        # Top-level plan string also works
+        self.write_grok("SuperGrok Heavy", in_quota=False)
+        sub = self.collect()["grok"]
+        self.assertEqual(sub["plan"], "supergrok_heavy")
+        self.assertEqual(sub["monthly_price_usd"], 300.0)
+        # Stale cache is ignored
+        self.write_grok("SuperGrok", fetched=NOW.timestamp() - 15 * DAY)
+        self.assertNotIn("grok", self.collect())
+
+    def test_unconfigured_agents_absent(self):
+        self.assertEqual(self.collect(), {})
+
+    def test_unknown_agent_rejected_by_config(self):
+        with self.assertRaises(ConfigError):
+            config.from_dict({"subscriptions": {"nonexistent": {"plan": "pro", "monthly_price_usd": 10}}})
+
     def test_known_plans_fill_in_price_and_label(self):
         for agent, plan, label, price in KNOWN:
             found = self.collect(config.from_dict({"subscriptions": {agent: {"plan": plan}}}).subscriptions)
@@ -220,6 +278,21 @@ class SubscriptionTest(unittest.TestCase):
             self.assertIsNone(sub["anchor_day"])
             self.assertFalse(sub["extra_usage_enabled"])
             check_subscriptions(self, found)
+
+    def test_unpriced_known_plans_require_price(self):
+        for agent, plan, label in [
+                ("commandcode", "provider", "Command Code Provider"),
+                ("commandcode", "pro", "Command Code Pro"),
+                ("commandcode", "max", "Command Code Max"),
+                ("grok", "premium_plus", "X Premium+"),
+        ]:
+            with self.assertRaises(ConfigError):
+                config.from_dict({"subscriptions": {agent: {"plan": plan}}})
+            cfg = config.from_dict({"subscriptions": {agent: {"plan": plan, "monthly_price_usd": 25.0}}})
+            found = self.collect(cfg.subscriptions)
+            sub = found[agent]
+            self.assertEqual(sub["plan_label"], label)
+            self.assertEqual(sub["monthly_price_usd"], 25.0)
 
     def test_manual_overrides_detection(self):
         self.write_claude(extra=True)

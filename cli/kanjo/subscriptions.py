@@ -14,7 +14,12 @@ Sources, per agent. Manual fields override detection for that agent
   with the same 14-day staleness rule as :mod:`kanjo.quota` (``fetched_at``, else
   the file mtime). Plan is ``plan`` or ``limits.plan_type``. No subscription date
   is known, so the anchor is unknown and ``extra_usage_enabled`` is false.
-* Antigravity: nothing is detectable. Only a manual table adds it.
+* Grok: Tokei's ``grok_quota_cache.json`` in ``~/.tokei`` (``$KANJO_TOKEI_DIR``),
+  with the same 14-day staleness rule as Codex. Plan is ``plan`` or ``quota.plan``.
+  No subscription date is known, so the anchor is unknown (``rolling_30d``) and
+  ``extra_usage_enabled`` is false.
+* Antigravity, Copilot, MiniMax, Qwen, Command Code, OpenCode: nothing is
+  detectable from non-secret files. Only a manual table adds them.
 
 The billing cycle is the latest ``anchor_day`` at 00:00 in the report timezone
 that is still <= now, through the next month's anchor at 00:00. Each month clamps
@@ -38,13 +43,17 @@ from zoneinfo import ZoneInfo
 from .quota import CODEX_FILE, _fresh, _load, _num, tokei_dir
 from .sources.base import iso_utc, local_timezone_name
 
+GROK_FILE = "grok_quota_cache.json"
+
 # Claude keys are also substring needles and must stay longest-first.
 KNOWN_PLANS = {
+    # https://claude.ai/pricing
     "claude": {
         "max_20x": ("Claude Max 20x", 200.0),
         "max_5x": ("Claude Max 5x", 100.0),
         "pro": ("Claude Pro", 20.0),
     },
+    # https://openai.com/chatgpt/pricing
     "codex": {
         "free": ("ChatGPT Free", 0.0),
         "go": ("ChatGPT Go", 8.0),
@@ -53,9 +62,53 @@ KNOWN_PLANS = {
         "team": ("ChatGPT Team", 30.0),
         "business": ("ChatGPT Business", 30.0),
     },
+    # https://one.google.com/subscriptions
     "antigravity": {
         "google_ai_pro": ("Google AI Pro", 19.99),
         "google_ai_ultra": ("Google AI Ultra", 249.99),
+    },
+    # https://x.com/settings/premium / https://grok.com
+    "grok": {
+        "supergrok": ("SuperGrok", 30.0),
+        "supergrok_lite": ("SuperGrok Lite", 10.0),
+        "supergrok_heavy": ("SuperGrok Heavy", 300.0),
+        "premium": ("X Premium", 8.0),
+        "premium_plus": ("X Premium+", None),
+    },
+    # https://github.com/features/copilot/plans
+    "copilot": {
+        "free": ("Copilot Free", 0.0),
+        "pro": ("Copilot Pro", 10.0),
+        "individual": ("Copilot Pro", 10.0),
+        "pro_plus": ("Copilot Pro+", 39.0),
+        "business": ("Copilot Business", 19.0),
+        "enterprise": ("Copilot Enterprise", 39.0),
+    },
+    # https://platform.minimax.io/docs/guides/pricing-coding-plan
+    "minimax": {
+        "starter": ("MiniMax Coding Plan Starter", 10.0),
+        "coding_plan_starter": ("MiniMax Coding Plan Starter", 10.0),
+        "plus": ("MiniMax Coding Plan Plus", 20.0),
+        "coding_plan_plus": ("MiniMax Coding Plan Plus", 20.0),
+        "max": ("MiniMax Coding Plan Max", 50.0),
+        "coding_plan_max": ("MiniMax Coding Plan Max", 50.0),
+    },
+    # https://dashscope.console.aliyun.com (Alibaba Cloud Model Studio Coding Plan)
+    "qwen": {
+        "coding_plan": ("Qwen Coding Plan Pro", 50.0),
+        "pro": ("Qwen Coding Plan Pro", 50.0),
+    },
+    # https://commandcode.ai
+    "commandcode": {
+        "go": ("Command Code Go", 1.0),
+        "goat": ("Command Code GOAT", 10.0),
+        "provider": ("Command Code Provider", None),
+        "pro": ("Command Code Pro", None),
+        "max": ("Command Code Max", None),
+    },
+    # https://opencode.ai
+    "opencode": {
+        "go": ("OpenCode Go", 10.0),
     },
 }
 
@@ -63,20 +116,33 @@ _LABEL_FAMILY = {
     "claude": "Claude",
     "codex": "ChatGPT",
     "antigravity": "Antigravity",
+    "grok": "Grok",
+    "copilot": "Copilot",
+    "minimax": "MiniMax",
+    "qwen": "Qwen",
+    "commandcode": "Command Code",
+    "opencode": "OpenCode",
 }
 
 
 def known_monthly_price(agent: str, plan: str) -> Optional[float]:
     """List price for a known plan key, or None when this agent has no such key."""
     found = _known(agent, plan)
-    return None if found is None else found[1]
+    return None if found is None else found[2]
 
 
-def _known(agent: str, plan: str) -> Optional[Tuple[str, float]]:
-    row = KNOWN_PLANS.get(agent, {}).get(plan)
-    if row is None:
-        return None
-    return row[0], float(row[1])
+def _known(agent: str, plan: str) -> Optional[Tuple[str, str, Optional[float]]]:
+    table = KNOWN_PLANS.get(agent, {})
+    if plan in table:
+        row = table[plan]
+        price = None if row[1] is None else float(row[1])
+        return plan, row[0], price
+    norm = plan.strip().lower().replace("-", "_").replace(" ", "_")
+    if norm in table:
+        row = table[norm]
+        price = None if row[1] is None else float(row[1])
+        return norm, row[0], price
+    return None
 
 
 def _unknown_label(agent: str, raw: str) -> str:
@@ -86,12 +152,12 @@ def _unknown_label(agent: str, raw: str) -> str:
 def _resolve(agent: str, plan: str, override) -> Tuple[str, str, Optional[float]]:
     found = _known(agent, plan)
     if found:
-        label, price = found
+        key, label, price = found
     else:
-        label, price = _unknown_label(agent, plan), None
+        key, label, price = plan, _unknown_label(agent, plan), None
     if override is not None:
         price = float(override)
-    return plan, label, price
+    return key, label, price
 
 
 def _map_claude(raw: str) -> Tuple[str, str, Optional[float]]:
@@ -241,6 +307,32 @@ def _detect_codex(directory: str, now: datetime, tz_name: str) -> Optional[dict]
     return _finish(plan, label, price, None, "rolling_30d", False, "detected", now, tz_name)
 
 
+def _grok_plan(data: dict) -> Optional[str]:
+    plan = data.get("plan")
+    if isinstance(plan, str) and plan.strip():
+        return plan.strip()
+    quota = data.get("quota")
+    if isinstance(quota, dict):
+        plan = quota.get("plan")
+        if isinstance(plan, str) and plan.strip():
+            return plan.strip()
+    return None
+
+
+def _detect_grok(directory: str, now: datetime, tz_name: str) -> Optional[dict]:
+    path = os.path.join(directory, GROK_FILE)
+    data = _load(path)
+    if not isinstance(data, dict):
+        return None
+    if not _fresh(_num(data.get("fetched_at")), path, now.timestamp()):
+        return None
+    raw = _grok_plan(data)
+    if raw is None:
+        return None
+    plan, label, price = _resolve("grok", raw, None)
+    return _finish(plan, label, price, None, "rolling_30d", False, "detected", now, tz_name)
+
+
 def _from_manual(agent: str, spec, now: datetime, tz_name: str,
                  detected: Optional[dict] = None) -> Optional[dict]:
     if not isinstance(spec, dict) or not spec:
@@ -283,6 +375,12 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         detected = None
     if detected:
         out["codex"] = detected
+    try:
+        detected = _detect_grok(directory, now_dt, tz_name)
+    except Exception:
+        detected = None
+    if detected:
+        out["grok"] = detected
     for agent, spec in (manual or {}).items():
         entry = _from_manual(str(agent), spec, now_dt, tz_name, out.get(str(agent)))
         if entry:
