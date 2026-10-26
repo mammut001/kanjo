@@ -316,7 +316,7 @@ class ProjectAgg(Agg):
 def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
                  prices: Optional[PriceBook] = None, home: Optional[str] = None,
                  now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
-                 cache=None, fs_root: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
+                 cache=None, repo_cache=None, fs_root: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
@@ -324,7 +324,10 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     sessions = dedupe(result.sessions)
     units = build_units(sessions)
 
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root)
+    if repo_cache is None and cache is not None:
+        repo_cache = getattr(cache, "repo_cache", None)
+
+    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root, repo_cache=repo_cache)
     scratch = ScratchpadDecoder(fs_root=fs_root)
     for s in sessions:
         for path, remote in s.remote_hints.items():
@@ -472,6 +475,9 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     totals.sessions = sum(p["sessions"] for p in project_list) + sum(b.sessions for b in buckets.values())
     totals_json = totals.to_json()
     totals_json["unique_sessions"] = unique_sessions  # each session once, incl. buckets, excl. parse_failed
+
+    if repo_cache is not None:
+        repo_cache.save()
 
     now = now or datetime.now(timezone.utc)
     tz_name = local_timezone_name()
