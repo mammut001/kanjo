@@ -397,7 +397,8 @@ private struct SubscriptionValueCard: View {
         let defaultRows = SubscriptionValue.rows(of: report)
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
-        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded, limit: 3)
+        let autoExpandForPinned = pinnedQuotaAgent != nil && orderedRows.contains(where: { $0.agent == pinnedQuotaAgent })
+        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded || autoExpandForPinned, limit: 3)
 
         return PanelSection(L10n.tr("overview.section.subscription_value"), flat: true) {
             VStack(alignment: .leading, spacing: 0) {

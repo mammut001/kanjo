@@ -116,7 +116,7 @@ Definitions follow CONTRACT.md §6.1; the engine is `KanjoCore/TimeRange.swift` 
 - The menu bar amount follows the range too: the filtered total with a tiny prefix — `7d $…`, `30d $…`,
   `wk $…` (Last week), `rst $…` (Since reset), `cyc $…` (Billing cycle) — and the plain report total for All.
 - Settings → **Quota reset** lists each agent's next weekly reset, its window start and the source
-  (`tokei` / `manual` / `none`); reset times can be set by hand in Settings or in `~/.config/kanjo/attribution.toml`.
+  (`live` / `tokei` / `manual` / `none`); reset times can be set by hand in Settings or in `~/.config/kanjo/attribution.toml`.
 
 Screenshot tip: `-timeRange days7` (or `all`, `today`, `days30`, `lastWeek`, `sinceReset`, `billingCycle`) presets the range for one launch.
 Preferences can be preset for one launch without persisting them, through the

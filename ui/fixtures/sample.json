@@ -10,31 +10,56 @@
   },
   "quota_windows": {
     "claude": {
-      "weekly_resets_at": "2026-10-27T10:00:00Z",
+      "weekly_resets_at": "2026-10-30T08:40:07Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 57.0,
-      "five_hour_resets_at": "2026-10-23T04:30:00Z",
+      "five_hour_resets_at": "2026-10-27T20:31:07Z",
       "five_hour_window_hours": 5,
       "five_hour_used_percent": 13.0,
-      "source": "tokei"
+      "source": "live"
     },
     "codex": {
-      "weekly_resets_at": "2026-10-28T08:00:00Z",
+      "weekly_resets_at": "2026-10-31T02:40:07Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 38.0,
-      "five_hour_resets_at": "2026-10-23T05:00:00Z",
+      "five_hour_resets_at": "2026-10-27T22:00:07Z",
       "five_hour_window_hours": 5,
       "five_hour_used_percent": 18.0,
-      "source": "manual"
+      "source": "live"
     },
     "grok": {
-      "weekly_resets_at": "2026-10-27T05:00:00Z",
+      "weekly_resets_at": "2026-10-31T20:40:07Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 42.0,
       "five_hour_resets_at": null,
       "five_hour_window_hours": null,
       "five_hour_used_percent": null,
-      "source": "tokei"
+      "source": "live"
+    },
+    "antigravity": {
+      "weekly_resets_at": "2026-10-31T04:40:07Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 61.2,
+      "five_hour_resets_at": "2026-10-27T21:10:07Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 18.5,
+      "source": "live",
+      "extra_windows": [
+        {
+          "id": "antigravity-3p-weekly",
+          "title": "Claude/GPT 周",
+          "used_percent": 24.0,
+          "resets_at": "2026-10-31T04:40:07Z",
+          "window_hours": 168
+        },
+        {
+          "id": "antigravity-3p-5h",
+          "title": "Claude/GPT 5h",
+          "used_percent": 50.0,
+          "resets_at": "2026-10-27T22:25:07Z",
+          "window_hours": 5
+        }
+      ]
     }
   },
   "subscriptions": {
@@ -60,6 +85,17 @@
       "extra_usage_enabled": false,
       "source": "detected"
     },
+    "antigravity": {
+      "plan": "google_ai_pro",
+      "plan_label": "Google AI Pro",
+      "monthly_price_usd": 19.99,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
     "grok": {
       "plan": "supergrok",
       "plan_label": "SuperGrok",
@@ -70,6 +106,17 @@
       "cycle_source": "rolling_30d",
       "extra_usage_enabled": false,
       "source": "detected"
+    },
+    "copilot": {
+      "plan": "pro",
+      "plan_label": "Copilot Pro",
+      "monthly_price_usd": 10.0,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "manual"
     }
   },
   "totals": {

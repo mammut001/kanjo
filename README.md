@@ -35,7 +35,8 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 
 - **A treemap of your repos by cost.** One glance tells you where the money went.
 - **An 8-week burn strip per repo**, colored by agent across all 9 supported tools.
-- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Detected automatically for Claude, Codex, and Grok, or configured manually in Settings for any agent. Hover a plan to see its 5-hour and weekly quota: how much is used and when each window resets. Hover a treemap tile for its per-agent cost and tokens.
+- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Shows top 3 rows by default with a "Show N more" collapse toggle, and rows can be dragged to choose which 3 stay on top. Detected automatically for Claude, Codex, Grok, and Antigravity, or configured manually in Settings for any agent. Hover a plan to see its 5-hour and weekly quota: how much is used and when each window resets (Antigravity also includes Claude/GPT extra windows; Command Code has no quota bar). Hover a treemap tile for its per-agent cost and tokens.
+- **Standalone quota fetching.** Kanjo is fully standalone — it reads local agent logs and fetches quota itself directly using local credentials (Antigravity via local language server on 127.0.0.1, ChatGPT, Claude, and Grok). Read-only, credentials stay in memory only, nothing is uploaded, and `KANJO_NO_NETWORK=1` (or `no_network = true` in config) disables all network requests. Tokei caches serve as an optional fallback only.
 - **Time ranges**: all time, Today, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
 - **Menu bar in cost or tokens mode.** Displays either spend (`$`) or total tokens with compact formatting and range suffixes.
 - **Languages.** Fully localized into English, 简体中文, and Français, with localized token units (`k`/`M`/`B`, `万`/`亿`, `k`/`M`/`Md`).
@@ -46,11 +47,15 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 
 <p align="center">
   <img src="docs/screenshots/quota-hover-claude.png" width="360" alt="Quota card on hover: Claude Max 5-hour and weekly windows">
-  <img src="docs/screenshots/mosaic-hover.png" width="360" alt="Treemap hover card: per-agent cost and tokens">
+  <img src="docs/screenshots/quota-hover-antigravity.png" width="360" alt="Quota card on hover: Antigravity Google AI Pro with Gemini and Claude/GPT extra windows">
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/mosaic-hover.png" width="360" alt="Treemap hover card: per-agent cost and tokens">
   <img src="docs/screenshots/detail-light.png" width="360" alt="Project detail">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/disk-light.png" width="360" alt="Disk page">
 </p>
 
@@ -70,7 +75,7 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | OpenCode | `~/.local/share/opencode/opencode.db` | files touched, directory / worktree |
 | Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot/session-store.db` | files touched, cwd |
 
-MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
+Antigravity sessions are detected automatically from both `~/.gemini/antigravity-cli` and `~/.gemini/antigravity` (Antigravity 2.0 app). MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
 ## How attribution works
 
@@ -182,7 +187,8 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 
 - **按花费的 treemap**：一眼看出钱去哪了。
 - **每个 repo 一条 8 周燃烧热力条**，按 9 种 agent 分色，每周花费构成一目了然。
-- **所有 agent 的订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。Claude、Codex、Grok 自动识别，其他 agent 均可在设置中手动配置。
+- **所有 agent 的订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。默认展示前 3 行，提供“展开其余 N 项”折叠切换，并支持拖拽自定义前 3 项排序。Claude、Codex、Grok 和 Antigravity 自动识别，其他 agent 均可在设置中手动配置。悬停可查看 5 小时与周额度窗口及重置倒计时（Antigravity 额外展示 Claude/GPT 附加窗口；Command Code 无额度条）。
+- **完全独立取数**：直接从本机日志与本地凭据获取额度（Antigravity 走本地 127.0.0.1 语言服务、ChatGPT、Claude、Grok），凭据仅留存内存、绝不上传，可设 `KANJO_NO_NETWORK=1` 禁用联网。Tokei 仅作为可选后备。Antigravity 同时自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`。
 - **时间范围**：全部、**今天**、7 天、30 天、上周、自上次额度重置以来、或本账期。
 - **菜单栏金额与 Token 模式**：可在设置中切换显示金额或 Token 数，带紧凑进位与时间范围后缀。
 - **多语言界面**：原生支持 English、简体中文与 Français，以及本地化的 Token 计数单位（万/亿、k/M/B、k/M/Md）。
@@ -207,7 +213,7 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 | OpenCode | `~/.local/share/opencode/opencode.db` | 碰过的文件、目录／worktree |
 | Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot/session-store.db` | 碰过的文件、当前工作目录 |
 
-MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
+Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`（Antigravity 2.0 app）。MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 
 ### 归属规则
 
