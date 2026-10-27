@@ -35,7 +35,7 @@ struct ProjectPathsView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 1)
-                .help(L10n.tr("project.locations.temporary_help"))
+                .hoverTip(L10n.tr("project.locations.temporary_help"))
                 if showTemporary {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(temporary, id: \.self) { pathRow($0, size: 9.5) }
@@ -66,7 +66,7 @@ struct ProjectPathsView: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .textSelection(.enabled)
-            .help(p)
+            .hoverTip(p)
     }
 }
 
@@ -126,6 +126,10 @@ struct ProjectDetailView: View {
     private var devScrollTarget: String? {
         devAnchor == Self.bottomAnchor || devAnchor == Self.locationsOpenAnchor ? Self.bottomAnchor : nil
     }
+    private var projectIndex: Int {
+        let sorted = report.projects.sorted { $0.cost > $1.cost }
+        return sorted.firstIndex(where: { $0.id == project.id }) ?? 0
+    }
 
     // 范围下：金额、tokens（只有 total）、By agent、By day、热力条、Sessions 按范围；
     // By model / By branch 没有按天数据，不过滤，标题旁标「All time」。
@@ -139,12 +143,22 @@ struct ProjectDetailView: View {
             agentsSection(shown)
             modelsSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.by_day"), inset: true) {
-                DayChart(days: shown.byDay, currency: cur, color: ProjectTint.color(of: shown), agentLabels: report.agentLabels)
+                DayChart(
+                    days: shown.byDay,
+                    currency: cur,
+                    color: ProjectTint.color(of: shown),
+                    agentLabels: report.agentLabels,
+                    pinnedId: "project:\(projectIndex):hover:day"
+                )
             }
             branchesSection(isAll: ctx.isAll)
             PanelSection(L10n.tr("project.section.sessions", shown.sessionsDetail.count), inset: true) {
-                SessionList(sessions: shown.sessionsDetail,
-                            threshold: report.config.dominantThreshold, currency: cur)
+                SessionList(
+                    sessions: shown.sessionsDetail,
+                    threshold: report.config.dominantThreshold,
+                    currency: cur,
+                    idPrefix: "project:\(projectIndex):hover"
+                )
             }
             locationsSection.id(Self.bottomAnchor)
         }
@@ -175,10 +189,10 @@ struct ProjectDetailView: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                            .help(note)
+                            .hoverTip(note)
                     }
                 }
-                .helpIfPresent(report.costNoteDisplayText)
+                .hoverTip(report.costNoteDisplayText)
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(L10n.tr("project.last_8_weeks")).font(.system(size: 9.5)).foregroundStyle(.secondary)
@@ -314,16 +328,34 @@ struct ProjectDetailView: View {
             Text(Fmt.tokens(v)).font(.system(size: 13, weight: .medium, design: .rounded).monospacedDigit())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(fullHelp)
+        .hoverCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    if let color { Circle().fill(color).frame(width: 7, height: 7) }
+                    else { Circle().strokeBorder(Color.secondary, lineWidth: 1).frame(width: 7, height: 7) }
+                    Text(label).font(.system(size: 12, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text(Fmt.tokens(v))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                }
+                Text(help)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .monospacedDigit()
+            .hoverCard()
+        }
+        .accessibilityHint(fullHelp)
     }
 
     /// 四类计费 token 的构成条（thinking 是 output 子集，不单列）。
     private func tokenBar(_ t: Tokens) -> some View {
-        let parts: [(tokens: Int, color: Color, label: String)] = [
-            (t.input, AgentPalette.tokenInput, L10n.tr("project.token.input")),
-            (t.output, AgentPalette.tokenOutput, L10n.tr("project.token.output")),
-            (t.cacheRead, AgentPalette.tokenCacheRead, L10n.tr("project.token.cache_read")),
-            (t.cacheWrite, AgentPalette.tokenCacheWrite, L10n.tr("project.token.cache_write"))
+        let parts: [(tokens: Int, color: Color, label: String, id: String)] = [
+            (t.input, AgentPalette.tokenInput, L10n.tr("project.token.input"), "input"),
+            (t.output, AgentPalette.tokenOutput, L10n.tr("project.token.output"), "output"),
+            (t.cacheRead, AgentPalette.tokenCacheRead, L10n.tr("project.token.cache_read"), "cache_read"),
+            (t.cacheWrite, AgentPalette.tokenCacheWrite, L10n.tr("project.token.cache_write"), "cache_write")
         ]
         let total = max(parts.reduce(0) { $0 + $1.tokens }, 1)
         let barHelp = parts.filter { $0.tokens > 0 }.map { tok in
@@ -336,13 +368,19 @@ struct ProjectDetailView: View {
                 ForEach(Array(visible.enumerated()), id: \.offset) { _, p in
                     Rectangle().fill(p.color)
                         .frame(width: max(avail * CGFloat(p.tokens) / CGFloat(total), 2))
-                        .help("● \(p.label)  \(Fmt.tokens(p.tokens)) (\(Fmt.percent(Double(p.tokens) / Double(total))))")
+                        .hoverCard {
+                            TokensBreakdownHoverCard(tokens: t, highlightedType: p.id)
+                        }
+                        .accessibilityLabel("● \(p.label)  \(Fmt.tokens(p.tokens)) (\(Fmt.percent(Double(p.tokens) / Double(total))))")
                 }
             }
             .clipShape(Capsule())
         }
         .frame(height: 4)
-        .help(barHelp)
+        .hoverCard(id: "project:\(projectIndex):hover:tokens") {
+            TokensBreakdownHoverCard(tokens: t)
+        }
+        .accessibilityLabel(barHelp)
     }
 
     private func agentsSection(_ shown: Project) -> some View {
@@ -359,16 +397,46 @@ struct ProjectDetailView: View {
                             fraction: maxCost > 0 ? a.cost / maxCost : 0,
                             value: Fmt.money(a.cost, currency: cur),
                             detail: L10n.tr("project.agent_detail", a.sessions, Fmt.tokens(a.tokens.total), Fmt.percent(shown.cost > 0 ? a.cost / shown.cost : 0)),
-                            help: TooltipBuilder.agentLine(label: a.label, cost: a.cost, tokens: a.tokens.total, currency: cur))
+                            help: TooltipBuilder.agentLine(label: a.label, cost: a.cost, tokens: a.tokens.total, currency: cur),
+                            card: {
+                                AnyView(
+                                    AgentRowsHoverCard(
+                                        title: a.label,
+                                        titleDotColor: AgentPalette.color(for: a.agent),
+                                        cost: a.cost,
+                                        tokens: a.tokens.total,
+                                        currency: cur,
+                                        rows: [HoverCardRowItem(id: a.agent, label: a.label, cost: a.cost, tokens: a.tokens.total, fraction: 1.0)],
+                                        subtitle: a.sessions == 1 ? L10n.tr("overview.count.session.singular", a.sessions) : L10n.tr("overview.count.session.plural", a.sessions)
+                                    )
+                                )
+                            })
                 }
                 if !shares.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(shares) { s in
+                            let cycleText = report.subscriptions?[s.agent].map {
+                                Fmt.cycleCaption($0, timezone: RangeEngine.timezone(of: report))
+                            } ?? L10n.tr("fmt.cycle_dates_unavailable")
                             Text(L10n.tr("project.cycle_share", Self.shareText(s.share), s.planLabel))
                                 .fixedSize(horizontal: false, vertical: true)
-                                .help(report.subscriptions?[s.agent].map {
-                                    Fmt.cycleCaption($0, timezone: RangeEngine.timezone(of: report))
-                                } ?? L10n.tr("fmt.cycle_dates_unavailable"))
+                                .hoverCard {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 5) {
+                                            AgentDot(agent: s.agent, size: 7)
+                                            Text(s.planLabel).font(.system(size: 12, weight: .semibold))
+                                            Spacer(minLength: 8)
+                                            Text(Self.shareText(s.share))
+                                                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                        }
+                                        Text(cycleText)
+                                            .font(.system(size: 10.5))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .monospacedDigit()
+                                    .hoverCard()
+                                }
+                                .accessibilityLabel(cycleText)
                         }
                     }
                     .font(.system(size: 10.5))
@@ -396,7 +464,7 @@ struct ProjectDetailView: View {
                     Text(L10n.tr("project.model")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.section.tokens")).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                 }
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
-                ForEach(shown) { m in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { j, m in
                     GridRow {
                         HStack(spacing: 5) {
                             AgentDot(agent: m.agent, size: 6)
@@ -407,7 +475,10 @@ struct ProjectDetailView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .help(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
+                        .hoverCard(id: "project:\(projectIndex):hover:model:\(j)") {
+                            ModelHoverCard(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens, currency: cur)
+                        }
+                        .accessibilityHint(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
                         Text(Fmt.tokens(m.tokens.total)).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                         Text(Fmt.money(m.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
                     }
@@ -433,21 +504,52 @@ struct ProjectDetailView: View {
                         Text(L10n.tr("project.branch")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.noun.sessions").capitalized).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)
                     }
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
-                    ForEach(shown) { b in
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { j, b in
                         let branchSessions = project.sessionsDetail.filter {
                             b.branch == "(unknown)" ? ($0.branch == nil || $0.branch == "" || $0.branch == "(unknown)") : ($0.branch == b.branch)
                         }
                         let branchTokens = branchSessions.reduce(0) { $0 + $1.tokens.total }
                         let branchHelp = "\(b.branch) · \(Fmt.costAndTokens(cost: b.cost, tokens: branchTokens, currency: cur))"
+                        let branchRows: [HoverCardRowItem] = {
+                            var agentCosts: [String: (cost: Double, tokens: Int)] = [:]
+                            for s in branchSessions {
+                                agentCosts[s.agent, default: (0, 0)].cost += s.cost
+                                agentCosts[s.agent, default: (0, 0)].tokens += s.tokens.total
+                            }
+                            let items = agentCosts.map { k, v in
+                                (agent: k, label: report.agentLabels[k] ?? k, cost: v.cost, tokens: v.tokens)
+                            }
+                            return HoverCardRowBuilder.agentRows(agents: items)
+                        }()
                         GridRow {
                             Text(b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch)
                                 .font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                                 .foregroundStyle(b.branch == "(unknown)" ? .secondary : .primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .help(branchHelp)
+                                .hoverCard(id: "project:\(projectIndex):hover:branch:\(j)") {
+                                    AgentRowsHoverCard(
+                                        title: b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch,
+                                        cost: b.cost,
+                                        tokens: branchTokens,
+                                        currency: cur,
+                                        rows: branchRows,
+                                        subtitle: b.sessions == 1 ? L10n.tr("project.noun.sessions") + " 1" : "\(b.sessions) " + L10n.tr("project.noun.sessions")
+                                    )
+                                }
+                                .accessibilityHint(branchHelp)
                             Text("\(b.sessions)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                             Text(Fmt.money(b.cost, currency: cur)).font(.system(size: 11, weight: .medium)).monospacedDigit()
-                                .help(branchHelp)
+                                .hoverCard {
+                                    AgentRowsHoverCard(
+                                        title: b.branch == "(unknown)" ? L10n.tr("common.unknown") : b.branch,
+                                        cost: b.cost,
+                                        tokens: branchTokens,
+                                        currency: cur,
+                                        rows: branchRows,
+                                        subtitle: b.sessions == 1 ? L10n.tr("project.noun.sessions") + " 1" : "\(b.sessions) " + L10n.tr("project.noun.sessions")
+                                    )
+                                }
+                                .accessibilityHint(branchHelp)
                         }
                     }
                 }
@@ -499,10 +601,10 @@ struct BucketDetailView: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                            .help(note)
+                            .hoverTip(note)
                     }
                 }
-                .helpIfPresent(report.costNoteDisplayText)
+                .hoverTip(report.costNoteDisplayText)
                 let usageStr = b.firstActive == nil ? L10n.tr("project.no_usage") : ShortDate.range(b.firstActive, b.lastActive)
                 let subtitleText = ProjectSubtitleText.make(
                     range: ctx.range,

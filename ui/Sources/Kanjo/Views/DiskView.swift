@@ -144,7 +144,7 @@ struct DiskView: View {
                     Text(L10n.tr("overview.generated_footer", Fmt.timestamp(report.generatedAt), report.schemaVersion))
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                         .padding(.horizontal, Metrics.rowInset)
-                        .help(disk.sourceDescription)
+                        .hoverTip(disk.sourceDescription)
                 }
                 .padding(.horizontal, Metrics.pagePadding)
                 .padding(.top, 12).padding(.bottom, 10)
@@ -196,7 +196,7 @@ struct DiskView: View {
             .labelsHidden()
             .controlSize(.small)
             .disabled(checking || applying || pending != nil)
-            .help(L10n.tr("disk.age_help"))
+            .hoverTip(L10n.tr("disk.age_help"))
         }
     }
 
@@ -231,7 +231,7 @@ struct DiskView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(open ? L10n.tr("disk.hide_agent_entries", agent.label) : L10n.tr("disk.show_agent_entries", agent.label))
+            .hoverTip(open ? L10n.tr("disk.hide_agent_entries", agent.label) : L10n.tr("disk.show_agent_entries", agent.label))
             if open {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(agent.entries.enumerated()), id: \.element.id) { i, entry in
@@ -274,12 +274,12 @@ struct DiskView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
-                    .help(entry.path)
+                    .hoverTip(entry.path)
                 Text("\(Fmt.bytes(entry.bytes)) · \(files) · \(ShortDate.day(entry.newest))")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .help(entry.note ?? "")
+                    .hoverTip(entry.note)
             }
             .padding(.leading, slot + 6)
         }
@@ -326,7 +326,7 @@ struct DiskView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(checking || applying)
-            .help(L10n.tr("disk.clean_help"))
+            .hoverTip(L10n.tr("disk.clean_help"))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
@@ -402,7 +402,7 @@ struct DiskView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
-                            .help(path)
+                            .hoverTip(path)
                     }
                     Text(CleanPlan.countAndSize(count: g.paths.count, bytes: g.bytes))
                         .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()

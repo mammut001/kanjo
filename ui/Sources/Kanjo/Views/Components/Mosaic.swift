@@ -18,6 +18,7 @@ struct MosaicView: View {
 
     let projects: [Project]
     let currency: String
+    var pinnedTile: Int? = nil
     let onSelect: (String) -> Void
     @State private var hovered: String?
 
@@ -32,13 +33,19 @@ struct MosaicView: View {
     var body: some View {
         GeometryReader { geo in
             let tiles = Self.tiles(projects, size: geo.size)
+            let sortedTiles = tiles.sorted { $0.cost > $1.cost }
+            let tileIndexMap = Dictionary(uniqueKeysWithValues: sortedTiles.enumerated().map { ($0.element.id, $0.offset) })
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
                     ForEach(tiles) { t in
+                        let rank = tileIndexMap[t.id] ?? 0
                         MosaicTileView(tile: t, currency: currency, onSelect: onSelect,
                                        onHover: { h in
                                            if h { hovered = t.id } else if hovered == t.id { hovered = nil }
                                        })
+                            .hoverCard(id: "overview:tile:\(rank)", isPinned: pinnedTile == rank) {
+                                MosaicHoverCard(tile: t, currency: currency)
+                            }
                             .frame(width: t.rect.width, height: t.rect.height)
                             .position(x: t.rect.midX, y: t.rect.midY)
                     }
@@ -150,7 +157,7 @@ private struct MosaicTileView: View {
         }
         .mosaicTile(color: tile.color)
         .onHover(perform: onHover)
-        .help(tile.help(currency: currency))
+        .accessibilityLabel(tile.help(currency: currency))
     }
 }
 

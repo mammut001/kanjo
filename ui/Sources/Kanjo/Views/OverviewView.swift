@@ -74,10 +74,13 @@ struct OverviewView: View {
                                 .zIndex(1) // 额度卡浮在下面的马赛克之上
                         }
                         if lists.visible.contains(where: { $0.cost > 0 }) {
-                            MosaicView(projects: lists.visible, currency: cur) { onSelect(.project($0)) }
+                            MosaicView(projects: lists.visible, currency: cur,
+                                       pinnedTile: MosaicCardRoute.index(in: scrollAnchor)) { onSelect(.project($0)) }
                                 .padding(.horizontal, Metrics.listInset - Metrics.flatPagePadding)
+                                .zIndex(lists.visible.isEmpty ? 0 : 0.5)
                         }
                     }
+                    .zIndex(1) // 悬停卡可以盖到下面的项目列表上
                     projectsSection(visible: lists.visible, hidden: lists.hidden, idle: lists.idle,
                                     isAll: ctx.isAll, legendAgents: legendAgents(in: f))
                     modelsSection(f)
@@ -140,7 +143,7 @@ struct OverviewView: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                            .help(note)
+                            .hoverTip(note)
                     }
                 }
                 .font(.system(size: 11))
@@ -148,7 +151,7 @@ struct OverviewView: View {
                 .lineLimit(1)
                 .layoutPriority(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .helpIfPresent(report.costNoteDisplayText)
+                .hoverTip(report.costNoteDisplayText)
                 Spacer(minLength: 4)
                 RangePicker(raw: $rangeRaw, effective: ctx.range, resetAvailable: ctx.resetAvailable,
                             cycleAvailable: ctx.cycleAvailable)
@@ -168,7 +171,33 @@ struct OverviewView: View {
                 }
             }
             .foregroundStyle(.secondary).monospacedDigit()
-            .help(help.joined(separator: "\n"))
+            .hoverCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(f.firstActive == nil ? L10n.tr("overview.help.no_usage_range") : ShortDate.range(f.firstActive, f.lastActive))
+                        .font(.system(size: 12, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(ctx.isAll ? L10n.tr("overview.help.cache_reads", Fmt.tokens(t.tokens.cacheRead)) : L10n.tr("overview.help.daily_summed"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        if hiddenCount > 0 {
+                            Text(L10n.tr("overview.help.hidden_projects", report.projects.count, hiddenCount))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        if failed > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(AgentPalette.bad)
+                                Text(failed == 1 ? L10n.tr("overview.help.failed_log.singular", failed) : L10n.tr("overview.help.failed_log.plural", failed))
+                                    .foregroundStyle(AgentPalette.bad)
+                            }
+                            .font(.system(size: 11))
+                        }
+                    }
+                }
+                .hoverCard()
+            }
+            .accessibilityHint(help.joined(separator: "\n"))
             if let caption = ctx.caption {
                 RangeCaption(text: caption, help: ctx.captionHelp).padding(.top, 1)
             }
@@ -199,6 +228,7 @@ struct OverviewView: View {
                 ProjectRow(project: p, currency: cur,
                            weeks: p.heatWeeks(endingOn: end), agentLabels: labels,
                            pinned: pinned.contains(p.id),
+                           projectIndex: i,
                            onOpen: { onSelect(.project(p.id)) },
                            onTogglePin: { pinnedRaw = ProjectPrefs.toggle(p.id, in: pinnedRaw) },
                            onHide: { hide(p.id) })
@@ -269,7 +299,7 @@ struct OverviewView: View {
             } else {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, m in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
-                    modelRow(m)
+                    modelRow(m, index: i)
                 }
                 if models.count > 8 {
                     RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
@@ -292,7 +322,7 @@ struct OverviewView: View {
         }
     }
 
-    private func modelRow(_ m: ModelCost) -> some View {
+    private func modelRow(_ m: ModelCost, index: Int) -> some View {
         HStack(alignment: .center, spacing: 6) {
             AgentDot(agent: m.agent, size: 6)
             Text(m.model)
@@ -316,7 +346,10 @@ struct OverviewView: View {
         }
         .padding(.horizontal, Metrics.listInset)
         .padding(.vertical, 6)
-        .help(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
+        .hoverCard(id: "overview:hover:model:\(index)") {
+            ModelHoverCard(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens, currency: cur)
+        }
+        .accessibilityHint(TooltipBuilder.modelTooltip(model: m.model, agent: m.agent, cost: m.cost, tokens: m.tokens.total, currency: cur))
     }
 
     private func bucketsSection(_ f: FilteredReport) -> some View {
@@ -363,7 +396,6 @@ private struct SubscriptionValueCard: View {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
                     quotaHover(line(row), row: row)
-                        .zIndex(shownQuotaAgent == row.agent ? 1 : 0)
                 }
                 Text(L10n.tr("overview.subscription_value.explanation"))
                     .font(.system(size: 10.5))
@@ -396,7 +428,7 @@ private struct SubscriptionValueCard: View {
                     dismissedRaw = RenewalNudge.serializeDismissed(dismissed.union(pending))
                 }
                 .foregroundStyle(.secondary)
-                .help(L10n.tr("overview.dismiss_renewal_reminder"))
+                .hoverTip(L10n.tr("overview.dismiss_renewal_reminder"))
                 .accessibilityLabel(L10n.tr("overview.dismiss_renewal_reminder"))
             }
             .buttonStyle(.plain)
@@ -439,7 +471,17 @@ private struct SubscriptionValueCard: View {
                     .layoutPriority(1)
                     .frame(minWidth: 42, alignment: .trailing)
             }
-            .help(help(row))
+            .hoverCard {
+                SubscriptionValueHoverCard(
+                    agent: row.agent,
+                    planLabel: row.planLabel,
+                    monthlyPriceUsd: row.monthlyPriceUsd,
+                    usage: row.usage,
+                    multiplier: row.multiplier,
+                    currency: cur
+                )
+            }
+            .accessibilityHint(help(row))
             if let sub = report.subscriptions?[row.agent] {
                 Group {
                     if SubscriptionValue.needsRenewalDay(sub) {
@@ -449,10 +491,10 @@ private struct SubscriptionValueCard: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help(SubscriptionValue.assumedDayHelp)
+                        .hoverTip(SubscriptionValue.assumedDayHelp)
                     } else {
                         Text(Fmt.cycleCaption(sub, timezone: RangeEngine.timezone(of: report)))
-                            .help(Fmt.cycleDates(sub, timezone: RangeEngine.timezone(of: report)))
+                            .hoverTip(Fmt.cycleDates(sub, timezone: RangeEngine.timezone(of: report)))
                     }
                 }
                     .font(.system(size: 10))
@@ -466,30 +508,21 @@ private struct SubscriptionValueCard: View {
         .padding(.vertical, 4)
     }
 
-    private var shownQuotaAgent: String? { pinnedQuotaAgent ?? hoveredAgent }
-
     /// 悬停 0.35 秒后在行下方（放不下时在上方）浮出额度卡；移出即收起。没有额度数据的 agent 不出卡片。
     private func quotaHover(_ content: some View, row: SubscriptionRow) -> some View {
         let quota = SubscriptionValue.quotaRows(report.quotaWindows?[row.agent],
                                                 timezone: RangeEngine.timezone(of: report))
-        return content
-            .onHover { inside in
-                hoverTask?.cancel()
-                guard !quota.isEmpty else { return }
-                if inside {
-                    hoverTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        if !Task.isCancelled { withAnimation(.easeOut(duration: 0.12)) { hoveredAgent = row.agent } }
-                    }
-                } else if hoveredAgent == row.agent {
-                    withAnimation(.easeIn(duration: 0.08)) { hoveredAgent = nil }
+        let quotaId = "overview:quota:\(row.agent)"
+        let isPinned = (pinnedQuotaAgent == row.agent)
+        return Group {
+            if !quota.isEmpty {
+                content.hoverCard(id: quotaId, isPinned: isPinned) {
+                    QuotaCard(agent: row.agent, planLabel: row.planLabel, rows: quota)
                 }
+            } else {
+                content
             }
-            .overlay(alignment: .top) {
-                if shownQuotaAgent == row.agent, !quota.isEmpty {
-                    QuotaPlacement(card: QuotaCard(agent: row.agent, planLabel: row.planLabel, rows: quota))
-                }
-            }
+        }
     }
 
     private func help(_ row: SubscriptionRow) -> String {
@@ -512,99 +545,12 @@ enum QuotaCardRoute {
     }
 }
 
-/// 把卡片放在行的正下方；按全局坐标判断会超出面板底部时翻到行的上方。
-private struct QuotaPlacement: View {
-    let card: QuotaCard
-    @State private var cardHeight: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { geo in
-            let frame = geo.frame(in: .global)
-            let gap: CGFloat = 4
-            let panelBottom = MenuPanelView.size.height - 8
-            let upward = frame.maxY + gap + cardHeight > panelBottom && frame.minY - gap - cardHeight > 8
-            card
-                .background(GeometryReader { c in
-                    Color.clear.onAppear { cardHeight = c.size.height }
-                        .onChange(of: c.size.height) { cardHeight = $0 }
-                })
-                .frame(width: geo.size.width - 2 * Metrics.listInset)
-                .offset(x: Metrics.listInset, y: upward ? -(cardHeight + gap) : frame.height + gap)
-        }
-        .allowsHitTesting(false)
-        .transition(.opacity)
-    }
-}
-
-/// 额度卡：agent 色点 + 档位名做标题；每个窗口一行：细进度条、右对齐百分比、重置时间。
-private struct QuotaCard: View {
-    let agent: String
-    let planLabel: String
-    let rows: [QuotaRow]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 6) {
-                AgentDot(agent: agent, size: 7)
-                Text(planLabel).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            }
-            ForEach(rows) { r in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(r.title).font(.system(size: 11, weight: .medium))
-                        Spacer(minLength: 8)
-                        Text(r.percent.map { "\(Int($0.rounded()))%" } ?? "—")
-                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(r.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
-                    }
-                    QuotaBar(fraction: (r.percent ?? 0) / 100, color: barColor(r.percent))
-                    Text(r.detail)
-                        .font(.system(size: 10))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.regularMaterial)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
-        )
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-    }
-
-    private func barColor(_ percent: Double?) -> Color {
-        switch SubscriptionValue.level(percent) {
-        case .normal: return AgentPalette.color(for: agent)
-        case .warning: return AgentPalette.quotaWarn
-        case .critical: return AgentPalette.bad
-        }
-    }
-}
-
-private struct QuotaBar: View {
-    let fraction: Double
-    let color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.08))
-                if fraction > 0 {
-                    Capsule().fill(color).frame(width: max(4, geo.size.width * min(fraction, 1)))
-                }
-            }
-        }
-        .frame(height: 4)
+/// `--route overview:tile:<n>`：马赛克第 n 块（按花费降序）的悬停卡固定展开。
+enum MosaicCardRoute {
+    static let prefix = "overview:tile:"
+    static func index(in anchor: String?) -> Int? {
+        guard let a = anchor, a.hasPrefix(prefix) else { return nil }
+        return Int(a.dropFirst(prefix.count))
     }
 }
 
@@ -614,6 +560,7 @@ struct ProjectRow: View {
     let weeks: [WeekCost]
     let agentLabels: [String: String]
     let pinned: Bool
+    var projectIndex: Int = 0
     let onOpen: () -> Void
     let onTogglePin: () -> Void
     let onHide: () -> Void
@@ -622,7 +569,12 @@ struct ProjectRow: View {
     private static let padV: CGFloat = 7
 
     var body: some View {
-        let strip = HeatStripView(weeks: weeks, agentLabels: agentLabels, currency: currency)
+        let strip = HeatStripView(
+            weeks: weeks,
+            agentLabels: agentLabels,
+            currency: currency,
+            idPrefix: "overview:hover:heat:\(projectIndex)"
+        )
         ZStack(alignment: .bottomTrailing) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -631,10 +583,10 @@ struct ProjectRow: View {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 8.5, weight: .semibold))
                                 .foregroundStyle(AgentPalette.pin)
-                                .help(L10n.tr("overview.badge.pinned"))
+                                .hoverTip(L10n.tr("overview.badge.pinned"))
                         }
                         Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                        AgentDots(agents: project.byAgent, currency: currency)
+                        AgentDots(agents: project.byAgent, currency: currency).hidden()
                         if project.pathMissing {
                             Badge(text: L10n.tr("overview.badge.path_missing"), style: .warn,
                                   help: L10n.tr("overview.badge.path_missing_help"))
@@ -655,16 +607,38 @@ struct ProjectRow: View {
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .help(L10n.tr("overview.row.last_active", Fmt.day(project.lastActive)))
+                            .hoverTip(L10n.tr("overview.row.last_active", Fmt.day(project.lastActive)))
                         Spacer(minLength: 8)
-                        strip
+                        strip.hidden()
                     }
                 }
                 .padding(.horizontal, Metrics.listInset).padding(.vertical, Self.padV)
                 .contentShape(Rectangle())
             }
             .buttonStyle(RowButtonStyle(highlighted: hover, cornerRadius: Metrics.rowRadius))
-            .help(project.id)
+            .hoverTip(project.id)
+            .overlay(alignment: .topLeading) {
+                HStack(alignment: .center, spacing: 6) {
+                    if pinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .hidden()
+                    }
+                    Text(project.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1).hidden()
+                    AgentDots(agents: project.byAgent, currency: currency, id: "overview:hover:dots:\(projectIndex)")
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpen)
+                }
+                .padding(.leading, Metrics.listInset)
+                .padding(.top, Self.padV)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                strip
+                    .padding(.trailing, Metrics.listInset)
+                    .padding(.bottom, Self.padV)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+            }
 
             HStack(spacing: 0) {
                 RowIconButton(systemName: pinned ? "pin.fill" : "pin",
@@ -706,7 +680,7 @@ struct HiddenProjectRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(project.id)
+            .hoverTip(project.id)
             RowIconButton(systemName: "eye", help: L10n.tr("overview.action.unhide"), action: onUnhide)
         }
         .padding(.leading, Metrics.listInset).padding(.trailing, Metrics.listInset - 4)
@@ -741,7 +715,7 @@ struct BucketRow: View {
         .contentShape(Rectangle())
 
         if let action {
-            Button(action: action) { row }.buttonStyle(RowButtonStyle(cornerRadius: Metrics.rowRadius)).help(L10n.tr("overview.show_these_sessions"))
+            Button(action: action) { row }.buttonStyle(RowButtonStyle(cornerRadius: Metrics.rowRadius)).hoverTip(L10n.tr("overview.show_these_sessions"))
         } else {
             row
         }
@@ -773,7 +747,7 @@ struct ParseFailedRow: View {
                         Text("—").font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                             .frame(minWidth: 52, alignment: .trailing)
-                            .help(L10n.tr("overview.parse_failed_help"))
+                            .hoverTip(L10n.tr("overview.parse_failed_help"))
                     }
                     Text(L10n.tr("overview.parse_failed_desc"))
                         .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -824,7 +798,15 @@ struct ReconciliationView: View {
             .font(.system(size: 10.5))
             .foregroundStyle(AgentPalette.good)
             .monospacedDigit()
-            .help(lines.map(\.1).joined(separator: "\n") + "\n\n" + contract)
+            .hoverCard {
+                ReconciliationHoverCard(
+                    ok: true,
+                    title: L10n.tr("overview.reconciled", Fmt.money(rec.cost.reported, currency: cur)),
+                    lines: lines,
+                    contract: contract
+                )
+            }
+            .accessibilityHint(lines.map(\.1).joined(separator: "\n") + "\n\n" + contract)
         } else {
             StatusBlock(kind: .bad, icon: "exclamationmark.triangle.fill") {
                 Text(L10n.tr("overview.reconcile_failed")).font(.system(size: 12, weight: .semibold))
@@ -836,7 +818,15 @@ struct ReconciliationView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .help(contract)
+            .hoverCard {
+                ReconciliationHoverCard(
+                    ok: false,
+                    title: L10n.tr("overview.reconcile_failed"),
+                    lines: lines,
+                    contract: contract
+                )
+            }
+            .accessibilityHint(contract)
         }
     }
 

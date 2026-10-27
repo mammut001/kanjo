@@ -50,7 +50,9 @@ enum DevRoute {
             let sec = Double(raw.dropFirst("loading:".count)) ?? 12.0
             return (.loading(sec), nil, nil)
         }
-        if QuotaCardRoute.agent(in: raw) != nil { return (.overview, raw, nil) }
+        if QuotaCardRoute.agent(in: raw) != nil || MosaicCardRoute.index(in: raw) != nil || raw.hasPrefix("overview:hover:") {
+            return report == nil ? nil : (.overview, raw, nil)
+        }
         if let (agent, isEdit) = SubscriptionSettingsRoute.parse(raw) {
             return (.settings, SubscriptionSettingsRoute.anchor(for: agent), isEdit ? agent : nil)
         }
@@ -61,10 +63,20 @@ enum DevRoute {
             let sorted = r.projects.sorted { $0.cost > $1.cost }
             guard sorted.indices.contains(i) else { return (.overview, nil, nil) }
             let anchor: String?
-            switch parts.count > 1 ? String(parts[1]) : "" {
-            case "bottom": anchor = ProjectDetailView.bottomAnchor
-            case "locations": anchor = ProjectDetailView.locationsOpenAnchor
-            default: anchor = nil
+            if parts.count > 1 {
+                let rest = String(parts[1])
+                switch rest {
+                case "bottom": anchor = ProjectDetailView.bottomAnchor
+                case "locations": anchor = ProjectDetailView.locationsOpenAnchor
+                default:
+                    if rest.hasPrefix("hover:") {
+                        anchor = raw
+                    } else {
+                        anchor = nil
+                    }
+                }
+            } else {
+                anchor = nil
             }
             return (.project(sorted[i].id), anchor, nil)
         }
@@ -124,6 +136,12 @@ struct MenuPanelView: View {
         .frame(minHeight: isTall ? Self.size.height : nil)
         .frame(height: isTall ? nil : Self.size.height)
         .panelBackground()
+        .environment(\.pinnedHoverId, activeAnchor)
+        .overlayPreferenceValue(HoverCardPreferenceKey.self) { payload in
+            GeometryReader { rootGeo in
+                HoverCardOverlayHost(payload: payload, containerSize: rootGeo.size)
+            }
+        }
         .onAppear { applyDevRoute(report: store.report) }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
     }
@@ -238,7 +256,7 @@ struct MenuPanelView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.refresh_now"))
+            .hoverTip(L10n.tr("menu.refresh_now"))
             .disabled(route == .disk ? disk.isLoading : store.isLoading)
 
             Group {
@@ -260,7 +278,7 @@ struct MenuPanelView: View {
             }
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(.secondary)
-            .help(route == .disk ? disk.sourceDescription : store.sourceDescription)
+            .hoverTip(route == .disk ? disk.sourceDescription : store.sourceDescription)
 
             Spacer()
 
@@ -273,7 +291,7 @@ struct MenuPanelView: View {
                 Image(systemName: "internaldrive")
             }
             .buttonStyle(IconButtonStyle(active: route == .disk))
-            .help(L10n.tr("menu.disk"))
+            .hoverTip(L10n.tr("menu.disk"))
 
             Button {
                 overviewAnchor = nil
@@ -283,7 +301,7 @@ struct MenuPanelView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.settings"))
+            .hoverTip(L10n.tr("menu.settings"))
 
             Button {
                 NSApp.terminate(nil)
@@ -291,7 +309,7 @@ struct MenuPanelView: View {
                 Image(systemName: "power")
             }
             .buttonStyle(IconButtonStyle())
-            .help(L10n.tr("menu.quit"))
+            .hoverTip(L10n.tr("menu.quit"))
         }
         .padding(.horizontal, 5).padding(.vertical, 3)
         .glassSurface(cornerRadius: 12)
