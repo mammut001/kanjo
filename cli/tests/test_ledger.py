@@ -142,6 +142,34 @@ class LedgerTest(unittest.TestCase):
         with open(os.path.join(self.data, "ledger.json"), encoding="utf-8") as handle:
             self.assertEqual(json.load(handle)["version"], 1)
 
+    def test_concurrent_saves_use_unique_tmp_paths(self):
+        l1 = Ledger(directory=self.data)
+        l2 = Ledger(directory=self.data)
+        l1.entries = {"a": {"test": 1}}
+        l1.dirty = True
+        l2.entries = {"b": {"test": 2}}
+        l2.dirty = True
+
+        observed_tmps = []
+        real_open = open
+
+        def tracking_open(file, *args, **kwargs):
+            if isinstance(file, str) and file.endswith(".tmp"):
+                observed_tmps.append(file)
+            return real_open(file, *args, **kwargs)
+
+        with mock.patch("kanjo.ledger.open", side_effect=tracking_open):
+            l1.save()
+            l2.save()
+
+        self.assertEqual(len(observed_tmps), 2)
+        self.assertNotEqual(observed_tmps[0], observed_tmps[1])
+        self.assertTrue(observed_tmps[0].endswith(".tmp"))
+        self.assertTrue(observed_tmps[1].endswith(".tmp"))
+        self.assertIn(str(os.getpid()), observed_tmps[0])
+        self.assertIn(str(os.getpid()), observed_tmps[1])
+        self.assertEqual([name for name in os.listdir(self.data) if name.endswith(".tmp")], [])
+
     def test_forget_orphans_requires_yes(self):
         path = self.write_log()
         self.export()

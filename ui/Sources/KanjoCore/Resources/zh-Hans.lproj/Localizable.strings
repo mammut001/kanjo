@@ -195,6 +195,8 @@
 "overview.show_these_sessions" = "查看这些会话";
 "overview.section.subscription_value" = "订阅价值";
 "overview.subscription_value.explanation" = "左侧为您支付的固定月费。右侧是相同工作量在 API 计费下的等价花费。";
+"overview.subscription_value.show_more" = "展开其余 %d 项";
+"overview.subscription_value.show_less" = "收起";
 "overview.extra_usage_on" = "额外用量已开启";
 "overview.extra_usage_help" = "已开启额外用量，超出部分将在固定费用之外另行计费。";
 "overview.renewal_not_set" = "%@ 未设置续费日 · ";
