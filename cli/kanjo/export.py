@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 from collections import defaultdict
@@ -503,6 +504,42 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         },
         "ledger": ledger_doc,
     }
+
+
+MOBILE_TOP_LEVEL_KEYS = ("schema_version", "generated_at", "generated_by", "timezone", "currency",
+                         "cost_note", "quota_windows", "subscriptions", "totals")
+MOBILE_PROJECT_KEYS = ("id", "name", "cost", "tokens", "sessions", "first_active", "last_active",
+                       "by_agent", "by_model", "by_day")
+MOBILE_BUCKET_KEYS = ("cost", "tokens", "sessions", "first_active", "last_active")
+
+
+def mobile_project_id(project_id: str) -> str:
+    """Stable opaque id so the phone can key rows without seeing the remote/path."""
+    return hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:12]
+
+
+def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
+    """Trim a full export document down to the CONTRACT.md section 11 phone snapshot."""
+    projects = []
+    for index, project in enumerate(doc["projects"], 1):
+        trimmed = {key: project[key] for key in MOBILE_PROJECT_KEYS}
+        if hide_project_names:
+            trimmed["id"] = mobile_project_id(project["id"])
+            trimmed["name"] = "Project %d" % index
+        projects.append(trimmed)
+
+    buckets = doc["buckets"]
+    mobile_buckets = {
+        "unattributed": {key: buckets["unattributed"][key] for key in MOBILE_BUCKET_KEYS},
+        "excluded": {key: buckets["excluded"][key] for key in MOBILE_BUCKET_KEYS},
+        "parse_failed": {"sessions": buckets["parse_failed"]["sessions"]},
+    }
+
+    mobile = {key: doc[key] for key in MOBILE_TOP_LEVEL_KEYS}
+    mobile["projects"] = projects
+    mobile["buckets"] = mobile_buckets
+    mobile["mobile"] = {"trimmed": True, "hidden_project_names": bool(hide_project_names)}
+    return mobile
 
 
 def check_invariants(doc: dict, tolerance: float = 0.01) -> List[str]:
