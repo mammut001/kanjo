@@ -20,6 +20,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
     @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
     @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
+    @AppStorage(SettingsKeys.cloudSyncEnabled, store: AppDefaults.store) private var cloudSyncEnabled = false
+    @AppStorage(SettingsKeys.cloudSyncHideProjectNames, store: AppDefaults.store) private var cloudSyncHideNames = false
+    @StateObject private var cloudSync = CloudSyncStore.shared
 
     private let intervals = [0, 1, 5, 15, 30, 60]
 
@@ -99,6 +102,20 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                 }
 
+                PanelSection(L10n.tr("settings.section.icloud"), inset: true) {
+                    Toggle(L10n.tr("settings.sync.enable"), isOn: $cloudSyncEnabled)
+                        .font(.system(size: 12))
+                    if cloudSyncEnabled {
+                        Toggle(L10n.tr("settings.sync.hide_names"), isOn: $cloudSyncHideNames)
+                            .font(.system(size: 12))
+                    }
+                    Text(syncStatusText)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(syncStatusColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                    note(L10n.tr("settings.sync.note"))
+                }
+
                 PanelSection(L10n.tr("settings.section.projects"), inset: true) {
                     let hidden = ProjectPrefs.parse(hiddenRaw).count
                     HStack {
@@ -145,6 +162,48 @@ struct SettingsView: View {
         }
         .onChange(of: refreshMinutes) { _ in store.restartTimer() }
         .onChange(of: sourceKind) { _ in store.applySettings() }
+        .onChange(of: cloudSyncEnabled) { enabled in
+            cloudSync.setEnabled(enabled)
+            if enabled {
+                cloudSync.resetUploadState()
+                store.refresh()
+            }
+        }
+        .onChange(of: cloudSyncHideNames) { _ in
+            cloudSync.resetUploadState()
+            if cloudSyncEnabled { store.refresh() }
+        }
+    }
+
+    private var syncStatusText: String {
+        switch cloudSync.status {
+        case .off:
+            return L10n.tr("settings.sync.status.off")
+        case .waitingForICloud:
+            return L10n.tr("settings.sync.status.waiting")
+        case .uploaded(let date):
+            return L10n.tr("settings.sync.status.uploaded", Self.clock(date))
+        case .failed(let message):
+            return L10n.tr("settings.sync.status.failed", message)
+        }
+    }
+
+    private var syncStatusColor: Color {
+        switch cloudSync.status {
+        case .off:
+            return .secondary
+        case .waitingForICloud, .uploaded:
+            return .secondary
+        case .failed:
+            return .red
+        }
+    }
+
+    private static func clock(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.currentLanguage)
+        formatter.setLocalizedDateFormatFromTemplate("HHmm")
+        return formatter.string(from: date)
     }
 
     /// 各 agent 的额度重置时间和来源（quota_windows），供总览的「Since reset」范围用。

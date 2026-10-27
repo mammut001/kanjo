@@ -13,16 +13,36 @@ final class SnapshotStore {
     }
 
     private(set) var state: State = .loading
+    private(set) var deviceName: String?
     private let source: SnapshotSource
 
-    init(source: SnapshotSource = BundledSampleSnapshotSource()) {
-        self.source = source
+    init(source: SnapshotSource? = nil) {
+        self.source = source ?? Self.defaultSource()
+    }
+
+    static func defaultSource(arguments: [String] = CommandLine.arguments) -> SnapshotSource {
+        if arguments.contains("-useSampleSnapshot") {
+            return BundledSampleSnapshotSource()
+        }
+        return CloudKitSnapshotSource()
     }
 
     func load() async {
-        state = .loading
+        await load(preserveState: false)
+    }
+
+    func refresh() async {
+        await load(preserveState: true)
+    }
+
+    private func load(preserveState: Bool) async {
+        if !preserveState {
+            state = .loading
+        }
         do {
-            if let report = try await source.load() {
+            let report = try await source.load()
+            deviceName = source.lastDeviceName
+            if let report {
                 state = .loaded(report)
             } else {
                 state = .empty

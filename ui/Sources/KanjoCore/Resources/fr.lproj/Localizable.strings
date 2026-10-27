@@ -138,6 +138,19 @@
 "settings.source.not_set" = "non défini · 30 derniers jours";
 "settings.source.manual" = "manuel";
 "settings.source.detected" = "détecté";
+"settings.section.icloud" = "Synchronisation iCloud";
+"settings.sync.enable" = "Synchroniser avec iCloud";
+"settings.sync.hide_names" = "Masquer les noms de projets sur l'iPhone";
+"settings.sync.note" = "Envoie l'instantané du téléphone vers votre base iCloud privée après chaque actualisation. Rien ne quitte votre compte iCloud.";
+"settings.sync.status.off" = "Désactivé";
+"settings.sync.status.waiting" = "En attente d'iCloud";
+"settings.sync.status.uploaded" = "Dernier envoi %@";
+"settings.sync.status.failed" = "Échec de la synchronisation : %@";
+"settings.sync.status.not_configured" = "Cette version n'est pas encore signée pour iCloud.";
+"gzip.error.invalid_header" = "L'instantané n'est pas un fichier gzip.";
+"gzip.error.truncated" = "Le fichier d'instantané est incomplet.";
+"gzip.error.unsupported_method" = "L'instantané utilise une compression non prise en charge.";
+"gzip.error.decompression_failed" = "Impossible de décompresser l'instantané.";
 
 /* Panneau de menu */
 "menu.python_needed" = "Le CLI de Kanjo nécessite Python 3 (inclus dans les Xcode Command Line Tools)";
@@ -254,6 +267,7 @@
 "project.section.by_agent" = "Par agent";
 "project.no_usage_range" = "Aucune utilisation sur cette période.";
 "project.agent_detail" = "%d sess · %@ tok · %@";
+"project.agent_detail_no_sessions" = "%@ tok · %@";
 "project.cycle_share" = "Ce dépôt : %@ de votre utilisation de %@ ce cycle";
 "project.section.by_model" = "Par modèle";
 "project.model" = "Modèle";
@@ -386,9 +400,11 @@
 
 /* Application iOS */
 "ios.updated" = "Mis à jour %@";
+"ios.updated_device" = "Mis à jour %@ · %@";
 "ios.empty.title" = "Aucun instantané";
 "ios.empty.body" = "Activez la synchronisation iCloud dans Kanjo sur votre Mac pour voir votre usage ici.";
 "ios.error.title" = "Impossible de charger l'instantané";
+"ios.error.missing_payload" = "L'instantané ne contient aucune donnée.";
 "ios.loading" = "Chargement…";
 "ios.all_models" = "Tous les modèles";
 "ios.quota_used" = "%@ utilisé";

@@ -151,6 +151,7 @@ struct ProjectRowView: View {
 
     private var detail: String {
         let tokens = L10n.tr("overview.tokens_count", Fmt.tokens(project.tokens.total))
+        guard project.sessions > 0 else { return tokens }
         let sessions = project.sessions == 1
             ? L10n.tr("overview.count.session.singular", project.sessions)
             : L10n.tr("overview.count.session.plural", project.sessions)

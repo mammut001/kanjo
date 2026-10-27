@@ -4,6 +4,7 @@ import UIKit
 
 struct OverviewView: View {
     let report: UsageReport
+    var deviceName: String? = nil
     @State private var range: TimeRange = .all
 
     private var currency: String { report.currency }
@@ -74,15 +75,17 @@ struct OverviewView: View {
         let projectText = used.count == 1
             ? L10n.tr("overview.count.project.singular", used.count)
             : L10n.tr("overview.count.project.plural", used.count)
-        let sessionText = result.sessions == 1
-            ? L10n.tr("overview.count.session.singular", result.sessions)
-            : L10n.tr("overview.count.session.plural", result.sessions)
-        return [
+        var parts = [
             Self.dateRange(result.firstActive, result.lastActive),
             projectText,
-            sessionText,
-            L10n.tr("overview.tokens_count", Fmt.tokens(result.tokens)),
-        ].joined(separator: " · ")
+        ]
+        if result.sessions > 0 {
+            parts.append(result.sessions == 1
+                ? L10n.tr("overview.count.session.singular", result.sessions)
+                : L10n.tr("overview.count.session.plural", result.sessions))
+        }
+        parts.append(L10n.tr("overview.tokens_count", Fmt.tokens(result.tokens)))
+        return parts.joined(separator: " · ")
     }
 
     static func dateRange(_ first: String?, _ last: String?) -> String {
@@ -152,11 +155,19 @@ struct OverviewView: View {
     }
 
     private var footer: some View {
-        Text(L10n.tr("ios.updated", Fmt.timestamp(report.generatedAt)))
+        Text(footerText)
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
+    }
+
+    private var footerText: String {
+        let updated = Fmt.timestamp(report.generatedAt)
+        if let deviceName, !deviceName.isEmpty {
+            return L10n.tr("ios.updated_device", updated, deviceName)
+        }
+        return L10n.tr("ios.updated", updated)
     }
 }
 

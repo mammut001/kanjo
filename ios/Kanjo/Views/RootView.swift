@@ -51,7 +51,8 @@ struct RootView: View {
                 }
             }
         case .loaded(let report):
-            OverviewView(report: report)
+            OverviewView(report: report, deviceName: store.deviceName)
+                .refreshable { await store.refresh() }
         }
     }
 }

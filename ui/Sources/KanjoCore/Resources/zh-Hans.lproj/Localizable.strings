@@ -138,6 +138,19 @@
 "settings.source.not_set" = "未设置 · 使用最近30天";
 "settings.source.manual" = "手动";
 "settings.source.detected" = "自动检测";
+"settings.section.icloud" = "iCloud 同步";
+"settings.sync.enable" = "同步到 iCloud";
+"settings.sync.hide_names" = "在 iPhone 上隐藏项目名";
+"settings.sync.note" = "每次刷新后将手机快照上传到你的 iCloud 私有数据库。数据不会离开你的 iCloud 账户。";
+"settings.sync.status.off" = "关闭";
+"settings.sync.status.waiting" = "等待 iCloud";
+"settings.sync.status.uploaded" = "上次上传 %@";
+"settings.sync.status.failed" = "同步失败：%@";
+"settings.sync.status.not_configured" = "此构建尚未配置 iCloud 签名。";
+"gzip.error.invalid_header" = "快照不是 gzip 文件。";
+"gzip.error.truncated" = "快照文件不完整。";
+"gzip.error.unsupported_method" = "快照使用了不支持的压缩方式。";
+"gzip.error.decompression_failed" = "无法解压快照。";
 
 /* 菜单面板 */
 "menu.python_needed" = "Kanjo CLI 需要 Python 3（包含在 Xcode Command Line Tools 中）";
@@ -254,6 +267,7 @@
 "project.section.by_agent" = "按 Agent";
 "project.no_usage_range" = "此范围内无用量。";
 "project.agent_detail" = "%d 次会话 · %@ tok · %@";
+"project.agent_detail_no_sessions" = "%@ tok · %@";
 "project.cycle_share" = "此仓库：占本账期 %@ 用量的 %@";
 "project.section.by_model" = "按模型";
 "project.model" = "模型";
@@ -386,9 +400,11 @@
 
 /* iOS 应用 */
 "ios.updated" = "更新于 %@";
+"ios.updated_device" = "更新于 %@ · %@";
 "ios.empty.title" = "还没有快照";
 "ios.empty.body" = "在 Mac 上打开 Kanjo 并开启 iCloud 同步，就能在这里看到 AI 用量。";
 "ios.error.title" = "无法载入快照";
+"ios.error.missing_payload" = "快照记录中没有数据。";
 "ios.loading" = "正在载入…";
 "ios.all_models" = "全部模型";
 "ios.quota_used" = "已用 %@";
