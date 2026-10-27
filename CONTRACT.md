@@ -318,3 +318,19 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 - `kind` 与 `deletable` 的默认对应：`cache` → always；`sessions` → after_import；`scratch` / `worktrees` → when_clean；`memory`（如 Antigravity 的跨会话记忆）→ never；`other` → never。
 - `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]`：只对 `blocked` 为空的条目生效；文件移入 `~/.Trash/kanjo-<时间戳>/`，不直接删除；git worktree 通过主仓库 `git worktree remove` 拆除；没有 `--yes` 时等同 `--dry-run`。输出 JSON：`{ "moved": [...路径], "freed_bytes": N, "skipped": [{ "id", "reason" }] }`。
 - UI 永远不自己删文件，只调用 `kanjo disk clean`，并且先用 `--dry-run` 展示将要移动的内容，用户确认后再带 `--yes` 执行。
+
+## 11. 手机快照 (`kanjo export --mobile`)
+
+`--mobile` 输出同一份报告的精简版，供 iOS 读取；数值和完整导出一致，只去掉体积大或含路径的字段。
+顶层只保留 `schema_version`、`generated_at`、`generated_by`、`timezone`、`currency`、`cost_note`、
+`quota_windows`、`subscriptions`、`totals`、`projects`、`buckets`，并新增：
+
+```jsonc
+"mobile": { "trimmed": true, "hidden_project_names": false }
+```
+
+- 每个项目只保留 `id`、`name`、`cost`、`tokens`、`sessions`、`first_active`、`last_active`、`by_agent`、`by_model`、`by_day`；去掉 `config`、`paths`、`remote`、`path_missing`、`by_branch`、`sessions_detail`。
+- `buckets` 只保留汇总：`unattributed` / `excluded` 为 Aggregate 字段（不含 `sessions_detail`），`parse_failed` 只留 `sessions`（不含 `files` 路径）。
+- `--hide-project-names`（只能和 `--mobile` 一起用）：项目名按 cost 顺序替换为 `Project 1`…`Project N`，`id` 替换为原 id 的 sha256 前 12 位十六进制，`mobile.hidden_project_names` 为 `true`。顺序不变。
+- `--gzip`：把 JSON 以 gzip 压缩后写到 stdout（二进制，无缩进）；`-o` 时写入文件。适合 Mac app 直接上传。
+
