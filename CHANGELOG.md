@@ -6,6 +6,41 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-26
+
+### Added
+
+- **Subscription quota card on hover.** Hovering a row of the Subscription value card shows a quota
+  card with the 5-hour and weekly windows (progress bar, percent, relative + absolute reset time;
+  expired windows show '—'), from new `quota_windows` fields `weekly_used_percent`,
+  `five_hour_used_percent`, and `five_hour_window_hours` read from Tokei caches.
+- **Signed DMG and optional notarization.** The DMG is signed with the Developer ID, and
+  `ui/package.sh` supports optional notarization via `KANJO_NOTARY_PROFILE` or `--notarize`.
+- **Sample fixtures and README screenshots.** Updated sample data and disk fixtures cover all nine
+  supported agents, with refreshed light and dark mode screenshots in the README.
+
+### Changed
+
+- **Cleaner session titles.** Session titles strip lead-in system tags, environment instructions,
+  work paths, diff snippets, and standalone slash commands, falling back to the next meaningful
+  prompt. Codex titles are extracted from the first actual user prompt rather than internal JSON
+  payloads or boilerplate.
+- **Safer packaging options.** `ui/package.sh` parses `--notarize` flags without mistaking version
+  arguments for keychain profile names, strips optional `v` prefixes, and fails early with a clear
+  message if notarization is requested without a Developer ID certificate.
+
+### Fixed
+
+- **DST-safe weekly quota resets.** Weekly 168-hour quota windows calculate resets using calendar week
+  intervals instead of fixed hourly offsets, keeping the weekly reset at the same local wall-clock
+  time across Daylight Saving Time transitions (spring forward and fall back).
+- **MiniMax and OpenCode de-duplication safety.** OpenCode session scanning skips the scan if the
+  MiniMax database exists but cannot be read to prevent double-counting shared sessions, and MiniMax
+  usage parsing generates unique keys even when turn IDs repeat.
+- **Case-insensitive localization lookup.** UI bundle lookup normalizes language codes and matches
+  `.lproj` directories case-insensitively, resolving missing Chinese (`zh-Hans`) strings on newer
+  Xcode and macOS CI runners.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added
@@ -112,7 +147,8 @@ First public release. Before publishing, the project went by the working name `a
 - `ui/package.sh` builds an ad-hoc signed `Kanjo.app` and a zip for release.
 - GitHub Actions CI for the CLI (Python 3.9 and 3.12) and the app (`swift build`, `swift test`).
 
-[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mammut001/kanjo/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/mammut001/kanjo/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mammut001/kanjo/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mammut001/kanjo/releases/tag/v0.2.0
 [0.1.0]: https://github.com/mammut001/kanjo/releases/tag/v0.1.0

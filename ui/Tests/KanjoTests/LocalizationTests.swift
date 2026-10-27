@@ -71,4 +71,95 @@ final class LocalizationTests: KanjoTestCase {
         let result = L10n.tr("common.show_all", language: "en", 5, "items")
         XCTAssertEqual(result, "Show all 5 items")
     }
+
+    /// 验证 lproj 目录名称匹配器（纯函数：大小写不敏感，规范化 '-' 与 '_'）
+    func testLprojMatcher() {
+        // 1. 标准目录名
+        let standardCandidates = ["en.lproj", "zh-Hans.lproj", "fr.lproj"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: standardCandidates), "zh-Hans.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "en", in: standardCandidates), "en.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "fr", in: standardCandidates), "fr.lproj")
+
+        // 2. 小写目录名 (zh-hans.lproj)
+        let lowerCandidates = ["en.lproj", "zh-hans.lproj", "fr.lproj"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: lowerCandidates), "zh-hans.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "zh-hans", in: lowerCandidates), "zh-hans.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "zh_Hans", in: lowerCandidates), "zh-hans.lproj")
+
+        // 3. 下划线目录名 (zh_Hans.lproj / zh_hans.lproj)
+        let underscoreCandidates = ["en.lproj", "zh_Hans.lproj", "fr.lproj"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: underscoreCandidates), "zh_Hans.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "zh-hans", in: underscoreCandidates), "zh_Hans.lproj")
+        XCTAssertEqual(L10n.matchLproj(for: "zh_Hans", in: underscoreCandidates), "zh_Hans.lproj")
+
+        let underscoreLowerCandidates = ["en.lproj", "zh_hans.lproj", "fr.lproj"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: underscoreLowerCandidates), "zh_hans.lproj")
+
+        // 4. 大写目录名 (ZH-HANS.LPROJ / ZH_HANS.LPROJ)
+        let upperCandidates = ["EN.LPROJ", "ZH-HANS.LPROJ", "FR.LPROJ"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: upperCandidates), "ZH-HANS.LPROJ")
+        XCTAssertEqual(L10n.matchLproj(for: "zh_Hans", in: upperCandidates), "ZH-HANS.LPROJ")
+
+        // 5. 不带 .lproj 后缀的语言代码列表（如 Bundle.localizations）
+        let rawCandidates = ["en", "zh-hans", "fr"]
+        XCTAssertEqual(L10n.matchLproj(for: "zh-Hans", in: rawCandidates), "zh-hans")
+        XCTAssertEqual(L10n.matchLproj(for: "zh_Hans", in: rawCandidates), "zh-hans")
+
+        // 6. 别名 matchLprojDirectory 同样可用
+        XCTAssertEqual(L10n.matchLprojDirectory(for: "zh-Hans", in: lowerCandidates), "zh-hans.lproj")
+
+        // 7. 不匹配与边界情况
+        XCTAssertNil(L10n.matchLproj(for: "ja", in: standardCandidates))
+        XCTAssertNil(L10n.matchLproj(for: "zh-Hant", in: standardCandidates))
+        XCTAssertNil(L10n.matchLproj(for: "zh-Hans", in: []))
+        XCTAssertNil(L10n.matchLproj(for: "", in: standardCandidates))
+        XCTAssertNil(L10n.matchLproj(for: "   ", in: standardCandidates))
+    }
+
+    /// 验证不同变体拼写（zh-Hans / zh-hans / zh_Hans）均可正常加载 bundle 和 strings
+    func testLanguageVariantsBundleAndStringsLoading() {
+        for variant in ["zh-Hans", "zh-hans", "zh_Hans"] {
+            guard let strings = L10n.allStrings(for: variant) else {
+                XCTFail("Failed to load strings dictionary for variant: \(variant)")
+                continue
+            }
+            XCTAssertFalse(strings.isEmpty, "Strings dictionary for \(variant) should not be empty")
+            XCTAssertNotNil(L10n.bundle(for: variant), "Bundle for \(variant) should be found")
+            XCTAssertEqual(L10n.tr("common.done", language: variant), "完成")
+        }
+    }
+
+    /// 验证即使 lproj 目录位于 bundle 根目录或使用下划线/小写，lprojURL 仍能正确定位
+    func testMockBundleRootAndLowercaseLookup() throws {
+        let fm = FileManager.default
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("KanjoMock_\(UUID().uuidString).bundle")
+        defer { try? fm.removeItem(at: tempDir) }
+
+        // 场景 1：lproj 位于根目录，名为 zh_Hans.lproj
+        let rootLproj = tempDir.appendingPathComponent("zh_Hans.lproj", isDirectory: true)
+        try fm.createDirectory(at: rootLproj, withIntermediateDirectories: true)
+        guard let bundle = Bundle(url: tempDir) else {
+            XCTFail("Failed to instantiate mock bundle")
+            return
+        }
+
+        let foundURL = L10n.lprojURL(for: "zh-Hans", in: bundle)
+        XCTAssertNotNil(foundURL)
+        XCTAssertEqual(foundURL?.lastPathComponent, "zh_Hans.lproj")
+
+        // 场景 2：lproj 位于 Contents/Resources/zh-hans.lproj
+        let nestedBundleDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("KanjoNestedMock_\(UUID().uuidString).bundle")
+        defer { try? fm.removeItem(at: nestedBundleDir) }
+
+        let nestedLproj = nestedBundleDir.appendingPathComponent("Contents/Resources/zh-hans.lproj", isDirectory: true)
+        try fm.createDirectory(at: nestedLproj, withIntermediateDirectories: true)
+        guard let nestedBundle = Bundle(url: nestedBundleDir) else {
+            XCTFail("Failed to instantiate nested mock bundle")
+            return
+        }
+
+        let foundNestedURL = L10n.lprojURL(for: "zh-Hans", in: nestedBundle)
+        XCTAssertNotNil(foundNestedURL)
+        XCTAssertEqual(foundNestedURL?.lastPathComponent, "zh-hans.lproj")
+    }
 }

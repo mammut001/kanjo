@@ -183,8 +183,10 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                             if isinstance(parts, list):
                                 for part in parts:
                                     if isinstance(part, dict) and part.get("text"):
-                                        session.title = short_title(part.get("text"))
-                                        break
+                                        t = short_title(part.get("text"))
+                                        if t:
+                                            session.title = t
+                                            break
         except OSError as exc:
             raise ParseError("cannot read chat transcript: %s" % exc)
 

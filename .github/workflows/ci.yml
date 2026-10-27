@@ -44,5 +44,7 @@ jobs:
           swift --version
       - name: Build
         run: swift build
+      - name: Print lproj layout
+        run: find .build -name '*.lproj' -path '*Kanjo_KanjoCore*' | head
       - name: Test
         run: swift test

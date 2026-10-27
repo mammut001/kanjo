@@ -27,8 +27,11 @@ AGENT = "codex"
 PATH_KEYS = {"workdir", "path", "file_path", "cwd", "paths", "dir", "directory", "working_directory"}
 CMD_KEYS = {"cmd", "command"}
 _PATCH_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+?)\s*$|^\*\*\* Move to: (.+?)\s*$", re.M)
-_MARKERS = (b'"session_meta"', b'"turn_context"', b'"token_count"', b'"user_message"',
-            b'"function_call"', b'"custom_tool_call"', b'"local_shell_call"')
+_MARKERS = (
+    b'"token_count"', b'"function_call"', b'"custom_tool_call"', b'"local_shell_call"',
+    b'"turn_context"', b'"session_meta"', b'"user_message"',
+    b'"role": "user"', b'"role":"user"', b'"instructions"', b'"instruction"',
+)
 
 
 def roots() -> List[str]:
@@ -104,8 +107,13 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         raise ParseError(str(exc))
     with handle:
         for raw in handle:
-            head = raw[:320]
-            if not any(marker in head for marker in _MARKERS):
+            head = raw[:512]
+            matched = False
+            for marker in _MARKERS:
+                if marker in head:
+                    matched = True
+                    break
+            if not matched:
                 if good == 0 and bad == 0 and raw.strip():
                     try:
                         json.loads(raw)
@@ -156,8 +164,10 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 if ptype == "user_message":
                     if session.title is None:
                         text = payload.get("message")
-                        if isinstance(text, str) and not text.lstrip().startswith("<"):
-                            session.title = short_title(text)
+                        if isinstance(text, str):
+                            t = short_title(text)
+                            if t:
+                                session.title = t
                     session.note_time(ts)
                 elif ptype == "token_count":
                     info = payload.get("info")
@@ -179,9 +189,42 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     session.note_cwd(cwd)
                 continue
             if kind == "response_item":
+                if session.title is None and payload.get("role") == "user":
+                    content = payload.get("content")
+                    text = None
+                    if isinstance(content, list):
+                        parts = []
+                        for b in content:
+                            if isinstance(b, dict):
+                                t = b.get("text") or b.get("input_text")
+                                if isinstance(t, str):
+                                    parts.append(t)
+                            elif isinstance(b, str):
+                                parts.append(b)
+                        if parts:
+                            text = "\n".join(parts)
+                    elif isinstance(content, str):
+                        text = content
+                    elif isinstance(payload.get("message"), str):
+                        text = payload.get("message")
+                    if text:
+                        t = short_title(text)
+                        if t:
+                            session.title = t
+                    session.note_time(ts)
                 found = unique(_tool_paths(payload, cwd))
                 if found:
                     session.tool_paths.append(found)
+                continue
+            if kind in ("instructions", "instruction"):
+                if session.title is None:
+                    text = payload.get("text") or payload.get("instructions") or payload.get("instruction")
+                    if isinstance(text, str):
+                        t = short_title(text)
+                        if t:
+                            session.title = t
+                session.note_time(ts)
+                continue
     if not have_meta:
         if good == 0 and bad > 0:
             raise ParseError("no valid JSON lines")

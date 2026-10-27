@@ -757,7 +757,7 @@ private struct QuotaResetSettingsRow: View {
             }
 
             if let quota, let reset = ReportDates.parseTimestamp(quota.weeklyResetsAt) {
-                let start = RangeEngine.windowStart(quota, now: Date())
+                let start = RangeEngine.windowStart(quota, now: Date(), calendar: calendar)
                 HStack(spacing: 4) {
                     Text(SettingsView.stamp(reset, calendar))
                         .font(.system(size: 10.5)).monospacedDigit()

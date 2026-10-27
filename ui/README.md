@@ -168,6 +168,7 @@ If `schema_version` is newer than 1, a warning appears and the app keeps renderi
 ./package.sh            # version from ../VERSION
 ./package.sh 0.3.0      # explicit version
 ./package.sh --icon     # also re-render Resources/Kanjo.png and Kanjo.icns
+./package.sh --notarize # notarize with keychain profile 'kanjo-notary'
 ```
 
 Builds arm64 and x86_64 release slices separately with SwiftPM and merges them with `lipo`.
@@ -178,7 +179,25 @@ pricing files, VERSION, and fallback sample JSON.
 
 Signing uses `KANJO_CODESIGN_IDENTITY` when set; otherwise it detects a Developer ID Application
 identity, falling back to ad-hoc (`-`). Developer ID signing uses hardened runtime and timestamps;
-the binary, app, and DMG are signed and verified. No notarization is performed yet.
+the binary, app, and DMG are signed and verified. Releases are not notarized yet.
+
+To build a notarized release, store credentials once in your macOS keychain (using an app-specific password):
+
+```bash
+xcrun notarytool store-credentials kanjo-notary --apple-id <your-apple-id> --team-id Z5D5N7CU6L
+```
+
+Then build with the notary profile:
+
+```bash
+KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
+# or pass --notarize (defaults to profile 'kanjo-notary'):
+./package.sh --notarize
+```
+
+When a profile is configured, `package.sh` notarizes the `.app` zip, staples the `.app`, rebuilds the zip
+and DMG from the stapled app, signs the DMG, notarizes the DMG, and staples it. If no profile is
+configured, notarization is skipped.
 
 With an empty CLI working directory, lookup order is bundled CLI → repository cli/ (DEBUG only)
 → `~/.local/share/kanjo/cli` → `/usr/local/share/kanjo/cli`. Settings shows the selected CLI and bundled
@@ -193,9 +212,9 @@ Sources/KanjoCore/       contract models (Codable), data sources, formatting, re
                           treemap / heat strip / project prefs pure functions (no UI)
 Sources/Kanjo/           SwiftUI app: KanjoApp, Store/ReportStore, Views/…
 Tests/KanjoTests/        decoding + invariant tests on fixtures/sample.json, formatting, treemap, heat strip, prefs tests
-fixtures/sample.json     test data (8 projects, 3 agents, split/cwd sessions, estimated models, buckets)
+fixtures/sample.json     test data (8 projects, 9 agents, split/cwd sessions, estimated models, buckets)
 fixtures/generate_sample.py   regenerates sample.json deterministically and asserts the invariants
-fixtures/disk-sample.json     disk page sample (5 agents); fixtures/generate_disk_sample.py regenerates it
+fixtures/disk-sample.json     disk page sample (10 agents); fixtures/generate_disk_sample.py regenerates it
 Resources/                Kanjo.png / Kanjo.icns app icon and make_icon.swift that draws it
 package.sh               universal .app + zip + DMG
 ```

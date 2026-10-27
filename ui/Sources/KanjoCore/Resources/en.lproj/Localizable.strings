@@ -155,6 +155,10 @@
 "menu.error_title" = "Could not load usage data";
 "menu.open_settings" = "Open Settings";
 "menu.expected_export_json" = "Expected a JSON file produced by `kanjo export` (see CONTRACT.md).";
+"menu.first_scan_hint" = "First run reads every AI tool's logs and takes about half a minute; later refreshes take a few seconds.";
+"menu.first_scan_elapsed" = "%d s elapsed";
+"menu.first_run_hint" = "First run reads every AI tool's logs and takes about half a minute; later refreshes take a few seconds.";
+"menu.first_run_elapsed" = "%d s elapsed";
 
 /* Overview */
 "overview.total_cost" = "Total cost";

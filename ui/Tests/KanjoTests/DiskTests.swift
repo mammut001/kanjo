@@ -15,12 +15,12 @@ final class DiskTests: KanjoTestCase {
         let r = try loadFixture()
         XCTAssertEqual(r.schemaVersion, 1)
         XCTAssertFalse(r.isNewerSchema)
-        XCTAssertEqual(r.agents.count, 5)
+        XCTAssertEqual(r.agents.count, 10)
         XCTAssertNil(r.cached)
         XCTAssertNil(r.scannedAt)
         XCTAssertNil(r.scanSeconds)
-        XCTAssertEqual(Fmt.bytes(r.totalBytes), "55.2 GB")
-        XCTAssertEqual(Fmt.bytes(r.reclaimableBytes), "31.4 GB")
+        XCTAssertEqual(Fmt.bytes(r.totalBytes), "42.2 GB")
+        XCTAssertEqual(Fmt.bytes(r.reclaimableBytes), "25.9 GB")
         let codex = try XCTUnwrap(r.agents.first { $0.agent == "codex" })
         XCTAssertEqual(codex.label, "Codex CLI")
         XCTAssertEqual(Fmt.bytes(codex.bytes), "11.8 GB")
@@ -264,7 +264,7 @@ final class DiskTests: KanjoTestCase {
 
     func testFileDiskSourceLoadsFixture() async throws {
         let r = try await FileDiskSource(url: try fixtureURL()).load()
-        XCTAssertEqual(r.agents.count, 5)
+        XCTAssertEqual(r.agents.count, 10)
         do {
             _ = try await FileDiskSource(url: URL(fileURLWithPath: "/nonexistent/disk.json")).load()
             XCTFail("expected error")

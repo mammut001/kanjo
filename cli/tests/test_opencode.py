@@ -1,6 +1,8 @@
 """Unit tests for the OpenCode log parser, including explicit MiniMax dedupe."""
 
+import io
 import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -92,3 +94,40 @@ class OpenCodeParserTest(unittest.TestCase):
     def test_missing_file_raises_parse_error(self):
         with self.assertRaises(ParseError):
             opencode.parse_file("/nonexistent/opencode.db::ses_1")
+
+    def test_minimax_db_exists_but_unreadable_skips_opencode_scan(self):
+        """When MiniMax sqlite.db exists but cannot be read, skip OpenCode scan and log once to stderr."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad_db = os.path.join(tmpdir, "sqlite.db")
+            with open(bad_db, "wb") as f:
+                f.write(b"corrupt sqlite header")
+
+            with mock.patch.dict(os.environ, {"KANJO_MINIMAX_DIR": tmpdir}):
+                err = io.StringIO()
+                with mock.patch("sys.stderr", err):
+                    discovered = opencode.discover([FIXTURE_DIR])
+
+                    self.assertEqual(discovered, [])
+                    err_output = err.getvalue()
+                    self.assertIn("warning:", err_output)
+                    self.assertIn("exists but cannot be read", err_output)
+                    self.assertIn("skipping OpenCode scan", err_output)
+
+                    # parse_file directly also raises ParseError
+                    db_path = os.path.join(FIXTURE_DIR, "opencode.db")
+                    with self.assertRaises(ParseError):
+                        opencode.parse_file(f"{db_path}::ses_op1")
+
+    def test_minimax_db_nonexistent_behaves_normally(self):
+        """When MiniMax db doesn't exist, OpenCode scan discovers sessions normally without stderr warnings."""
+        with mock.patch.dict(os.environ, {"KANJO_MINIMAX_DIR": "/nonexistent/minimax/dir"}):
+            err = io.StringIO()
+            with mock.patch("sys.stderr", err):
+                discovered = opencode.discover([FIXTURE_DIR])
+
+            ids = [p.split("::")[-1] for p, _ in discovered]
+            self.assertIn("ses_op1", ids)
+            self.assertIn("ses_op2", ids)
+            self.assertNotIn("ses_mm_overlap1", ids)
+            self.assertEqual(len(discovered), 2)
+            self.assertEqual(err.getvalue(), "")

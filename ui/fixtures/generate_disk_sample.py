@@ -2,7 +2,7 @@
 
 Usage: python3 fixtures/generate_disk_sample.py [out.json]   (default: fixtures/disk-sample.json)
 
-Five agents, paths under /Users/alice. Totals format as 55.2 GB / 31.4 GB,
+Ten agents, paths under /Users/alice. Totals format as 42.2 GB / 25.9 GB,
 Codex as 11.8 GB (decimal, 1000-based). One entry per deletable class, one
 blocked entry per reason. Reclaimable is every entry that is not `never`
 and has an empty blocked list.
@@ -10,8 +10,8 @@ and has an empty blocked list.
 import json
 import sys
 
-TOTAL = 55_200_000_000
-RECLAIMABLE = 31_400_000_000
+TOTAL = 42_200_000_000
+RECLAIMABLE = 25_900_000_000
 
 AGENTS = [
     ("claude", "Claude Code", [
@@ -39,17 +39,6 @@ AGENTS = [
          6_100_000_000, 6, "2026-09-01", "2026-10-11", "when_clean", [],
          "Git worktrees with a clean tree. Removed with git worktree remove."),
     ]),
-    ("gemini", "Gemini CLI", [
-        ("gemini:sessions", "sessions", "/Users/alice/.gemini/sessions",
-         4_200_000_000, 510, "2026-04-04", "2026-10-23", "after_import", [],
-         "Gemini session logs already copied into the ledger."),
-        ("gemini:scratch", "scratch", "/Users/alice/.gemini/tmp",
-         2_200_000_000, 88, "2026-10-20", "2026-10-25", "when_clean", ["active"],
-         "Temporary files still in use."),
-        ("gemini:memory", "memory", "/Users/alice/.gemini/memory",
-         4_200_000_000, 15, "2026-02-02", "2026-09-30", "never", [],
-         "Gemini memory store. Never deleted."),
-    ]),
     ("antigravity", "Antigravity CLI", [
         ("antigravity:sessions", "sessions", "/Users/alice/.gemini/antigravity-cli/conversations",
          2_600_000_000, 73, "2026-05-19", "2026-10-21", "after_import", [],
@@ -64,16 +53,49 @@ AGENTS = [
          1_600_000_000, 9, "2026-01-20", "2026-10-01", "never", [],
          "Cross-session memory. Never deleted."),
     ]),
-    ("cursor", "Cursor", [
-        ("cursor:cache", "cache", "/Users/alice/Library/Application Support/Cursor/Cache",
-         626_000_000, 4100, "2026-09-12", "2026-10-18", "always", [],
-         "Editor cache. Cursor recreates it."),
-        ("cursor:sessions", "sessions", "/Users/alice/Library/Application Support/Cursor/User/globalStorage",
-         4_374_000_000, 220, "2026-03-15", "2026-10-24", "after_import", [],
-         "Chat transcripts already imported into the ledger."),
-        ("cursor:other", "other", "/Users/alice/Library/Application Support/Cursor/User/workspaceStorage",
-         3_000_000_000, 96, "2026-02-11", "2026-10-16", "never", [],
-         "Workspace state the editor still needs."),
+    ("grok", "Grok CLI", [
+        ("grok:sessions", "sessions", "/Users/alice/.grok/sessions",
+         1_200_000_000, 84, "2026-08-10", "2026-10-24", "after_import", [],
+         "Grok sessions. Numbers stay in the ledger after deletion."),
+        ("grok:bundled", "other", "/Users/alice/.grok/bundled",
+         800_000_000, 12, "2026-08-01", "2026-09-15", "never", [],
+         "Bundled models and assets. Never deleted."),
+    ]),
+    ("qwen", "Qwen Code", [
+        ("qwen:sessions", "sessions", "/Users/alice/.qwen/usage",
+         600_000_000, 45, "2026-07-01", "2026-10-23", "after_import", [],
+         "Qwen Code monthly usage logs."),
+        ("qwen:projects", "other", "/Users/alice/.qwen/projects",
+         400_000_000, 18, "2026-07-01", "2026-10-20", "never", [],
+         "Qwen project metadata. Kept across sessions."),
+    ]),
+    ("commandcode", "Command Code", [
+        ("commandcode:sessions", "sessions", "/Users/alice/.commandcode/projects",
+         500_000_000, 32, "2026-08-15", "2026-10-22", "after_import", [],
+         "Command Code project sessions."),
+    ]),
+    ("minimax", "MiniMax", [
+        ("minimax:sessions", "sessions", "/Users/alice/.minimax",
+         300_000_000, 3, "2026-09-01", "2026-10-24", "never", [],
+         "MiniMax SQLite database. DB-backed sessions are never deleted by disk clean."),
+    ]),
+    ("opencode", "OpenCode", [
+        ("opencode:sessions", "sessions", "/Users/alice/.local/share/opencode",
+         400_000_000, 4, "2026-08-20", "2026-10-24", "never", [],
+         "OpenCode SQLite database. DB-backed sessions are never deleted by disk clean."),
+    ]),
+    ("copilot", "Copilot CLI", [
+        ("copilot:sessions", "sessions", "/Users/alice/.copilot/session-state",
+         700_000_000, 150, "2026-06-10", "2026-10-23", "after_import", [],
+         "Copilot CLI session state."),
+    ]),
+    ("claude-desktop", "Claude Desktop", [
+        ("claude-desktop:cache", "cache", "/Users/alice/Library/Application Support/Claude/Cache",
+         500_000_000, 3200, "2026-09-10", "2026-10-25", "always", [],
+         "Claude desktop app cache. Safe to delete."),
+        ("claude-desktop:code-cache", "cache", "/Users/alice/Library/Application Support/Claude/Code Cache",
+         200_000_000, 1100, "2026-09-10", "2026-10-25", "always", [],
+         "Claude desktop code cache. Safe to delete."),
     ]),
 ]
 
@@ -108,7 +130,7 @@ def main():
     }
     assert doc["total_bytes"] == TOTAL, doc["total_bytes"]
     assert doc["reclaimable_bytes"] == RECLAIMABLE, doc["reclaimable_bytes"]
-    assert len(agents) == 5
+    assert len(agents) == 10
     assert next(a["bytes"] for a in agents if a["agent"] == "codex") == 11_800_000_000
     deletable = {e["deletable"] for a in agents for e in a["entries"]}
     assert deletable >= {"always", "after_import", "when_clean", "never"}

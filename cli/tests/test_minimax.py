@@ -7,6 +7,7 @@ from kanjo.sources import minimax
 from kanjo.sources.base import ParseError
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "minimax")
+DUP_FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "minimax_duplicate")
 
 
 class MiniMaxParserTest(unittest.TestCase):
@@ -53,3 +54,25 @@ class MiniMaxParserTest(unittest.TestCase):
     def test_missing_file_raises_parse_error(self):
         with self.assertRaises(ParseError):
             minimax.parse_file("/nonexistent/path/sqlite.db::mvs_test1")
+
+    def test_duplicated_turn_id(self):
+        """When turn_id is duplicated within a session, 1st row keeps current key and 2nd+ rows use :row_id suffix."""
+        discovered = minimax.discover([DUP_FIXTURE_DIR])
+        self.assertEqual(len(discovered), 1)
+        path, parent = discovered[0]
+        session = minimax.parse_file(path, parent)
+        self.assertEqual(session.id, "mvs_dup1")
+        self.assertEqual(len(session.messages), 4)
+
+        keys = [m.key for m in session.messages]
+        # 1st row of turn_1: retains current key format minimax:{sid}:{turn_id}
+        self.assertEqual(keys[0], "minimax:mvs_dup1:turn_1")
+        # 2nd row of turn_1: appends row id (2)
+        self.assertEqual(keys[1], "minimax:mvs_dup1:turn_1:2")
+        # 3rd row of turn_1: appends row id (3)
+        self.assertEqual(keys[2], "minimax:mvs_dup1:turn_1:3")
+        # 1st (and only) row of turn_2: retains current key format
+        self.assertEqual(keys[3], "minimax:mvs_dup1:turn_2")
+
+        # All keys are unique so deduplication preserves all rows
+        self.assertEqual(len(set(keys)), 4)

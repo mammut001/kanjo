@@ -383,6 +383,8 @@ private struct SubscriptionValueCard: View {
     let report: UsageReport
     var pinnedQuotaAgent: String? = nil
     let onSetRenewalDay: (String) -> Void
+    @State private var hoveredAgent: String?
+    @State private var hoverTask: Task<Void, Never>?
     @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
 
     private var cur: String { report.currency }

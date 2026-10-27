@@ -94,7 +94,7 @@ final class DecodingTests: KanjoTestCase {
     func testFixtureCoversRequiredCases() throws {
         let r = try loadFixture()
         let agents = Set(r.projects.flatMap { $0.byAgent.map(\.agent) })
-        XCTAssertEqual(agents, ["claude", "antigravity", "codex"])
+        XCTAssertEqual(agents, ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax", "opencode", "copilot"])
         XCTAssertTrue(r.projects.contains { $0.byAgent.count == 1 }, "single-agent project")
         XCTAssertTrue(r.projects.contains { $0.pathMissing }, "path_missing project")
         XCTAssertTrue(r.projects.contains { $0.remote == nil && $0.id.hasPrefix("/") }, "no-remote project")
@@ -144,6 +144,13 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertEqual(generatedAt.timeIntervalSince(cycleStart), 30 * 24 * 60 * 60)
         XCTAssertEqual(codex.cycleEnd, r.generatedAt)
         XCTAssertEqual(codex.source, "detected")
+        let grok = try XCTUnwrap(r.subscriptions?["grok"])
+        XCTAssertEqual(grok.plan, "supergrok")
+        XCTAssertEqual(grok.planLabel, "SuperGrok")
+        XCTAssertEqual(grok.monthlyPriceUsd, 30)
+        XCTAssertNil(grok.anchorDay)
+        XCTAssertEqual(grok.cycleSource, "rolling_30d")
+        XCTAssertEqual(grok.source, "detected")
         XCTAssertNil(r.subscriptions?["antigravity"])
     }
 
