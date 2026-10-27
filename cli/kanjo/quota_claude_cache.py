@@ -85,7 +85,12 @@ def _decompress_payload(data: bytes) -> Optional[bytes]:
         try:
             import zstandard
             dctx = zstandard.ZstdDecompressor()
-            return dctx.decompress(data[pos:], max_output_size=MAX_CACHE_FILE_SIZE * 10)
+            try:
+                return dctx.decompress(data[pos:], max_output_size=MAX_CACHE_FILE_SIZE * 10)
+            except Exception:
+                decomp = dctx.decompressobj().decompress(data[pos:])
+                if decomp:
+                    return decomp
         except Exception:
             pass
 
@@ -105,7 +110,7 @@ def _decompress_payload(data: bytes) -> Optional[bytes]:
                     timeout=1,
                     check=False,
                 )
-                if res.returncode == 0 and res.stdout:
+                if res.stdout:
                     return res.stdout
             except Exception:
                 pass

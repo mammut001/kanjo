@@ -356,6 +356,46 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertEqual(res_gz["five_hour_resets_at"], "2024-10-27T08:00:00Z")
         self.assertEqual(res_gz["source"], "live")
 
+        # 3. Trailing Chromium cache metadata footer after compressed payload
+        os.remove(f_gz)
+        f_footer = os.path.join(cache_dir, "0003_0")
+        chromium_footer = b"\xf5\x13\x24\x9a\x01\x00\x00\x00\x00\x00\x00\x00\x2f\x00\x00\x00\xd8\x41\x0d\xbd"
+        footer_content = (
+            b"HTTP/1.1 200 OK\r\n"
+            b"/api/organizations/org-123/usage\r\n"
+            b"\r\n" + gz_body + chromium_footer
+        )
+        with open(f_footer, "wb") as fh:
+            fh.write(footer_content)
+        os.utime(f_footer, (now, now))
+
+        res_footer = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNotNone(res_footer)
+        self.assertEqual(res_footer["weekly_used_percent"], 45.0)
+        self.assertEqual(res_footer["five_hour_used_percent"], 15.0)
+
+        # 4. Zstandard stream with trailing Chromium footer bytes (if zstd CLI available)
+        zstd_bin = shutil.which("zstd")
+        if not zstd_bin:
+            for cand in ("/opt/homebrew/bin/zstd", "/usr/local/bin/zstd", "/usr/bin/zstd"):
+                if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                    zstd_bin = cand
+                    break
+        if zstd_bin:
+            os.remove(f_footer)
+            f_zstd = os.path.join(cache_dir, "0004_0")
+            import subprocess
+            zstd_body = subprocess.run([zstd_bin, "-c", "-q"], input=json.dumps(payload).encode("utf-8"), capture_output=True).stdout
+            zstd_content = b"HTTP/1.1 200 OK\r\n/usage\r\n\r\n" + zstd_body + chromium_footer
+            with open(f_zstd, "wb") as fh:
+                fh.write(zstd_content)
+            os.utime(f_zstd, (now, now))
+
+            res_zstd = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+            self.assertIsNotNone(res_zstd)
+            self.assertEqual(res_zstd["weekly_used_percent"], 45.0)
+            self.assertEqual(res_zstd["five_hour_used_percent"], 15.0)
+
     def test_claude_desktop_cache_expired_ignored(self):
         now = 1730000000.0  # 2024-10-27T03:33:20Z
         cache_dir = os.path.join(self.tmp, "claude_cache_exp")

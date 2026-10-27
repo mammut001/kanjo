@@ -151,7 +151,21 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertNil(grok.anchorDay)
         XCTAssertEqual(grok.cycleSource, "rolling_30d")
         XCTAssertEqual(grok.source, "detected")
-        XCTAssertNil(r.subscriptions?["antigravity"])
+        let antigravity = try XCTUnwrap(r.subscriptions?["antigravity"])
+        XCTAssertEqual(antigravity.plan, "google_ai_pro")
+        XCTAssertEqual(antigravity.planLabel, "Google AI Pro")
+        XCTAssertEqual(antigravity.monthlyPriceUsd, 19.99)
+        XCTAssertNil(antigravity.anchorDay)
+        XCTAssertEqual(antigravity.cycleSource, "rolling_30d")
+        XCTAssertEqual(antigravity.source, "detected")
+        let copilot = try XCTUnwrap(r.subscriptions?["copilot"])
+        XCTAssertEqual(copilot.plan, "pro")
+        XCTAssertEqual(copilot.planLabel, "Copilot Pro")
+        XCTAssertEqual(copilot.monthlyPriceUsd, 10)
+        XCTAssertNil(copilot.anchorDay)
+        XCTAssertEqual(copilot.cycleSource, "rolling_30d")
+        XCTAssertEqual(copilot.source, "manual")
+        XCTAssertNil(r.subscriptions?["qwen"])
     }
 
     func testMissingSubscriptionsDecodesAsNil() throws {

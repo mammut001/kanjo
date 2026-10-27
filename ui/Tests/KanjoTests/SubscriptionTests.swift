@@ -297,7 +297,7 @@ final class SubscriptionTests: KanjoTestCase {
         let top = r.projects[0]
         let shares = SubscriptionValue.shares(project: top.id, report: r, now: now)
         XCTAssertFalse(shares.isEmpty)
-        XCTAssertFalse(shares.contains { $0.agent == "antigravity" })
+        XCTAssertFalse(shares.contains { $0.agent == "qwen" })
         for s in shares {
             let total = usage.total(for: s.agent)
             XCTAssertGreaterThan(total, 0)
