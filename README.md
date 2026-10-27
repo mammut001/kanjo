@@ -62,7 +62,7 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl` | files touched, cwd, scratchpad path |
 | Codex CLI | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**` | files touched, cwd |
-| Antigravity CLI | `~/.gemini/antigravity-cli/conversations/*.db` | files touched, workspace |
+| Antigravity (CLI / App) | `~/.gemini/antigravity-cli/conversations/*.db`, `~/.gemini/antigravity/conversations/*.db` | files touched, workspace |
 | Grok CLI | `~/.grok/sessions/**` | files touched, cwd |
 | Qwen Code | `~/.qwen/chats/*.jsonl`, `~/.qwen/usage/token-usage-*.jsonl` | files touched, cwd |
 | Command Code | `~/.commandcode/projects/**/*.jsonl` | files touched, cwd |
@@ -199,7 +199,7 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl` | 碰过的文件、当前工作目录、scratchpad 路径 |
 | Codex CLI | `~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**` | 碰过的文件、当前工作目录 |
-| Antigravity CLI | `~/.gemini/antigravity-cli/conversations/*.db` | 碰过的文件、工作区 |
+| Antigravity (CLI / App) | `~/.gemini/antigravity-cli/conversations/*.db`、`~/.gemini/antigravity/conversations/*.db` | 碰过的文件、工作区 |
 | Grok CLI | `~/.grok/sessions/**` | 碰过的文件、当前工作目录 |
 | Qwen Code | `~/.qwen/chats/*.jsonl`、`~/.qwen/usage/token-usage-*.jsonl` | 碰过的文件、当前工作目录 |
 | Command Code | `~/.commandcode/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |

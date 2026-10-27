@@ -82,7 +82,10 @@ def default_roots() -> dict:
         "claude_projects": env_dirs("KANJO_CLAUDE_DIR", ["~/.claude/projects"]),
         "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%d" % os.getuid())),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
-        "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", ["~/.gemini/antigravity-cli/conversations"]),
+        "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
+            "~/.gemini/antigravity-cli/conversations",
+            "~/.gemini/antigravity/conversations",
+        ]),
         "grok": os.path.expanduser(os.environ["KANJO_GROK_DIR"]) if os.environ.get("KANJO_GROK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.grok")),
         "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
         "commandcode": os.path.expanduser(os.environ["KANJO_COMMANDCODE_DIR"]) if os.environ.get("KANJO_COMMANDCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.commandcode")),

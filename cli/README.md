@@ -55,7 +55,7 @@ Only the JSON document goes to stdout. Status messages and invariant warnings go
 | agent | default location | override |
 |---|---|---|
 | Claude Code | `~/.claude/projects/<slug>/<session>.jsonl`, sub-agents in `<session>/subagents/*.jsonl` | `KANJO_CLAUDE_DIR` |
-| Antigravity CLI | `~/.gemini/antigravity-cli/conversations/<id>.db` (SQLite + protobuf) | `KANJO_ANTIGRAVITY_DIR` |
+| Antigravity (CLI / App) | `~/.gemini/antigravity-cli/conversations/<id>.db`, `~/.gemini/antigravity/conversations/<id>.db` (SQLite + protobuf) | `KANJO_ANTIGRAVITY_DIR` |
 | Codex CLI / Desktop | `~/.codex/sessions/**/rollout-*.jsonl`, `~/.codex/archived_sessions/` | `KANJO_CODEX_DIR` |
 
 Each override takes a list of directories separated by `:`.
@@ -120,10 +120,10 @@ Cleaning always rescans and invalidates the cache after moving anything.
 | Codex archived sessions | `~/.codex/archived_sessions` | sessions | after_import |
 | Codex worktrees | each git worktree under `~/.codex/worktrees` | worktrees | when_clean |
 | Codex logs | `~/.codex/logs` | cache | always |
-| Antigravity sessions | `~/.gemini/antigravity-cli/conversations` (`KANJO_ANTIGRAVITY_DIR`) | sessions | after_import |
+| Antigravity sessions | `~/.gemini/antigravity-cli/conversations`, `~/.gemini/antigravity/conversations` (`KANJO_ANTIGRAVITY_DIR`) | sessions | after_import |
 | Antigravity scratch | `brain/<id>/scratch`, one entry per brain id | scratch | when_clean |
 | Antigravity memory | the rest of `brain/` | memory | never |
-| Antigravity cache | `~/.gemini/antigravity-cli/cache` | cache | always |
+| Antigravity cache | `~/.gemini/antigravity-cli/cache`, `~/.gemini/antigravity/cache` | cache | always |
 | Grok sessions | `~/.grok/sessions` (`KANJO_GROK_DIR`) | sessions | after_import |
 | Grok bundled | `~/.grok/bundled` | other | never |
 | Claude desktop | `~/Library/Application Support/Claude/{Cache,Code Cache,GPUCache}` (`KANJO_CLAUDE_APP_CACHE`) | cache | always |

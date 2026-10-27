@@ -1,4 +1,5 @@
-"""Antigravity CLI: ``~/.gemini/antigravity-cli/conversations/<id>.db`` (SQLite).
+"""Antigravity (CLI & App): ``~/.gemini/antigravity-cli/conversations/<id>.db``
+and ``~/.gemini/antigravity/conversations/<id>.db`` (SQLite).
 
 All content is protobuf without a published schema. Field numbers were
 reverse engineered (the token layout follows Tokei's ``_antigravity_gen_step``,
@@ -46,16 +47,25 @@ _USER_INPUT_STEP = 14
 
 
 def roots() -> List[str]:
-    return env_dirs("KANJO_ANTIGRAVITY_DIR", ["~/.gemini/antigravity-cli/conversations"])
+    return env_dirs("KANJO_ANTIGRAVITY_DIR", [
+        "~/.gemini/antigravity-cli/conversations",
+        "~/.gemini/antigravity/conversations",
+    ])
 
 
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
-    found = []
+    by_name: Dict[str, Tuple[str, float]] = {}
     for root in dirs if dirs is not None else roots():
         if os.path.isdir(root):
             for path in sorted(glob.glob(os.path.join(root, "*.db"))):
-                found.append((path, None))
-    return found
+                name = os.path.basename(path)
+                try:
+                    mtime = os.path.getmtime(path)
+                except OSError:
+                    mtime = 0.0
+                if name not in by_name or mtime > by_name[name][1]:
+                    by_name[name] = (path, mtime)
+    return [(path, None) for path, _ in sorted(by_name.values(), key=lambda t: t[0])]
 
 
 # ---- protobuf wire format (ported from Tokei) ---------------------------------
