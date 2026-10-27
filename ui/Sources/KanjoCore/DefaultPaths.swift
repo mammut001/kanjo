@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 
 public enum DefaultPaths {
@@ -92,3 +94,5 @@ public enum DefaultPaths {
         return nil
     }
 }
+
+#endif

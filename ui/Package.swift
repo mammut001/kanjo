@@ -4,7 +4,11 @@ import PackageDescription
 let package = Package(
     name: "Kanjo",
     defaultLocalization: "en",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v13), .iOS(.v17)],
+    products: [
+        // 供 iOS app 复用纯逻辑与本地化资源。
+        .library(name: "KanjoCore", targets: ["KanjoCore"]),
+    ],
     targets: [
         // 纯逻辑：契约模型、数据源、格式化、对账。不依赖 SwiftUI，方便测试。
         .target(

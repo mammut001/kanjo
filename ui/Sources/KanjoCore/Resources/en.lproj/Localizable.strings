@@ -383,3 +383,15 @@
 "reconcile.sessions_line" = "Sessions %@ vs sum %@";
 "reconcile.diff" = " · diff %@";
 "reconcile.contract_invariant" = "Invariant from the data contract: totals = sum(projects) + unattributed + excluded (cost tolerance $0.01).";
+
+/* iOS app */
+"ios.updated" = "Updated %@";
+"ios.empty.title" = "No snapshot yet";
+"ios.empty.body" = "Turn on iCloud sync in Kanjo on your Mac to see your AI usage here.";
+"ios.error.title" = "Couldn't load the snapshot";
+"ios.loading" = "Loading…";
+"ios.all_models" = "All models";
+"ios.quota_used" = "%@ used";
+"ios.quota_no_data" = "No quota data";
+"ios.projects" = "Projects";
+"ios.language" = "Language";
