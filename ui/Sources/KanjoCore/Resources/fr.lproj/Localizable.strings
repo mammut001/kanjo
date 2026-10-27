@@ -383,3 +383,15 @@
 "reconcile.sessions_line" = "Sessions %@ vs somme %@";
 "reconcile.diff" = " · écart %@";
 "reconcile.contract_invariant" = "Invariant du contrat de données : totaux = somme(projets) + non attribué + exclu (tolérance de coût 0,01 $).";
+
+/* Application iOS */
+"ios.updated" = "Mis à jour %@";
+"ios.empty.title" = "Aucun instantané";
+"ios.empty.body" = "Activez la synchronisation iCloud dans Kanjo sur votre Mac pour voir votre usage ici.";
+"ios.error.title" = "Impossible de charger l'instantané";
+"ios.loading" = "Chargement…";
+"ios.all_models" = "Tous les modèles";
+"ios.quota_used" = "%@ utilisé";
+"ios.quota_no_data" = "Aucune donnée de quota";
+"ios.projects" = "Projets";
+"ios.language" = "Langue";

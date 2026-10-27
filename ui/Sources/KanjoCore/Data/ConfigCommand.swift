@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 
 /// 续费日只交给 CLI 写配置。nil 表示移除覆盖，让下一次 export 重新检测。
@@ -170,3 +172,5 @@ public struct ConfigDataSource {
         try await execute(args: args)
     }
 }
+
+#endif

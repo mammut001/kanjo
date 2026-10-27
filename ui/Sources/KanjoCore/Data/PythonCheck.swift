@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 
 public enum PythonCheck {
@@ -25,3 +27,5 @@ public enum PythonCheck {
         }
     }
 }
+
+#endif

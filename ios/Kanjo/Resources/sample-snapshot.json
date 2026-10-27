@@ -1,0 +1,6332 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-23T02:00:00Z",
+  "generated_by": "generate_sample.py",
+  "timezone": "Asia/Shanghai",
+  "currency": "USD",
+  "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "config": {
+    "dominant_threshold": 0.8
+  },
+  "quota_windows": {
+    "claude": {
+      "weekly_resets_at": "2026-10-30T08:40:07Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 57.0,
+      "five_hour_resets_at": "2026-10-27T20:31:07Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 13.0,
+      "source": "live"
+    },
+    "codex": {
+      "weekly_resets_at": "2026-10-31T02:40:07Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 38.0,
+      "five_hour_resets_at": "2026-10-27T22:00:07Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 18.0,
+      "source": "live"
+    },
+    "grok": {
+      "weekly_resets_at": "2026-10-31T20:40:07Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 42.0,
+      "five_hour_resets_at": null,
+      "five_hour_window_hours": null,
+      "five_hour_used_percent": null,
+      "source": "live"
+    },
+    "antigravity": {
+      "weekly_resets_at": "2026-10-31T04:40:07Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 61.2,
+      "five_hour_resets_at": "2026-10-27T21:10:07Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 18.5,
+      "source": "live",
+      "extra_windows": [
+        {
+          "id": "antigravity-3p-weekly",
+          "title": "Claude/GPT Weekly",
+          "used_percent": 24.0,
+          "resets_at": "2026-10-31T04:40:07Z",
+          "window_hours": 168
+        },
+        {
+          "id": "antigravity-3p-5h",
+          "title": "Claude/GPT 5h",
+          "used_percent": 50.0,
+          "resets_at": "2026-10-27T22:25:07Z",
+          "window_hours": 5
+        }
+      ]
+    }
+  },
+  "subscriptions": {
+    "claude": {
+      "plan": "max_5x",
+      "plan_label": "Claude Max 5x",
+      "monthly_price_usd": 100.0,
+      "cycle_start": "2026-09-24T16:00:00Z",
+      "cycle_end": "2026-10-24T16:00:00Z",
+      "anchor_day": 25,
+      "cycle_source": "subscription_date",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
+    "codex": {
+      "plan": "plus",
+      "plan_label": "ChatGPT Plus",
+      "monthly_price_usd": 20.0,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
+    "antigravity": {
+      "plan": "google_ai_pro",
+      "plan_label": "Google AI Pro",
+      "monthly_price_usd": 19.99,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
+    "grok": {
+      "plan": "supergrok",
+      "plan_label": "SuperGrok",
+      "monthly_price_usd": 30.0,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "detected"
+    },
+    "copilot": {
+      "plan": "pro",
+      "plan_label": "Copilot Pro",
+      "monthly_price_usd": 10.0,
+      "cycle_start": "2026-09-23T02:00:00Z",
+      "cycle_end": "2026-10-23T02:00:00Z",
+      "anchor_day": null,
+      "cycle_source": "rolling_30d",
+      "extra_usage_enabled": false,
+      "source": "manual"
+    }
+  },
+  "totals": {
+    "cost": 275.9897,
+    "tokens": {
+      "input": 2924407,
+      "output": 3613293,
+      "cache_read": 240985951,
+      "cache_write": 18636227,
+      "thinking": 509991,
+      "total": 266159878
+    },
+    "sessions": 150,
+    "first_active": "2026-07-26",
+    "last_active": "2026-10-23"
+  },
+  "projects": [
+    {
+      "id": "github.com/alice/pocket-timer",
+      "name": "PocketTimer",
+      "remote": "github.com/alice/pocket-timer",
+      "paths": [
+        "/Users/alice/Documents/GitHub/PocketTimer",
+        "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+        "/Users/alice/Documents/GitHub/PocketTimer-widgets"
+      ],
+      "path_missing": false,
+      "cost": 139.9752,
+      "tokens": {
+        "input": 1213076,
+        "output": 1476419,
+        "cache_read": 98750227,
+        "cache_write": 7806555,
+        "thinking": 200972,
+        "total": 109246277
+      },
+      "sessions": 49,
+      "first_active": "2026-08-13",
+      "last_active": "2026-10-23",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 120.2177,
+          "tokens": {
+            "input": 640735,
+            "output": 811691,
+            "cache_read": 45207904,
+            "cache_write": 3881825,
+            "thinking": 186706,
+            "total": 50542155
+          },
+          "sessions": 25
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 9.8468,
+          "tokens": {
+            "input": 449190,
+            "output": 518524,
+            "cache_read": 37783391,
+            "cache_write": 3011124,
+            "thinking": 0,
+            "total": 41762229
+          },
+          "sessions": 18
+        },
+        {
+          "agent": "copilot",
+          "label": "Copilot CLI",
+          "cost": 5.1479,
+          "tokens": {
+            "input": 73542,
+            "output": 55476,
+            "cache_read": 7520528,
+            "cache_write": 490403,
+            "thinking": 0,
+            "total": 8139949
+          },
+          "sessions": 3
+        },
+        {
+          "agent": "grok",
+          "label": "Grok CLI",
+          "cost": 4.7628,
+          "tokens": {
+            "input": 49609,
+            "output": 90728,
+            "cache_read": 8238404,
+            "cache_write": 423203,
+            "thinking": 14266,
+            "total": 8801944
+          },
+          "sessions": 3
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 96.7967,
+          "tokens": {
+            "input": 307602,
+            "output": 362696,
+            "cache_read": 19050159,
+            "cache_write": 1941611,
+            "thinking": 75941,
+            "total": 21662068
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 17.0389,
+          "tokens": {
+            "input": 259133,
+            "output": 363767,
+            "cache_read": 19452891,
+            "cache_write": 1325090,
+            "thinking": 92202,
+            "total": 21400881
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 9.6911,
+          "tokens": {
+            "input": 421324,
+            "output": 470846,
+            "cache_read": 35647792,
+            "cache_write": 2766727,
+            "thinking": 0,
+            "total": 39306689
+          },
+          "estimated": false
+        },
+        {
+          "model": "copilot-sonnet-5",
+          "agent": "copilot",
+          "cost": 5.1479,
+          "tokens": {
+            "input": 73542,
+            "output": 55476,
+            "cache_read": 7520528,
+            "cache_write": 490403,
+            "thinking": 0,
+            "total": 8139949
+          },
+          "estimated": false
+        },
+        {
+          "model": "grok-4-beta",
+          "agent": "grok",
+          "cost": 4.7628,
+          "tokens": {
+            "input": 49609,
+            "output": 90728,
+            "cache_read": 8238404,
+            "cache_write": 423203,
+            "thinking": 14266,
+            "total": 8801944
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-opus-5-6-preview",
+          "agent": "claude",
+          "cost": 4.7602,
+          "tokens": {
+            "input": 5710,
+            "output": 9933,
+            "cache_read": 1177224,
+            "cache_write": 115400,
+            "thinking": 2097,
+            "total": 1308267
+          },
+          "estimated": true
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 1.6222,
+          "tokens": {
+            "input": 68290,
+            "output": 75295,
+            "cache_read": 5527630,
+            "cache_write": 499724,
+            "thinking": 16466,
+            "total": 6170939
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.1557,
+          "tokens": {
+            "input": 27866,
+            "output": 47678,
+            "cache_read": 2135599,
+            "cache_write": 244397,
+            "thinking": 0,
+            "total": 2455540
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-13",
+          "cost": 0.7012,
+          "tokens": 2915422,
+          "by_agent": {
+            "codex": 0.7012
+          },
+          "by_agent_tokens": {
+            "codex": 2915422
+          }
+        },
+        {
+          "day": "2026-08-15",
+          "cost": 1.768,
+          "tokens": 1496855,
+          "by_agent": {
+            "copilot": 1.768
+          },
+          "by_agent_tokens": {
+            "copilot": 1496855
+          }
+        },
+        {
+          "day": "2026-08-16",
+          "cost": 0.7562,
+          "tokens": 3237378,
+          "by_agent": {
+            "codex": 0.7562
+          },
+          "by_agent_tokens": {
+            "codex": 3237378
+          }
+        },
+        {
+          "day": "2026-08-18",
+          "cost": 5.834,
+          "tokens": 1364285,
+          "by_agent": {
+            "claude": 5.834
+          },
+          "by_agent_tokens": {
+            "claude": 1364285
+          }
+        },
+        {
+          "day": "2026-08-19",
+          "cost": 10.0236,
+          "tokens": 4800566,
+          "by_agent": {
+            "claude": 9.7467,
+            "codex": 0.2769
+          },
+          "by_agent_tokens": {
+            "claude": 3072520,
+            "codex": 1728046
+          }
+        },
+        {
+          "day": "2026-08-24",
+          "cost": 0.239,
+          "tokens": 928861,
+          "by_agent": {
+            "codex": 0.239
+          },
+          "by_agent_tokens": {
+            "codex": 928861
+          }
+        },
+        {
+          "day": "2026-08-26",
+          "cost": 0.5591,
+          "tokens": 1529128,
+          "by_agent": {
+            "codex": 0.5591
+          },
+          "by_agent_tokens": {
+            "codex": 1529128
+          }
+        },
+        {
+          "day": "2026-08-29",
+          "cost": 2.6134,
+          "tokens": 5275304,
+          "by_agent": {
+            "claude": 2.089,
+            "codex": 0.5244
+          },
+          "by_agent_tokens": {
+            "claude": 2385159,
+            "codex": 2890145
+          }
+        },
+        {
+          "day": "2026-08-30",
+          "cost": 0.5139,
+          "tokens": 462209,
+          "by_agent": {
+            "codex": 0.5139
+          },
+          "by_agent_tokens": {
+            "codex": 462209
+          }
+        },
+        {
+          "day": "2026-09-01",
+          "cost": 9.0151,
+          "tokens": 3800904,
+          "by_agent": {
+            "claude": 9.0151
+          },
+          "by_agent_tokens": {
+            "claude": 3800904
+          }
+        },
+        {
+          "day": "2026-09-03",
+          "cost": 3.2232,
+          "tokens": 874582,
+          "by_agent": {
+            "claude": 3.2232
+          },
+          "by_agent_tokens": {
+            "claude": 874582
+          }
+        },
+        {
+          "day": "2026-09-05",
+          "cost": 1.5817,
+          "tokens": 2842051,
+          "by_agent": {
+            "grok": 1.5817
+          },
+          "by_agent_tokens": {
+            "grok": 2842051
+          }
+        },
+        {
+          "day": "2026-09-07",
+          "cost": 2.2046,
+          "tokens": 5809030,
+          "by_agent": {
+            "grok": 1.2313,
+            "codex": 0.9733
+          },
+          "by_agent_tokens": {
+            "grok": 2317414,
+            "codex": 3491616
+          }
+        },
+        {
+          "day": "2026-09-08",
+          "cost": 1.6593,
+          "tokens": 3201063,
+          "by_agent": {
+            "copilot": 1.6593
+          },
+          "by_agent_tokens": {
+            "copilot": 3201063
+          }
+        },
+        {
+          "day": "2026-09-10",
+          "cost": 1.6604,
+          "tokens": 1447347,
+          "by_agent": {
+            "claude": 1.6604
+          },
+          "by_agent_tokens": {
+            "claude": 1447347
+          }
+        },
+        {
+          "day": "2026-09-12",
+          "cost": 0.6954,
+          "tokens": 3347139,
+          "by_agent": {
+            "codex": 0.6954
+          },
+          "by_agent_tokens": {
+            "codex": 3347139
+          }
+        },
+        {
+          "day": "2026-09-13",
+          "cost": 11.6384,
+          "tokens": 2564838,
+          "by_agent": {
+            "claude": 11.6384
+          },
+          "by_agent_tokens": {
+            "claude": 2564838
+          }
+        },
+        {
+          "day": "2026-09-14",
+          "cost": 17.303,
+          "tokens": 5712129,
+          "by_agent": {
+            "claude": 17.303
+          },
+          "by_agent_tokens": {
+            "claude": 5712129
+          }
+        },
+        {
+          "day": "2026-09-16",
+          "cost": 10.1914,
+          "tokens": 11260353,
+          "by_agent": {
+            "claude": 9.6623,
+            "codex": 0.5291
+          },
+          "by_agent_tokens": {
+            "claude": 8199589,
+            "codex": 3060764
+          }
+        },
+        {
+          "day": "2026-09-17",
+          "cost": 0.4689,
+          "tokens": 1734579,
+          "by_agent": {
+            "codex": 0.4689
+          },
+          "by_agent_tokens": {
+            "codex": 1734579
+          }
+        },
+        {
+          "day": "2026-09-19",
+          "cost": 1.9039,
+          "tokens": 2689503,
+          "by_agent": {
+            "claude": 1.9039
+          },
+          "by_agent_tokens": {
+            "claude": 2689503
+          }
+        },
+        {
+          "day": "2026-09-20",
+          "cost": 0.9933,
+          "tokens": 727962,
+          "by_agent": {
+            "claude": 0.9933
+          },
+          "by_agent_tokens": {
+            "claude": 727962
+          }
+        },
+        {
+          "day": "2026-09-21",
+          "cost": 7.0886,
+          "tokens": 4491506,
+          "by_agent": {
+            "claude": 6.6068,
+            "codex": 0.4818
+          },
+          "by_agent_tokens": {
+            "claude": 1558548,
+            "codex": 2932958
+          }
+        },
+        {
+          "day": "2026-09-23",
+          "cost": 0.7459,
+          "tokens": 3914094,
+          "by_agent": {
+            "codex": 0.7459
+          },
+          "by_agent_tokens": {
+            "codex": 3914094
+          }
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 0.4097,
+          "tokens": 1643686,
+          "by_agent": {
+            "codex": 0.4097
+          },
+          "by_agent_tokens": {
+            "codex": 1643686
+          }
+        },
+        {
+          "day": "2026-09-26",
+          "cost": 2.0268,
+          "tokens": 3587739,
+          "by_agent": {
+            "claude": 2.0268
+          },
+          "by_agent_tokens": {
+            "claude": 3587739
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "cost": 19.189,
+          "tokens": 5911912,
+          "by_agent": {
+            "claude": 19.189
+          },
+          "by_agent_tokens": {
+            "claude": 5911912
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "cost": 1.9498,
+          "tokens": 3642479,
+          "by_agent": {
+            "grok": 1.9498
+          },
+          "by_agent_tokens": {
+            "grok": 3642479
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "cost": 0.1771,
+          "tokens": 767592,
+          "by_agent": {
+            "codex": 0.1771
+          },
+          "by_agent_tokens": {
+            "codex": 767592
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "cost": 6.3247,
+          "tokens": 1181344,
+          "by_agent": {
+            "claude": 6.3247
+          },
+          "by_agent_tokens": {
+            "claude": 1181344
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "cost": 7.7149,
+          "tokens": 3981069,
+          "by_agent": {
+            "claude": 5.9943,
+            "copilot": 1.7206
+          },
+          "by_agent_tokens": {
+            "claude": 539038,
+            "copilot": 3442031
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "cost": 5.7308,
+          "tokens": 5241109,
+          "by_agent": {
+            "claude": 4.7602,
+            "codex": 0.9706
+          },
+          "by_agent_tokens": {
+            "claude": 1308267,
+            "codex": 3932842
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "cost": 1.1241,
+          "tokens": 1958256,
+          "by_agent": {
+            "claude": 1.1241
+          },
+          "by_agent_tokens": {
+            "claude": 1958256
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "cost": 0.8243,
+          "tokens": 3245770,
+          "by_agent": {
+            "codex": 0.8243
+          },
+          "by_agent_tokens": {
+            "codex": 3245770
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "cost": 1.1225,
+          "tokens": 1658233,
+          "by_agent": {
+            "claude": 1.1225
+          },
+          "by_agent_tokens": {
+            "claude": 1658233
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "feat/widgets",
+          "cost": 53.4372,
+          "sessions": 10
+        },
+        {
+          "branch": "main",
+          "cost": 31.7053,
+          "sessions": 13
+        },
+        {
+          "branch": "fix/146-quota",
+          "cost": 23.294,
+          "sessions": 8
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 17.4137,
+          "sessions": 9
+        },
+        {
+          "branch": "release-1.4.5",
+          "cost": 14.125,
+          "sessions": 9
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "093923de-8bab-ce3b-2628-6bfbe767dcea",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-22T19:37:00Z",
+          "ended": "2026-10-22T20:22:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.1225,
+          "tokens": {
+            "input": 31856,
+            "output": 32777,
+            "cache_read": 1577028,
+            "cache_write": 16572,
+            "thinking": 5286,
+            "total": 1658233
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "3b8faa18-37f8-a88b-17fc-695a07a0ca6e",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-21T04:58:00Z",
+          "ended": "2026-10-21T05:37:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "fix/146-quota",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.8243,
+          "tokens": {
+            "input": 31669,
+            "output": 39253,
+            "cache_read": 3137723,
+            "cache_write": 37125,
+            "thinking": 0,
+            "total": 3245770
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "bc20b9f2-4a9c-589e-51b3-0182f7fe604f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T10:32:00Z",
+          "ended": "2026-10-16T12:00:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.1241,
+          "tokens": {
+            "input": 12189,
+            "output": 18188,
+            "cache_read": 1813435,
+            "cache_write": 114444,
+            "thinking": 4065,
+            "total": 1958256
+          },
+          "share": 0.6,
+          "attribution": "split",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "8dfa6a56-d12d-bc9a-aaf9-15310200b1f0",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-15T14:02:00Z",
+          "ended": "2026-10-15T14:39:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.9706,
+          "tokens": {
+            "input": 48253,
+            "output": 59988,
+            "cache_read": 3643157,
+            "cache_write": 181444,
+            "thinking": 0,
+            "total": 3932842
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "17d30f32-8de1-596c-5a9a-206a16f142a2",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-15T11:16:00Z",
+          "ended": "2026-10-15T11:46:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/pocket-timer",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-6-preview"
+          ],
+          "cost": 4.7602,
+          "tokens": {
+            "input": 5710,
+            "output": 9933,
+            "cache_read": 1177224,
+            "cache_write": 115400,
+            "thinking": 2097,
+            "total": 1308267
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "3270e4fa-abae-4f43-bcae-8081bdf070aa",
+          "agent": "copilot",
+          "label": "Copilot CLI",
+          "started": "2026-10-14T09:50:00Z",
+          "ended": "2026-10-14T10:05:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": null,
+          "models": [
+            "copilot-sonnet-5"
+          ],
+          "cost": 1.7206,
+          "tokens": {
+            "input": 30584,
+            "output": 4287,
+            "cache_read": 3249932,
+            "cache_write": 157228,
+            "thinking": 0,
+            "total": 3442031
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "0d366dfc-c28e-bd70-7129-9889a01ac992",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-14T09:20:00Z",
+          "ended": "2026-10-14T12:12:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 5.9943,
+          "tokens": {
+            "input": 36879,
+            "output": 28130,
+            "cache_read": 322125,
+            "cache_write": 151904,
+            "thinking": 6846,
+            "total": 539038
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "d1bdb8c0-c71d-5e60-1d52-06abb7e6427c",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-11T15:42:00Z",
+          "ended": "2026-10-11T18:10:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 6.3247,
+          "tokens": {
+            "input": 39952,
+            "output": 28288,
+            "cache_read": 1000978,
+            "cache_write": 112126,
+            "thinking": 6814,
+            "total": 1181344
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "12ef6101-6082-786f-ca00-ef586c521d13",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-06T10:59:00Z",
+          "ended": "2026-10-06T12:47:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.1771,
+          "tokens": {
+            "input": 17508,
+            "output": 6845,
+            "cache_read": 694511,
+            "cache_write": 48728,
+            "thinking": 0,
+            "total": 767592
+          },
+          "share": 0.7,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "f319c125-07f1-94f9-c115-6d6d0a4e5b70",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-10-02T05:08:00Z",
+          "ended": "2026-10-02T07:12:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 1.9498,
+          "tokens": {
+            "input": 3559,
+            "output": 32141,
+            "cache_read": 3499690,
+            "cache_write": 107089,
+            "thinking": 5303,
+            "total": 3642479
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "2dea9493-0658-663a-698c-206fe1a47e10",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-29T23:08:00Z",
+          "ended": "2026-09-30T02:06:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 9.8968,
+          "tokens": {
+            "input": 19363,
+            "output": 12575,
+            "cache_read": 3577290,
+            "cache_write": 310175,
+            "thinking": 2913,
+            "total": 3919403
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "11a72609-5edd-bbbf-a959-76636daa2e68",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-29T16:28:00Z",
+          "ended": "2026-09-29T16:51:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 9.2922,
+          "tokens": {
+            "input": 33415,
+            "output": 58704,
+            "cache_read": 1659803,
+            "cache_write": 240587,
+            "thinking": 11011,
+            "total": 1992509
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 2,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "5c941cf0-dc98-d2c1-e2ac-f72f9e574f7a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-26T03:50:00Z",
+          "ended": "2026-09-26T04:05:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 2.0268,
+          "tokens": {
+            "input": 31405,
+            "output": 31976,
+            "cache_read": 3409668,
+            "cache_write": 114690,
+            "thinking": 7444,
+            "total": 3587739
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 3,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "c2171429-8e20-0724-7d13-7018680bac63",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-24T15:49:00Z",
+          "ended": "2026-09-24T16:39:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.4097,
+          "tokens": {
+            "input": 31236,
+            "output": 30826,
+            "cache_read": 1477030,
+            "cache_write": 104594,
+            "thinking": 0,
+            "total": 1643686
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "587ef344-6f3f-920c-98b8-e4cc1bc044fc",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-23T04:45:00Z",
+          "ended": "2026-09-23T06:18:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "fix/146-quota",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.7459,
+          "tokens": {
+            "input": 29776,
+            "output": 38519,
+            "cache_read": 3621658,
+            "cache_write": 224141,
+            "thinking": 0,
+            "total": 3914094
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "8bcf53a1-bc10-fa52-bf5d-2fdf89c8d2ab",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-21T13:44:00Z",
+          "ended": "2026-09-21T16:15:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 6.6068,
+          "tokens": {
+            "input": 17710,
+            "output": 4505,
+            "cache_read": 1321909,
+            "cache_write": 214424,
+            "thinking": 1252,
+            "total": 1558548
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "2c7f0b79-3d67-cde9-2834-e4c014c8b3b4",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-20T22:06:00Z",
+          "ended": "2026-09-21T00:46:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4818,
+          "tokens": {
+            "input": 40436,
+            "output": 9340,
+            "cache_read": 2702796,
+            "cache_write": 180386,
+            "thinking": 0,
+            "total": 2932958
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "68586eba-6a34-c854-1071-4d5136c59dac",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-20T02:13:00Z",
+          "ended": "2026-09-20T03:42:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.9933,
+          "tokens": {
+            "input": 15332,
+            "output": 32179,
+            "cache_read": 604936,
+            "cache_write": 75515,
+            "thinking": 8176,
+            "total": 727962
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "96fc734d-a003-cd28-ca8f-3653c9af18f8",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-19T07:05:00Z",
+          "ended": "2026-09-19T07:17:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.9039,
+          "tokens": {
+            "input": 11873,
+            "output": 40820,
+            "cache_read": 2502038,
+            "cache_write": 134772,
+            "thinking": 10331,
+            "total": 2689503
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "a56c0941-fbf2-4050-a748-dbcfac619e63",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-17T15:11:00Z",
+          "ended": "2026-09-17T15:39:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4689,
+          "tokens": {
+            "input": 6599,
+            "output": 26528,
+            "cache_read": 1563224,
+            "cache_write": 138228,
+            "thinking": 0,
+            "total": 1734579
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "53cd6268-610c-f373-4299-9aa40cdf742b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-16T15:50:00Z",
+          "ended": "2026-09-16T16:36:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.6058,
+          "tokens": {
+            "input": 42247,
+            "output": 61467,
+            "cache_read": 3540740,
+            "cache_write": 188078,
+            "thinking": 17523,
+            "total": 3832532
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "4767d76c-162f-8a24-ef43-613cd4aac9a3",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-16T07:38:00Z",
+          "ended": "2026-09-16T08:21:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.1776,
+          "tokens": {
+            "input": 25845,
+            "output": 49521,
+            "cache_read": 3784873,
+            "cache_write": 137954,
+            "thinking": 12838,
+            "total": 3998193
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "1ee34dc4-3b04-8a8b-405b-fdc94e7ed827",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-16T06:31:00Z",
+          "ended": "2026-09-16T07:31:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.5291,
+          "tokens": {
+            "input": 22720,
+            "output": 30759,
+            "cache_read": 2868231,
+            "cache_write": 139054,
+            "thinking": 0,
+            "total": 3060764
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "ffe3fa49-054f-92ff-f366-bad4964db03f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-16T01:10:00Z",
+          "ended": "2026-09-16T03:04:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.8789,
+          "tokens": {
+            "input": 31593,
+            "output": 35472,
+            "cache_read": 226906,
+            "cache_write": 74893,
+            "thinking": 8908,
+            "total": 368864
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "36d8393a-7c44-1fe7-ab42-20a7474a493b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-14T06:21:00Z",
+          "ended": "2026-09-14T06:41:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 5.7543,
+          "tokens": {
+            "input": 22936,
+            "output": 38688,
+            "cache_read": 1708737,
+            "cache_write": 133242,
+            "thinking": 6214,
+            "total": 1903603
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "c2b01cfd-d045-dd1c-6684-09e3f1f8343e",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-14T03:51:00Z",
+          "ended": "2026-09-14T06:24:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 11.5487,
+          "tokens": {
+            "input": 23732,
+            "output": 48781,
+            "cache_read": 3566117,
+            "cache_write": 169896,
+            "thinking": 10336,
+            "total": 3808526
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 3,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "7a8d03aa-782a-65e0-48ca-765192f5df7b",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-13T00:33:00Z",
+          "ended": "2026-09-13T02:58:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 11.6384,
+          "tokens": {
+            "input": 14251,
+            "output": 53103,
+            "cache_read": 2283242,
+            "cache_write": 214242,
+            "thinking": 8782,
+            "total": 2564838
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "43e458fc-63f2-ae24-fc3d-3348008d4127",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-12T12:56:00Z",
+          "ended": "2026-09-12T13:42:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.6954,
+          "tokens": {
+            "input": 18731,
+            "output": 29134,
+            "cache_read": 3045225,
+            "cache_write": 254049,
+            "thinking": 0,
+            "total": 3347139
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "4fcca39a-b683-d2e6-337e-a2dfb09b2a5c",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-10T12:45:00Z",
+          "ended": "2026-09-10T13:06:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.6604,
+          "tokens": {
+            "input": 43454,
+            "output": 39677,
+            "cache_read": 1107093,
+            "cache_write": 257123,
+            "thinking": 11564,
+            "total": 1447347
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "c40c5d91-46fd-e062-a33d-c7afd701410d",
+          "agent": "copilot",
+          "label": "Copilot CLI",
+          "started": "2026-09-08T10:11:00Z",
+          "ended": "2026-09-08T12:35:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "feat/widgets",
+          "models": [
+            "copilot-sonnet-5"
+          ],
+          "cost": 1.6593,
+          "tokens": {
+            "input": 20279,
+            "output": 12444,
+            "cache_read": 3034622,
+            "cache_write": 133718,
+            "thinking": 0,
+            "total": 3201063
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "e0f3eab0-5cec-4eb5-edd9-68311ca35cfb",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-07T09:51:00Z",
+          "ended": "2026-09-07T12:13:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.9733,
+          "tokens": {
+            "input": 40177,
+            "output": 51982,
+            "cache_read": 3226138,
+            "cache_write": 173319,
+            "thinking": 0,
+            "total": 3491616
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "7922bac2-82dc-4c8e-36b5-229aacf5e81e",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-09-06T22:04:00Z",
+          "ended": "2026-09-06T23:25:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "fix/146-quota",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 1.2313,
+          "tokens": {
+            "input": 14047,
+            "output": 26468,
+            "cache_read": 2088748,
+            "cache_write": 188151,
+            "thinking": 3877,
+            "total": 2317414
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "2369b584-ff5e-9ff0-ff50-bde4382567b8",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-09-04T20:51:00Z",
+          "ended": "2026-09-04T21:58:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 1.5817,
+          "tokens": {
+            "input": 32003,
+            "output": 32119,
+            "cache_read": 2649966,
+            "cache_write": 127963,
+            "thinking": 5086,
+            "total": 2842051
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "12a4def0-c4bb-b7a9-d988-68dd9c7c7377",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-03T07:03:00Z",
+          "ended": "2026-09-03T08:07:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 3.2232,
+          "tokens": {
+            "input": 29173,
+            "output": 15836,
+            "cache_read": 809076,
+            "cache_write": 20497,
+            "thinking": 2956,
+            "total": 874582
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "74daaebf-1f11-5b76-d92c-9227eadf5085",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-31T20:33:00Z",
+          "ended": "2026-08-31T21:14:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 9.0151,
+          "tokens": {
+            "input": 33383,
+            "output": 7814,
+            "cache_read": 3502931,
+            "cache_write": 256776,
+            "thinking": 1268,
+            "total": 3800904
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "371ecd7b-27cd-8130-4722-9389571aa876",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-30T09:09:00Z",
+          "ended": "2026-08-30T11:07:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.5139,
+          "tokens": {
+            "input": 25899,
+            "output": 46128,
+            "cache_read": 161835,
+            "cache_write": 228347,
+            "thinking": 0,
+            "total": 462209
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "e059a0ee-9132-b63e-f162-87e4e9c349e0",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-29T09:34:00Z",
+          "ended": "2026-08-29T10:47:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.089,
+          "tokens": {
+            "input": 49893,
+            "output": 41367,
+            "cache_read": 2073315,
+            "cache_write": 220584,
+            "thinking": 11087,
+            "total": 2385159
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "14822f53-8201-0c62-f5f5-9b220e8fa8e0",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-29T07:05:00Z",
+          "ended": "2026-08-29T07:48:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.2249,
+          "tokens": {
+            "input": 14016,
+            "output": 17175,
+            "cache_read": 772005,
+            "cache_write": 274345,
+            "thinking": 0,
+            "total": 1077541
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "cb9bc326-d20e-ac17-4e20-fd1a598336e3",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-28T22:53:00Z",
+          "ended": "2026-08-28T23:24:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2995,
+          "tokens": {
+            "input": 17795,
+            "output": 6205,
+            "cache_read": 1721518,
+            "cache_write": 67086,
+            "thinking": 0,
+            "total": 1812604
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "aefcfad8-efc8-9849-b3aa-7efe4458a885",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-26T02:28:00Z",
+          "ended": "2026-08-26T04:09:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.5591,
+          "tokens": {
+            "input": 13696,
+            "output": 37128,
+            "cache_read": 1365836,
+            "cache_write": 112468,
+            "thinking": 0,
+            "total": 1529128
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "dc815fe7-ceda-8bbb-7171-0434134c6c92",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-24T00:56:00Z",
+          "ended": "2026-08-24T01:48:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.239,
+          "tokens": {
+            "input": 23822,
+            "output": 11461,
+            "cache_read": 756519,
+            "cache_write": 137059,
+            "thinking": 0,
+            "total": 928861
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "f143262f-dc5c-0eed-8da0-365bf89897b9",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-19T12:00:00Z",
+          "ended": "2026-08-19T14:58:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2769,
+          "tokens": {
+            "input": 19348,
+            "output": 7490,
+            "cache_read": 1422240,
+            "cache_write": 278968,
+            "thinking": 0,
+            "total": 1728046
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "fix quota reset after midnight rollover"
+        },
+        {
+          "id": "61607459-85c7-504b-c693-da1139c6a1ca",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-19T10:53:00Z",
+          "ended": "2026-08-19T13:02:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.0212,
+          "tokens": {
+            "input": 9381,
+            "output": 50726,
+            "cache_read": 454625,
+            "cache_write": 108021,
+            "thinking": 11982,
+            "total": 622753
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "50f0fd0a-750c-ab75-4ccc-9bc2a53f8a28",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-19T10:43:00Z",
+          "ended": "2026-08-19T13:15:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "feat/widgets",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.7255,
+          "tokens": {
+            "input": 35965,
+            "output": 39978,
+            "cache_read": 2185196,
+            "cache_write": 188628,
+            "thinking": 9060,
+            "total": 2449767
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 3,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "e7c421c7-4049-7b71-7d10-6c6081627cf1",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-18T05:22:00Z",
+          "ended": "2026-08-18T07:47:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.7871,
+          "tokens": {
+            "input": 8893,
+            "output": 18794,
+            "cache_read": 847715,
+            "cache_write": 105206,
+            "thinking": 4757,
+            "total": 980608
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "e9a1fa6f-81f7-6d1c-2dbc-2134c30ff46e",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-17T17:22:00Z",
+          "ended": "2026-08-17T17:54:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-widgets",
+          "branch": "fix/146-quota",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.0469,
+          "tokens": {
+            "input": 14305,
+            "output": 12392,
+            "cache_read": 150904,
+            "cache_write": 206076,
+            "thinking": 3196,
+            "total": 383677
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "b321bf21-4dd8-eb85-b04d-337677fc9703",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-15T22:51:00Z",
+          "ended": "2026-08-15T23:37:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.7562,
+          "tokens": {
+            "input": 33871,
+            "output": 35023,
+            "cache_read": 2909447,
+            "cache_write": 259037,
+            "thinking": 0,
+            "total": 3237378
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "f0bbac67-aa38-d0a1-6ba2-5efe311c6eb6",
+          "agent": "copilot",
+          "label": "Copilot CLI",
+          "started": "2026-08-15T00:36:00Z",
+          "ended": "2026-08-15T01:56:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer-fixes-146",
+          "branch": null,
+          "models": [
+            "copilot-sonnet-5"
+          ],
+          "cost": 1.768,
+          "tokens": {
+            "input": 22679,
+            "output": 38745,
+            "cache_read": 1235974,
+            "cache_write": 199457,
+            "thinking": 0,
+            "total": 1496855
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "3a3c563e-4bd6-cee6-31b1-b099d52721e7",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-12T18:25:00Z",
+          "ended": "2026-08-12T20:32:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/PocketTimer",
+          "branch": "release-1.4.5",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.7012,
+          "tokens": {
+            "input": 13638,
+            "output": 34740,
+            "cache_read": 2694298,
+            "cache_write": 172746,
+            "thinking": 0,
+            "total": 2915422
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        }
+      ]
+    },
+    {
+      "id": "github.com/bobchen/meterkit",
+      "name": "meterkit",
+      "remote": "github.com/bobchen/meterkit",
+      "paths": [
+        "/Users/alice/Documents/GitHub/meterkit"
+      ],
+      "path_missing": false,
+      "cost": 49.0224,
+      "tokens": {
+        "input": 420055,
+        "output": 618840,
+        "cache_read": 34762413,
+        "cache_write": 2464231,
+        "thinking": 134000,
+        "total": 38265539
+      },
+      "sessions": 25,
+      "first_active": "2026-08-27",
+      "last_active": "2026-10-19",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 45.5718,
+          "tokens": {
+            "input": 198723,
+            "output": 333288,
+            "cache_read": 15893459,
+            "cache_write": 1542482,
+            "thinking": 73720,
+            "total": 17967952
+          },
+          "sessions": 12
+        },
+        {
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "cost": 2.6567,
+          "tokens": {
+            "input": 107371,
+            "output": 108532,
+            "cache_read": 8708109,
+            "cache_write": 302555,
+            "thinking": 32015,
+            "total": 9226567
+          },
+          "sessions": 5
+        },
+        {
+          "agent": "minimax",
+          "label": "MiniMax",
+          "cost": 0.4961,
+          "tokens": {
+            "input": 61603,
+            "output": 96419,
+            "cache_read": 5448780,
+            "cache_write": 300726,
+            "thinking": 12017,
+            "total": 5907528
+          },
+          "sessions": 4
+        },
+        {
+          "agent": "opencode",
+          "label": "OpenCode",
+          "cost": 0.2978,
+          "tokens": {
+            "input": 52358,
+            "output": 80601,
+            "cache_read": 4712065,
+            "cache_write": 318468,
+            "thinking": 16248,
+            "total": 5163492
+          },
+          "sessions": 4
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 38.0811,
+          "tokens": {
+            "input": 98421,
+            "output": 175871,
+            "cache_read": 7351518,
+            "cache_write": 660648,
+            "thinking": 38133,
+            "total": 8286458
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 6.97,
+          "tokens": {
+            "input": 81808,
+            "output": 125053,
+            "cache_read": 7362487,
+            "cache_write": 704022,
+            "thinking": 28486,
+            "total": 8273370
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-pro",
+          "agent": "antigravity",
+          "cost": 2.0654,
+          "tokens": {
+            "input": 57236,
+            "output": 70606,
+            "cache_read": 5364295,
+            "cache_write": 61615,
+            "thinking": 22137,
+            "total": 5553752
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.5205,
+          "tokens": {
+            "input": 18494,
+            "output": 32364,
+            "cache_read": 1179454,
+            "cache_write": 177812,
+            "thinking": 7101,
+            "total": 1408124
+          },
+          "estimated": false
+        },
+        {
+          "model": "minimax-m3",
+          "agent": "minimax",
+          "cost": 0.4961,
+          "tokens": {
+            "input": 61603,
+            "output": 96419,
+            "cache_read": 5448780,
+            "cache_write": 300726,
+            "thinking": 12017,
+            "total": 5907528
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3.5-pro-exp",
+          "agent": "antigravity",
+          "cost": 0.415,
+          "tokens": {
+            "input": 21188,
+            "output": 9271,
+            "cache_read": 745405,
+            "cache_write": 60997,
+            "thinking": 2390,
+            "total": 836861
+          },
+          "estimated": true
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "agent": "opencode",
+          "cost": 0.2978,
+          "tokens": {
+            "input": 52358,
+            "output": 80601,
+            "cache_read": 4712065,
+            "cache_write": 318468,
+            "thinking": 16248,
+            "total": 5163492
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-flash",
+          "agent": "antigravity",
+          "cost": 0.1763,
+          "tokens": {
+            "input": 28947,
+            "output": 28655,
+            "cache_read": 2598409,
+            "cache_write": 179943,
+            "thinking": 7488,
+            "total": 2835954
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-27",
+          "cost": 0.1232,
+          "tokens": 1955908,
+          "by_agent": {
+            "antigravity": 0.1232
+          },
+          "by_agent_tokens": {
+            "antigravity": 1955908
+          }
+        },
+        {
+          "day": "2026-08-31",
+          "cost": 4.0448,
+          "tokens": 625668,
+          "by_agent": {
+            "claude": 4.0448
+          },
+          "by_agent_tokens": {
+            "claude": 625668
+          }
+        },
+        {
+          "day": "2026-09-03",
+          "cost": 0.0626,
+          "tokens": 478852,
+          "by_agent": {
+            "opencode": 0.0626
+          },
+          "by_agent_tokens": {
+            "opencode": 478852
+          }
+        },
+        {
+          "day": "2026-09-05",
+          "cost": 0.7193,
+          "tokens": 1570446,
+          "by_agent": {
+            "antigravity": 0.7193
+          },
+          "by_agent_tokens": {
+            "antigravity": 1570446
+          }
+        },
+        {
+          "day": "2026-09-06",
+          "cost": 3.2893,
+          "tokens": 4867146,
+          "by_agent": {
+            "claude": 3.1948,
+            "opencode": 0.0945
+          },
+          "by_agent_tokens": {
+            "claude": 3897345,
+            "opencode": 969801
+          }
+        },
+        {
+          "day": "2026-09-09",
+          "cost": 1.5016,
+          "tokens": 1895898,
+          "by_agent": {
+            "claude": 1.5016
+          },
+          "by_agent_tokens": {
+            "claude": 1895898
+          }
+        },
+        {
+          "day": "2026-09-14",
+          "cost": 0.0739,
+          "tokens": 2375260,
+          "by_agent": {
+            "opencode": 0.0739
+          },
+          "by_agent_tokens": {
+            "opencode": 2375260
+          }
+        },
+        {
+          "day": "2026-09-15",
+          "cost": 6.0054,
+          "tokens": 1878959,
+          "by_agent": {
+            "claude": 6.0054
+          },
+          "by_agent_tokens": {
+            "claude": 1878959
+          }
+        },
+        {
+          "day": "2026-09-18",
+          "cost": 0.1036,
+          "tokens": 952179,
+          "by_agent": {
+            "minimax": 0.1036
+          },
+          "by_agent_tokens": {
+            "minimax": 952179
+          }
+        },
+        {
+          "day": "2026-09-19",
+          "cost": 0.7659,
+          "tokens": 2708488,
+          "by_agent": {
+            "antigravity": 0.7659
+          },
+          "by_agent_tokens": {
+            "antigravity": 2708488
+          }
+        },
+        {
+          "day": "2026-09-21",
+          "cost": 14.3463,
+          "tokens": 4060362,
+          "by_agent": {
+            "claude": 14.3463
+          },
+          "by_agent_tokens": {
+            "claude": 4060362
+          }
+        },
+        {
+          "day": "2026-09-23",
+          "cost": 0.1255,
+          "tokens": 864335,
+          "by_agent": {
+            "minimax": 0.1255
+          },
+          "by_agent_tokens": {
+            "minimax": 864335
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "cost": 0.1361,
+          "tokens": 2111480,
+          "by_agent": {
+            "minimax": 0.1361
+          },
+          "by_agent_tokens": {
+            "minimax": 2111480
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "cost": 8.1906,
+          "tokens": 3762060,
+          "by_agent": {
+            "claude": 8.0597,
+            "minimax": 0.1309
+          },
+          "by_agent_tokens": {
+            "claude": 1782526,
+            "minimax": 1979534
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "cost": 4.3956,
+          "tokens": 2606343,
+          "by_agent": {
+            "claude": 4.3956
+          },
+          "by_agent_tokens": {
+            "claude": 2606343
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "cost": 0.0668,
+          "tokens": 1339579,
+          "by_agent": {
+            "opencode": 0.0668
+          },
+          "by_agent_tokens": {
+            "opencode": 1339579
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "cost": 4.0236,
+          "tokens": 1220851,
+          "by_agent": {
+            "claude": 4.0236
+          },
+          "by_agent_tokens": {
+            "claude": 1220851
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "cost": 0.415,
+          "tokens": 836861,
+          "by_agent": {
+            "antigravity": 0.415
+          },
+          "by_agent_tokens": {
+            "antigravity": 836861
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "cost": 0.6333,
+          "tokens": 2154864,
+          "by_agent": {
+            "antigravity": 0.6333
+          },
+          "by_agent_tokens": {
+            "antigravity": 2154864
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "feat/pricing-json",
+          "cost": 31.1666,
+          "sessions": 15
+        },
+        {
+          "branch": "fix/dedupe-stream",
+          "cost": 8.0717,
+          "sessions": 3
+        },
+        {
+          "branch": "main",
+          "cost": 5.7605,
+          "sessions": 6
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 4.0236,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "69efafb1-3a7e-8e14-e359-eee173991a47",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-19T03:25:00Z",
+          "ended": "2026-10-19T06:01:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.6333,
+          "tokens": {
+            "input": 23324,
+            "output": 26557,
+            "cache_read": 2039401,
+            "cache_write": 65582,
+            "thinking": 9426,
+            "total": 2154864
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "6bcd5ce7-46a5-6fe8-6f46-f1b12ace1aa9",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-17T08:43:00Z",
+          "ended": "2026-10-17T09:30:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "main",
+          "models": [
+            "gemini-3.5-pro-exp"
+          ],
+          "cost": 0.415,
+          "tokens": {
+            "input": 21188,
+            "output": 9271,
+            "cache_read": 745405,
+            "cache_write": 60997,
+            "thinking": 2390,
+            "total": 836861
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "f2e61828-01bb-819c-4dfe-111722af711f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-08T13:21:00Z",
+          "ended": "2026-10-08T14:57:00Z",
+          "cwd": "/Users/alice/Documents/experiments/meterkit-bench",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.0236,
+          "tokens": {
+            "input": 6333,
+            "output": 8486,
+            "cache_read": 1120056,
+            "cache_write": 85976,
+            "thinking": 1521,
+            "total": 1220851
+          },
+          "share": 1.0,
+          "attribution": "override",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "b303f438-fe21-10d0-4bbe-4aff9326dffd",
+          "agent": "opencode",
+          "label": "OpenCode",
+          "started": "2026-10-05T03:13:00Z",
+          "ended": "2026-10-05T04:34:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "deepseek-v4-pro"
+          ],
+          "cost": 0.0668,
+          "tokens": {
+            "input": 7578,
+            "output": 17233,
+            "cache_read": 1259699,
+            "cache_write": 55069,
+            "thinking": 3386,
+            "total": 1339579
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "9716108e-f721-69bb-8096-27182051acef",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-03T18:38:00Z",
+          "ended": "2026-10-03T19:41:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.129,
+          "tokens": {
+            "input": 29136,
+            "output": 28090,
+            "cache_read": 1364059,
+            "cache_write": 133335,
+            "thinking": 6932,
+            "total": 1554620
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "703e957f-35ab-8466-b557-8b00f166cdcf",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-03T17:28:00Z",
+          "ended": "2026-10-03T18:55:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 3.2666,
+          "tokens": {
+            "input": 11335,
+            "output": 25745,
+            "cache_read": 974867,
+            "cache_write": 39776,
+            "thinking": 6261,
+            "total": 1051723
+          },
+          "share": 0.55,
+          "attribution": "split",
+          "subagents": 1,
+          "title": "review this diff"
+        },
+        {
+          "id": "1bbc91f7-5f18-e583-f0b6-f83fa377f6f1",
+          "agent": "minimax",
+          "label": "MiniMax",
+          "started": "2026-10-01T03:17:00Z",
+          "ended": "2026-10-01T05:38:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "minimax-m3"
+          ],
+          "cost": 0.1309,
+          "tokens": {
+            "input": 5460,
+            "output": 16637,
+            "cache_read": 1897627,
+            "cache_write": 59810,
+            "thinking": 2297,
+            "total": 1979534
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "98de8ebb-a3b5-cece-a446-be72364c911a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-30T20:26:00Z",
+          "ended": "2026-09-30T22:02:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 8.0597,
+          "tokens": {
+            "input": 8067,
+            "output": 30875,
+            "cache_read": 1505013,
+            "cache_write": 238571,
+            "thinking": 6327,
+            "total": 1782526
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 3,
+          "title": "fix quota reset after midnight rollover"
+        },
+        {
+          "id": "b88ec318-c16d-83ed-ad81-f8bd402913ec",
+          "agent": "minimax",
+          "label": "MiniMax",
+          "started": "2026-09-29T08:02:00Z",
+          "ended": "2026-09-29T09:19:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "main",
+          "models": [
+            "minimax-m3"
+          ],
+          "cost": 0.1361,
+          "tokens": {
+            "input": 23720,
+            "output": 11514,
+            "cache_read": 2024636,
+            "cache_write": 51610,
+            "thinking": 1370,
+            "total": 2111480
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "bf0d073d-821c-1336-9970-cf60ebff8d15",
+          "agent": "minimax",
+          "label": "MiniMax",
+          "started": "2026-09-23T04:20:00Z",
+          "ended": "2026-09-23T06:10:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "minimax-m3"
+          ],
+          "cost": 0.1255,
+          "tokens": {
+            "input": 25372,
+            "output": 39269,
+            "cache_read": 684954,
+            "cache_write": 114740,
+            "thinking": 5433,
+            "total": 864335
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "a075e927-5110-b492-f442-7e0b61484bb3",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-21T12:37:00Z",
+          "ended": "2026-09-21T14:25:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 6.7604,
+          "tokens": {
+            "input": 31248,
+            "output": 43314,
+            "cache_read": 352776,
+            "cache_write": 176595,
+            "thinking": 8490,
+            "total": 603933
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 2,
+          "title": null
+        },
+        {
+          "id": "8beddb12-ad77-e82f-49a2-3a89e6b5a92c",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-21T05:07:00Z",
+          "ended": "2026-09-21T05:55:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 6.1937,
+          "tokens": {
+            "input": 5712,
+            "output": 40236,
+            "cache_read": 1764690,
+            "cache_write": 70385,
+            "thinking": 10864,
+            "total": 1881023
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 1,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "7d45d8ef-d56c-e8ea-1959-7b5aa7a8f636",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-20T19:55:00Z",
+          "ended": "2026-09-20T22:50:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.3922,
+          "tokens": {
+            "input": 28582,
+            "output": 28769,
+            "cache_read": 1396461,
+            "cache_write": 121594,
+            "thinking": 7450,
+            "total": 1575406
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "d86a6460-59a1-120e-1bb4-3332d8e7012f",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-19T09:18:00Z",
+          "ended": "2026-09-19T12:12:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.7659,
+          "tokens": {
+            "input": 31038,
+            "output": 20356,
+            "cache_read": 2627471,
+            "cache_write": 29623,
+            "thinking": 5971,
+            "total": 2708488
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "a847bce7-90fa-6b57-24ac-2130deaf528d",
+          "agent": "minimax",
+          "label": "MiniMax",
+          "started": "2026-09-18T15:17:00Z",
+          "ended": "2026-09-18T15:28:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "minimax-m3"
+          ],
+          "cost": 0.1036,
+          "tokens": {
+            "input": 7051,
+            "output": 28999,
+            "cache_read": 841563,
+            "cache_write": 74566,
+            "thinking": 2917,
+            "total": 952179
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "530a37df-0bc6-1066-0769-165fe746ccb9",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-15T05:07:00Z",
+          "ended": "2026-09-15T07:02:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 6.0054,
+          "tokens": {
+            "input": 29393,
+            "output": 31133,
+            "cache_read": 1789337,
+            "cache_write": 29096,
+            "thinking": 5446,
+            "total": 1878959
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "8a16a06c-c958-e75e-21d5-3971336749b5",
+          "agent": "opencode",
+          "label": "OpenCode",
+          "started": "2026-09-14T07:16:00Z",
+          "ended": "2026-09-14T09:48:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "deepseek-v4-pro"
+          ],
+          "cost": 0.0739,
+          "tokens": {
+            "input": 12216,
+            "output": 7862,
+            "cache_read": 2283106,
+            "cache_write": 72076,
+            "thinking": 1391,
+            "total": 2375260
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "be9d61ee-18b8-7245-6e8f-75a117dded81",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-09T07:21:00Z",
+          "ended": "2026-09-09T10:15:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.5016,
+          "tokens": {
+            "input": 9136,
+            "output": 38282,
+            "cache_read": 1748370,
+            "cache_write": 100110,
+            "thinking": 6266,
+            "total": 1895898
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "b65feea9-7d82-4264-1ba3-62e7afa415e5",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-06T09:39:00Z",
+          "ended": "2026-09-06T11:51:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "fix/dedupe-stream",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.7525,
+          "tokens": {
+            "input": 10814,
+            "output": 32458,
+            "cache_read": 1889073,
+            "cache_write": 232594,
+            "thinking": 8265,
+            "total": 2164939
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 1,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "fbe94499-dbc0-80fd-46fb-7bf300b9d4a3",
+          "agent": "opencode",
+          "label": "OpenCode",
+          "started": "2026-09-05T20:45:00Z",
+          "ended": "2026-09-05T23:19:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "main",
+          "models": [
+            "deepseek-v4-pro"
+          ],
+          "cost": 0.0945,
+          "tokens": {
+            "input": 8046,
+            "output": 35178,
+            "cache_read": 888542,
+            "cache_write": 38035,
+            "thinking": 8357,
+            "total": 969801
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "585a0afa-7bfd-cc12-89e0-6ab37250ee18",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-05T16:23:00Z",
+          "ended": "2026-09-05T16:27:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.4423,
+          "tokens": {
+            "input": 9919,
+            "output": 14046,
+            "cache_read": 1508650,
+            "cache_write": 199791,
+            "thinking": 3138,
+            "total": 1732406
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "86ad8a8c-6bc4-123e-bde1-3c1b20733f6d",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-05T04:08:00Z",
+          "ended": "2026-09-05T04:15:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.7193,
+          "tokens": {
+            "input": 12030,
+            "output": 32171,
+            "cache_read": 1513247,
+            "cache_write": 12998,
+            "thinking": 9159,
+            "total": 1570446
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "fadd7ea3-aca5-e2fd-b966-442aad238d36",
+          "agent": "opencode",
+          "label": "OpenCode",
+          "started": "2026-09-03T06:07:00Z",
+          "ended": "2026-09-03T07:37:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "deepseek-v4-pro"
+          ],
+          "cost": 0.0626,
+          "tokens": {
+            "input": 24518,
+            "output": 20328,
+            "cache_read": 280718,
+            "cache_write": 153288,
+            "thinking": 3114,
+            "total": 478852
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "e9b5c5cf-d766-5cda-fe04-90593985fb62",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-31T05:34:00Z",
+          "ended": "2026-08-31T08:19:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 4.0448,
+          "tokens": {
+            "input": 19048,
+            "output": 11854,
+            "cache_read": 480107,
+            "cache_write": 114659,
+            "thinking": 2760,
+            "total": 625668
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "refactor settings store into separate module"
+        },
+        {
+          "id": "4dead645-0986-bbeb-f23e-323d0b9bd934",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-08-27T11:50:00Z",
+          "ended": "2026-08-27T12:10:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/meterkit",
+          "branch": "feat/pricing-json",
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.1232,
+          "tokens": {
+            "input": 19791,
+            "output": 20177,
+            "cache_read": 1782585,
+            "cache_write": 133355,
+            "thinking": 5069,
+            "total": 1955908
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": null
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/habit-garden",
+      "name": "HabitGarden",
+      "remote": "github.com/alice/habit-garden",
+      "paths": [
+        "/Users/alice/Documents/GitHub/HabitGarden",
+        "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding"
+      ],
+      "path_missing": false,
+      "cost": 31.1808,
+      "tokens": {
+        "input": 428776,
+        "output": 585492,
+        "cache_read": 37366790,
+        "cache_write": 3262570,
+        "thinking": 117566,
+        "total": 41643628
+      },
+      "sessions": 30,
+      "first_active": "2026-09-09",
+      "last_active": "2026-10-21",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 20.8582,
+          "tokens": {
+            "input": 103659,
+            "output": 167206,
+            "cache_read": 12469208,
+            "cache_write": 1226417,
+            "thinking": 40656,
+            "total": 13966490
+          },
+          "sessions": 10
+        },
+        {
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "cost": 4.6028,
+          "tokens": {
+            "input": 183507,
+            "output": 181386,
+            "cache_read": 13402357,
+            "cache_write": 1008729,
+            "thinking": 60645,
+            "total": 14775979
+          },
+          "sessions": 10
+        },
+        {
+          "agent": "grok",
+          "label": "Grok CLI",
+          "cost": 3.0996,
+          "tokens": {
+            "input": 50114,
+            "output": 71915,
+            "cache_read": 5135682,
+            "cache_write": 614306,
+            "thinking": 12123,
+            "total": 5872017
+          },
+          "sessions": 4
+        },
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 1.8908,
+          "tokens": {
+            "input": 72973,
+            "output": 131758,
+            "cache_read": 5599443,
+            "cache_write": 291933,
+            "thinking": 0,
+            "total": 6096107
+          },
+          "sessions": 5
+        },
+        {
+          "agent": "qwen",
+          "label": "Qwen Code",
+          "cost": 0.7294,
+          "tokens": {
+            "input": 18523,
+            "output": 33227,
+            "cache_read": 760100,
+            "cache_write": 121185,
+            "thinking": 4142,
+            "total": 933035
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 12.6734,
+          "tokens": {
+            "input": 12876,
+            "output": 50380,
+            "cache_read": 2173234,
+            "cache_write": 290237,
+            "thinking": 13857,
+            "total": 2526727
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 7.965,
+          "tokens": {
+            "input": 78426,
+            "output": 104701,
+            "cache_read": 9667523,
+            "cache_write": 869041,
+            "thinking": 24532,
+            "total": 10719691
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3-pro",
+          "agent": "antigravity",
+          "cost": 3.8453,
+          "tokens": {
+            "input": 117800,
+            "output": 117553,
+            "cache_read": 9478310,
+            "cache_write": 606820,
+            "thinking": 40992,
+            "total": 10320483
+          },
+          "estimated": false
+        },
+        {
+          "model": "grok-4-beta",
+          "agent": "grok",
+          "cost": 3.0996,
+          "tokens": {
+            "input": 50114,
+            "output": 71915,
+            "cache_read": 5135682,
+            "cache_write": 614306,
+            "thinking": 12123,
+            "total": 5872017
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 1.8363,
+          "tokens": {
+            "input": 62354,
+            "output": 113719,
+            "cache_read": 4969250,
+            "cache_write": 214820,
+            "thinking": 0,
+            "total": 5360143
+          },
+          "estimated": false
+        },
+        {
+          "model": "qwen-3.8-max",
+          "agent": "qwen",
+          "cost": 0.7294,
+          "tokens": {
+            "input": 18523,
+            "output": 33227,
+            "cache_read": 760100,
+            "cache_write": 121185,
+            "thinking": 4142,
+            "total": 933035
+          },
+          "estimated": false
+        },
+        {
+          "model": "gemini-3.5-pro-exp",
+          "agent": "antigravity",
+          "cost": 0.4854,
+          "tokens": {
+            "input": 26184,
+            "output": 3456,
+            "cache_read": 1093144,
+            "cache_write": 158042,
+            "thinking": 1341,
+            "total": 1280826
+          },
+          "estimated": true
+        },
+        {
+          "model": "gemini-3-flash",
+          "agent": "antigravity",
+          "cost": 0.2721,
+          "tokens": {
+            "input": 39523,
+            "output": 60377,
+            "cache_read": 2830903,
+            "cache_write": 243867,
+            "thinking": 18312,
+            "total": 3174670
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.2198,
+          "tokens": {
+            "input": 12357,
+            "output": 12125,
+            "cache_read": 628451,
+            "cache_write": 67139,
+            "thinking": 2267,
+            "total": 720072
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.0545,
+          "tokens": {
+            "input": 10619,
+            "output": 18039,
+            "cache_read": 630193,
+            "cache_write": 77113,
+            "thinking": 0,
+            "total": 735964
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-09-09",
+          "cost": 1.5085,
+          "tokens": 3869630,
+          "by_agent": {
+            "grok": 1.1897,
+            "codex": 0.2111,
+            "antigravity": 0.1077
+          },
+          "by_agent_tokens": {
+            "grok": 2107504,
+            "codex": 1002026,
+            "antigravity": 760100
+          }
+        },
+        {
+          "day": "2026-09-10",
+          "cost": 0.2519,
+          "tokens": 845915,
+          "by_agent": {
+            "codex": 0.2519
+          },
+          "by_agent_tokens": {
+            "codex": 845915
+          }
+        },
+        {
+          "day": "2026-09-11",
+          "cost": 1.3273,
+          "tokens": 1976264,
+          "by_agent": {
+            "claude": 0.9344,
+            "antigravity": 0.3929
+          },
+          "by_agent_tokens": {
+            "claude": 1155258,
+            "antigravity": 821006
+          }
+        },
+        {
+          "day": "2026-09-17",
+          "cost": 0.0708,
+          "tokens": 940251,
+          "by_agent": {
+            "antigravity": 0.0708
+          },
+          "by_agent_tokens": {
+            "antigravity": 940251
+          }
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 2.0766,
+          "tokens": 3155168,
+          "by_agent": {
+            "claude": 1.3539,
+            "antigravity": 0.7227
+          },
+          "by_agent_tokens": {
+            "claude": 1171650,
+            "antigravity": 1983518
+          }
+        },
+        {
+          "day": "2026-09-25",
+          "cost": 6.1088,
+          "tokens": 1483173,
+          "by_agent": {
+            "claude": 6.1088
+          },
+          "by_agent_tokens": {
+            "claude": 1483173
+          }
+        },
+        {
+          "day": "2026-09-26",
+          "cost": 0.7294,
+          "tokens": 933035,
+          "by_agent": {
+            "qwen": 0.7294
+          },
+          "by_agent_tokens": {
+            "qwen": 933035
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "cost": 0.3617,
+          "tokens": 604341,
+          "by_agent": {
+            "codex": 0.3617
+          },
+          "by_agent_tokens": {
+            "codex": 604341
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "cost": 0.7557,
+          "tokens": 831837,
+          "by_agent": {
+            "claude": 0.7557
+          },
+          "by_agent_tokens": {
+            "claude": 831837
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "cost": 0.6276,
+          "tokens": 2404708,
+          "by_agent": {
+            "antigravity": 0.6276
+          },
+          "by_agent_tokens": {
+            "antigravity": 2404708
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "cost": 2.344,
+          "tokens": 5085824,
+          "by_agent": {
+            "antigravity": 1.401,
+            "claude": 0.943
+          },
+          "by_agent_tokens": {
+            "antigravity": 4473865,
+            "claude": 611959
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "cost": 1.0763,
+          "tokens": 3010258,
+          "by_agent": {
+            "antigravity": 0.589,
+            "codex": 0.4873
+          },
+          "by_agent_tokens": {
+            "antigravity": 1787082,
+            "codex": 1223176
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "cost": 1.2444,
+          "tokens": 2027833,
+          "by_agent": {
+            "claude": 1.2444
+          },
+          "by_agent_tokens": {
+            "claude": 2027833
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "cost": 1.7614,
+          "tokens": 2962478,
+          "by_agent": {
+            "claude": 1.7614
+          },
+          "by_agent_tokens": {
+            "claude": 2962478
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "cost": 8.4477,
+          "tokens": 5327751,
+          "by_agent": {
+            "claude": 7.7566,
+            "antigravity": 0.6911
+          },
+          "by_agent_tokens": {
+            "claude": 3722302,
+            "antigravity": 1605449
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "cost": 0.5788,
+          "tokens": 2420649,
+          "by_agent": {
+            "codex": 0.5788
+          },
+          "by_agent_tokens": {
+            "codex": 2420649
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "cost": 1.2682,
+          "tokens": 2523294,
+          "by_agent": {
+            "grok": 1.2682
+          },
+          "by_agent_tokens": {
+            "grok": 2523294
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "cost": 0.6417,
+          "tokens": 1241219,
+          "by_agent": {
+            "grok": 0.6417
+          },
+          "by_agent_tokens": {
+            "grok": 1241219
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "agy/streaks",
+          "cost": 11.4328,
+          "sessions": 8
+        },
+        {
+          "branch": "agy/onboarding",
+          "cost": 7.7666,
+          "sessions": 5
+        },
+        {
+          "branch": "main",
+          "cost": 6.1582,
+          "sessions": 9
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 5.8232,
+          "sessions": 8
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "5e0a72ab-7f5d-b163-b12b-66807f072cb9",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-10-20T22:22:00Z",
+          "ended": "2026-10-21T00:00:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 0.6417,
+          "tokens": {
+            "input": 12811,
+            "output": 16020,
+            "cache_read": 1039831,
+            "cache_write": 172557,
+            "thinking": 2145,
+            "total": 1241219
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "c0d7ac73-095f-fa81-40d9-2bce7930ba20",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-10-20T05:51:00Z",
+          "ended": "2026-10-20T06:46:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 0.1521,
+          "tokens": {
+            "input": 2903,
+            "output": 9342,
+            "cache_read": 180516,
+            "cache_write": 168606,
+            "thinking": 1415,
+            "total": 361367
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "6ec01269-2108-4dd9-f75d-1e3cc48d5650",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-10-19T18:20:00Z",
+          "ended": "2026-10-19T20:23:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "agy/streaks",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 1.1161,
+          "tokens": {
+            "input": 18938,
+            "output": 14172,
+            "cache_read": 1986393,
+            "cache_write": 142424,
+            "thinking": 2323,
+            "total": 2161927
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "76c5a0dc-7e7e-7419-a0c1-4035c5d95f51",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-19T15:30:00Z",
+          "ended": "2026-10-19T17:03:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.5788,
+          "tokens": {
+            "input": 21821,
+            "output": 35659,
+            "cache_read": 2283495,
+            "cache_write": 79674,
+            "thinking": 0,
+            "total": 2420649
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "80a8a23d-17ea-ec83-8892-042f9d4b2bf9",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-17T11:54:00Z",
+          "ended": "2026-10-17T12:39:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 6.653,
+          "tokens": {
+            "input": 15710,
+            "output": 29081,
+            "cache_read": 1202839,
+            "cache_write": 195692,
+            "thinking": 7946,
+            "total": 1443322
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "67884209-92ca-525a-6de5-93329364f3d0",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-17T06:28:00Z",
+          "ended": "2026-10-17T08:13:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.2057,
+          "tokens": {
+            "input": 23516,
+            "output": 4108,
+            "cache_read": 130481,
+            "cache_write": 166518,
+            "thinking": 1721,
+            "total": 324623
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "fa698cd2-fe23-90f3-e7bb-aefc8f3dc97f",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-17T02:28:00Z",
+          "ended": "2026-10-17T03:55:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/habit-garden",
+          "branch": "main",
+          "models": [
+            "gemini-3.5-pro-exp"
+          ],
+          "cost": 0.4854,
+          "tokens": {
+            "input": 26184,
+            "output": 3456,
+            "cache_read": 1093144,
+            "cache_write": 158042,
+            "thinking": 1341,
+            "total": 1280826
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "b788f5d1-ffe5-75f6-65ed-cfe34f2dad3f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T20:00:00Z",
+          "ended": "2026-10-16T22:25:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.1036,
+          "tokens": {
+            "input": 16221,
+            "output": 18264,
+            "cache_read": 2213305,
+            "cache_write": 31190,
+            "thinking": 5162,
+            "total": 2278980
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "fd034ada-c952-5185-81e0-3a5e8b48f496",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T14:56:00Z",
+          "ended": "2026-10-16T16:01:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.012,
+          "tokens": {
+            "input": 16180,
+            "output": 8937,
+            "cache_read": 1533344,
+            "cache_write": 98515,
+            "thinking": 1823,
+            "total": 1656976
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "bc20b9f2-4a9c-589e-51b3-0182f7fe604f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-16T10:32:00Z",
+          "ended": "2026-10-16T12:00:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.7494,
+          "tokens": {
+            "input": 8125,
+            "output": 12126,
+            "cache_read": 1208956,
+            "cache_write": 76295,
+            "thinking": 2709,
+            "total": 1305502
+          },
+          "share": 0.4,
+          "attribution": "split",
+          "subagents": 1,
+          "title": null
+        },
+        {
+          "id": "01582463-9d87-76a0-72d7-8bdd781799ff",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-12T23:29:00Z",
+          "ended": "2026-10-13T00:10:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "agy/streaks",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.2444,
+          "tokens": {
+            "input": 5267,
+            "output": 12253,
+            "cache_read": 1882285,
+            "cache_write": 128028,
+            "thinking": 2093,
+            "total": 2027833
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 3,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "b69f68c3-e60f-d420-2c33-350c73b911d8",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-11T07:16:00Z",
+          "ended": "2026-10-11T09:56:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4873,
+          "tokens": {
+            "input": 8996,
+            "output": 33218,
+            "cache_read": 1150992,
+            "cache_write": 29970,
+            "thinking": 0,
+            "total": 1223176
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "1eb74b56-53ff-d3a2-4a19-35014169b9fc",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-10T18:58:00Z",
+          "ended": "2026-10-10T21:55:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.589,
+          "tokens": {
+            "input": 23122,
+            "output": 19642,
+            "cache_read": 1716272,
+            "cache_write": 28046,
+            "thinking": 6122,
+            "total": 1787082
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "fix quota reset after midnight rollover"
+        },
+        {
+          "id": "236e1608-9acb-394a-cd1f-5318331f63fb",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-10T06:16:00Z",
+          "ended": "2026-10-10T08:20:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.5537,
+          "tokens": {
+            "input": 29877,
+            "output": 16312,
+            "cache_read": 1849211,
+            "cache_write": 126688,
+            "thinking": 4838,
+            "total": 2022088
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "d65e59dd-e62d-2d06-cf9b-85581a7f195b",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-10T03:57:00Z",
+          "ended": "2026-10-10T06:29:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.8473,
+          "tokens": {
+            "input": 20324,
+            "output": 32418,
+            "cache_read": 2304432,
+            "cache_write": 94603,
+            "thinking": 12636,
+            "total": 2451777
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "692e07b6-0b2f-6d5c-700b-5d5fb89f72f3",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-09T18:32:00Z",
+          "ended": "2026-10-09T21:14:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.943,
+          "tokens": {
+            "input": 5102,
+            "output": 15244,
+            "cache_read": 440453,
+            "cache_write": 151160,
+            "thinking": 4049,
+            "total": 611959
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "5fbbf0b1-8083-89c8-657e-01c90da23e5c",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-10-06T09:05:00Z",
+          "ended": "2026-10-06T09:30:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.6276,
+          "tokens": {
+            "input": 27442,
+            "output": 14306,
+            "cache_read": 2311570,
+            "cache_write": 51390,
+            "thinking": 4392,
+            "total": 2404708
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "727716ec-59fe-fbbc-71a3-fad2b0946d2a",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-03T23:32:00Z",
+          "ended": "2026-10-04T00:58:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.7557,
+          "tokens": {
+            "input": 4385,
+            "output": 13619,
+            "cache_read": 728582,
+            "cache_write": 85251,
+            "thinking": 3508,
+            "total": 831837
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "9136f1f8-f310-46dc-6202-bee65cb5e69c",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-03T12:15:00Z",
+          "ended": "2026-10-03T13:52:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.3617,
+          "tokens": {
+            "input": 19450,
+            "output": 31993,
+            "cache_read": 526235,
+            "cache_write": 26663,
+            "thinking": 0,
+            "total": 604341
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "f020e992-b576-255e-9854-9f222102f9c9",
+          "agent": "qwen",
+          "label": "Qwen Code",
+          "started": "2026-09-25T23:04:00Z",
+          "ended": "2026-09-26T01:37:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "qwen-3.8-max"
+          ],
+          "cost": 0.7294,
+          "tokens": {
+            "input": 18523,
+            "output": 33227,
+            "cache_read": 760100,
+            "cache_write": 121185,
+            "thinking": 4142,
+            "total": 933035
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "7f7f6c0a-07c0-d116-a394-ed549e3c5a88",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-24T23:33:00Z",
+          "ended": "2026-09-24T23:57:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "agy/streaks",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 6.1088,
+          "tokens": {
+            "input": 2945,
+            "output": 24060,
+            "cache_read": 1335825,
+            "cache_write": 120343,
+            "thinking": 6376,
+            "total": 1483173
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "fb16f757-76f1-86ab-af47-5b49c775e395",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-24T11:28:00Z",
+          "ended": "2026-09-24T11:49:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.7227,
+          "tokens": {
+            "input": 13033,
+            "output": 28150,
+            "cache_read": 1764382,
+            "cache_write": 177953,
+            "thinking": 10858,
+            "total": 1983518
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "62f5df2b-adaa-44ca-8ed6-ad5e18318aa3",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-24T00:10:00Z",
+          "ended": "2026-09-24T02:06:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.3539,
+          "tokens": {
+            "input": 20335,
+            "output": 29332,
+            "cache_read": 926796,
+            "cache_write": 195187,
+            "thinking": 6053,
+            "total": 1171650
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "31274148-7c7c-404e-c422-d03ef29a6339",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-17T11:00:00Z",
+          "ended": "2026-09-17T13:55:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "agy/onboarding",
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.0708,
+          "tokens": {
+            "input": 12469,
+            "output": 14748,
+            "cache_read": 873210,
+            "cache_write": 39824,
+            "thinking": 4029,
+            "total": 940251
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "7634c169-4f76-e388-12fe-28bf81e0d489",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-11T11:54:00Z",
+          "ended": "2026-09-11T13:50:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gemini-3-pro"
+          ],
+          "cost": 0.3929,
+          "tokens": {
+            "input": 3520,
+            "output": 17425,
+            "cache_read": 744092,
+            "cache_write": 55969,
+            "thinking": 4140,
+            "total": 821006
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "98c3e3ca-7ff4-cec6-e7b7-b4c6d6312a80",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-10T18:33:00Z",
+          "ended": "2026-09-10T19:37:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.9344,
+          "tokens": {
+            "input": 9389,
+            "output": 4290,
+            "cache_read": 996823,
+            "cache_write": 144756,
+            "thinking": 937,
+            "total": 1155258
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "7fc15858-2fa0-d842-bc55-300b06a241af",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-10T09:16:00Z",
+          "ended": "2026-09-10T11:46:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.2519,
+          "tokens": {
+            "input": 5269,
+            "output": 14919,
+            "cache_read": 769072,
+            "cache_write": 56655,
+            "thinking": 0,
+            "total": 845915
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "beed10b6-4f6e-274b-deda-b0276550f74a",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-09T14:30:00Z",
+          "ended": "2026-09-09T16:06:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/onboarding",
+          "models": [
+            "gemini-3-flash"
+          ],
+          "cost": 0.1077,
+          "tokens": {
+            "input": 4020,
+            "output": 30821,
+            "cache_read": 615563,
+            "cache_write": 109696,
+            "thinking": 10568,
+            "total": 760100
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "823dd107-5c8a-c066-cb2f-afa32c913a7c",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-09-09T13:02:00Z",
+          "ended": "2026-09-09T15:26:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden/.worktrees/agy-onboarding",
+          "branch": "agy/streaks",
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 1.1897,
+          "tokens": {
+            "input": 15462,
+            "output": 32381,
+            "cache_read": 1928942,
+            "cache_write": 130719,
+            "thinking": 6240,
+            "total": 2107504
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "investigate memory leak in timeline view"
+        },
+        {
+          "id": "a974d079-716f-da0a-45a8-882914e286e5",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-09T08:26:00Z",
+          "ended": "2026-09-09T10:17:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/HabitGarden",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.2111,
+          "tokens": {
+            "input": 17437,
+            "output": 15969,
+            "cache_read": 869649,
+            "cache_write": 98971,
+            "thinking": 0,
+            "total": 1002026
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/weather-cli",
+      "name": "weather-cli",
+      "remote": "github.com/alice/weather-cli",
+      "paths": [
+        "/Users/alice/Documents/GitHub/weather-cli"
+      ],
+      "path_missing": false,
+      "cost": 25.1388,
+      "tokens": {
+        "input": 107247,
+        "output": 133066,
+        "cache_read": 10295094,
+        "cache_write": 697718,
+        "thinking": 31743,
+        "total": 11233125
+      },
+      "sessions": 8,
+      "first_active": "2026-10-04",
+      "last_active": "2026-10-23",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 25.1388,
+          "tokens": {
+            "input": 107247,
+            "output": 133066,
+            "cache_read": 10295094,
+            "cache_write": 697718,
+            "thinking": 31743,
+            "total": 11233125
+          },
+          "sessions": 8
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 22.3904,
+          "tokens": {
+            "input": 77024,
+            "output": 89661,
+            "cache_read": 5956897,
+            "cache_write": 297342,
+            "thinking": 22549,
+            "total": 6420924
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 2.3502,
+          "tokens": {
+            "input": 22138,
+            "output": 14544,
+            "cache_read": 3486777,
+            "cache_write": 271900,
+            "thinking": 2988,
+            "total": 3795359
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.3981,
+          "tokens": {
+            "input": 8085,
+            "output": 28861,
+            "cache_read": 851420,
+            "cache_write": 128476,
+            "thinking": 6206,
+            "total": 1016842
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-04",
+          "cost": 2.6726,
+          "tokens": 860501,
+          "by_agent": {
+            "claude": 2.6726
+          },
+          "by_agent_tokens": {
+            "claude": 860501
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "cost": 13.9884,
+          "tokens": 6013339,
+          "by_agent": {
+            "claude": 13.9884
+          },
+          "by_agent_tokens": {
+            "claude": 6013339
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 7.7347,
+          "tokens": 2807180,
+          "by_agent": {
+            "claude": 7.7347
+          },
+          "by_agent_tokens": {
+            "claude": 2807180
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "cost": 0.7431,
+          "tokens": 1552105,
+          "by_agent": {
+            "claude": 0.7431
+          },
+          "by_agent_tokens": {
+            "claude": 1552105
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 25.1388,
+          "sessions": 8
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "18c01e2b-f99f-0704-20f0-156a1e6a6628",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-22T16:21:00Z",
+          "ended": "2026-10-22T17:58:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.7431,
+          "tokens": {
+            "input": 5176,
+            "output": 7846,
+            "cache_read": 1442619,
+            "cache_write": 96464,
+            "thinking": 1713,
+            "total": 1552105
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "<script>alert('xss in title')</script> sanitize test"
+        },
+        {
+          "id": "d7b4c294-bd44-089d-9dd2-f9defd98fe33",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T23:40:00Z",
+          "ended": "2026-10-22T01:52:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 1.0768,
+          "tokens": {
+            "input": 3735,
+            "output": 10760,
+            "cache_read": 1537190,
+            "cache_write": 167594,
+            "thinking": 2234,
+            "total": 1719279
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "review this diff"
+        },
+        {
+          "id": "500e15c0-b89b-df7f-93e3-4c35ef0a573d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T17:37:00Z",
+          "ended": "2026-10-21T18:55:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 6.6579,
+          "tokens": {
+            "input": 22776,
+            "output": 27979,
+            "cache_read": 882818,
+            "cache_write": 154328,
+            "thinking": 7983,
+            "total": 1087901
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "797ebe87-98cf-1188-06d2-5913a1173719",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T14:43:00Z",
+          "ended": "2026-10-21T16:21:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 2.9051,
+          "tokens": {
+            "input": 9019,
+            "output": 5644,
+            "cache_read": 879757,
+            "cache_write": 54767,
+            "thinking": 1607,
+            "total": 949187
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "e1e0fffc-98f6-fd7f-7eb1-62f14806f804",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T14:05:00Z",
+          "ended": "2026-10-21T14:32:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 5.3109,
+          "tokens": {
+            "input": 22773,
+            "output": 17361,
+            "cache_read": 1936038,
+            "cache_write": 40701,
+            "thinking": 3523,
+            "total": 2016873
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "690e7e62-3432-3ec6-b0c4-a01c69b7c0fa",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T08:24:00Z",
+          "ended": "2026-10-21T10:42:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 4.9542,
+          "tokens": {
+            "input": 16266,
+            "output": 28360,
+            "cache_read": 1767789,
+            "cache_write": 33180,
+            "thinking": 6729,
+            "total": 1845595
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        },
+        {
+          "id": "83d5bceb-5edb-b8ee-c2ba-f0e02179e3f0",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-20T16:03:00Z",
+          "ended": "2026-10-20T16:25:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/weather-cli",
+          "branch": "main",
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.8182,
+          "tokens": {
+            "input": 18228,
+            "output": 14053,
+            "cache_read": 1051264,
+            "cache_write": 118139,
+            "thinking": 2830,
+            "total": 1201684
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 1,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "703e957f-35ab-8466-b557-8b00f166cdcf",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-03T17:28:00Z",
+          "ended": "2026-10-03T18:55:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.6726,
+          "tokens": {
+            "input": 9274,
+            "output": 21063,
+            "cache_read": 797619,
+            "cache_write": 32545,
+            "thinking": 5124,
+            "total": 860501
+          },
+          "share": 0.45,
+          "attribution": "split",
+          "subagents": 1,
+          "title": "review this diff"
+        }
+      ]
+    },
+    {
+      "id": "gitlab.com/acme/infra-scripts",
+      "name": "infra-scripts",
+      "remote": "gitlab.com/acme/infra-scripts",
+      "paths": [
+        "/Users/alice/Documents/GitHub/infra-scripts"
+      ],
+      "path_missing": false,
+      "cost": 10.9436,
+      "tokens": {
+        "input": 414375,
+        "output": 496589,
+        "cache_read": 31303280,
+        "cache_write": 1988526,
+        "thinking": 5738,
+        "total": 34202770
+      },
+      "sessions": 17,
+      "first_active": "2026-08-04",
+      "last_active": "2026-10-22",
+      "by_agent": [
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 5.4848,
+          "tokens": {
+            "input": 265822,
+            "output": 312906,
+            "cache_read": 20435450,
+            "cache_write": 1409005,
+            "thinking": 0,
+            "total": 22423183
+          },
+          "sessions": 11
+        },
+        {
+          "agent": "commandcode",
+          "label": "Command Code",
+          "cost": 4.2734,
+          "tokens": {
+            "input": 126063,
+            "output": 150223,
+            "cache_read": 9824315,
+            "cache_write": 498719,
+            "thinking": 0,
+            "total": 10599320
+          },
+          "sessions": 5
+        },
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 1.1854,
+          "tokens": {
+            "input": 22490,
+            "output": 33460,
+            "cache_read": 1043515,
+            "cache_write": 80802,
+            "thinking": 5738,
+            "total": 1180267
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 5.3522,
+          "tokens": {
+            "input": 236164,
+            "output": 280325,
+            "cache_read": 18029768,
+            "cache_write": 1237883,
+            "thinking": 0,
+            "total": 19784140
+          },
+          "estimated": false
+        },
+        {
+          "model": "command-r-plus",
+          "agent": "commandcode",
+          "cost": 4.2735,
+          "tokens": {
+            "input": 126063,
+            "output": 150223,
+            "cache_read": 9824315,
+            "cache_write": 498719,
+            "thinking": 0,
+            "total": 10599320
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 1.1854,
+          "tokens": {
+            "input": 22490,
+            "output": 33460,
+            "cache_read": 1043515,
+            "cache_write": 80802,
+            "thinking": 5738,
+            "total": 1180267
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.1327,
+          "tokens": {
+            "input": 29658,
+            "output": 32581,
+            "cache_read": 2405682,
+            "cache_write": 171122,
+            "thinking": 0,
+            "total": 2639043
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-08-04",
+          "cost": 0.6167,
+          "tokens": 2513529,
+          "by_agent": {
+            "codex": 0.6167
+          },
+          "by_agent_tokens": {
+            "codex": 2513529
+          }
+        },
+        {
+          "day": "2026-08-09",
+          "cost": 1.3203,
+          "tokens": 4733172,
+          "by_agent": {
+            "codex": 1.3203
+          },
+          "by_agent_tokens": {
+            "codex": 4733172
+          }
+        },
+        {
+          "day": "2026-08-11",
+          "cost": 1.0149,
+          "tokens": 2535232,
+          "by_agent": {
+            "commandcode": 1.0149
+          },
+          "by_agent_tokens": {
+            "commandcode": 2535232
+          }
+        },
+        {
+          "day": "2026-08-20",
+          "cost": 0.3985,
+          "tokens": 2808112,
+          "by_agent": {
+            "codex": 0.3985
+          },
+          "by_agent_tokens": {
+            "codex": 2808112
+          }
+        },
+        {
+          "day": "2026-08-26",
+          "cost": 0.6897,
+          "tokens": 3187841,
+          "by_agent": {
+            "codex": 0.6897
+          },
+          "by_agent_tokens": {
+            "codex": 3187841
+          }
+        },
+        {
+          "day": "2026-08-28",
+          "cost": 0.7329,
+          "tokens": 3780384,
+          "by_agent": {
+            "codex": 0.7329
+          },
+          "by_agent_tokens": {
+            "codex": 3780384
+          }
+        },
+        {
+          "day": "2026-09-20",
+          "cost": 0.5028,
+          "tokens": 539770,
+          "by_agent": {
+            "codex": 0.5028
+          },
+          "by_agent_tokens": {
+            "codex": 539770
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "cost": 0.6732,
+          "tokens": 1785292,
+          "by_agent": {
+            "commandcode": 0.6732
+          },
+          "by_agent_tokens": {
+            "commandcode": 1785292
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "cost": 0.5781,
+          "tokens": 2614302,
+          "by_agent": {
+            "codex": 0.5781
+          },
+          "by_agent_tokens": {
+            "codex": 2614302
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "cost": 0.0759,
+          "tokens": 328968,
+          "by_agent": {
+            "codex": 0.0759
+          },
+          "by_agent_tokens": {
+            "codex": 328968
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "cost": 0.9273,
+          "tokens": 2359225,
+          "by_agent": {
+            "commandcode": 0.9273
+          },
+          "by_agent_tokens": {
+            "commandcode": 2359225
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "cost": 1.1854,
+          "tokens": 1180267,
+          "by_agent": {
+            "claude": 1.1854
+          },
+          "by_agent_tokens": {
+            "claude": 1180267
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "cost": 0.9033,
+          "tokens": 1704255,
+          "by_agent": {
+            "commandcode": 0.9033
+          },
+          "by_agent_tokens": {
+            "commandcode": 1704255
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "cost": 0.7547,
+          "tokens": 2215316,
+          "by_agent": {
+            "commandcode": 0.7547
+          },
+          "by_agent_tokens": {
+            "commandcode": 2215316
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "cost": 0.1445,
+          "tokens": 790887,
+          "by_agent": {
+            "codex": 0.1445
+          },
+          "by_agent_tokens": {
+            "codex": 790887
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "cost": 0.4254,
+          "tokens": 1126218,
+          "by_agent": {
+            "codex": 0.4254
+          },
+          "by_agent_tokens": {
+            "codex": 1126218
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 5.7521,
+          "sessions": 9
+        },
+        {
+          "branch": "chore/terraform-1.9",
+          "cost": 5.1915,
+          "sessions": 8
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "e8e6e840-f090-f5a0-ce61-01996e3a0ba8",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-21T19:47:00Z",
+          "ended": "2026-10-21T22:06:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.4254,
+          "tokens": {
+            "input": 26665,
+            "output": 27386,
+            "cache_read": 945662,
+            "cache_write": 126505,
+            "thinking": 0,
+            "total": 1126218
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "bump deps and fix breaking changes"
+        },
+        {
+          "id": "fe7ee362-8a89-b0f0-1052-91d3b34c6c73",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-18T11:08:00Z",
+          "ended": "2026-10-18T12:53:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.1445,
+          "tokens": {
+            "input": 10949,
+            "output": 3733,
+            "cache_read": 747555,
+            "cache_write": 28650,
+            "thinking": 0,
+            "total": 790887
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "a3422e50-9e2a-7324-0f79-a8a75f8a14bd",
+          "agent": "commandcode",
+          "label": "Command Code",
+          "started": "2026-10-17T03:17:00Z",
+          "ended": "2026-10-17T03:56:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "command-r-plus"
+          ],
+          "cost": 0.7547,
+          "tokens": {
+            "input": 30709,
+            "output": 13875,
+            "cache_read": 2156648,
+            "cache_write": 14084,
+            "thinking": 0,
+            "total": 2215316
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "draft README for the new CLI flags"
+        },
+        {
+          "id": "3f5cf2f3-3acb-43a3-d2c7-bffb6118433b",
+          "agent": "commandcode",
+          "label": "Command Code",
+          "started": "2026-10-13T14:13:00Z",
+          "ended": "2026-10-13T14:17:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "command-r-plus"
+          ],
+          "cost": 0.9033,
+          "tokens": {
+            "input": 27807,
+            "output": 47044,
+            "cache_read": 1453451,
+            "cache_write": 175953,
+            "thinking": 0,
+            "total": 1704255
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "4ceda164-69df-14e9-3896-41dd8570b59f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-11T20:56:00Z",
+          "ended": "2026-10-11T23:27:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 1.1854,
+          "tokens": {
+            "input": 22490,
+            "output": 33460,
+            "cache_read": 1043515,
+            "cache_write": 80802,
+            "thinking": 5738,
+            "total": 1180267
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 3,
+          "title": "implement CSV export"
+        },
+        {
+          "id": "741423b5-0e3e-25f2-cf06-71c7720b274b",
+          "agent": "commandcode",
+          "label": "Command Code",
+          "started": "2026-10-06T21:51:00Z",
+          "ended": "2026-10-07T00:08:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "command-r-plus"
+          ],
+          "cost": 0.9273,
+          "tokens": {
+            "input": 17245,
+            "output": 33805,
+            "cache_read": 2184723,
+            "cache_write": 123452,
+            "thinking": 0,
+            "total": 2359225
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "write tests for the paywall flow"
+        },
+        {
+          "id": "12ef6101-6082-786f-ca00-ef586c521d13",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-06T10:59:00Z",
+          "ended": "2026-10-06T12:47:00Z",
+          "cwd": "/Users/alice",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.0759,
+          "tokens": {
+            "input": 7504,
+            "output": 2934,
+            "cache_read": 297647,
+            "cache_write": 20883,
+            "thinking": 0,
+            "total": 328968
+          },
+          "share": 0.3,
+          "attribution": "split",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "a44d9fec-fd85-d7fa-8ac9-7b01e3ad64d4",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-04T16:21:00Z",
+          "ended": "2026-10-04T17:30:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.5781,
+          "tokens": {
+            "input": 34803,
+            "output": 30103,
+            "cache_read": 2334616,
+            "cache_write": 214780,
+            "thinking": 0,
+            "total": 2614302
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "ec170298-143d-f5b3-a58e-83dd548c1d84",
+          "agent": "commandcode",
+          "label": "Command Code",
+          "started": "2026-09-29T00:35:00Z",
+          "ended": "2026-09-29T03:02:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "command-r-plus"
+          ],
+          "cost": 0.6732,
+          "tokens": {
+            "input": 16265,
+            "output": 22092,
+            "cache_read": 1646376,
+            "cache_write": 100559,
+            "thinking": 0,
+            "total": 1785292
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "1cb9b73a-906d-5c8c-ead0-8c8913fe8a29",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-19T19:34:00Z",
+          "ended": "2026-09-19T22:32:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.5028,
+          "tokens": {
+            "input": 27759,
+            "output": 42367,
+            "cache_read": 355786,
+            "cache_write": 113858,
+            "thinking": 0,
+            "total": 539770
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "27372b52-7a6a-2107-2231-9050f5159494",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-28T15:53:00Z",
+          "ended": "2026-08-28T17:15:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.7329,
+          "tokens": {
+            "input": 14164,
+            "output": 42050,
+            "cache_read": 3485802,
+            "cache_write": 238368,
+            "thinking": 0,
+            "total": 3780384
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "explain this stack trace"
+        },
+        {
+          "id": "363908bf-03ec-e8ff-e8b3-d763f4ff3f3a",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-26T02:47:00Z",
+          "ended": "2026-08-26T04:27:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.6897,
+          "tokens": {
+            "input": 31719,
+            "output": 37472,
+            "cache_read": 3011189,
+            "cache_write": 107461,
+            "thinking": 0,
+            "total": 3187841
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "9442b5e6-9583-1d58-ef4c-51198da5d39b",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-19T20:35:00Z",
+          "ended": "2026-08-19T22:13:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.3985,
+          "tokens": {
+            "input": 12914,
+            "output": 5629,
+            "cache_read": 2608564,
+            "cache_write": 181005,
+            "thinking": 0,
+            "total": 2808112
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "port parser to streaming JSONL reader"
+        },
+        {
+          "id": "2f12b150-605f-b1eb-4cc5-7e0d26332018",
+          "agent": "commandcode",
+          "label": "Command Code",
+          "started": "2026-08-11T03:46:00Z",
+          "ended": "2026-08-11T05:18:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "command-r-plus"
+          ],
+          "cost": 1.0149,
+          "tokens": {
+            "input": 34037,
+            "output": 33407,
+            "cache_read": 2383117,
+            "cache_write": 84671,
+            "thinking": 0,
+            "total": 2535232
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "dfe2c0a0-a96b-3c42-f6d2-2a7baec76a82",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-09T09:09:00Z",
+          "ended": "2026-08-09T09:59:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.8074,
+          "tokens": {
+            "input": 37176,
+            "output": 42747,
+            "cache_read": 3593725,
+            "cache_write": 213945,
+            "thinking": 0,
+            "total": 3887593
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "rename package and update imports"
+        },
+        {
+          "id": "8a2db2e6-3bfd-a8a6-705f-ddf566fadca0",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-09T02:10:00Z",
+          "ended": "2026-08-09T04:51:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "main",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.5129,
+          "tokens": {
+            "input": 29021,
+            "output": 50373,
+            "cache_read": 701425,
+            "cache_write": 64760,
+            "thinking": 0,
+            "total": 845579
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "5c11ab6d-42f5-b3f5-4ef4-c34d5bf86f3c",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-08-04T02:49:00Z",
+          "ended": "2026-08-04T04:34:00Z",
+          "cwd": "/Users/alice/Documents/GitHub/infra-scripts",
+          "branch": "chore/terraform-1.9",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.6167,
+          "tokens": {
+            "input": 33148,
+            "output": 28112,
+            "cache_read": 2353479,
+            "cache_write": 98790,
+            "thinking": 0,
+            "total": 2513529
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "speed up cold start by lazy loading fonts"
+        }
+      ]
+    },
+    {
+      "id": "/Users/alice/Documents/experiments/rust-playground",
+      "name": "rust-playground",
+      "remote": null,
+      "paths": [
+        "/Users/alice/Documents/experiments/rust-playground"
+      ],
+      "path_missing": false,
+      "cost": 4.8207,
+      "tokens": {
+        "input": 261803,
+        "output": 204963,
+        "cache_read": 21640443,
+        "cache_write": 1750191,
+        "thinking": 0,
+        "total": 23857400
+      },
+      "sessions": 8,
+      "first_active": "2026-09-15",
+      "last_active": "2026-09-28",
+      "by_agent": [
+        {
+          "agent": "codex",
+          "label": "Codex CLI",
+          "cost": 4.8207,
+          "tokens": {
+            "input": 261803,
+            "output": 204963,
+            "cache_read": 21640443,
+            "cache_write": 1750191,
+            "thinking": 0,
+            "total": 23857400
+          },
+          "sessions": 8
+        }
+      ],
+      "by_model": [
+        {
+          "model": "gpt-5.5-codex",
+          "agent": "codex",
+          "cost": 4.7555,
+          "tokens": {
+            "input": 235058,
+            "output": 193174,
+            "cache_read": 20239817,
+            "cache_write": 1632950,
+            "thinking": 0,
+            "total": 22300999
+          },
+          "estimated": false
+        },
+        {
+          "model": "gpt-5.5-mini",
+          "agent": "codex",
+          "cost": 0.0653,
+          "tokens": {
+            "input": 26745,
+            "output": 11789,
+            "cache_read": 1400626,
+            "cache_write": 117241,
+            "thinking": 0,
+            "total": 1556401
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-09-15",
+          "cost": 0.7548,
+          "tokens": 3983805,
+          "by_agent": {
+            "codex": 0.7548
+          },
+          "by_agent_tokens": {
+            "codex": 3983805
+          }
+        },
+        {
+          "day": "2026-09-16",
+          "cost": 0.5143,
+          "tokens": 2322996,
+          "by_agent": {
+            "codex": 0.5143
+          },
+          "by_agent_tokens": {
+            "codex": 2322996
+          }
+        },
+        {
+          "day": "2026-09-21",
+          "cost": 0.9899,
+          "tokens": 5075962,
+          "by_agent": {
+            "codex": 0.9899
+          },
+          "by_agent_tokens": {
+            "codex": 5075962
+          }
+        },
+        {
+          "day": "2026-09-22",
+          "cost": 0.6886,
+          "tokens": 2204041,
+          "by_agent": {
+            "codex": 0.6886
+          },
+          "by_agent_tokens": {
+            "codex": 2204041
+          }
+        },
+        {
+          "day": "2026-09-24",
+          "cost": 0.6715,
+          "tokens": 3870075,
+          "by_agent": {
+            "codex": 0.6715
+          },
+          "by_agent_tokens": {
+            "codex": 3870075
+          }
+        },
+        {
+          "day": "2026-09-26",
+          "cost": 0.5459,
+          "tokens": 3947080,
+          "by_agent": {
+            "codex": 0.5459
+          },
+          "by_agent_tokens": {
+            "codex": 3947080
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "cost": 0.6557,
+          "tokens": 2453441,
+          "by_agent": {
+            "codex": 0.6557
+          },
+          "by_agent_tokens": {
+            "codex": 2453441
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "master",
+          "cost": 2.8801,
+          "sessions": 5
+        },
+        {
+          "branch": "(unknown)",
+          "cost": 1.9406,
+          "sessions": 3
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "039b058c-2faa-be0b-b7f6-0cdf41dc1c60",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-28T04:54:00Z",
+          "ended": "2026-09-28T06:54:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.6557,
+          "tokens": {
+            "input": 50206,
+            "output": 38453,
+            "cache_read": 2066966,
+            "cache_write": 297816,
+            "thinking": 0,
+            "total": 2453441
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "4988e418-f6c3-1218-c183-6315330f8be1",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-25T18:07:00Z",
+          "ended": "2026-09-25T19:35:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.5459,
+          "tokens": {
+            "input": 43634,
+            "output": 16850,
+            "cache_read": 3803785,
+            "cache_write": 82811,
+            "thinking": 0,
+            "total": 3947080
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "migrate config to toml"
+        },
+        {
+          "id": "b47a1c5b-b0b3-9015-3510-2852b4746349",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-24T06:10:00Z",
+          "ended": "2026-09-24T07:17:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.6715,
+          "tokens": {
+            "input": 14718,
+            "output": 21066,
+            "cache_read": 3539347,
+            "cache_write": 294944,
+            "thinking": 0,
+            "total": 3870075
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "8bd88fcd-57a2-be4e-887b-03e5e980f808",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-22T07:53:00Z",
+          "ended": "2026-09-22T10:20:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.6886,
+          "tokens": {
+            "input": 16652,
+            "output": 41253,
+            "cache_read": 2041717,
+            "cache_write": 104419,
+            "thinking": 0,
+            "total": 2204041
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add dark mode support"
+        },
+        {
+          "id": "b90ed44b-951c-25d5-4d4c-5280546252e7",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-21T13:52:00Z",
+          "ended": "2026-09-21T16:07:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.3647,
+          "tokens": {
+            "input": 27348,
+            "output": 27965,
+            "cache_read": 876102,
+            "cache_write": 330359,
+            "thinking": 0,
+            "total": 1261774
+          },
+          "share": 1.0,
+          "attribution": "cwd",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "bfbeac7a-efc5-9738-2fb2-1e667ed17aab",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-21T04:16:00Z",
+          "ended": "2026-09-21T06:06:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": "master",
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.6252,
+          "tokens": {
+            "input": 40054,
+            "output": 14256,
+            "cache_read": 3460685,
+            "cache_write": 299193,
+            "thinking": 0,
+            "total": 3814188
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "3e11bafe-3d41-96fe-963a-8617bdab07e7",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-15T17:49:00Z",
+          "ended": "2026-09-15T18:44:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.5143,
+          "tokens": {
+            "input": 37773,
+            "output": 19547,
+            "cache_read": 2173264,
+            "cache_write": 92412,
+            "thinking": 0,
+            "total": 2322996
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "add widget refresh on app foreground"
+        },
+        {
+          "id": "0ac4de85-4a5b-1aff-257f-7595cdfb4db9",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-09-15T09:41:00Z",
+          "ended": "2026-09-15T12:11:00Z",
+          "cwd": "/Users/alice/Documents/experiments/rust-playground",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex"
+          ],
+          "cost": 0.7548,
+          "tokens": {
+            "input": 31418,
+            "output": 25573,
+            "cache_read": 3678577,
+            "cache_write": 248237,
+            "thinking": 0,
+            "total": 3983805
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "review this diff"
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/old-blog",
+      "name": "old-blog",
+      "remote": "github.com/alice/old-blog",
+      "paths": [
+        "/Users/alice/Sites/old-blog"
+      ],
+      "path_missing": true,
+      "cost": 1.9822,
+      "tokens": {
+        "input": 32223,
+        "output": 32410,
+        "cache_read": 2199165,
+        "cache_write": 233287,
+        "thinking": 7625,
+        "total": 2497085
+      },
+      "sessions": 4,
+      "first_active": "2026-07-26",
+      "last_active": "2026-08-12",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 1.9822,
+          "tokens": {
+            "input": 32223,
+            "output": 32410,
+            "cache_read": 2199165,
+            "cache_write": 233287,
+            "thinking": 7625,
+            "total": 2497085
+          },
+          "sessions": 4
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-sonnet-5",
+          "agent": "claude",
+          "cost": 1.9147,
+          "tokens": {
+            "input": 31096,
+            "output": 28494,
+            "cache_read": 1955444,
+            "cache_write": 215286,
+            "thinking": 6498,
+            "total": 2230320
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.0676,
+          "tokens": {
+            "input": 1127,
+            "output": 3916,
+            "cache_read": 243721,
+            "cache_write": 18001,
+            "thinking": 1127,
+            "total": 266765
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-07-26",
+          "cost": 0.6298,
+          "tokens": 841786,
+          "by_agent": {
+            "claude": 0.6298
+          },
+          "by_agent_tokens": {
+            "claude": 841786
+          }
+        },
+        {
+          "day": "2026-08-07",
+          "cost": 0.2966,
+          "tokens": 169498,
+          "by_agent": {
+            "claude": 0.2966
+          },
+          "by_agent_tokens": {
+            "claude": 169498
+          }
+        },
+        {
+          "day": "2026-08-11",
+          "cost": 0.4987,
+          "tokens": 1011880,
+          "by_agent": {
+            "claude": 0.4987
+          },
+          "by_agent_tokens": {
+            "claude": 1011880
+          }
+        },
+        {
+          "day": "2026-08-12",
+          "cost": 0.5571,
+          "tokens": 473921,
+          "by_agent": {
+            "claude": 0.5571
+          },
+          "by_agent_tokens": {
+            "claude": 473921
+          }
+        }
+      ],
+      "by_branch": [],
+      "sessions_detail": [
+        {
+          "id": "b139c476-de3c-e88b-e6b9-d31a361f6d90",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-12T05:07:00Z",
+          "ended": "2026-08-12T05:25:00Z",
+          "cwd": "/Users/alice/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.5571,
+          "tokens": {
+            "input": 9058,
+            "output": 15518,
+            "cache_read": 363099,
+            "cache_write": 86246,
+            "thinking": 3989,
+            "total": 473921
+          },
+          "share": 1.0,
+          "attribution": "scratchpad",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        },
+        {
+          "id": "d3fbe043-af1d-5a1a-4ccb-235539d1c7ff",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-11T02:31:00Z",
+          "ended": "2026-08-11T03:43:00Z",
+          "cwd": "/Users/alice/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.4987,
+          "tokens": {
+            "input": 9703,
+            "output": 2369,
+            "cache_read": 960925,
+            "cache_write": 38883,
+            "thinking": 441,
+            "total": 1011880
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 3,
+          "title": "why does the build fail on CI but not locally?"
+        },
+        {
+          "id": "538d6b8c-c607-b1e9-f80b-2cea658e54a2",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-08-07T10:46:00Z",
+          "ended": "2026-08-07T11:03:00Z",
+          "cwd": "/Users/alice/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.2966,
+          "tokens": {
+            "input": 1894,
+            "output": 4635,
+            "cache_read": 112977,
+            "cache_write": 49992,
+            "thinking": 1122,
+            "total": 169498
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 2,
+          "title": "fix quota reset after midnight rollover"
+        },
+        {
+          "id": "3d8f95f4-905f-9096-2996-56e24c9d6907",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-07-26T13:43:00Z",
+          "ended": "2026-07-26T13:51:00Z",
+          "cwd": "/Users/alice/Sites/old-blog",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.6298,
+          "tokens": {
+            "input": 11568,
+            "output": 9888,
+            "cache_read": 762164,
+            "cache_write": 58166,
+            "thinking": 2073,
+            "total": 841786
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 0,
+          "title": "set up release workflow with signing"
+        }
+      ]
+    },
+    {
+      "id": "github.com/alice/dotfiles",
+      "name": "dotfiles",
+      "remote": "github.com/alice/dotfiles",
+      "paths": [
+        "/Users/alice/.dotfiles"
+      ],
+      "path_missing": false,
+      "cost": 0.0017,
+      "tokens": {
+        "input": 5,
+        "output": 5,
+        "cache_read": 660,
+        "cache_write": 30,
+        "thinking": 0,
+        "total": 700
+      },
+      "sessions": 1,
+      "first_active": "2026-10-03",
+      "last_active": "2026-10-03",
+      "by_agent": [
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "cost": 0.0017,
+          "tokens": {
+            "input": 5,
+            "output": 5,
+            "cache_read": 660,
+            "cache_write": 30,
+            "thinking": 0,
+            "total": 700
+          },
+          "sessions": 1
+        }
+      ],
+      "by_model": [
+        {
+          "model": "claude-opus-5-5",
+          "agent": "claude",
+          "cost": 0.0017,
+          "tokens": {
+            "input": 5,
+            "output": 5,
+            "cache_read": 585,
+            "cache_write": 19,
+            "thinking": 0,
+            "total": 614
+          },
+          "estimated": false
+        },
+        {
+          "model": "claude-haiku-5-5",
+          "agent": "claude",
+          "cost": 0.0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "cache_read": 75,
+            "cache_write": 11,
+            "thinking": 0,
+            "total": 86
+          },
+          "estimated": false
+        }
+      ],
+      "by_day": [
+        {
+          "day": "2026-10-03",
+          "cost": 0.0017,
+          "tokens": 700,
+          "by_agent": {
+            "claude": 0.0017
+          },
+          "by_agent_tokens": {
+            "claude": 700
+          }
+        }
+      ],
+      "by_branch": [
+        {
+          "branch": "main",
+          "cost": 0.0017,
+          "sessions": 1
+        }
+      ],
+      "sessions_detail": [
+        {
+          "id": "176de21f-1b46-ebdc-5c56-d9bc5111d31d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-02T20:31:00Z",
+          "ended": "2026-10-02T23:29:00Z",
+          "cwd": "/Users/alice/.dotfiles",
+          "branch": "main",
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 0.0017,
+          "tokens": {
+            "input": 5,
+            "output": 5,
+            "cache_read": 660,
+            "cache_write": 30,
+            "thinking": 0,
+            "total": 700
+          },
+          "share": 1.0,
+          "attribution": "dominant",
+          "subagents": 1,
+          "title": "fix quota reset after midnight rollover"
+        }
+      ]
+    }
+  ],
+  "buckets": {
+    "unattributed": {
+      "cost": 3.312,
+      "tokens": {
+        "input": 27907,
+        "output": 30381,
+        "cache_read": 2636088,
+        "cache_write": 192408,
+        "thinking": 4694,
+        "total": 2886784
+      },
+      "sessions": 5,
+      "first_active": "2026-09-24",
+      "last_active": "2026-10-21",
+      "sessions_detail": [
+        {
+          "id": "8567c805-34f5-41c0-c8c5-eb2a7490adeb",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-21T14:37:00Z",
+          "ended": "2026-10-21T16:27:00Z",
+          "cwd": "/Users/alice",
+          "branch": null,
+          "models": [
+            "claude-sonnet-5"
+          ],
+          "cost": 0.4087,
+          "tokens": {
+            "input": 8332,
+            "output": 1852,
+            "cache_read": 628548,
+            "cache_write": 44618,
+            "thinking": 374,
+            "total": 683350
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "b0c07fcc-96ad-d4df-adf7-5924c5b8386b",
+          "agent": "codex",
+          "label": "Codex CLI",
+          "started": "2026-10-20T10:12:00Z",
+          "ended": "2026-10-20T11:40:00Z",
+          "cwd": "/tmp",
+          "branch": null,
+          "models": [
+            "gpt-5.5-codex",
+            "gpt-5.5-mini"
+          ],
+          "cost": 0.0791,
+          "tokens": {
+            "input": 9951,
+            "output": 7513,
+            "cache_read": 148636,
+            "cache_write": 24850,
+            "thinking": 0,
+            "total": 190950
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "summarize this pdf"
+        },
+        {
+          "id": "df3a098a-ccac-2fb5-1a0c-6c0493cd1291",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-28T18:43:00Z",
+          "ended": "2026-09-28T21:30:00Z",
+          "cwd": "/Users/alice",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 2.3427,
+          "tokens": {
+            "input": 7173,
+            "output": 5527,
+            "cache_read": 607082,
+            "cache_write": 58052,
+            "thinking": 1210,
+            "total": 677834
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "summarize this pdf"
+        },
+        {
+          "id": "8f5242d3-54bb-bcf8-28fe-a7618d49fe3f",
+          "agent": "antigravity",
+          "label": "Antigravity CLI",
+          "started": "2026-09-26T19:02:00Z",
+          "ended": "2026-09-26T20:27:00Z",
+          "cwd": "/tmp",
+          "branch": null,
+          "models": [
+            "gemini-3-pro",
+            "gemini-3-flash"
+          ],
+          "cost": 0.1422,
+          "tokens": {
+            "input": 1543,
+            "output": 3840,
+            "cache_read": 716646,
+            "cache_write": 15588,
+            "thinking": 1254,
+            "total": 737617
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "convert this curl to python"
+        },
+        {
+          "id": "a85894df-3f8c-1097-c4da-2c2e1bffa279",
+          "agent": "grok",
+          "label": "Grok CLI",
+          "started": "2026-09-24T07:54:00Z",
+          "ended": "2026-09-24T10:17:00Z",
+          "cwd": "/Users/alice/Downloads",
+          "branch": null,
+          "models": [
+            "grok-4-beta"
+          ],
+          "cost": 0.3393,
+          "tokens": {
+            "input": 908,
+            "output": 11649,
+            "cache_read": 535176,
+            "cache_write": 49300,
+            "thinking": 1856,
+            "total": 597033
+          },
+          "share": 1.0,
+          "attribution": "none",
+          "subagents": 0,
+          "title": "summarize this pdf"
+        }
+      ]
+    },
+    "excluded": {
+      "cost": 9.6123,
+      "tokens": {
+        "input": 18940,
+        "output": 35128,
+        "cache_read": 2031791,
+        "cache_write": 240711,
+        "thinking": 7653,
+        "total": 2326570
+      },
+      "sessions": 3,
+      "first_active": "2026-09-16",
+      "last_active": "2026-10-08",
+      "sessions_detail": [
+        {
+          "id": "ccf4ffb0-b4bb-a73f-ac70-51d1d051267f",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-08T10:50:00Z",
+          "ended": "2026-10-08T12:51:00Z",
+          "cwd": "/Users/alice/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 3.8816,
+          "tokens": {
+            "input": 4205,
+            "output": 16097,
+            "cache_read": 684149,
+            "cache_write": 106371,
+            "thinking": 3217,
+            "total": 810822
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 0,
+          "title": "review this diff"
+        },
+        {
+          "id": "22f3f068-7c0f-549d-0274-0f73f3abea0d",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-10-07T17:38:00Z",
+          "ended": "2026-10-07T19:46:00Z",
+          "cwd": "/Users/alice/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5",
+            "claude-haiku-5-5"
+          ],
+          "cost": 4.3671,
+          "tokens": {
+            "input": 11860,
+            "output": 15351,
+            "cache_read": 931186,
+            "cache_write": 111951,
+            "thinking": 3502,
+            "total": 1070348
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 0,
+          "title": null
+        },
+        {
+          "id": "234b4562-98af-5cca-6b11-b7cb63725424",
+          "agent": "claude",
+          "label": "Claude Code",
+          "started": "2026-09-16T08:03:00Z",
+          "ended": "2026-09-16T10:59:00Z",
+          "cwd": "/Users/alice/scratch/llm-evals",
+          "branch": null,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "cost": 1.3636,
+          "tokens": {
+            "input": 2875,
+            "output": 3680,
+            "cache_read": 416456,
+            "cache_write": 22389,
+            "thinking": 934,
+            "total": 445400
+          },
+          "share": 1.0,
+          "attribution": "excluded",
+          "subagents": 2,
+          "title": "set up release workflow with signing"
+        }
+      ]
+    },
+    "parse_failed": {
+      "sessions": 2,
+      "files": [
+        "/Users/alice/.codex/sessions/2026/09/14/rollout-2026-09-14T08-12-55-legacy.jsonl",
+        "/Users/alice/.claude/projects/-Users-alice-Documents-GitHub-PocketTimer/0c1d-broken.jsonl"
+      ]
+    }
+  }
+}

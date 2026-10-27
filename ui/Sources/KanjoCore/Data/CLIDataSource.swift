@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 
 /// 执行外部命令（默认 `python3 -m kanjo export`），把 stdout 当契约 JSON 解码。
@@ -77,3 +79,5 @@ public struct CLIDataSource: UsageDataSource {
         return (p.terminationStatus, outData, errData, timedOut)
     }
 }
+
+#endif

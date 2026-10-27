@@ -58,6 +58,7 @@ public protocol DiskSource {
     func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult
 }
 
+#if os(macOS)
 /// 跑 `kanjo disk --json` 和 `kanjo disk clean`。命令从设置里的导出命令推导，工作目录与用量导出相同。
 public struct DiskDataSource: DiskSource {
     public let cliCommand: String
@@ -98,6 +99,7 @@ public struct DiskDataSource: DiskSource {
         return out
     }
 }
+#endif
 
 /// `--disk-data` 指定的 JSON 文件。清理不会在这里动磁盘：没有 CLI 可调用，直接拒绝。
 public struct FileDiskSource: DiskSource {

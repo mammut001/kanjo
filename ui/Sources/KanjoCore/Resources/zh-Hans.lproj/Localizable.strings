@@ -383,3 +383,15 @@
 "reconcile.sessions_line" = "会话数 %@ vs 汇总 %@";
 "reconcile.diff" = " · 差异 %@";
 "reconcile.contract_invariant" = "数据契约不变量：总计 = 项目和 + 未归因 + 已排除（费用容差 $0.01）。";
+
+/* iOS 应用 */
+"ios.updated" = "更新于 %@";
+"ios.empty.title" = "还没有快照";
+"ios.empty.body" = "在 Mac 上打开 Kanjo 并开启 iCloud 同步，就能在这里看到 AI 用量。";
+"ios.error.title" = "无法载入快照";
+"ios.loading" = "正在载入…";
+"ios.all_models" = "全部模型";
+"ios.quota_used" = "已用 %@";
+"ios.quota_no_data" = "暂无额度数据";
+"ios.projects" = "项目";
+"ios.language" = "语言";
