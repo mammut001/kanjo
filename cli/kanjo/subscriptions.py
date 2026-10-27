@@ -400,6 +400,33 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         detected = None
     if detected:
         out["grok"] = detected
+    if "antigravity" not in out:
+        try:
+            from .quota_fetch import get_cached_plan
+            agy_plan = get_cached_plan("antigravity")
+            if agy_plan:
+                plan, label, price = _resolve("antigravity", agy_plan, None)
+                out["antigravity"] = _finish(plan, label, price, None, "rolling_30d", False, "detected", now_dt, tz_name)
+        except Exception:
+            pass
+    if "codex" not in out:
+        try:
+            from .quota_fetch import get_cached_plan
+            codex_plan = get_cached_plan("codex")
+            if codex_plan:
+                plan, label, price = _resolve("codex", codex_plan, None)
+                out["codex"] = _finish(plan, label, price, None, "rolling_30d", False, "detected", now_dt, tz_name)
+        except Exception:
+            pass
+    if "grok" not in out:
+        try:
+            from .quota_fetch import get_cached_plan
+            grok_plan = get_cached_plan("grok")
+            if grok_plan:
+                plan, label, price = _resolve("grok", grok_plan, None)
+                out["grok"] = _finish(plan, label, price, None, "rolling_30d", False, "detected", now_dt, tz_name)
+        except Exception:
+            pass
     for agent, spec in (manual or {}).items():
         entry = _from_manual(str(agent), spec, now_dt, tz_name, out.get(str(agent)))
         if entry:

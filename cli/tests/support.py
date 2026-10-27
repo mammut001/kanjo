@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 def ensure_test_data_dir():
     """Keep the permanent ledger off the real home directory during tests."""
+    os.environ.setdefault("KANJO_NO_NETWORK", "1")
     current = os.environ.get("KANJO_DATA_DIR", "")
     home = os.path.abspath(os.path.expanduser("~"))
     if current:
@@ -155,7 +156,12 @@ def check_quota_windows(tc, qw):
     tc.assertIsInstance(qw, dict, "quota_windows")
     for agent, w in qw.items():
         where = "quota_windows.%s" % agent
-        tc.assertEqual(set(w), QUOTA_KEYS, where)
+        tc.assertEqual(set(w) - {"extra_windows"}, QUOTA_KEYS, where)
+        if "extra_windows" in w:
+            tc.assertIsInstance(w["extra_windows"], list, where)
+            for ew in w["extra_windows"]:
+                tc.assertIn("id", ew)
+                tc.assertIn("title", ew)
         tc.assertRegex(w["weekly_resets_at"], ISO_UTC)
         tc.assertIsInstance(w["weekly_window_hours"], int, where)
         tc.assertNotIsInstance(w["weekly_window_hours"], bool, where)

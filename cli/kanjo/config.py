@@ -58,6 +58,7 @@ class Config:
     overrides: Dict[str, str] = field(default_factory=dict)
     exclude: List[str] = field(default_factory=list)
     dominant_threshold: float = DEFAULT_THRESHOLD
+    no_network: bool = False
     # agent -> {"weekly_reset": str, "weekly_resets_at": epoch s, "weekly_window_hours": int, "five_hour_resets_at": epoch s | None}
     quota_windows: Dict[str, dict] = field(default_factory=dict)
     quota_origins: Dict[str, dict] = field(default_factory=dict)
@@ -222,6 +223,8 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
             raise ConfigError("dominant_threshold must be a number")
     if not 0.0 < cfg.dominant_threshold <= 1.0:
         raise ConfigError("dominant_threshold must be in (0, 1]")
+    if "no_network" in flat:
+        cfg.no_network = bool(flat["no_network"])
     if flat.get("quota_windows"):
         cfg.quota_windows = _quota_windows(flat["quota_windows"])
         cfg.quota_origins = {

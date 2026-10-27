@@ -51,6 +51,59 @@ final class SubscriptionTests: KanjoTestCase {
         let stale = QuotaWindow(weeklyResetsAt: "2026-10-24T11:00:00Z", weeklyUsedPercent: 90)
         XCTAssertEqual(SubscriptionValue.quotaRows(stale, timezone: utc, now: now).first?.percent, nil)
         XCTAssertEqual(SubscriptionValue.quotaRows(nil, timezone: utc), [])
+
+        // Extra windows (e.g. Antigravity 3p Claude/GPT group)
+        let extra = [
+            ExtraQuotaWindow(id: "antigravity-3p-weekly", title: "Claude/GPT 周", usedPercent: 10.0,
+                             resetsAt: "2026-10-31T04:53:24Z", windowHours: 168),
+            ExtraQuotaWindow(id: "antigravity-3p-5h", title: "Claude/GPT 5h", usedPercent: 50.0,
+                             resetsAt: "2026-10-24T11:00:00Z", windowHours: 5),  // expired -> ended
+        ]
+        let agy = QuotaWindow(weeklyResetsAt: "2026-10-31T04:53:24Z", weeklyUsedPercent: 80.1,
+                              fiveHourResetsAt: "2026-10-24T17:05:49Z", fiveHourWindowHours: 5, fiveHourUsedPercent: 25.0,
+                              extraWindows: extra)
+        let agyRows = SubscriptionValue.quotaRows(agy, timezone: utc, now: now, language: "en_US")
+        XCTAssertEqual(agyRows.map(\.id), ["five_hour", "weekly", "antigravity-3p-weekly", "antigravity-3p-5h"])
+        XCTAssertEqual(agyRows.map(\.title), ["5-hour", "Weekly", "Claude/GPT 周", "Claude/GPT 5h"])
+        XCTAssertEqual(agyRows.map(\.percent), [25.0, 80.1, 10.0, nil])
+        XCTAssertEqual(agyRows[2].detail.contains("Resets in"), true)
+        XCTAssertEqual(agyRows[3].detail, "Window ended")
+    }
+
+    func testExtraWindowsDecoding() throws {
+        // Backward compatibility: decoding without extra_windows
+        let jsonWithout = """
+        {
+            "weekly_resets_at": "2026-10-31T04:53:24Z",
+            "weekly_window_hours": 168,
+            "source": "tokei"
+        }
+        """.data(using: .utf8)!
+        let decodedWithout = try JSONDecoder().decode(QuotaWindow.self, from: jsonWithout)
+        XCTAssertNil(decodedWithout.extraWindows)
+
+        // Decoding with extra_windows
+        let jsonWith = """
+        {
+            "weekly_resets_at": "2026-10-31T04:53:24Z",
+            "weekly_window_hours": 168,
+            "source": "tokei",
+            "extra_windows": [
+                {
+                    "id": "antigravity-3p-weekly",
+                    "title": "Claude/GPT 周",
+                    "used_percent": 12.5,
+                    "resets_at": "2026-10-31T04:53:24Z",
+                    "window_hours": 168
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+        let decodedWith = try JSONDecoder().decode(QuotaWindow.self, from: jsonWith)
+        XCTAssertEqual(decodedWith.extraWindows?.count, 1)
+        XCTAssertEqual(decodedWith.extraWindows?.first?.id, "antigravity-3p-weekly")
+        XCTAssertEqual(decodedWith.extraWindows?.first?.title, "Claude/GPT 周")
+        XCTAssertEqual(decodedWith.extraWindows?.first?.usedPercent, 12.5)
     }
 
     func testRelativeResetAndLevels() {

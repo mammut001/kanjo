@@ -183,8 +183,10 @@ Sources, per agent (the first one found wins):
 
    In `attribution.json` this is `{"quota_windows": {"claude": {...}}}`.
    You can also set or unset overrides via `kanjo config set quota_windows.<agent>.weekly_reset "tue 05:00"` and `kanjo config unset quota_windows.<agent>.weekly_reset`.
-2. **Tokei** (https://github.com/cclank/tokei), if it is installed (`"source": "tokei"`).
-   `kanjo` reads Tokei's cache files and does not call any API:
+2. **Direct fetch** (`"source": "tokei"`):
+   `kanjo` independently queries the provider's local language server or official usage endpoint (Antigravity on 127.0.0.1 with Gemini 5h/weekly and Claude/GPT `extra_windows`, Codex, Claude, Grok) using existing local credentials. Credentials are kept in memory only and never stored in caches or logs. Results are cached in `~/.local/share/kanjo/quota_cache.json` with a 5-minute TTL. Set `KANJO_NO_NETWORK=1` or `no_network = true` in config to disable outbound network requests.
+3. **Tokei** (https://github.com/cclank/tokei) cache fallback (`"source": "tokei"`):
+   `kanjo` reads Tokei's cache files if present as a fallback:
 
    | agent | file in `~/.tokei/` | weekly reset | 5-hour reset | fetched at |
    |---|---|---|---|---|

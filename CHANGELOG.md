@@ -6,6 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Independent provider quota fetching.** Kanjo can now fetch live quota windows directly from providers (Antigravity with Gemini 5h/weekly and Claude/GPT extra windows, Codex, Claude, Grok) without relying on Tokei, caching results locally with 5-minute TTL.
+- **Extra quota windows support.** Support for `extra_windows` in Antigravity's quota card rendering additional quota bars (e.g. Claude/GPT models) in the hover card.
+
 ### Fixed
 
 - **Antigravity 2.0 app session discovery.** Antigravity 2.0 writes SQLite logs to `~/.gemini/antigravity/conversations/` in addition to the legacy CLI location `~/.gemini/antigravity-cli/conversations/`. Kanjo now scans both directories by default and deduplicates overlapping conversation IDs by preferring the most recently modified database.
