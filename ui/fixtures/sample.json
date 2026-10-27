@@ -47,7 +47,7 @@
       "extra_windows": [
         {
           "id": "antigravity-3p-weekly",
-          "title": "Claude/GPT 周",
+          "title": "Claude/GPT Weekly",
           "used_percent": 24.0,
           "resets_at": "2026-10-31T04:40:07Z",
           "window_hours": 168

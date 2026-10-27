@@ -1,3 +1,4 @@
+import gzip
 import io
 import json
 import os
@@ -9,7 +10,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest import mock
 
-from kanjo import quota, quota_fetch, subscriptions
+from kanjo import quota, quota_claude_cache, quota_fetch, subscriptions
 
 
 class QuotaFetchTest(unittest.TestCase):
@@ -296,6 +297,175 @@ class QuotaFetchTest(unittest.TestCase):
         }
         qw_manual = quota.quota_windows(manual=manual, directory="/nonexistent/tokei", now=now, no_network=True)
         self.assertEqual(qw_manual["claude"]["source"], "manual")
+
+    def test_claude_desktop_cache_fresh_payloads(self):
+        now = 1730000000.0  # 2024-10-27T03:33:20Z
+        cache_dir = os.path.join(self.tmp, "claude_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        payload = {
+            "five_hour": {
+                "utilization": 15.0,
+                "resets_at": "2024-10-27T08:00:00Z",
+            },
+            "seven_day": {
+                "utilization": 45.0,
+                "resets_at": "2024-10-31T10:00:00Z",
+            },
+        }
+
+        # 1. Embedded HTTP headers + raw JSON
+        f_raw = os.path.join(cache_dir, "0001_0")
+        raw_content = (
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Type: application/json\r\n"
+            b"\r\n" + json.dumps(payload).encode("utf-8") + b"\x00\x01\x02"
+        )
+        with open(f_raw, "wb") as fh:
+            fh.write(raw_content)
+        os.utime(f_raw, (now, now))
+
+        res_raw = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNotNone(res_raw)
+        self.assertEqual(res_raw["weekly_used_percent"], 45.0)
+        self.assertEqual(res_raw["weekly_resets_at"], "2024-10-31T10:00:00Z")
+        self.assertEqual(res_raw["weekly_window_hours"], 168)
+        self.assertEqual(res_raw["five_hour_used_percent"], 15.0)
+        self.assertEqual(res_raw["five_hour_resets_at"], "2024-10-27T08:00:00Z")
+        self.assertEqual(res_raw["five_hour_window_hours"], 5)
+        self.assertEqual(res_raw["source"], "live")
+
+        # 2. Embedded HTTP headers + gzipped JSON
+        os.remove(f_raw)
+        f_gz = os.path.join(cache_dir, "0002_0")
+        gz_body = gzip.compress(json.dumps(payload).encode("utf-8"))
+        gz_content = (
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Encoding: gzip\r\n"
+            b"\r\n" + gz_body + b"\xff\xfe\x00"
+        )
+        with open(f_gz, "wb") as fh:
+            fh.write(gz_content)
+        os.utime(f_gz, (now, now))
+
+        res_gz = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNotNone(res_gz)
+        self.assertEqual(res_gz["weekly_used_percent"], 45.0)
+        self.assertEqual(res_gz["five_hour_used_percent"], 15.0)
+        self.assertEqual(res_gz["weekly_resets_at"], "2024-10-31T10:00:00Z")
+        self.assertEqual(res_gz["five_hour_resets_at"], "2024-10-27T08:00:00Z")
+        self.assertEqual(res_gz["source"], "live")
+
+        # 3. Trailing Chromium cache metadata footer after compressed payload
+        os.remove(f_gz)
+        f_footer = os.path.join(cache_dir, "0003_0")
+        chromium_footer = b"\xf5\x13\x24\x9a\x01\x00\x00\x00\x00\x00\x00\x00\x2f\x00\x00\x00\xd8\x41\x0d\xbd"
+        footer_content = (
+            b"HTTP/1.1 200 OK\r\n"
+            b"/api/organizations/org-123/usage\r\n"
+            b"\r\n" + gz_body + chromium_footer
+        )
+        with open(f_footer, "wb") as fh:
+            fh.write(footer_content)
+        os.utime(f_footer, (now, now))
+
+        res_footer = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNotNone(res_footer)
+        self.assertEqual(res_footer["weekly_used_percent"], 45.0)
+        self.assertEqual(res_footer["five_hour_used_percent"], 15.0)
+
+        # 4. Zstandard stream with trailing Chromium footer bytes (if zstd CLI available)
+        zstd_bin = shutil.which("zstd")
+        if not zstd_bin:
+            for cand in ("/opt/homebrew/bin/zstd", "/usr/local/bin/zstd", "/usr/bin/zstd"):
+                if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                    zstd_bin = cand
+                    break
+        if zstd_bin:
+            os.remove(f_footer)
+            f_zstd = os.path.join(cache_dir, "0004_0")
+            import subprocess
+            zstd_body = subprocess.run([zstd_bin, "-c", "-q"], input=json.dumps(payload).encode("utf-8"), capture_output=True).stdout
+            zstd_content = b"HTTP/1.1 200 OK\r\n/usage\r\n\r\n" + zstd_body + chromium_footer
+            with open(f_zstd, "wb") as fh:
+                fh.write(zstd_content)
+            os.utime(f_zstd, (now, now))
+
+            res_zstd = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+            self.assertIsNotNone(res_zstd)
+            self.assertEqual(res_zstd["weekly_used_percent"], 45.0)
+            self.assertEqual(res_zstd["five_hour_used_percent"], 15.0)
+
+    def test_claude_desktop_cache_expired_ignored(self):
+        now = 1730000000.0  # 2024-10-27T03:33:20Z
+        cache_dir = os.path.join(self.tmp, "claude_cache_exp")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        expired_payload = {
+            "five_hour": {
+                "utilization": 20.0,
+                "resets_at": "2024-10-26T08:00:00Z",  # in the past
+            },
+            "seven_day": {
+                "utilization": 80.0,
+                "resets_at": "2024-10-26T10:00:00Z",  # in the past
+            },
+        }
+        f_exp = os.path.join(cache_dir, "expired_0")
+        with open(f_exp, "wb") as fh:
+            fh.write(json.dumps(expired_payload).encode("utf-8"))
+        os.utime(f_exp, (now, now))
+
+        res = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNone(res)
+
+    def test_claude_desktop_cache_garbage_files_ignored(self):
+        now = 1730000000.0
+        cache_dir = os.path.join(self.tmp, "claude_cache_garbage")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # Unrelated binary files, corrupt gzip, empty files
+        with open(os.path.join(cache_dir, "empty_0"), "wb") as fh:
+            pass
+        with open(os.path.join(cache_dir, "corrupt_gz_0"), "wb") as fh:
+            fh.write(b"\x1f\x8b\x08corrupt_bytes_here")
+        with open(os.path.join(cache_dir, "random_0"), "wb") as fh:
+            fh.write(b"NOT_JSON_OR_USAGE" * 50)
+
+        res = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertIsNone(res)
+
+    def test_fetch_claude_quota_falls_back_to_desktop_cache(self):
+        now = 1730000000.0
+        cache_dir = os.path.join(self.tmp, "claude_cache_fallback")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        payload = {
+            "five_hour": {
+                "utilization": 12.0,
+                "resets_at": "2024-10-27T08:00:00Z",
+            },
+            "seven_day": {
+                "utilization": 60.0,
+                "resets_at": "2024-10-31T10:00:00Z",
+            },
+        }
+        f_cache = os.path.join(cache_dir, "entry_0")
+        with open(f_cache, "wb") as fh:
+            fh.write(b"HTTP/1.1 200 OK\r\n\r\n" + json.dumps(payload).encode("utf-8"))
+        os.utime(f_cache, (now, now))
+
+        with mock.patch.dict(os.environ, {"KANJO_CLAUDE_CACHE_DIR": cache_dir}):
+            # Live API credentials fail / return None (e.g. empty keychain token)
+            with mock.patch.object(quota_fetch, "_load_claude_credentials", return_value=None):
+                res = quota_fetch.fetch_claude_quota(now=now)
+
+        self.assertIsNotNone(res)
+        self.assertEqual(res["weekly_used_percent"], 60.0)
+        self.assertEqual(res["five_hour_used_percent"], 12.0)
+        self.assertEqual(res["weekly_resets_at"], "2024-10-31T10:00:00Z")
+        self.assertEqual(res["five_hour_resets_at"], "2024-10-27T08:00:00Z")
+        self.assertEqual(res["source"], "live")
 
 
 if __name__ == "__main__":

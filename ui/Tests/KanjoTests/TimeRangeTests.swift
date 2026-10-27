@@ -438,10 +438,12 @@ final class TimeRangeTests: KanjoTestCase {
 
     func testFixtureRangesAreConsistent() throws {
         let r = try fixture()
-        XCTAssertEqual(r.quotaWindows?["claude"]?.source, "tokei")
-        XCTAssertNil(r.quotaWindows?["antigravity"])
+        XCTAssertEqual(r.quotaWindows?["claude"]?.source, "live")
+        XCTAssertNotNil(r.quotaWindows?["antigravity"])
+        XCTAssertNil(r.quotaWindows?["qwen"])
         XCTAssertEqual(r.subscriptions?["claude"]?.plan, "max_5x")
-        XCTAssertNil(r.subscriptions?["antigravity"])
+        XCTAssertEqual(r.subscriptions?["antigravity"]?.plan, "google_ai_pro")
+        XCTAssertNil(r.subscriptions?["qwen"])
         for range in TimeRange.allCases {
             let f = RangeEngine.filtered(r, range: RangeEngine.spec(range, report: r, now: now), fallbackAgentFor: fallback)
             XCTAssertLessThanOrEqual(f.cost, r.totals.cost + 0.01, range.rawValue)
@@ -452,7 +454,7 @@ final class TimeRangeTests: KanjoTestCase {
                 XCTAssertEqual(p.byDay.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
                 XCTAssertEqual(p.byAgent.reduce(0) { $0 + $1.cost }, p.cost, accuracy: 1e-6)
                 if range == .sinceReset || range == .billingCycle {
-                    XCTAssertFalse(p.byAgent.contains { $0.agent == "antigravity" })
+                    XCTAssertFalse(p.byAgent.contains { $0.agent == "qwen" })
                 }
             }
         }

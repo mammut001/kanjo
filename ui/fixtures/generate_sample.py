@@ -269,8 +269,8 @@ totals = {"cost": round(sum(p["cost"] for p in projects) + buckets["unattributed
           "first_active": min(all_days), "last_active": max(all_days)}
 
 # 额度窗口：claude / codex / grok / antigravity 有 live 来源。
-# 相对当前时间动态计算重置时间，确保截图时各窗口处于进行中状态并展示倒计时。
-now_live = datetime.now(timezone.utc)
+# 固定时间基准以保证 sample.json 生成确定性。
+now_live = datetime(2026, 10, 27, 18, 40, 7, tzinfo=timezone.utc)
 claude_weekly = (now_live + timedelta(days=2, hours=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
 claude_5h = (now_live + timedelta(hours=1, minutes=51)).strftime("%Y-%m-%dT%H:%M:%SZ")
 codex_weekly = (now_live + timedelta(days=3, hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -319,7 +319,7 @@ quota_windows = {
         "extra_windows": [
             {
                 "id": "antigravity-3p-weekly",
-                "title": "Claude/GPT 周",
+                "title": "Claude/GPT Weekly",
                 "used_percent": 24.0,
                 "resets_at": agy_weekly,
                 "window_hours": 168,
