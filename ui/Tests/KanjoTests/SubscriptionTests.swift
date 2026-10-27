@@ -273,7 +273,7 @@ final class SubscriptionTests: KanjoTestCase {
         let filtered = RangeEngine.filtered(r, range: RangeEngine.spec(.billingCycle, report: r, now: now)) {
             dominantAgent($0.byAgent)?.agent ?? $0.byAgent.first?.agent ?? "unknown"
         }
-        for agent in ["claude", "codex", "grok"] {
+        for agent in ["claude", "codex", "grok", "antigravity", "copilot"] {
             let fromProjects = filtered.projects.reduce(0.0) { acc, p in
                 acc + (p.byAgent.first { $0.agent == agent }?.cost ?? 0)
             }
@@ -283,11 +283,11 @@ final class SubscriptionTests: KanjoTestCase {
             XCTAssertEqual(usage.total(for: agent), fromProjects + fromBuckets, accuracy: 0.01, agent)
             XCTAssertGreaterThan(usage.total(for: agent), 0, agent)
         }
-        XCTAssertEqual(usage.total(for: "antigravity"), 0)
+        XCTAssertEqual(usage.total(for: "qwen"), 0)
 
         let rows = SubscriptionValue.rows(of: r, now: now)
         XCTAssertEqual(rows.map(\.agent), rows.sorted { $0.usage > $1.usage }.map(\.agent))
-        XCTAssertEqual(Set(rows.map(\.agent)), ["claude", "codex", "grok"])
+        XCTAssertEqual(Set(rows.map(\.agent)), ["claude", "codex", "grok", "antigravity", "copilot"])
         for row in rows {
             let price = r.subscriptions?[row.agent]?.monthlyPriceUsd
             XCTAssertEqual(row.multiplier, SubscriptionValue.multiplier(usage: row.usage, monthlyPriceUsd: price))

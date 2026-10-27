@@ -268,34 +268,70 @@ totals = {"cost": round(sum(p["cost"] for p in projects) + buckets["unattributed
           "sessions": sum(p["sessions"] for p in projects) + buckets["unattributed"]["sessions"] + buckets["excluded"]["sessions"],
           "first_active": min(all_days), "last_active": max(all_days)}
 
-# 额度窗口：claude / codex / grok 有，antigravity 没有 → UI 的「Since reset」下 antigravity 不计入。
+# 额度窗口：claude / codex / grok / antigravity 有 live 来源。
+# 相对当前时间动态计算重置时间，确保截图时各窗口处于进行中状态并展示倒计时。
+now_live = datetime.now(timezone.utc)
+claude_weekly = (now_live + timedelta(days=2, hours=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+claude_5h = (now_live + timedelta(hours=1, minutes=51)).strftime("%Y-%m-%dT%H:%M:%SZ")
+codex_weekly = (now_live + timedelta(days=3, hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ")
+codex_5h = (now_live + timedelta(hours=3, minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+grok_weekly = (now_live + timedelta(days=4, hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+agy_weekly = (now_live + timedelta(days=3, hours=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+agy_5h = (now_live + timedelta(hours=2, minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+agy_3p_5h = (now_live + timedelta(hours=3, minutes=45)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 quota_windows = {
     "claude": {
-        "weekly_resets_at": "2026-10-27T10:00:00Z",
+        "weekly_resets_at": claude_weekly,
         "weekly_window_hours": 168,
         "weekly_used_percent": 57.0,
-        "five_hour_resets_at": "2026-10-23T04:30:00Z",
+        "five_hour_resets_at": claude_5h,
         "five_hour_window_hours": 5,
         "five_hour_used_percent": 13.0,
-        "source": "tokei",
+        "source": "live",
     },
     "codex": {
-        "weekly_resets_at": "2026-10-28T08:00:00Z",
+        "weekly_resets_at": codex_weekly,
         "weekly_window_hours": 168,
         "weekly_used_percent": 38.0,
-        "five_hour_resets_at": "2026-10-23T05:00:00Z",
+        "five_hour_resets_at": codex_5h,
         "five_hour_window_hours": 5,
         "five_hour_used_percent": 18.0,
-        "source": "manual",
+        "source": "live",
     },
     "grok": {
-        "weekly_resets_at": "2026-10-27T05:00:00Z",
+        "weekly_resets_at": grok_weekly,
         "weekly_window_hours": 168,
         "weekly_used_percent": 42.0,
         "five_hour_resets_at": None,
         "five_hour_window_hours": None,
         "five_hour_used_percent": None,
-        "source": "tokei",
+        "source": "live",
+    },
+    "antigravity": {
+        "weekly_resets_at": agy_weekly,
+        "weekly_window_hours": 168,
+        "weekly_used_percent": 61.2,
+        "five_hour_resets_at": agy_5h,
+        "five_hour_window_hours": 5,
+        "five_hour_used_percent": 18.5,
+        "source": "live",
+        "extra_windows": [
+            {
+                "id": "antigravity-3p-weekly",
+                "title": "Claude/GPT 周",
+                "used_percent": 24.0,
+                "resets_at": agy_weekly,
+                "window_hours": 168,
+            },
+            {
+                "id": "antigravity-3p-5h",
+                "title": "Claude/GPT 5h",
+                "used_percent": 50.0,
+                "resets_at": agy_3p_5h,
+                "window_hours": 5,
+            },
+        ],
     },
 }
 
@@ -325,15 +361,14 @@ def cycle_bounds(anchor_day, now=NOW):
     end_y, end_m = add_month(year, month)
     return iso(year, month, anchor_day), iso(end_y, end_m, anchor_day)
 
-# 订阅：claude / codex / grok 有，antigravity 没有 → UI 的「Billing cycle」下 antigravity 不计入。
-# Codex / Grok 未知真实续费日，用 generated_at 结束的滚动 30 天演示设置引导。
+# 订阅：claude / codex / grok / antigravity / copilot（共 5 个，触发 Subscription value 折叠卡展开）。
+# Codex / Grok / Antigravity / Copilot 未知真实续费日，用 generated_at 结束的滚动 30 天演示设置引导。
 # 账期按 anchor_day 在 Asia/Shanghai 的 00:00 折算（报告 generated_at 落在 10 月 23 日）。
 claude_start, claude_end = cycle_bounds(25)
 generated_at = datetime(2026, 10, 23, 2, tzinfo=timezone.utc)
-codex_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-codex_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
-grok_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-grok_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+rolling_start = (generated_at - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+rolling_end = generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+codex_start = rolling_start
 subscriptions = {
     "claude": {
         "plan": "max_5x", "plan_label": "Claude Max 5x", "monthly_price_usd": 100.0,
@@ -342,13 +377,23 @@ subscriptions = {
     },
     "codex": {
         "plan": "plus", "plan_label": "ChatGPT Plus", "monthly_price_usd": 20.0,
-        "cycle_start": codex_start, "cycle_end": codex_end, "anchor_day": None,
+        "cycle_start": rolling_start, "cycle_end": rolling_end, "anchor_day": None,
+        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
+    },
+    "antigravity": {
+        "plan": "google_ai_pro", "plan_label": "Google AI Pro", "monthly_price_usd": 19.99,
+        "cycle_start": rolling_start, "cycle_end": rolling_end, "anchor_day": None,
         "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
     },
     "grok": {
         "plan": "supergrok", "plan_label": "SuperGrok", "monthly_price_usd": 30.0,
-        "cycle_start": grok_start, "cycle_end": grok_end, "anchor_day": None,
+        "cycle_start": rolling_start, "cycle_end": rolling_end, "anchor_day": None,
         "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
+    },
+    "copilot": {
+        "plan": "pro", "plan_label": "Copilot Pro", "monthly_price_usd": 10.0,
+        "cycle_start": rolling_start, "cycle_end": rolling_end, "anchor_day": None,
+        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "manual",
     },
 }
 out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "generated_by": "generate_sample.py",
@@ -374,7 +419,11 @@ for p in projects:
         assert set(d["by_agent"]) <= {a["agent"] for a in p["by_agent"]}, (p["id"], d["day"])
         assert set(d["by_agent_tokens"]) == set(d["by_agent"]), (p["id"], d["day"])
         assert sum(d["by_agent_tokens"].values()) == d["tokens"], (p["id"], d["day"])
-assert set(subscriptions) == {"claude", "codex", "grok"}
+assert set(subscriptions) == {"claude", "codex", "antigravity", "grok", "copilot"}
+assert subscriptions["antigravity"]["plan"] == "google_ai_pro"
+assert subscriptions["antigravity"]["monthly_price_usd"] == 19.99
+assert subscriptions["copilot"]["plan"] == "pro"
+assert subscriptions["copilot"]["monthly_price_usd"] == 10.0
 assert subscriptions["claude"]["plan"] == "max_5x"
 assert subscriptions["claude"]["monthly_price_usd"] == 100.0
 assert subscriptions["claude"]["anchor_day"] == 25
