@@ -25,6 +25,41 @@ final class LocalizationTests: KanjoTestCase {
         }
     }
 
+    /// 扫描 ui/Sources 源码中所有 L10n.tr 调用的字面量 key，确保它们均在 en.lproj 中存在
+    func testAllSourceKeysPresentInEnglishStrings() throws {
+        guard let packageRoot = DefaultPaths.packageRoot else {
+            return
+        }
+        guard let enStrings = L10n.allStrings(for: "en") else {
+            XCTFail("Failed to load English strings")
+            return
+        }
+        let sourcesURL = packageRoot.appendingPathComponent("Sources")
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: sourcesURL, includingPropertiesForKeys: [.isRegularFileKey]) else {
+            XCTFail("Failed to enumerate Sources directory")
+            return
+        }
+
+        let regex = try NSRegularExpression(pattern: #"L10n\.tr\(\s*"([^"]+)""#)
+        var usedKeys = Set<String>()
+
+        for case let fileURL as URL in enumerator {
+            guard fileURL.pathExtension == "swift" else { continue }
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            let nsRange = NSRange(content.startIndex..<content.endIndex, in: content)
+            regex.enumerateMatches(in: content, range: nsRange) { match, _, _ in
+                if let match, let range = Range(match.range(at: 1), in: content) {
+                    usedKeys.insert(String(content[range]))
+                }
+            }
+        }
+
+        XCTAssertFalse(usedKeys.isEmpty, "Should find L10n.tr keys in sources")
+        let missing = usedKeys.filter { enStrings[$0] == nil }
+        XCTAssertTrue(missing.isEmpty, "Keys used in ui/Sources missing in en.lproj: \(missing.sorted().joined(separator: ", "))")
+    }
+
     /// 验证对若干常用 key 解析 zh-Hans 和 fr 时返回的内容与英文不同（且不是原始 key）
     func testResolvingKeysDifferFromEnglish() {
         let sampleKeys = [

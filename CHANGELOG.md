@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Antigravity 2.0 app session discovery.** Antigravity 2.0 writes SQLite logs to `~/.gemini/antigravity/conversations/` in addition to the legacy CLI location `~/.gemini/antigravity-cli/conversations/`. Kanjo now scans both directories by default and deduplicates overlapping conversation IDs by preferring the most recently modified database.
+- **Missing subscription hover card localizations.** Added missing localization keys `settings.subscriptions.price` and `overview.cycle_usage` across English, Simplified Chinese, and French, and added an automated source audit test ensuring all `L10n.tr` keys exist in localization catalogs.
 
 ## [0.3.2] - 2026-10-27
 
