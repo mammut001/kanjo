@@ -53,14 +53,14 @@ struct ProjectDetailView: View {
 
     private func summary(_ result: FilteredProject) -> String {
         guard result.firstActive != nil else { return L10n.tr("project.no_usage_range") }
-        let sessions = result.sessions == 1
-            ? L10n.tr("overview.count.session.singular", result.sessions)
-            : L10n.tr("overview.count.session.plural", result.sessions)
-        return [
-            OverviewView.dateRange(result.firstActive, result.lastActive),
-            sessions,
-            L10n.tr("overview.tokens_count", Fmt.tokens(result.tokens)),
-        ].joined(separator: " · ")
+        var parts = [OverviewView.dateRange(result.firstActive, result.lastActive)]
+        if result.sessions > 0 {
+            parts.append(result.sessions == 1
+                ? L10n.tr("overview.count.session.singular", result.sessions)
+                : L10n.tr("overview.count.session.plural", result.sessions))
+        }
+        parts.append(L10n.tr("overview.tokens_count", Fmt.tokens(result.tokens)))
+        return parts.joined(separator: " · ")
     }
 
     private func agentsSection(_ result: FilteredProject) -> some View {
@@ -94,8 +94,7 @@ struct ProjectDetailView: View {
                             }
                         }
                         .frame(height: 8)
-                        Text(L10n.tr("project.agent_detail", agent.sessions, Fmt.tokens(agent.tokens.total),
-                                     Fmt.percent(result.cost > 0 ? agent.cost / result.cost : 0)))
+                        Text(agentDetail(agent, result: result))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -105,6 +104,14 @@ struct ProjectDetailView: View {
             .padding(14)
             .kanjoCard()
         }
+    }
+
+    private func agentDetail(_ agent: AgentCost, result: FilteredProject) -> String {
+        let percent = Fmt.percent(result.cost > 0 ? agent.cost / result.cost : 0)
+        if agent.sessions > 0 {
+            return L10n.tr("project.agent_detail", agent.sessions, Fmt.tokens(agent.tokens.total), percent)
+        }
+        return L10n.tr("project.agent_detail_no_sessions", Fmt.tokens(agent.tokens.total), percent)
     }
 
     private var modelsSection: some View {

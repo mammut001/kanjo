@@ -138,6 +138,19 @@
 "settings.source.not_set" = "not set · using last 30 days";
 "settings.source.manual" = "manual";
 "settings.source.detected" = "detected";
+"settings.section.icloud" = "iCloud sync";
+"settings.sync.enable" = "Sync to iCloud";
+"settings.sync.hide_names" = "Hide project names on iPhone";
+"settings.sync.note" = "Uploads the phone snapshot to your private iCloud database after each refresh. Nothing leaves your iCloud account.";
+"settings.sync.status.off" = "Off";
+"settings.sync.status.waiting" = "Waiting for iCloud";
+"settings.sync.status.uploaded" = "Last uploaded %@";
+"settings.sync.status.failed" = "Sync failed: %@";
+"settings.sync.status.not_configured" = "This build is not signed for iCloud yet.";
+"gzip.error.invalid_header" = "The snapshot is not a gzip file.";
+"gzip.error.truncated" = "The snapshot file is truncated.";
+"gzip.error.unsupported_method" = "The snapshot uses an unsupported compression method.";
+"gzip.error.decompression_failed" = "Could not decompress the snapshot.";
 
 /* Menu Panel */
 "menu.python_needed" = "Kanjo's CLI needs Python 3 (included with the Xcode Command Line Tools)";
@@ -254,6 +267,7 @@
 "project.section.by_agent" = "By agent";
 "project.no_usage_range" = "No usage in this range.";
 "project.agent_detail" = "%d sess · %@ tok · %@";
+"project.agent_detail_no_sessions" = "%@ tok · %@";
 "project.cycle_share" = "This repo: %@ of your %@ usage this cycle";
 "project.section.by_model" = "By model";
 "project.model" = "Model";
@@ -386,9 +400,11 @@
 
 /* iOS app */
 "ios.updated" = "Updated %@";
+"ios.updated_device" = "Updated %@ · %@";
 "ios.empty.title" = "No snapshot yet";
 "ios.empty.body" = "Turn on iCloud sync in Kanjo on your Mac to see your AI usage here.";
 "ios.error.title" = "Couldn't load the snapshot";
+"ios.error.missing_payload" = "The snapshot record has no payload.";
 "ios.loading" = "Loading…";
 "ios.all_models" = "All models";
 "ios.quota_used" = "%@ used";

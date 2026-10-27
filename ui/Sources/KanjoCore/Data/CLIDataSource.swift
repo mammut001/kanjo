@@ -33,6 +33,30 @@ public struct CLIDataSource: UsageDataSource {
         return try ReportDecoder.decode(out)
     }
 
+    public static func mobileExportCommand(_ command: String, hideProjectNames: Bool) -> String {
+        let base = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let flags = hideProjectNames
+            ? " --mobile --gzip --hide-project-names"
+            : " --mobile --gzip"
+        return base + flags
+    }
+
+    public func loadMobileSnapshot(hideProjectNames: Bool) async throws -> Data {
+        let command = Self.mobileExportCommand(self.command, hideProjectNames: hideProjectNames)
+        let cwd = self.workingDirectory
+        let timeout = self.timeout
+        let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
+            try Self.run(command: command, cwd: cwd, timeout: timeout)
+        }.value
+        if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
+        guard status == 0 else {
+            throw DataSourceError.commandFailed(command: command, status: status,
+                                                stderr: String(decoding: err, as: UTF8.self))
+        }
+        if out.isEmpty { throw DataSourceError.emptyInput("Mobile export output") }
+        return out
+    }
+
     static func run(command: String, cwd: URL?, timeout: TimeInterval) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")

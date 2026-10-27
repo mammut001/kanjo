@@ -21,6 +21,7 @@ targets:
         PRODUCT_NAME: Kanjo
         DEVELOPMENT_TEAM: Z5D5N7CU6L
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Kanjo/Kanjo.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Kanjo
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

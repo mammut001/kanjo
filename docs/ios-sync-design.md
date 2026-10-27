@@ -66,6 +66,19 @@ iPhone: 打开 App / 小组件刷新 → 读最新快照 → 用 KanjoCore 渲�
 - `ui/package.sh`：嵌入描述文件（`Contents/embedded.provisionprofile`），entitlements 加 iCloud 容器和 `com.apple.developer.icloud-container-environment = Production`，然后签名 → 公证 → staple。
 - 风险点：从 Xcode 运行正常、装进「应用程序」后连不上 CloudKit，通常是描述文件未生效或环境混用。需要在真机上实测，不能只靠读代码。
 
+### package.sh 还需要什么（T3/T4 代码已就位，打包步骤未做）
+
+T3 的代码在 `#if canImport(CloudKit)` 后面，没有 entitlements 也能编译和跑测试；没有开关 / iCloud 账户时不会发起任何 CloudKit 请求。等账号和描述文件就绪后，`ui/package.sh` 还需要：
+
+1. 把含 `iCloud.com.lanshuagent.kanjo` 的 **Developer ID** 描述文件复制到 `Kanjo.app/Contents/embedded.provisionprofile`。
+2. 生成并传入 entitlements 文件，至少包含：
+   - `com.apple.developer.icloud-container-identifiers` = `["iCloud.com.lanshuagent.kanjo"]`
+   - `com.apple.developer.icloud-services` = `["CloudKit"]`
+   - `com.apple.developer.icloud-container-environment` = `Production`（本地调试可用 `Development`）
+3. 用这份 entitlements 对主可执行文件签名（`codesign --entitlements … --options runtime`），再走公证 / staple。
+4. 在 CloudKit Dashboard 把 `Snapshot` 记录类型和 `deviceName` / `generatedAt` / `schemaVersion` / `payload` 字段从 Development 部署到 Production；否则发布版查询会失败。
+5. 真机验证：Developer ID 签名的 app 装进「应用程序」后仍能 `accountStatus == .available` 并成功写入私有库。模拟器 / 无描述文件的构建只能验证编译和 UI。
+
 ## 7. 分步计划
 
 | 步骤 | 内容 | 依赖 |

@@ -14,6 +14,12 @@ public enum SettingsKeys {
     public static let timeRange = "timeRange"                // TimeRange.rawValue；默认 all
     public static let renewalNudgeDismissed = "renewalNudgeDismissed"
     public static let subscriptionOrder = "subscriptionOrder" // 逗号分隔的 agent id（SubscriptionOrder）
+    public static let cloudSyncEnabled = "cloudSyncEnabled"
+    public static let cloudSyncHideProjectNames = "cloudSyncHideProjectNames"
+    public static let cloudSyncDeviceID = "cloudSyncDeviceID"
+    public static let cloudSyncLastUploadHash = "cloudSyncLastUploadHash"
+    public static let cloudSyncLastFingerprint = "cloudSyncLastFingerprint"
+    public static let cloudSyncLastUploadedAt = "cloudSyncLastUploadedAt"
 }
 
 public enum SourceKind: String, CaseIterable, Identifiable {

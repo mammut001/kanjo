@@ -150,6 +150,7 @@ final class ReportStore: ObservableObject {
                 guard gen == generation else { return }
                 report = r
                 error = nil
+                CloudSyncStore.shared.reportDidRefresh(r)
             } catch {
                 guard gen == generation else { return }
                 if source is CLIDataSource { await checkPython() }

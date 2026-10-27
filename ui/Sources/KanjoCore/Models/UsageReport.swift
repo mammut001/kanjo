@@ -35,6 +35,23 @@ public struct UsageReport: Codable, Equatable {
         case totals, projects, buckets
     }
 
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        generatedAt = try c.decode(String.self, forKey: .generatedAt)
+        generatedBy = try c.decodeIfPresent(String.self, forKey: .generatedBy)
+        timezone = try c.decodeIfPresent(String.self, forKey: .timezone)
+        currency = try c.decode(String.self, forKey: .currency)
+        costNote = try c.decode(String.self, forKey: .costNote)
+        config = try c.decodeIfPresent(ReportConfig.self, forKey: .config)
+            ?? ReportConfig(dominantThreshold: 0.8)
+        quotaWindows = try c.decodeIfPresent([String: QuotaWindow].self, forKey: .quotaWindows)
+        subscriptions = try c.decodeIfPresent([String: Subscription].self, forKey: .subscriptions)
+        totals = try c.decode(Aggregate.self, forKey: .totals)
+        projects = try c.decode([Project].self, forKey: .projects)
+        buckets = try c.decode(Buckets.self, forKey: .buckets)
+    }
+
     /// schema_version 高于本 UI 支持的版本：显示警告，继续渲染。
     public var isNewerSchema: Bool { schemaVersion > supportedSchemaVersion }
 
@@ -61,6 +78,10 @@ public struct ReportConfig: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case dominantThreshold = "dominant_threshold"
+    }
+
+    public init(dominantThreshold: Double) {
+        self.dominantThreshold = dominantThreshold
     }
 }
 
@@ -240,6 +261,46 @@ public struct Project: Codable, Equatable, Identifiable {
         case byBranch = "by_branch"
         case sessionsDetail = "sessions_detail"
     }
+
+    public init(id: String, name: String, remote: String?, paths: [String], pathMissing: Bool,
+                cost: Double, tokens: Tokens, sessions: Int, firstActive: String? = nil, lastActive: String? = nil,
+                byAgent: [AgentCost], byModel: [ModelCost], byDay: [DayCost],
+                byBranch: [BranchCost], sessionsDetail: [Session]) {
+        self.id = id
+        self.name = name
+        self.remote = remote
+        self.paths = paths
+        self.pathMissing = pathMissing
+        self.cost = cost
+        self.tokens = tokens
+        self.sessions = sessions
+        self.firstActive = firstActive
+        self.lastActive = lastActive
+        self.byAgent = byAgent
+        self.byModel = byModel
+        self.byDay = byDay
+        self.byBranch = byBranch
+        self.sessionsDetail = sessionsDetail
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        remote = try c.decodeIfPresent(String.self, forKey: .remote)
+        paths = try c.decodeIfPresent([String].self, forKey: .paths) ?? []
+        pathMissing = try c.decodeIfPresent(Bool.self, forKey: .pathMissing) ?? false
+        cost = try c.decode(Double.self, forKey: .cost)
+        tokens = try c.decode(Tokens.self, forKey: .tokens)
+        sessions = try c.decode(Int.self, forKey: .sessions)
+        firstActive = try c.decodeIfPresent(String.self, forKey: .firstActive)
+        lastActive = try c.decodeIfPresent(String.self, forKey: .lastActive)
+        byAgent = try c.decode([AgentCost].self, forKey: .byAgent)
+        byModel = try c.decode([ModelCost].self, forKey: .byModel)
+        byDay = try c.decode([DayCost].self, forKey: .byDay)
+        byBranch = try c.decodeIfPresent([BranchCost].self, forKey: .byBranch) ?? []
+        sessionsDetail = try c.decodeIfPresent([Session].self, forKey: .sessionsDetail) ?? []
+    }
 }
 
 public struct AgentCost: Codable, Equatable, Identifiable {
@@ -365,11 +426,46 @@ public struct SessionBucket: Codable, Equatable {
         case lastActive = "last_active"
         case sessionsDetail = "sessions_detail"
     }
+
+    public init(cost: Double, tokens: Tokens, sessions: Int, firstActive: String? = nil,
+                lastActive: String? = nil, sessionsDetail: [Session]) {
+        self.cost = cost
+        self.tokens = tokens
+        self.sessions = sessions
+        self.firstActive = firstActive
+        self.lastActive = lastActive
+        self.sessionsDetail = sessionsDetail
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cost = try c.decode(Double.self, forKey: .cost)
+        tokens = try c.decode(Tokens.self, forKey: .tokens)
+        sessions = try c.decode(Int.self, forKey: .sessions)
+        firstActive = try c.decodeIfPresent(String.self, forKey: .firstActive)
+        lastActive = try c.decodeIfPresent(String.self, forKey: .lastActive)
+        sessionsDetail = try c.decodeIfPresent([Session].self, forKey: .sessionsDetail) ?? []
+    }
 }
 
 public struct ParseFailedBucket: Codable, Equatable {
     public var sessions: Int
     public var files: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case sessions, files
+    }
+
+    public init(sessions: Int, files: [String]) {
+        self.sessions = sessions
+        self.files = files
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessions = try c.decode(Int.self, forKey: .sessions)
+        files = try c.decodeIfPresent([String].self, forKey: .files) ?? []
+    }
 }
 
 public struct Buckets: Codable, Equatable {
