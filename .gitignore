@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# Provisioning profiles (do not commit)
+ui/Resources/*.provisionprofile
+
 # Python
 __pycache__/
 *.pyc
