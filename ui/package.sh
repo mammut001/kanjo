@@ -2,18 +2,71 @@
 # 构建内置 CLI 的通用 Kanjo.app、zip 和 DMG，产物留在 build/。
 # 只用 SwiftPM + 系统自带工具（iconutil / sips / codesign / ditto / notarytool / stapler），不需要 Xcode 工程。
 #
-# 用法：./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]]
+# 用法：./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]] [--profile <path>]
 #   version  默认读仓库顶层的 VERSION 文件
 #   --icon   重新生成 Resources/Kanjo.png 和 Kanjo.icns（缺失时也会自动生成）
 #   --notarize [profile]  公证产物（默认 keychain profile 为 'kanjo-notary'，亦可设环境变量 KANJO_NOTARY_PROFILE）
+#   --profile <path>  嵌入 Developer ID 描述文件并加 iCloud entitlements（亦可设环境变量 KANJO_PROVISION_PROFILE）
 set -euo pipefail
 cd "$(dirname "$0")"
+
+APP_NAME="Kanjo"
+BUNDLE_ID="com.lanshuagent.kanjo"
+ICLOUD_CONTAINER="iCloud.com.lanshuagent.kanjo"
+BUILD_DIR="build"
+
+profile_info() {
+    python3 - "$1" "$BUNDLE_ID" "$ICLOUD_CONTAINER" <<'PY'
+import plistlib, sys
+
+path, bundle_id, container = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path, "rb") as fh:
+        profile = plistlib.load(fh)
+except Exception as exc:
+    sys.exit(f"could not read provisioning profile: {exc}")
+
+def values(raw):
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple)):
+        return [str(item) for item in raw]
+    return [str(raw)]
+
+entitlements = profile.get("Entitlements") or {}
+app_ids = values(entitlements.get("com.apple.application-identifier")) + values(entitlements.get("application-identifier"))
+app_ids = list(dict.fromkeys(app_ids))
+if not app_ids:
+    sys.exit("provisioning profile has no application-identifier")
+suffix = "." + bundle_id
+matches = [app_id for app_id in app_ids if app_id.endswith(suffix)]
+if not matches:
+    sys.exit(f"provisioning profile application-identifier {', '.join(app_ids)} does not end with {suffix}")
+
+containers = []
+for key in (
+    "com.apple.developer.icloud-container-identifiers",
+    "com.apple.developer.ubiquity-container-identifiers",
+    "com.apple.developer.icloud-container-development-container-identifiers",
+):
+    containers += values(entitlements.get(key))
+if container not in containers:
+    sys.exit(f"provisioning profile does not contain iCloud container {container}")
+
+team_ids = values(entitlements.get("com.apple.developer.team-identifier")) + values(profile.get("TeamIdentifier"))
+team_id = team_ids[0] if team_ids else matches[0].split(".", 1)[0]
+if not team_id:
+    sys.exit("provisioning profile has no team identifier")
+print(f"{matches[0]}\t{team_id}")
+PY
+}
 
 VERSION=""
 REGEN_ICON=0
 ARCHS=(arm64 x86_64)
 MAKE_DMG=1
 NOTARY_PROFILE="${KANJO_NOTARY_PROFILE:-}"
+PROFILE="${KANJO_PROVISION_PROFILE:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --icon) REGEN_ICON=1 ;;
@@ -32,7 +85,15 @@ while [[ $# -gt 0 ]]; do
         --notarize=*)
             NOTARY_PROFILE="${1#*=}"
             ;;
-        -h|--help) echo "Usage: ./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]]"; exit 0 ;;
+        --profile)
+            if [[ $# -lt 2 || "$2" =~ ^- ]]; then echo "--profile needs a path" >&2; exit 1; fi
+            shift
+            PROFILE="$1"
+            ;;
+        --profile=*)
+            PROFILE="${1#*=}"
+            ;;
+        -h|--help) echo "Usage: ./package.sh [version] [--icon] [--no-dmg] [--arch arm64|x86_64] [--notarize [profile]] [--profile <path>]"; exit 0 ;;
         -*) echo "unknown option: $1" >&2; exit 1 ;;
         *) VERSION="$1" ;;
     esac
@@ -59,9 +120,48 @@ if [[ -n "$NOTARY_PROFILE" && "$IDENTITY" == "-" ]]; then
     exit 1
 fi
 
-APP_NAME="Kanjo"
-BUNDLE_ID="com.lanshuagent.kanjo"
-BUILD_DIR="build"
+if [[ -z "$PROFILE" && -f "Resources/$APP_NAME.provisionprofile" ]]; then
+    PROFILE="Resources/$APP_NAME.provisionprofile"
+fi
+if [[ -n "$PROFILE" ]]; then
+    [[ -f "$PROFILE" ]] || { echo "provisioning profile not found: $PROFILE" >&2; exit 1; }
+    if [[ "$IDENTITY" == "-" ]]; then
+        echo "iCloud entitlements need a Developer ID identity" >&2
+        exit 1
+    fi
+    mkdir -p "$BUILD_DIR"
+    PROFILE_PLIST="$BUILD_DIR/profile.plist"
+    if ! security cms -D -i "$PROFILE" > "$PROFILE_PLIST"; then
+        echo "could not decode provisioning profile: $PROFILE" >&2
+        exit 1
+    fi
+    PROFILE_INFO="$(profile_info "$PROFILE_PLIST")"
+    APP_ID="${PROFILE_INFO%%$'\t'*}"
+    TEAM_ID="${PROFILE_INFO##*$'\t'}"
+    ENTITLEMENTS="$BUILD_DIR/$APP_NAME.entitlements"
+    cat > "$ENTITLEMENTS" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.application-identifier</key><string>${TEAM_ID}.${BUNDLE_ID}</string>
+    <key>com.apple.developer.team-identifier</key><string>${TEAM_ID}</string>
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>${ICLOUD_CONTAINER}</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+    <key>com.apple.developer.icloud-container-environment</key><string>Production</string>
+</dict>
+</plist>
+PLIST
+    plutil -lint "$ENTITLEMENTS" >/dev/null
+    echo "==> provisioning profile: $PROFILE ($APP_ID, team $TEAM_ID)"
+fi
+
 APP="$BUILD_DIR/$APP_NAME.app"
 ZIP="$BUILD_DIR/$APP_NAME-$VERSION-macos.zip"
 DMG="$BUILD_DIR/$APP_NAME-$VERSION-macos.dmg"
@@ -150,9 +250,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
+if [[ -n "$PROFILE" ]]; then
+    cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
+fi
+
 SIGN_FLAGS=(--force --sign "$IDENTITY")
 if [[ "$IDENTITY" != - ]]; then
     SIGN_FLAGS+=(--options runtime --timestamp)
+fi
+MAIN_SIGN_FLAGS=("${SIGN_FLAGS[@]}")
+if [[ -n "$PROFILE" ]]; then
+    MAIN_SIGN_FLAGS+=(--entitlements "$ENTITLEMENTS")
 fi
 xattr -cr "$APP"
 for b in "$APP/Contents/Resources"/*.bundle; do
@@ -160,9 +268,26 @@ for b in "$APP/Contents/Resources"/*.bundle; do
         codesign "${SIGN_FLAGS[@]}" "$b"
     fi
 done
-codesign "${SIGN_FLAGS[@]}" "$APP/Contents/MacOS/$APP_NAME"
-codesign "${SIGN_FLAGS[@]}" "$APP"
+codesign "${MAIN_SIGN_FLAGS[@]}" "$APP/Contents/MacOS/$APP_NAME"
+codesign "${MAIN_SIGN_FLAGS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
+
+if [[ -n "$PROFILE" ]]; then
+    echo "==> codesign -d --entitlements :- $APP"
+    ENT_OUTPUT="$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
+    ENT_SUMMARY="$(printf '%s' "$ENT_OUTPUT" | python3 -c '
+import plistlib, sys
+try:
+    data = plistlib.loads(sys.stdin.buffer.read())
+except Exception:
+    sys.exit(0)
+containers = data.get("com.apple.developer.icloud-container-identifiers") or []
+container = containers[0] if containers else "?"
+environment = data.get("com.apple.developer.icloud-container-environment", "?")
+print(f"iCloud container {container} · environment {environment}")
+' 2>/dev/null || true)"
+    echo "    ${ENT_SUMMARY:-iCloud container $ICLOUD_CONTAINER · environment Production}"
+fi
 
 create_dmg() {
     rm -f "$DMG"
@@ -263,6 +388,10 @@ fi
 
 echo "Architectures: ${ARCHS[*]}"
 echo "Signing identity: $IDENTITY"
+if [[ -n "$PROFILE" ]]; then
+    echo "Provisioning profile: $PROFILE"
+    echo "iCloud container: $ICLOUD_CONTAINER (Production)"
+fi
 if [[ -n "$NOTARY_PROFILE" ]]; then
     echo "Notary profile: $NOTARY_PROFILE"
 fi

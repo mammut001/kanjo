@@ -199,6 +199,19 @@ When a profile is configured, `package.sh` notarizes the `.app` zip, staples the
 and DMG from the stapled app, signs the DMG, notarizes the DMG, and staples it. If no profile is
 configured, notarization is skipped.
 
+### Building with iCloud sync
+
+Pass the Developer ID provisioning profile that contains the `iCloud.com.lanshuagent.kanjo` container:
+
+```bash
+KANJO_PROVISION_PROFILE=~/Downloads/Kanjo_macOS_Developer_ID.provisionprofile \
+  KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
+```
+
+`--profile <path>` works too, and `Resources/Kanjo.provisionprofile` is picked up automatically when present.
+The profile is embedded in `Kanjo.app` and the main executable is signed with the iCloud entitlements.
+Without a profile the build is unchanged (no entitlements, sync stays off). Profiles are ignored by git.
+
 With an empty CLI working directory, lookup order is bundled CLI → repository cli/ (DEBUG only)
 → `~/.local/share/kanjo/cli` → `/usr/local/share/kanjo/cli`. Settings shows the selected CLI and bundled
 version. Python 3 via Command Line Tools is required; missing tools show an installer button and Retry.

@@ -130,6 +130,20 @@ Release builds can be notarized with Apple’s notary service.
    ```
 This submits the app zip to Apple, staples the ticket to `Kanjo.app`, rebuilds the zip and DMG, signs the DMG, notarizes the DMG, and staples it.
 
+### Building with iCloud sync
+
+Pass the Developer ID provisioning profile that contains the `iCloud.com.lanshuagent.kanjo` container:
+
+```bash
+cd ui
+KANJO_PROVISION_PROFILE=~/Downloads/Kanjo_macOS_Developer_ID.provisionprofile \
+  KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
+```
+
+`--profile <path>` works too, and `Resources/Kanjo.provisionprofile` is picked up automatically when present.
+The profile is embedded in `Kanjo.app` and the main executable is signed with the iCloud entitlements.
+Without a profile the build is unchanged (no entitlements, sync stays off). Profiles are ignored by git.
+
 ## Configuration
 
 Optional, at `~/.config/kanjo/attribution.toml`:
