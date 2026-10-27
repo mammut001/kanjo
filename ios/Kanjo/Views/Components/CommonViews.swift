@@ -68,44 +68,48 @@ struct AgentDots: View {
 
 struct QuotaBarRow: View {
     let row: QuotaRow
+    let agent: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(row.title)
-                Spacer(minLength: 8)
-                Text(percentText)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            .font(.caption)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: max(0, geo.size.width * CGFloat((row.percent ?? 0) / 100)))
+        if let percent = row.percent {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(row.title)
+                    Spacer(minLength: 8)
+                    Text(String(format: "%.0f%%", percent))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
+                .font(.caption)
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                        Capsule()
+                            .fill(tint(for: percent))
+                            .frame(width: max(0, geo.size.width * CGFloat(percent / 100)))
+                    }
+                }
+                .frame(height: 6)
+
+                Text(row.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
-            .frame(height: 6)
-
-            Text(row.detail)
+            .accessibilityElement(children: .combine)
+        } else {
+            Text("\(row.title) · \(row.detail)")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
     }
 
-    private var percentText: String {
-        guard let percent = row.percent else { return "—" }
-        return String(format: "%.0f%%", percent)
-    }
-
-    private var tint: Color {
-        switch SubscriptionValue.level(row.percent) {
-        case .normal: return IOSPalette.good
+    private func tint(for percent: Double) -> Color {
+        switch SubscriptionValue.level(percent) {
+        case .normal: return IOSPalette.agent(agent)
         case .warning: return IOSPalette.quotaWarn
         case .critical: return IOSPalette.bad
         }

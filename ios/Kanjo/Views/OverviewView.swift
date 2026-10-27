@@ -207,7 +207,7 @@ private struct SubscriptionValueSection: View {
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(quota) { item in
-                                    QuotaBarRow(row: item)
+                                    QuotaBarRow(row: item, agent: row.agent)
                                 }
                             }
                         }
