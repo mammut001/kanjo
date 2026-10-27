@@ -6,6 +6,24 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-27
+
+### Added
+
+- **Collapsible, reorderable Subscription value card.** The card shows 3 rows by default with a
+  "Show N more" toggle, and rows can be dragged to choose which 3 stay on top (order is saved).
+- **Colored hover cards everywhere**, replacing all system tooltips.
+- **Slow first scan hint** in the UI.
+
+### Changed
+
+- **Faster exports.** Faster warm export (repo resolution cache) and faster cold export.
+
+### Fixed
+
+- **Concurrent refresh crash.** `Ledger.save()` and `kanjo export -o` used a fixed `.tmp` file, so two
+  simultaneous runs could fail with `FileNotFoundError`; they now use unique temp files.
+
 ## [0.3.1] - 2026-10-26
 
 ### Added
