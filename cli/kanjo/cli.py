@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from typing import List, Optional
 
 from . import __version__, disk_cache
@@ -38,10 +39,17 @@ def cmd_export(args) -> int:
     doc = build_export(config=_config(args), cache=_cache(args))
     text = json.dumps(doc, ensure_ascii=False, indent=None if args.compact else 2)
     if args.output and args.output != "-":
-        tmp = args.output + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            handle.write(text + "\n")
-        os.replace(tmp, args.output)
+        tmp = "%s.%d.%s.tmp" % (args.output, os.getpid(), uuid.uuid4().hex[:8])
+        try:
+            with open(tmp, "w", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+            os.replace(tmp, args.output)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
         print("wrote %s (%d projects, total $%.2f)" % (args.output, len(doc["projects"]), doc["totals"]["cost"]),
               file=sys.stderr)
     else:

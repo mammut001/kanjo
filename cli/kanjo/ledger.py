@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from typing import Dict, List, Optional, Tuple, Union
 
 from .cache import _dump_session, _load_session, _signature
@@ -326,7 +327,7 @@ class Ledger:
         os.makedirs(self.dir, exist_ok=True)
         stamp = iso_utc(time.time())
         payload = {"version": LEDGER_VERSION, "updated_at": stamp, "entries": self.entries}
-        tmp = self.path + ".tmp"
+        tmp = "%s.%d.%s.tmp" % (self.path, os.getpid(), uuid.uuid4().hex[:8])
         try:
             with open(tmp, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))

@@ -174,6 +174,7 @@ class RepoCache:
     def save(self) -> None:
         if not self.dirty:
             return
+        tmp = None
         try:
             os.makedirs(self.dir, exist_ok=True)
             fd, tmp = tempfile.mkstemp(prefix=".repo-cache-", dir=self.dir)
@@ -184,6 +185,12 @@ class RepoCache:
             self.dirty = False
         except OSError:
             pass
+        finally:
+            if tmp is not None and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
 
 class SessionCache:
@@ -231,6 +238,7 @@ class SessionCache:
         for key in stale:
             del self.entries[key]
         if self.dirty or stale:
+            tmp = None
             try:
                 os.makedirs(self.dir, exist_ok=True)
                 fd, tmp = tempfile.mkstemp(prefix=".parse-cache-", dir=self.dir)
@@ -241,4 +249,10 @@ class SessionCache:
                 self.dirty = False
             except OSError:
                 pass  # a cache that cannot be written only costs speed
+            finally:
+                if tmp is not None and os.path.exists(tmp):
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
         self.repo_cache.save()
