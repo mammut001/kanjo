@@ -6,9 +6,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-27
+
 ### Added
 
 - **Independent provider quota fetching.** Kanjo can now fetch live quota windows directly from providers (Antigravity with Gemini 5h/weekly and Claude/GPT extra windows, Codex, Claude, Grok) without relying on Tokei, caching results locally with 5-minute TTL.
+- **Quota source label.** Live-fetched quota windows are marked `source: "live"`; Tokei cache stays `"tokei"`.
 - **Extra quota windows support.** Support for `extra_windows` in Antigravity's quota card rendering additional quota bars (e.g. Claude/GPT models) in the hover card.
 
 ### Fixed
