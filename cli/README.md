@@ -185,6 +185,7 @@ Sources, per agent (the first one found wins):
    You can also set or unset overrides via `kanjo config set quota_windows.<agent>.weekly_reset "tue 05:00"` and `kanjo config unset quota_windows.<agent>.weekly_reset`.
 2. **Direct fetch** (`"source": "live"`):
    `kanjo` independently queries the provider's local language server or official usage endpoint (Antigravity on 127.0.0.1 with Gemini 5h/weekly and Claude/GPT `extra_windows`, Codex, Claude, Grok) using existing local credentials. Credentials are kept in memory only and never stored in caches or logs. Results are cached in `~/.local/share/kanjo/quota_cache.json` with a 5-minute TTL. Set `KANJO_NO_NETWORK=1` or `no_network = true` in config to disable outbound network requests.
+   For Claude, `kanjo` checks: 1) live OAuth API using the macOS Keychain token; 2) Claude Desktop's local Chromium HTTP cache (`~/Library/Application Support/Claude/Cache/Cache_Data`, configurable via `KANJO_CLAUDE_CACHE_DIR`); 3) `~/.claude.json` `cachedUsageUtilization` (only if the window has not ended).
 3. **Tokei** (https://github.com/cclank/tokei) cache fallback (`"source": "tokei"`):
    `kanjo` reads Tokei's cache files if present as a fallback:
 
@@ -434,6 +435,8 @@ kanjo/
   cli.py          argparse: export / projects / doctor / ledger / disk
   config.py       attribution.toml / .json
   quota.py        quota_windows from the config or Tokei's ~/.tokei caches
+  quota_fetch.py  direct provider quota fetching
+  quota_claude_cache.py  Claude Desktop HTTP cache fallback scanner
   subscriptions.py  subscription plans and billing cycles (Claude config, Tokei, manual)
   identity.py     path -> project (remote normalization, worktrees, scratchpad decoding)
   attribution.py  scoring and decision

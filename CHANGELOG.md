@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Claude Desktop HTTP cache fallback for quota windows.** When Claude Code CLI credentials are absent or expired in Keychain, Kanjo falls back to scanning Claude Desktop's local Chromium HTTP cache (`~/Library/Application Support/Claude/Cache/Cache_Data`, configurable via `KANJO_CLAUDE_CACHE_DIR`) for recent `/usage` responses, parsing active 5-hour and weekly utilization and reset timestamps.
+
 ## [0.3.3] - 2026-10-27
 
 ### Added

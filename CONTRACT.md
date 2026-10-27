@@ -41,7 +41,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "five_hour_resets_at": "2026-10-24T09:30:00Z", // 可为 null
       "five_hour_window_hours": 5,                   // agent 没有 5 小时窗口时为 null；窗口已结束（five_hour_resets_at 为 null）时仍保留，UI 据此显示「窗口已结束」
       "five_hour_used_percent": 13.0,                // 5 小时窗口已用百分比；five_hour_resets_at 为 null 时为 null
-      "source": "tokei"                              // 数据来源：live（Kanjo 独立直连获取：Claude, Codex, Grok, Antigravity）| tokei（读 ~/.tokei 缓存）| manual（配置 weekly_reset / weekly_resets_at）
+      "source": "tokei"                              // 数据来源：live（Kanjo 独立直连获取：Claude, Codex, Grok, Antigravity；Claude 支持 Keychain OAuth API、Claude Desktop HTTP 缓存回退与 ~/.claude.json 回退）| tokei（读 ~/.tokei 缓存）| manual（配置 weekly_reset / weekly_resets_at）
     },
     "codex": { "weekly_resets_at": "...", "weekly_window_hours": 168, "weekly_used_percent": 24.0, "five_hour_resets_at": "...", "five_hour_window_hours": 5, "five_hour_used_percent": 8.0, "source": "tokei" },
     "grok":  { "weekly_resets_at": "...", "weekly_window_hours": 168, "weekly_used_percent": 42.0, "five_hour_resets_at": null, "five_hour_window_hours": null, "five_hour_used_percent": null, "source": "tokei" },
@@ -51,7 +51,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "extra_windows": [                             // 可选附加窗口列表（如 Antigravity 的 Claude/GPT 组；Gemini 组填入标准 5h/weekly 字段）
         {
           "id": "antigravity-3p-weekly",
-          "title": "Claude/GPT 周",
+          "title": "Claude/GPT Weekly",
           "used_percent": 10.0,
           "resets_at": "...",
           "window_hours": 168

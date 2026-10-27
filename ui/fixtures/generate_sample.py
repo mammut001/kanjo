@@ -319,7 +319,7 @@ quota_windows = {
         "extra_windows": [
             {
                 "id": "antigravity-3p-weekly",
-                "title": "Claude/GPT 周",
+                "title": "Claude/GPT Weekly",
                 "used_percent": 24.0,
                 "resets_at": agy_weekly,
                 "window_hours": 168,

@@ -10,25 +10,25 @@
   },
   "quota_windows": {
     "claude": {
-      "weekly_resets_at": "2026-10-30T08:40:07Z",
+      "weekly_resets_at": "2026-10-30T10:17:35Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 57.0,
-      "five_hour_resets_at": "2026-10-27T20:31:07Z",
+      "five_hour_resets_at": "2026-10-27T22:08:35Z",
       "five_hour_window_hours": 5,
       "five_hour_used_percent": 13.0,
       "source": "live"
     },
     "codex": {
-      "weekly_resets_at": "2026-10-31T02:40:07Z",
+      "weekly_resets_at": "2026-10-31T04:17:35Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 38.0,
-      "five_hour_resets_at": "2026-10-27T22:00:07Z",
+      "five_hour_resets_at": "2026-10-27T23:37:35Z",
       "five_hour_window_hours": 5,
       "five_hour_used_percent": 18.0,
       "source": "live"
     },
     "grok": {
-      "weekly_resets_at": "2026-10-31T20:40:07Z",
+      "weekly_resets_at": "2026-10-31T22:17:35Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 42.0,
       "five_hour_resets_at": null,
@@ -37,26 +37,26 @@
       "source": "live"
     },
     "antigravity": {
-      "weekly_resets_at": "2026-10-31T04:40:07Z",
+      "weekly_resets_at": "2026-10-31T06:17:35Z",
       "weekly_window_hours": 168,
       "weekly_used_percent": 61.2,
-      "five_hour_resets_at": "2026-10-27T21:10:07Z",
+      "five_hour_resets_at": "2026-10-27T22:47:35Z",
       "five_hour_window_hours": 5,
       "five_hour_used_percent": 18.5,
       "source": "live",
       "extra_windows": [
         {
           "id": "antigravity-3p-weekly",
-          "title": "Claude/GPT 周",
+          "title": "Claude/GPT Weekly",
           "used_percent": 24.0,
-          "resets_at": "2026-10-31T04:40:07Z",
+          "resets_at": "2026-10-31T06:17:35Z",
           "window_hours": 168
         },
         {
           "id": "antigravity-3p-5h",
           "title": "Claude/GPT 5h",
           "used_percent": 50.0,
-          "resets_at": "2026-10-27T22:25:07Z",
+          "resets_at": "2026-10-28T00:02:35Z",
           "window_hours": 5
         }
       ]

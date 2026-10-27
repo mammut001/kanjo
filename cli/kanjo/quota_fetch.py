@@ -28,6 +28,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from .quota_claude_cache import scan_claude_desktop_cache
+
 CACHE_VERSION = 1
 CACHE_TTL = 300  # 5 minutes
 REQUEST_TIMEOUT = 10
@@ -562,6 +564,10 @@ def _claude_from_config(now: float) -> Optional[dict]:
             if isinstance(cached, dict):
                 util = cached.get("utilization")
                 if isinstance(util, dict):
+                    seven_reset = _parse_iso(util.get("seven_day", {}).get("resets_at")) if isinstance(util.get("seven_day"), dict) else None
+                    five_reset = _parse_iso(util.get("five_hour", {}).get("resets_at")) if isinstance(util.get("five_hour"), dict) else None
+                    if (seven_reset is None or seven_reset <= now) and (five_reset is None or five_reset <= now):
+                        return None
                     res = parse_claude_usage(util, now=now)
                     if res:
                         res["source"] = "live"
@@ -572,41 +578,50 @@ def _claude_from_config(now: float) -> Optional[dict]:
 
 
 def fetch_claude_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dict]:
-    if is_network_disabled():
+    claude_cache_dir = os.environ.get("KANJO_CLAUDE_CACHE_DIR")
+    if is_network_disabled() and not claude_cache_dir:
         return None
-    token = _load_claude_credentials()
-    if token:
-        url = "https://api.anthropic.com/api/oauth/usage?at_wall=1&skip_spend=1"
-        req = urllib.request.Request(url, headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "anthropic-beta": "oauth-2025-04-20",
-            "User-Agent": "claude-code/2.1.0",
-        })
-        req.add_unredirected_header("Authorization", f"Bearer {token}")
 
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as res:
-                parsed = urllib.parse.urlparse(res.geturl())
-                if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
+    # 1. Live OAuth API via Keychain token
+    if not is_network_disabled():
+        token = _load_claude_credentials()
+        if token:
+            url = "https://api.anthropic.com/api/oauth/usage?at_wall=1&skip_spend=1"
+            req = urllib.request.Request(url, headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "anthropic-beta": "oauth-2025-04-20",
+                "User-Agent": "claude-code/2.1.0",
+            })
+            req.add_unredirected_header("Authorization", f"Bearer {token}")
+
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as res:
+                    parsed = urllib.parse.urlparse(res.geturl())
+                    if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
+                        _debug_log("claude", "parse_error")
+                        return None
+                    data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
+                    result = parse_claude_usage(data, now=now)
+                    if result:
+                        return result
                     _debug_log("claude", "parse_error")
-                    return None
-                data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
-                result = parse_claude_usage(data, now=now)
-                if result:
-                    return result
+            except urllib.error.HTTPError as e:
+                _debug_log("claude", f"http_status {e.code}")
+            except (TimeoutError, urllib.error.URLError) as e:
+                if "timed out" in str(e).lower():
+                    _debug_log("claude", "timeout")
+                else:
+                    _debug_log("claude", "parse_error")
+            except Exception:
                 _debug_log("claude", "parse_error")
-        except urllib.error.HTTPError as e:
-            _debug_log("claude", f"http_status {e.code}")
-        except (TimeoutError, urllib.error.URLError) as e:
-            if "timed out" in str(e).lower():
-                _debug_log("claude", "timeout")
-            else:
-                _debug_log("claude", "parse_error")
-        except Exception:
-            _debug_log("claude", "parse_error")
 
-    # If live token is not in keychain or expired, fallback to Claude CLI's own cache in ~/.claude.json
+    # 2. Claude Desktop HTTP cache scan (~/Library/Application Support/Claude/Cache/Cache_Data)
+    cache_result = scan_claude_desktop_cache(now=now, cache_dir=claude_cache_dir)
+    if cache_result:
+        return cache_result
+
+    # 3. ~/.claude.json cachedUsageUtilization fallback (only if its window hasn't ended)
     cached_result = _claude_from_config(now)
     if cached_result:
         return cached_result
