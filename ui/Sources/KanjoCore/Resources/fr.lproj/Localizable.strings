@@ -195,6 +195,8 @@
 "overview.show_these_sessions" = "Afficher ces sessions";
 "overview.section.subscription_value" = "Valeur de l'abonnement";
 "overview.subscription_value.explanation" = "Vous payez le forfait fixe à gauche. Le montant à droite correspond au coût du même travail avec la facturation API.";
+"overview.subscription_value.show_more" = "Afficher %d de plus";
+"overview.subscription_value.show_less" = "Afficher moins";
 "overview.extra_usage_on" = "utilisation suppl. activée";
 "overview.extra_usage_help" = "L'utilisation supplémentaire est activée, les dépassements sont donc facturés en plus du forfait fixe.";
 "overview.renewal_not_set" = "Jours de renouvellement non définis pour %@ · ";

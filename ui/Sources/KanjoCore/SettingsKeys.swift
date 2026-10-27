@@ -13,6 +13,7 @@ public enum SettingsKeys {
     public static let pinnedProjects = "pinnedProjects"      // 同上
     public static let timeRange = "timeRange"                // TimeRange.rawValue；默认 all
     public static let renewalNudgeDismissed = "renewalNudgeDismissed"
+    public static let subscriptionOrder = "subscriptionOrder" // 逗号分隔的 agent id（SubscriptionOrder）
 }
 
 public enum SourceKind: String, CaseIterable, Identifiable {

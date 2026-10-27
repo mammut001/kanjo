@@ -379,23 +379,72 @@ struct OverviewView: View {
 /// 悬停时第二行热力条左边出现置顶 / 隐藏两个小按钮；右键菜单有更多动作。
 /// 订阅价值：每个有订阅的 agent 一行。左边是月费，右边是本账期 API 等价用量和倍数。
 /// 没有新的卡片描边，和总览其他节一样直接放在面板上。底部那句说明固定显示。
+/// 默认展示前 3 行；超过 3 行可折叠展开；支持拖拽行自定义排序。
 private struct SubscriptionValueCard: View {
     let report: UsageReport
     var pinnedQuotaAgent: String? = nil
     let onSetRenewalDay: (String) -> Void
     @State private var hoveredAgent: String?
     @State private var hoverTask: Task<Void, Never>?
+    @State private var isExpanded = false
+    @State private var targetedAgent: String?
     @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
+    @AppStorage(SettingsKeys.subscriptionOrder, store: AppDefaults.store) private var subscriptionOrderRaw = ""
 
     private var cur: String { report.currency }
 
     var body: some View {
-        let rows = SubscriptionValue.rows(of: report)
+        let defaultRows = SubscriptionValue.rows(of: report)
+        let order = SubscriptionOrder.parse(subscriptionOrderRaw)
+        let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
+        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded, limit: 3)
+
         return PanelSection(L10n.tr("overview.section.subscription_value"), flat: true) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                ForEach(Array(visibleRows.enumerated()), id: \.element.id) { i, row in
                     if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
                     quotaHover(line(row), row: row)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(targetedAgent == row.agent ? Color.accentColor.opacity(0.12) : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                        .draggable(row.agent)
+                        .dropDestination(for: String.self) { items, _ in
+                            targetedAgent = nil
+                            guard let source = items.first, source != row.agent,
+                                  orderedRows.contains(where: { $0.agent == source }) else { return false }
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                let moved = SubscriptionOrder.move(from: source, to: row.agent, in: orderedRows)
+                                subscriptionOrderRaw = SubscriptionOrder.serialize(moved.map(\.agent))
+                            }
+                            return true
+                        } isTargeted: { targeted in
+                            if targeted {
+                                targetedAgent = row.agent
+                            } else if targetedAgent == row.agent {
+                                targetedAgent = nil
+                            }
+                        }
+                }
+                if orderedRows.count > 3 {
+                    RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(isExpanded
+                                ? L10n.tr("overview.subscription_value.show_less")
+                                : L10n.tr("overview.subscription_value.show_more", orderedRows.count - 3))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(Color.accentColor)
+                            Spacer()
+                        }
+                        .padding(.horizontal, Metrics.listInset)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 Text(L10n.tr("overview.subscription_value.explanation"))
                     .font(.system(size: 10.5))

@@ -195,6 +195,8 @@
 "overview.show_these_sessions" = "Show these sessions";
 "overview.section.subscription_value" = "Subscription value";
 "overview.subscription_value.explanation" = "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.";
+"overview.subscription_value.show_more" = "Show %d more";
+"overview.subscription_value.show_less" = "Show less";
 "overview.extra_usage_on" = "extra usage on";
 "overview.extra_usage_help" = "Extra usage is enabled, so overage is billed on top of the flat fee.";
 "overview.renewal_not_set" = "Renewal days not set for %@ · ";
