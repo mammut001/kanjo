@@ -242,7 +242,7 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                     "five_hour_resets_at": entry.get("five_hour_resets_at"),
                     "five_hour_window_hours": entry.get("five_hour_window_hours"),
                     "five_hour_used_percent": entry.get("five_hour_used_percent"),
-                    "source": "tokei",
+                    "source": "live",
                 }
                 if "extra_windows" in entry and entry["extra_windows"]:
                     contract_entry["extra_windows"] = entry["extra_windows"]

@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import shutil
@@ -70,6 +71,7 @@ class QuotaFetchTest(unittest.TestCase):
         }
         res = quota_fetch.parse_antigravity_summary(data, now=now, plan_name="Google AI Pro")
         self.assertIsNotNone(res)
+        self.assertEqual(res["source"], "live")
         self.assertEqual(res["plan"], "Google AI Pro")
         self.assertEqual(res["weekly_used_percent"], 80.1)
         self.assertEqual(res["five_hour_used_percent"], 25.0)
@@ -101,6 +103,7 @@ class QuotaFetchTest(unittest.TestCase):
         }
         res = quota_fetch.parse_codex_usage(data, now=now)
         self.assertIsNotNone(res)
+        self.assertEqual(res["source"], "live")
         self.assertEqual(res["plan"], "plus")
         self.assertEqual(res["five_hour_used_percent"], 12.0)
         self.assertEqual(res["weekly_used_percent"], 45.5)
@@ -111,36 +114,39 @@ class QuotaFetchTest(unittest.TestCase):
         now = 1730000000.0
         data = {
             "five_hour": {
-                "utilization": 0.13,
+                "utilization": 13,
                 "resets_at": "2024-10-27T10:00:00Z",
             },
             "seven_day": {
-                "utilization": 0.57,
+                "utilization": 57,
                 "resets_at": "2024-10-31T10:00:00Z",
             },
         }
         res = quota_fetch.parse_claude_usage(data, now=now)
         self.assertIsNotNone(res)
+        self.assertEqual(res["source"], "live")
         self.assertEqual(res["five_hour_used_percent"], 13.0)
         self.assertEqual(res["weekly_used_percent"], 57.0)
         self.assertEqual(res["five_hour_window_hours"], 5)
         self.assertEqual(res["weekly_window_hours"], 168)
 
-    def test_parse_grok_usage(self):
+    def test_parse_grok_usage_unified_billing_omitted_zero(self):
         now = 1730000000.0
+        # Protobuf JSON omits creditUsagePercent when 0.0
         data = {
-            "subscriptionTier": "SuperGrok",
             "config": {
-                "creditUsagePercent": 42.0,
+                "isUnifiedBillingUser": True,
                 "currentPeriod": {
+                    "start": "2024-10-24T10:00:00Z",
                     "end": "2024-10-31T10:00:00Z",
                 },
             },
         }
         res = quota_fetch.parse_grok_usage(data, now=now)
         self.assertIsNotNone(res)
+        self.assertEqual(res["source"], "live")
         self.assertEqual(res["plan"], "SuperGrok")
-        self.assertEqual(res["weekly_used_percent"], 42.0)
+        self.assertEqual(res["weekly_used_percent"], 0.0)
         self.assertEqual(res["weekly_window_hours"], 168)
         self.assertIsNone(res["five_hour_resets_at"])
 
@@ -152,6 +158,22 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertIsNone(quota_fetch.parse_claude_usage({}, now=now))
         self.assertIsNone(quota_fetch.parse_grok_usage({}, now=now))
 
+    def test_debug_logging_format(self):
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            with mock.patch.dict(os.environ, {"KANJO_QUOTA_DEBUG": "1"}):
+                quota_fetch._debug_log("claude", "no_credentials")
+                quota_fetch._debug_log("grok", "http_status 401")
+                quota_fetch._debug_log("codex", "timeout")
+                quota_fetch._debug_log("antigravity", "parse_error")
+        output = stderr.getvalue()
+        self.assertIn("quota_debug: claude -> no_credentials\n", output)
+        self.assertIn("quota_debug: grok -> http_status 401\n", output)
+        self.assertIn("quota_debug: codex -> timeout\n", output)
+        self.assertIn("quota_debug: antigravity -> parse_error\n", output)
+        # Ensure no secrets or tokens
+        self.assertNotIn("token", output.lower())
+
     def test_cache_ttl_and_no_network(self):
         now = 1730000000.0
         fake_data = {
@@ -162,6 +184,7 @@ class QuotaFetchTest(unittest.TestCase):
                     "weekly_resets_at": "2024-10-31T10:00:00Z",
                     "weekly_window_hours": 168,
                     "weekly_used_percent": 80.0,
+                    "source": "live",
                     "plan": "Google AI Pro",
                 }
             }
@@ -189,6 +212,7 @@ class QuotaFetchTest(unittest.TestCase):
                     "weekly_resets_at": "2024-10-31T10:00:00Z",
                     "weekly_window_hours": 168,
                     "weekly_used_percent": 80.0,
+                    "source": "live",
                     "plan": "Google AI Pro",
                 }
             }
@@ -218,16 +242,17 @@ class QuotaFetchTest(unittest.TestCase):
                 "antigravity": {
                     "plan": "Google AI Pro",
                     "weekly_resets_at": "2024-10-31T10:00:00Z",
+                    "source": "live",
                 },
                 "codex": {
                     "plan": "plus",
                     "weekly_resets_at": "2024-10-31T10:00:00Z",
+                    "source": "live",
                 },
             }
         }
         quota_fetch.save_quota_cache(fake_cache)
 
-        # Pass non-existent tokei directory; subscriptions should still detect Google AI Pro and Codex Plus!
         subs = subscriptions.subscriptions(manual={}, directory="/nonexistent/tokei/dir", now=now)
         self.assertIn("antigravity", subs)
         self.assertEqual(subs["antigravity"]["plan"], "google_ai_pro")
@@ -250,18 +275,19 @@ class QuotaFetchTest(unittest.TestCase):
                     "weekly_resets_at": "2024-10-31T10:00:00Z",
                     "weekly_window_hours": 168,
                     "weekly_used_percent": 30.0,
-                    "source": "tokei",
+                    "source": "live",
                 }
             }
         }
         quota_fetch.save_quota_cache(fake_cache)
 
-        # 1. Fetched quota is present
+        # 1. Fetched quota has source "live"
         qw = quota.quota_windows(manual={}, directory="/nonexistent/tokei", now=now, no_network=True)
         self.assertIn("claude", qw)
         self.assertEqual(qw["claude"]["weekly_used_percent"], 30.0)
+        self.assertEqual(qw["claude"]["source"], "live")
 
-        # 2. Manual override beats fetched quota
+        # 2. Manual override beats fetched quota and has source "manual"
         manual = {
             "claude": {
                 "weekly_reset": "tue 05:00",

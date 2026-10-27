@@ -9,6 +9,7 @@ Security rules:
 4. Results cached in ~/.local/share/kanjo/quota_cache.json with 5-minute TTL,
    storing only public window/percent/reset information (mode 0600).
 5. KANJO_NO_NETWORK=1 disables all outbound requests.
+6. KANJO_QUOTA_DEBUG=1 prints only provider name + failure category to stderr.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -42,10 +44,26 @@ def quota_cache_path() -> str:
     return os.path.join(data_dir(), "quota_cache.json")
 
 
+def _debug_log(provider: str, category: str) -> None:
+    if os.environ.get("KANJO_QUOTA_DEBUG") == "1":
+        sys.stderr.write(f"quota_debug: {provider} -> {category}\n")
+
+
 def _pct(value) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
     return round(min(max(float(value), 0.0), 100.0), 1)
+
+
+def _percentage(value) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    val = float(value)
+    if not math.isfinite(val) or val < 0:
+        return None
+    if 0 < val <= 1.0:
+        val = val * 100.0
+    return _pct(val)
 
 
 def _iso_utc(ts: Optional[float]) -> Optional[str]:
@@ -187,6 +205,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
         return None
     processes = _find_antigravity_processes()
     if not processes:
+        _debug_log("antigravity", "no_credentials")
         return None
 
     paths = {
@@ -199,6 +218,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
     }}).encode("utf-8")
     summary_body = json.dumps({"forceRefresh": True}).encode("utf-8")
 
+    last_error_cat = "parse_error"
     for proc in processes:
         csrf = proc.get("csrf_token") or ""
         ports = _antigravity_ports(proc["pid"], proc.get("port"))
@@ -217,7 +237,17 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                     ctx.verify_mode = ssl.CERT_NONE
                     with urllib.request.urlopen(req, timeout=min(timeout, 3), context=ctx) as res:
                         data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
+                except urllib.error.HTTPError as e:
+                    last_error_cat = f"http_status {e.code}"
+                    continue
+                except (TimeoutError, urllib.error.URLError) as e:
+                    if "timed out" in str(e).lower():
+                        last_error_cat = "timeout"
+                    else:
+                        last_error_cat = "parse_error"
+                    continue
                 except Exception:
+                    last_error_cat = "parse_error"
                     continue
 
                 if not isinstance(data, dict):
@@ -246,6 +276,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                 result = parse_antigravity_summary(data, now=now, plan_name=plan_name)
                 if result:
                     return result
+    _debug_log("antigravity", last_error_cat)
     return None
 
 
@@ -345,7 +376,7 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
         "five_hour_resets_at": _iso_utc(five_reset),
         "five_hour_window_hours": five_hours,
         "five_hour_used_percent": five_pct,
-        "source": "tokei",
+        "source": "live",
     }
     if plan_name:
         out["plan"] = plan_name
@@ -361,6 +392,13 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
 def _load_codex_auth() -> Optional[Tuple[str, Optional[str]]]:
     """Returns (access_token, account_id) from ~/.codex/auth.json."""
     path = os.path.expanduser(os.path.join("~", ".codex", "auth.json"))
+    codex_dir = os.environ.get("KANJO_CODEX_DIR")
+    if codex_dir:
+        for p in codex_dir.split(os.pathsep):
+            parent_auth = os.path.join(os.path.dirname(os.path.expanduser(p)), "auth.json")
+            if os.path.isfile(parent_auth):
+                path = parent_auth
+                break
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -382,6 +420,7 @@ def fetch_codex_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[di
         return None
     auth = _load_codex_auth()
     if not auth:
+        _debug_log("codex", "no_credentials")
         return None
     access_token, account_id = auth
 
@@ -398,12 +437,26 @@ def fetch_codex_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[di
         with urllib.request.urlopen(req, timeout=timeout) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "chatgpt.com":
+                _debug_log("codex", "parse_error")
                 return None
             data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        _debug_log("codex", f"http_status {e.code}")
+        return None
+    except (TimeoutError, urllib.error.URLError) as e:
+        if "timed out" in str(e).lower():
+            _debug_log("codex", "timeout")
+        else:
+            _debug_log("codex", "parse_error")
+        return None
     except Exception:
+        _debug_log("codex", "parse_error")
         return None
 
-    return parse_codex_usage(data, now=now)
+    result = parse_codex_usage(data, now=now)
+    if not result:
+        _debug_log("codex", "parse_error")
+    return result
 
 
 def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
@@ -446,6 +499,9 @@ def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
         pri_reset = None
         pri_pct = None
 
+    if sec_reset is None and sec_pct is None and pri_reset is None and pri_pct is None:
+        return None
+
     out = {
         "weekly_resets_at": _iso_utc(sec_reset),
         "weekly_window_hours": sec_hours,
@@ -453,7 +509,7 @@ def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
         "five_hour_resets_at": _iso_utc(pri_reset),
         "five_hour_window_hours": pri_hours,
         "five_hour_used_percent": pri_pct,
-        "source": "tokei",
+        "source": "live",
     }
     plan = data.get("plan_type")
     if isinstance(plan, str) and plan.strip():
@@ -462,7 +518,7 @@ def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
 
 
 # -----------------------------------------------------------------------------
-# 3. Claude Code (HTTPS api.anthropic.com via macOS Keychain)
+# 3. Claude Code (HTTPS api.anthropic.com via macOS Keychain / ~/.claude.json)
 # -----------------------------------------------------------------------------
 
 def _load_claude_credentials() -> Optional[str]:
@@ -472,14 +528,17 @@ def _load_claude_credentials() -> Optional[str]:
             ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
             capture_output=True, text=True, timeout=3, check=False
         )
-        if res.returncode != 0 or not res.stdout.strip():
+        if res.returncode != 0:
+            _debug_log("claude", "keychain_denied")
             return None
-        data = json.loads(res.stdout.strip())
+        raw_text = res.stdout.strip()
+        if not raw_text:
+            return None
+        data = json.loads(raw_text)
         if isinstance(data, dict):
             oauth = data.get("claudeAiOauth") or {}
             token = oauth.get("accessToken")
             if isinstance(token, str) and token.strip():
-                # Check expiration
                 expires_at = oauth.get("expiresAt")
                 if isinstance(expires_at, (int, float)):
                     exp = float(expires_at)
@@ -493,32 +552,67 @@ def _load_claude_credentials() -> Optional[str]:
     return None
 
 
+def _claude_from_config(now: float) -> Optional[dict]:
+    claude_json = os.path.expanduser(os.environ.get("KANJO_CLAUDE_CONFIG") or os.path.join("~", ".claude.json"))
+    try:
+        with open(claude_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            cached = data.get("cachedUsageUtilization")
+            if isinstance(cached, dict):
+                util = cached.get("utilization")
+                if isinstance(util, dict):
+                    res = parse_claude_usage(util, now=now)
+                    if res:
+                        res["source"] = "live"
+                        return res
+    except Exception:
+        pass
+    return None
+
+
 def fetch_claude_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dict]:
     if is_network_disabled():
         return None
     token = _load_claude_credentials()
-    if not token:
-        return None
+    if token:
+        url = "https://api.anthropic.com/api/oauth/usage?at_wall=1&skip_spend=1"
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-code/2.1.0",
+        })
+        req.add_unredirected_header("Authorization", f"Bearer {token}")
 
-    url = "https://api.anthropic.com/api/oauth/usage?at_wall=1&skip_spend=1"
-    req = urllib.request.Request(url, headers={
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "anthropic-beta": "oauth-2025-04-20",
-        "User-Agent": "claude-code/2.1.0",
-    })
-    req.add_unredirected_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as res:
+                parsed = urllib.parse.urlparse(res.geturl())
+                if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
+                    _debug_log("claude", "parse_error")
+                    return None
+                data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
+                result = parse_claude_usage(data, now=now)
+                if result:
+                    return result
+                _debug_log("claude", "parse_error")
+        except urllib.error.HTTPError as e:
+            _debug_log("claude", f"http_status {e.code}")
+        except (TimeoutError, urllib.error.URLError) as e:
+            if "timed out" in str(e).lower():
+                _debug_log("claude", "timeout")
+            else:
+                _debug_log("claude", "parse_error")
+        except Exception:
+            _debug_log("claude", "parse_error")
 
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
-            parsed = urllib.parse.urlparse(res.geturl())
-            if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
-                return None
-            data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
-    except Exception:
-        return None
+    # If live token is not in keychain or expired, fallback to Claude CLI's own cache in ~/.claude.json
+    cached_result = _claude_from_config(now)
+    if cached_result:
+        return cached_result
 
-    return parse_claude_usage(data, now=now)
+    _debug_log("claude", "no_credentials")
+    return None
 
 
 def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
@@ -530,7 +624,7 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
         return None
 
     # Weekly
-    sec_pct = _pct(float(seven["utilization"]) * 100.0) if "utilization" in seven else None
+    sec_pct = _percentage(seven.get("utilization"))
     sec_reset = _parse_iso(seven.get("resets_at"))
     sec_hours = 168
     if sec_reset is not None and sec_reset <= now:
@@ -539,12 +633,15 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
         sec_pct = None
 
     # 5h
-    pri_pct = _pct(float(five["utilization"]) * 100.0) if "utilization" in five else None
+    pri_pct = _percentage(five.get("utilization"))
     pri_reset = _parse_iso(five.get("resets_at"))
     pri_hours = 5
     if pri_reset is not None and pri_reset <= now:
         pri_reset = None
         pri_pct = None
+
+    if sec_reset is None and sec_pct is None and pri_reset is None and pri_pct is None:
+        return None
 
     return {
         "weekly_resets_at": _iso_utc(sec_reset),
@@ -553,7 +650,7 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
         "five_hour_resets_at": _iso_utc(pri_reset),
         "five_hour_window_hours": pri_hours,
         "five_hour_used_percent": pri_pct,
-        "source": "tokei",
+        "source": "live",
     }
 
 
@@ -594,6 +691,7 @@ def fetch_grok_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dic
         return None
     token = _load_grok_auth()
     if not token:
+        _debug_log("grok", "no_credentials")
         return None
 
     url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
@@ -607,12 +705,26 @@ def fetch_grok_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dic
         with urllib.request.urlopen(req, timeout=timeout) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "cli-chat-proxy.grok.com":
+                _debug_log("grok", "parse_error")
                 return None
             data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        _debug_log("grok", f"http_status {e.code}")
+        return None
+    except (TimeoutError, urllib.error.URLError) as e:
+        if "timed out" in str(e).lower():
+            _debug_log("grok", "timeout")
+        else:
+            _debug_log("grok", "parse_error")
+        return None
     except Exception:
+        _debug_log("grok", "parse_error")
         return None
 
-    return parse_grok_usage(data, now=now)
+    result = parse_grok_usage(data, now=now)
+    if not result:
+        _debug_log("grok", "parse_error")
+    return result
 
 
 def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
@@ -624,7 +736,15 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
     period = cfg.get("currentPeriod") or {}
     end_raw = period.get("end") or cfg.get("billingPeriodEnd")
     reset_ts = _parse_iso(end_raw)
-    used_pct = _pct(cfg.get("creditUsagePercent"))
+
+    pct_raw = cfg.get("creditUsagePercent")
+    if "creditUsagePercent" not in cfg:
+        # Protobuf JSON omits zero values; unified billing user with a valid period has 0% used
+        has_period = bool(period.get("start") and reset_ts is not None)
+        if cfg.get("isUnifiedBillingUser") is True and has_period:
+            pct_raw = 0.0
+    used_pct = _pct(pct_raw)
+
     if reset_ts is None and used_pct is None:
         return None
 
@@ -634,6 +754,7 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
         reset_ts += period_s * (math.floor((now - reset_ts) / period_s) + 1)
         used_pct = None
 
+    plan = data.get("subscriptionTier") or data.get("plan") or ("SuperGrok" if cfg.get("isUnifiedBillingUser") else None)
     out = {
         "weekly_resets_at": _iso_utc(reset_ts),
         "weekly_window_hours": hours,
@@ -641,9 +762,8 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
         "five_hour_resets_at": None,
         "five_hour_window_hours": None,
         "five_hour_used_percent": None,
-        "source": "tokei",
+        "source": "live",
     }
-    plan = data.get("subscriptionTier") or data.get("plan")
     if isinstance(plan, str) and plan.strip():
         out["plan"] = plan.strip()
     return out
@@ -673,7 +793,6 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
                 return {k: v for k, v in providers.items() if isinstance(v, dict)}
 
     if no_network or is_network_disabled():
-        # Fall back to stale cache if network is disabled
         if cached:
             providers = cached.get("providers")
             if isinstance(providers, dict):
@@ -690,7 +809,6 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
             pass
 
     if results:
-        # Merge with previous cache for providers that couldn't be refreshed
         old_providers = (cached.get("providers") if cached else {}) or {}
         merged = dict(old_providers)
         merged.update(results)
@@ -701,7 +819,6 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
         })
         return results
 
-    # Return previous cache if fresh fetch got nothing
     if cached:
         providers = cached.get("providers")
         if isinstance(providers, dict):

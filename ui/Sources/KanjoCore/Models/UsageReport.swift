@@ -97,7 +97,7 @@ public struct QuotaWindow: Codable, Equatable {
     public var fiveHourResetsAt: String?
     public var fiveHourWindowHours: Int?
     public var fiveHourUsedPercent: Double?
-    public var source: String               // "tokei" | "manual"
+    public var source: String               // "live" | "tokei" | "manual"
     public var extraWindows: [ExtraQuotaWindow]?
 
     enum CodingKeys: String, CodingKey {

@@ -104,6 +104,17 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(decodedWith.extraWindows?.first?.id, "antigravity-3p-weekly")
         XCTAssertEqual(decodedWith.extraWindows?.first?.title, "Claude/GPT 周")
         XCTAssertEqual(decodedWith.extraWindows?.first?.usedPercent, 12.5)
+
+        // Decoding with source: "live"
+        let jsonLive = """
+        {
+            "weekly_resets_at": "2026-10-31T04:53:24Z",
+            "weekly_window_hours": 168,
+            "source": "live"
+        }
+        """.data(using: .utf8)!
+        let decodedLive = try JSONDecoder().decode(QuotaWindow.self, from: jsonLive)
+        XCTAssertEqual(decodedLive.source, "live")
     }
 
     func testRelativeResetAndLevels() {
