@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import os
 import sys
@@ -13,7 +14,7 @@ from . import __version__, disk_cache
 from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
-from .export import COST_NOTE, SOURCES, build_export, check_invariants, scan
+from .export import COST_NOTE, SOURCES, build_export, check_invariants, mobile_document, scan
 from .ledger import Ledger
 from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions as load_subscriptions
@@ -36,13 +37,23 @@ def _cache(args):
 
 
 def cmd_export(args) -> int:
+    if args.hide_project_names and not args.mobile:
+        print("kanjo: --hide-project-names requires --mobile", file=sys.stderr)
+        return 2
     doc = build_export(config=_config(args), cache=_cache(args))
-    text = json.dumps(doc, ensure_ascii=False, indent=None if args.compact else 2)
+    if args.mobile:
+        doc = mobile_document(doc, hide_project_names=args.hide_project_names)
+    if args.gzip:
+        payload = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        data = gzip.compress(payload, mtime=0)
+    else:
+        text = json.dumps(doc, ensure_ascii=False, indent=None if args.compact else 2)
+        data = (text + "\n").encode("utf-8")
     if args.output and args.output != "-":
         tmp = "%s.%d.%s.tmp" % (args.output, os.getpid(), uuid.uuid4().hex[:8])
         try:
-            with open(tmp, "w", encoding="utf-8") as handle:
-                handle.write(text + "\n")
+            with open(tmp, "wb") as handle:
+                handle.write(data)
             os.replace(tmp, args.output)
         except Exception:
             try:
@@ -52,8 +63,11 @@ def cmd_export(args) -> int:
             raise
         print("wrote %s (%d projects, total $%.2f)" % (args.output, len(doc["projects"]), doc["totals"]["cost"]),
               file=sys.stderr)
+    elif args.gzip:
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
     else:
-        sys.stdout.write(text + "\n")
+        sys.stdout.write(data.decode("utf-8"))
     problems = check_invariants(doc)
     for p in problems:
         print("warning: invariant: %s" % p, file=sys.stderr)
@@ -267,6 +281,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("export", help="write the JSON document defined in CONTRACT.md")
     p.add_argument("-o", "--output", metavar="FILE", help="output file (default: stdout)")
     p.add_argument("--compact", action="store_true", help="no indentation")
+    p.add_argument("--mobile", action="store_true",
+                   help="trim the document to the phone snapshot (CONTRACT.md section 11)")
+    p.add_argument("--hide-project-names", action="store_true",
+                   help="with --mobile, replace project names and ids with opaque values")
+    p.add_argument("--gzip", action="store_true", help="write gzip-compressed JSON to stdout")
     common(p)
     p.set_defaults(func=cmd_export)
 
