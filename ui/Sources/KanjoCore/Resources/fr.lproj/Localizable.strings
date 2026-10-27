@@ -112,6 +112,7 @@
 "weekday.sat" = "sam.";
 "weekday.sun" = "dim.";
 "settings.section.subscriptions" = "Abonnements";
+"settings.subscriptions.price" = "Prix mensuel";
 "settings.subscriptions_note" = "« Appliquer » enregistre le jour de renouvellement via le CLI ; « Réinitialiser » restaure la détection. Les agents sans abonnement sont exclus de la période Cycle de facturation.";
 "settings.renews_on_day" = "Renouv. le %d";
 "settings.renews_day_help" = "Jour du mois (1–28)";
@@ -195,6 +196,7 @@
 "overview.show_these_sessions" = "Afficher ces sessions";
 "overview.section.subscription_value" = "Valeur de l'abonnement";
 "overview.subscription_value.explanation" = "Vous payez le forfait fixe à gauche. Le montant à droite correspond au coût du même travail avec la facturation API.";
+"overview.cycle_usage" = "Utilisation équivalente API ce cycle";
 "overview.subscription_value.show_more" = "Afficher %d de plus";
 "overview.subscription_value.show_less" = "Afficher moins";
 "overview.extra_usage_on" = "utilisation suppl. activée";

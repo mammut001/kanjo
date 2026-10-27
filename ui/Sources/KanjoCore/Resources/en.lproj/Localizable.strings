@@ -112,6 +112,7 @@
 "weekday.sat" = "Sat";
 "weekday.sun" = "Sun";
 "settings.section.subscriptions" = "Subscriptions";
+"settings.subscriptions.price" = "Monthly price";
 "settings.subscriptions_note" = "Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.";
 "settings.renews_on_day" = "Renews on day %d";
 "settings.renews_day_help" = "Day of the month (1–28)";
@@ -195,6 +196,7 @@
 "overview.show_these_sessions" = "Show these sessions";
 "overview.section.subscription_value" = "Subscription value";
 "overview.subscription_value.explanation" = "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.";
+"overview.cycle_usage" = "API-equivalent usage this cycle";
 "overview.subscription_value.show_more" = "Show %d more";
 "overview.subscription_value.show_less" = "Show less";
 "overview.extra_usage_on" = "extra usage on";

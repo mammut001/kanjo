@@ -64,6 +64,31 @@ public struct ReportConfig: Codable, Equatable {
     }
 }
 
+/// 额度附加窗口（如 Antigravity 中的第三方模型组 Claude / GPT 窗口）。
+public struct ExtraQuotaWindow: Codable, Equatable, Identifiable {
+    public var id: String
+    public var title: String
+    public var usedPercent: Double?
+    public var resetsAt: String?
+    public var windowHours: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case usedPercent = "used_percent"
+        case resetsAt = "resets_at"
+        case windowHours = "window_hours"
+    }
+
+    public init(id: String, title: String, usedPercent: Double? = nil, resetsAt: String? = nil, windowHours: Int? = nil) {
+        self.id = id
+        self.title = title
+        self.usedPercent = usedPercent
+        self.resetsAt = resetsAt
+        self.windowHours = windowHours
+    }
+}
+
 /// 一个 agent 的额度窗口（契约第 2 节 quota_windows）。
 public struct QuotaWindow: Codable, Equatable {
     public var weeklyResetsAt: String       // 下次周重置，ISO 8601 UTC
@@ -72,7 +97,8 @@ public struct QuotaWindow: Codable, Equatable {
     public var fiveHourResetsAt: String?
     public var fiveHourWindowHours: Int?
     public var fiveHourUsedPercent: Double?
-    public var source: String               // "tokei" | "manual"
+    public var source: String               // "live" | "tokei" | "manual"
+    public var extraWindows: [ExtraQuotaWindow]?
 
     enum CodingKeys: String, CodingKey {
         case weeklyResetsAt = "weekly_resets_at"
@@ -82,11 +108,12 @@ public struct QuotaWindow: Codable, Equatable {
         case fiveHourWindowHours = "five_hour_window_hours"
         case fiveHourUsedPercent = "five_hour_used_percent"
         case source
+        case extraWindows = "extra_windows"
     }
 
     public init(weeklyResetsAt: String, weeklyWindowHours: Int = 168, weeklyUsedPercent: Double? = nil,
                 fiveHourResetsAt: String? = nil, fiveHourWindowHours: Int? = nil, fiveHourUsedPercent: Double? = nil,
-                source: String = "tokei") {
+                source: String = "tokei", extraWindows: [ExtraQuotaWindow]? = nil) {
         self.weeklyResetsAt = weeklyResetsAt
         self.weeklyWindowHours = weeklyWindowHours
         self.weeklyUsedPercent = weeklyUsedPercent
@@ -94,6 +121,7 @@ public struct QuotaWindow: Codable, Equatable {
         self.fiveHourWindowHours = fiveHourWindowHours
         self.fiveHourUsedPercent = fiveHourUsedPercent
         self.source = source
+        self.extraWindows = extraWindows
     }
 }
 

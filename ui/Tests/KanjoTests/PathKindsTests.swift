@@ -13,6 +13,8 @@ final class PathKindsTests: KanjoTestCase {
             "/private/var/folders/xy/T/build",
             "~/.gemini/antigravity-cli/brain/123/scratch/watch-ui",
             "/Users/me/.gemini/antigravity-cli/brain/123",
+            "~/.gemini/antigravity/brain/123/scratch/watch-ui",
+            "/Users/me/.gemini/antigravity/brain/123",
             "~/.claude/projects/foo",
             "/Users/me/.codex/worktrees/a1b2/proj",
             "/Users/me/work/scratchpad",

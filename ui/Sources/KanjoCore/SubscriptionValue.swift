@@ -75,6 +75,18 @@ public enum SubscriptionValue {
                                  detail: ended ? L10n.tr("overview.quota.ended")
                                     : resetText(reset, timezone: timezone, now: now, language: language)))
         }
+        if let extra = window.extraWindows {
+            for ew in extra {
+                let reset = ew.resetsAt.flatMap(ReportDates.parseTimestamp).flatMap { $0 > now ? $0 : nil }
+                rows.append(QuotaRow(
+                    id: ew.id,
+                    title: ew.title,
+                    percent: reset == nil ? nil : clampPercent(ew.usedPercent),
+                    detail: reset.map { resetText($0, timezone: timezone, now: now, language: language) }
+                        ?? L10n.tr("overview.quota.ended")
+                ))
+            }
+        }
         return rows
     }
 

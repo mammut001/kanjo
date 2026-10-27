@@ -4,15 +4,17 @@ Sources, per agent, highest priority first:
 
 1. ``[quota_windows.<agent>]`` in the user config (``source: "manual"``),
    either ``weekly_reset = "tue 05:00"`` or ``weekly_resets_at = <ISO 8601>``.
-2. Tokei's caches in ``~/.tokei`` (``$KANJO_TOKEI_DIR``), ``source: "tokei"``:
-   - Claude: ``claude_quota_swift_cache.json`` -> ``snapshot.q7Reset`` (weekly) and
-     ``snapshot.q5Reset`` (5-hour), epoch seconds; freshness from ``snapshot.updated``.
-   - Codex: ``codex_quota_cache.json`` -> ``limits.secondary`` (weekly, ``window_minutes``)
-     and ``limits.primary`` (5-hour) ``resets_at``; freshness from ``fetched_at``.
-   - Grok: ``grok_quota_cache.json`` -> ``quota.reset`` (weekly, ``window``), freshness
-     from ``fetched_at``.
-   Used percent per window comes from ``snapshot.q7`` / ``q5`` (Claude),
-   ``limits.*.used_percent`` (Codex) and ``quota.pct`` (Grok); manual entries have none.
+2. Kanjo's direct live quota fetcher (:mod:`kanjo.quota_fetch`), ``source: "tokei"``:
+   - Antigravity: local LanguageServerService on 127.0.0.1 (Gemini 5h/weekly +
+     Claude/GPT group as ``extra_windows``).
+   - Codex: ChatGPT usage API (5h and weekly).
+   - Claude: Anthropic OAuth usage API via Keychain credentials (5h and weekly).
+   - Grok: Grok billing API via ``~/.grok/auth.json`` (weekly).
+   Results are cached in ``~/.local/share/kanjo/quota_cache.json`` (5 min TTL).
+3. Tokei's caches in ``~/.tokei`` (``$KANJO_TOKEI_DIR``), as optional fallback:
+   - Claude: ``claude_quota_swift_cache.json``
+   - Codex: ``codex_quota_cache.json``
+   - Grok: ``grok_quota_cache.json``
 
 A Tokei cache older than ``MAX_AGE_DAYS`` is ignored. Anything missing or malformed
 just leaves that agent out; this module never raises.
@@ -210,12 +212,15 @@ TOKEI_READERS = {"claude": _claude, "codex": _codex, "grok": _grok}
 
 
 def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[str] = None,
-                  now: Optional[float] = None, timezone_name: Optional[str] = None) -> Dict[str, dict]:
+                  now: Optional[float] = None, timezone_name: Optional[str] = None,
+                  no_network: bool = False) -> Dict[str, dict]:
     """agent -> contract ``quota_windows`` entry. ``manual`` is ``Config.quota_windows``."""
     now = time.time() if now is None else now
     directory = directory or tokei_dir()
     tz_name = timezone_name or local_timezone_name()
     out: Dict[str, dict] = {}
+
+    # 1. Tokei cache (optional fallback)
     for agent, reader in TOKEI_READERS.items():
         try:
             entry = reader(directory, now)
@@ -223,6 +228,29 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
             entry = None
         if entry:
             out[agent] = entry
+
+    # 2. Kanjo direct live fetch (takes precedence over Tokei fallback)
+    try:
+        from .quota_fetch import fetch_all_quotas
+        fetched = fetch_all_quotas(now=now, no_network=no_network)
+        for agent, entry in (fetched or {}).items():
+            if isinstance(entry, dict) and entry.get("weekly_resets_at"):
+                contract_entry = {
+                    "weekly_resets_at": entry.get("weekly_resets_at"),
+                    "weekly_window_hours": entry.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS),
+                    "weekly_used_percent": entry.get("weekly_used_percent"),
+                    "five_hour_resets_at": entry.get("five_hour_resets_at"),
+                    "five_hour_window_hours": entry.get("five_hour_window_hours"),
+                    "five_hour_used_percent": entry.get("five_hour_used_percent"),
+                    "source": "live",
+                }
+                if "extra_windows" in entry and entry["extra_windows"]:
+                    contract_entry["extra_windows"] = entry["extra_windows"]
+                out[agent] = contract_entry
+    except Exception:
+        pass
+
+    # 3. Manual config (highest priority)
     for agent, spec in (manual or {}).items():
         if "weekly_reset" in spec:
             weekly = next_occurrence(spec["weekly_reset"], now, tz_name)
