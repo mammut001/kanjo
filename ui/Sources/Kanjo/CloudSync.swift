@@ -1,6 +1,7 @@
 import Foundation
 import KanjoCore
 import SwiftUI
+import os
 
 #if canImport(CloudKit)
 import CloudKit
@@ -8,6 +9,7 @@ import CloudKit
 @MainActor
 final class CloudSyncStore: ObservableObject {
     static let shared = CloudSyncStore()
+    static let logger = Logger(subsystem: "com.lanshuagent.kanjo", category: "sync")
 
     enum Status: Equatable {
         case off
@@ -57,14 +59,23 @@ final class CloudSyncStore: ObservableObject {
     func reportDidRefresh(_ report: UsageReport) {
         guard isEnabled else {
             status = .off
+            Self.logger.info("sync skipped: toggle off")
             return
         }
-        guard !SnapshotConfig.isSnapshotMode, AppDefaults.suiteName() == nil else { return }
+        guard !SnapshotConfig.isSnapshotMode else {
+            Self.logger.info("sync skipped: snapshot mode")
+            return
+        }
+        guard AppDefaults.suiteName() == nil else {
+            Self.logger.info("sync skipped: test defaults suite")
+            return
+        }
         Task { await performSync(report) }
     }
 
     private func performSync(_ report: UsageReport) async {
         if inFlight {
+            Self.logger.info("sync deferred: another sync is in flight")
             pendingReport = report
             return
         }
@@ -80,6 +91,7 @@ final class CloudSyncStore: ObservableObject {
         do {
             guard isEnabled else {
                 status = .off
+                Self.logger.info("sync skipped: toggle off")
                 return
             }
 
@@ -92,28 +104,41 @@ final class CloudSyncStore: ObservableObject {
                let lastUploaded = Self.storedUploadDate(defaults: defaults),
                Date().timeIntervalSince(lastUploaded) < 15 * 60,
                defaults.string(forKey: SettingsKeys.cloudSyncLastFingerprint) == fingerprint {
+                let minutes = Int(Date().timeIntervalSince(lastUploaded) / 60)
+                Self.logger.info("sync skipped: fingerprint unchanged, last upload \(minutes, privacy: .public) min ago")
                 status = .uploaded(lastUploaded)
                 return
             }
+            if force {
+                Self.logger.info("sync forced: upload state was reset")
+            }
 
             guard CloudKitEntitlement.hasContainer() else {
+                Self.logger.error("sync skipped: no CloudKit entitlement")
                 status = .failed(L10n.tr("settings.sync.status.not_configured"))
                 return
             }
             let account = try await accountStatus()
             guard account == .available else {
+                Self.logger.info("sync skipped: iCloud account status \(Self.accountCode(account), privacy: .public)")
                 status = .waitingForICloud
                 return
             }
+            Self.logger.info("sync started: iCloud account available")
 
             let source = CLIDataSource(
                 command: CLILaunch.command(defaults: defaults),
                 workingDirectory: CLILaunch.workingDirectory(defaults: defaults)
             )
+            Self.logger.info("export started: hide project names \(self.hideProjectNames, privacy: .public)")
+            let exportStart = Date()
             let payload = try await source.loadMobileSnapshot(hideProjectNames: hideProjectNames)
+            let exportMs = Int(Date().timeIntervalSince(exportStart) * 1000)
+            Self.logger.info("export finished: bytes \(payload.count, privacy: .public), ms \(exportMs, privacy: .public)")
             let hash = SnapshotPayload.contentHash(fromGzip: payload)
 
             if hash == defaults.string(forKey: SettingsKeys.cloudSyncLastUploadHash) {
+                Self.logger.info("hash unchanged: skipping upload")
                 defaults.set(fingerprint, forKey: SettingsKeys.cloudSyncLastFingerprint)
                 if let uploaded = Self.storedUploadDate(defaults: defaults) {
                     status = .uploaded(uploaded)
@@ -141,7 +166,11 @@ final class CloudSyncStore: ObservableObject {
             try payload.write(to: assetURL, options: .atomic)
             defer { try? fileManager.removeItem(at: assetURL) }
 
+            Self.logger.info("upload started: record \(snapshot.deviceID, privacy: .private), device \(snapshot.deviceName, privacy: .public), bytes \(payload.count, privacy: .public)")
+            let uploadStart = Date()
             try await save(snapshot, payloadURL: assetURL, database: database())
+            let uploadMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
+            Self.logger.info("upload succeeded: record \(snapshot.deviceID, privacy: .private), bytes \(payload.count, privacy: .public), ms \(uploadMs, privacy: .public)")
 
             let uploaded = Date()
             defaults.set(hash, forKey: SettingsKeys.cloudSyncLastUploadHash)
@@ -149,9 +178,28 @@ final class CloudSyncStore: ObservableObject {
             defaults.set(uploaded.timeIntervalSince1970, forKey: SettingsKeys.cloudSyncLastUploadedAt)
             status = .uploaded(uploaded)
         } catch {
+            Self.logFailure(error)
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            NSLog("Kanjo iCloud sync failed: \(message)")
             status = .failed(message)
+        }
+    }
+
+    private static func accountCode(_ status: CKAccountStatus) -> String {
+        switch status {
+        case .available: return "available"
+        case .noAccount: return "noAccount"
+        case .restricted: return "restricted"
+        case .couldNotDetermine: return "couldNotDetermine"
+        case .temporarilyUnavailable: return "temporarilyUnavailable"
+        @unknown default: return "unknown"
+        }
+    }
+
+    private static func logFailure(_ error: Error) {
+        if let ckError = error as? CKError {
+            logger.error("sync failed: CKError code \(ckError.code.rawValue, privacy: .public), description \(ckError.localizedDescription, privacy: .private)")
+        } else {
+            logger.error("sync failed: \(String(describing: type(of: error)), privacy: .public), description \(error.localizedDescription, privacy: .private)")
         }
     }
 
@@ -178,6 +226,7 @@ final class CloudSyncStore: ObservableObject {
         do {
             existing = try await fetch(recordID, in: database)
         } catch let error as CKError where error.code == .unknownItem {
+            Self.logger.info("no existing record for \(snapshot.deviceID, privacy: .private); creating new one")
             existing = nil
         }
 

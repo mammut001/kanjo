@@ -1,6 +1,8 @@
+import CloudKit
 import Foundation
 import KanjoCore
 import Observation
+import os
 
 @MainActor
 @Observable
@@ -22,15 +24,15 @@ final class SnapshotStore {
 
     static func defaultSource(arguments: [String] = CommandLine.arguments) -> SnapshotSource {
         if arguments.contains("-useSampleSnapshot") {
+            SyncLog.sync.info("fallback to sample: -useSampleSnapshot argument")
             return BundledSampleSnapshotSource()
         }
         return CloudKitSnapshotSource()
     }
 
     func load() async {
-        print("KANJO load start source=\(type(of: source))")
+        SyncLog.sync.info("load started: source \(String(describing: type(of: self.source)), privacy: .public)")
         await load(preserveState: false)
-        print("KANJO load done state=\(state)")
     }
 
     func refresh() async {
@@ -46,10 +48,17 @@ final class SnapshotStore {
             deviceName = source.lastDeviceName
             if let report {
                 state = .loaded(report)
+                SyncLog.sync.info("load finished: snapshot decoded")
             } else {
                 state = .empty
+                SyncLog.sync.info("load finished: no snapshot, showing empty state")
             }
         } catch {
+            if let ckError = error as? CKError {
+                SyncLog.sync.error("load failed: CKError code \(ckError.code.rawValue, privacy: .public), description \(ckError.localizedDescription, privacy: .private)")
+            } else {
+                SyncLog.sync.error("load failed: \(String(describing: type(of: error)), privacy: .public), description \(error.localizedDescription, privacy: .private)")
+            }
             state = .failed(error.localizedDescription)
         }
     }
