@@ -192,6 +192,42 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertNil(SubscriptionValue.multiplier(usage: 10, monthlyPriceUsd: r.subscriptions?["claude"]?.monthlyPriceUsd))
     }
 
+    func testSlimMobileSessionsDecode() throws {
+        let slim: [[String: Any]] = [[
+            "agent": "claude",
+            "started": "2026-10-12T09:30:00Z",
+            "ended": "2026-10-12T11:02:00Z",
+            "cost": 4.21,
+            "tokens": ["total": 1234],
+            "models": ["claude-opus-5-5"],
+        ]]
+        let data = try mutatedFixture { obj in
+            var projects = obj["projects"] as! [[String: Any]]
+            projects[0]["sessions_detail"] = slim
+            obj["projects"] = projects
+            var buckets = obj["buckets"] as! [String: Any]
+            var unattributed = buckets["unattributed"] as! [String: Any]
+            unattributed["sessions_detail"] = slim
+            buckets["unattributed"] = unattributed
+            obj["buckets"] = buckets
+        }
+        let r = try ReportDecoder.decode(data)
+        let s = try XCTUnwrap(r.projects[0].sessionsDetail.first)
+        XCTAssertEqual(s.id, "claude@2026-10-12T09:30:00Z")
+        XCTAssertEqual(s.label, "Claude Code")
+        XCTAssertEqual(s.share, 1)
+        XCTAssertEqual(s.attribution, "none")
+        XCTAssertEqual(s.subagents, 0)
+        XCTAssertEqual(s.tokens.total, 1234)
+        XCTAssertEqual(s.tokens.input, 0)
+        XCTAssertEqual(s.models, ["claude-opus-5-5"])
+        XCTAssertNil(s.cwd)
+        XCTAssertNil(s.branch)
+        XCTAssertNil(s.title)
+        XCTAssertNil(s.byDay)
+        XCTAssertEqual(r.buckets.unattributed.sessionsDetail.first?.tokens.total, 1234)
+    }
+
     func testDayWithoutByAgentDecodesAsNil() throws {
         let json = #"[{"day": "2026-10-22", "cost": 3.2, "tokens": 120000},"#
             + #"{"day": "2026-10-23", "cost": 1, "tokens": 5, "by_agent": {"claude": 0.75, "codex": 0.25}}]"#

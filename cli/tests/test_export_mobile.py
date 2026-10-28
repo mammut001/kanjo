@@ -21,9 +21,10 @@ MOBILE_TOP_LEVEL = {"schema_version", "generated_at", "generated_by", "timezone"
                     "cost_note", "quota_windows", "subscriptions", "totals", "projects", "buckets",
                     "mobile"}
 MOBILE_PROJECT_KEYS = {"id", "name", "cost", "tokens", "sessions", "first_active", "last_active",
-                       "by_agent", "by_model", "by_day"}
-MOBILE_BUCKET_KEYS = {"cost", "tokens", "sessions", "first_active", "last_active"}
-DROP_PROJECT_KEYS = {"config", "paths", "remote", "path_missing", "by_branch", "sessions_detail"}
+                       "by_agent", "by_model", "by_day", "sessions_detail"}
+MOBILE_BUCKET_KEYS = {"cost", "tokens", "sessions", "first_active", "last_active", "sessions_detail"}
+DROP_PROJECT_KEYS = {"config", "paths", "remote", "path_missing", "by_branch"}
+SLIM_SESSION_KEYS = {"agent", "started", "ended", "cost", "tokens", "models"}
 
 
 class MobileDocumentTest(unittest.TestCase):
@@ -42,6 +43,7 @@ class MobileDocumentTest(unittest.TestCase):
         self.assertEqual(self.mobile["mobile"], {"trimmed": True, "hidden_project_names": False})
         for key in ("config", "ledger"):
             self.assertNotIn(key, self.mobile)
+        self.assertIn("sessions_detail", self.mobile["projects"][0])
 
     def test_projects_keep_only_phone_fields(self):
         self.assertEqual(len(self.mobile["projects"]), len(self.full["projects"]))
@@ -58,13 +60,29 @@ class MobileDocumentTest(unittest.TestCase):
             self.assertEqual(mobile_project["by_agent"], full_project["by_agent"])
             self.assertEqual(mobile_project["by_model"], full_project["by_model"])
             self.assertEqual(mobile_project["by_day"], full_project["by_day"])
+            self.assertEqual(len(mobile_project["sessions_detail"]),
+                             len(full_project["sessions_detail"]))
+            for slim, full in zip(mobile_project["sessions_detail"], full_project["sessions_detail"]):
+                self.assertEqual(set(slim), SLIM_SESSION_KEYS)
+                self.assertEqual(set(slim["tokens"]), {"total"})
+                self.assertEqual(slim["agent"], full["agent"])
+                self.assertEqual(slim["started"], full["started"])
+                self.assertEqual(slim["ended"], full["ended"])
+                self.assertEqual(slim["cost"], full["cost"])
+                self.assertEqual(slim["tokens"]["total"], full["tokens"]["total"])
+                self.assertEqual(slim["models"], full["models"])
 
     def test_buckets_are_summaries_only(self):
         buckets = self.mobile["buckets"]
         for name in ("unattributed", "excluded"):
             self.assertEqual(set(buckets[name]), MOBILE_BUCKET_KEYS)
-            for key in MOBILE_BUCKET_KEYS:
+            for key in MOBILE_BUCKET_KEYS - {"sessions_detail"}:
                 self.assertEqual(buckets[name][key], self.full["buckets"][name][key])
+            full_sessions = self.full["buckets"][name]["sessions_detail"]
+            self.assertEqual(len(buckets[name]["sessions_detail"]), len(full_sessions))
+            for slim in buckets[name]["sessions_detail"]:
+                self.assertEqual(set(slim), SLIM_SESSION_KEYS)
+                self.assertEqual(set(slim["tokens"]), {"total"})
         self.assertEqual(set(buckets["parse_failed"]), {"sessions"})
         self.assertEqual(buckets["parse_failed"]["sessions"], self.full["buckets"]["parse_failed"]["sessions"])
 
@@ -74,8 +92,13 @@ class MobileDocumentTest(unittest.TestCase):
                     "cost_note", "quota_windows", "subscriptions"):
             self.assertEqual(self.mobile[key], self.full[key])
         text = json.dumps(self.mobile)
-        for needle in ('"sessions_detail"', '"paths"', '"remote"', '"path_missing"', '"by_branch"'):
+        for needle in ('"paths"', '"remote"', '"path_missing"', '"by_branch"',
+                       '"cwd"', '"attribution"', '"subagents"', '"share"', '"title"'):
             self.assertNotIn(needle, text)
+        for project in self.mobile["projects"]:
+            for session in project["sessions_detail"]:
+                self.assertEqual(set(session), SLIM_SESSION_KEYS)
+                self.assertNotIn("id", session)
 
     def test_hide_project_names_keeps_order_and_is_stable(self):
         hidden = mobile_document(self.full, hide_project_names=True)
@@ -89,6 +112,12 @@ class MobileDocumentTest(unittest.TestCase):
                          [p["cost"] for p in self.full["projects"]])
         self.assertEqual(len({p["id"] for p in hidden["projects"]}), len(hidden["projects"]))
         self.assertEqual(hidden, mobile_document(self.full, hide_project_names=True))
+        for project in hidden["projects"]:
+            for session in project["sessions_detail"]:
+                self.assertEqual(set(session), SLIM_SESSION_KEYS)
+                for full_project in self.full["projects"]:
+                    self.assertNotIn(full_project["name"], json.dumps(session, ensure_ascii=False))
+                    self.assertNotIn(full_project["id"], json.dumps(session, ensure_ascii=False))
 
     def test_full_export_is_not_mutated(self):
         before = json.dumps(self.full, sort_keys=True)
@@ -96,6 +125,7 @@ class MobileDocumentTest(unittest.TestCase):
         self.assertEqual(json.dumps(self.full, sort_keys=True), before)
         self.assertIn("sessions_detail", self.full["projects"][0])
         self.assertIn("config", self.full)
+        self.assertIn("title", self.full["projects"][0]["sessions_detail"][0])
 
 
 class MobileCliTest(unittest.TestCase):

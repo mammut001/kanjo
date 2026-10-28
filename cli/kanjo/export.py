@@ -509,8 +509,8 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
 MOBILE_TOP_LEVEL_KEYS = ("schema_version", "generated_at", "generated_by", "timezone", "currency",
                          "cost_note", "quota_windows", "subscriptions", "totals")
 MOBILE_PROJECT_KEYS = ("id", "name", "cost", "tokens", "sessions", "first_active", "last_active",
-                       "by_agent", "by_model", "by_day")
-MOBILE_BUCKET_KEYS = ("cost", "tokens", "sessions", "first_active", "last_active")
+                       "by_agent", "by_model", "by_day", "sessions_detail")
+MOBILE_BUCKET_KEYS = ("cost", "tokens", "sessions", "first_active", "last_active", "sessions_detail")
 
 
 def mobile_project_id(project_id: str) -> str:
@@ -518,11 +518,28 @@ def mobile_project_id(project_id: str) -> str:
     return hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:12]
 
 
+def mobile_session(session: dict) -> dict:
+    """A session without anything that can identify a repo or a conversation."""
+    return {
+        "agent": session["agent"],
+        "started": session["started"],
+        "ended": session["ended"],
+        "cost": session["cost"],
+        "tokens": {"total": session["tokens"]["total"]},
+        "models": list(session.get("models") or []),
+    }
+
+
+def mobile_sessions(agg: dict) -> list:
+    return [mobile_session(s) for s in agg.get("sessions_detail", [])]
+
+
 def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
     """Trim a full export document down to the CONTRACT.md section 11 phone snapshot."""
     projects = []
     for index, project in enumerate(doc["projects"], 1):
         trimmed = {key: project[key] for key in MOBILE_PROJECT_KEYS}
+        trimmed["sessions_detail"] = mobile_sessions(project)
         if hide_project_names:
             trimmed["id"] = mobile_project_id(project["id"])
             trimmed["name"] = "Project %d" % index
@@ -534,6 +551,8 @@ def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
         "excluded": {key: buckets["excluded"][key] for key in MOBILE_BUCKET_KEYS},
         "parse_failed": {"sessions": buckets["parse_failed"]["sessions"]},
     }
+    for name in ("unattributed", "excluded"):
+        mobile_buckets[name]["sessions_detail"] = mobile_sessions(buckets[name])
 
     mobile = {key: doc[key] for key in MOBILE_TOP_LEVEL_KEYS}
     mobile["projects"] = projects

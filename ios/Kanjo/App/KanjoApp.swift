@@ -7,6 +7,7 @@ struct KanjoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(store: store)
+                .onAppear { print("KANJO root appear args=\(CommandLine.arguments)") }
         }
     }
 }

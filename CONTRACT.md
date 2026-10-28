@@ -329,8 +329,9 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 "mobile": { "trimmed": true, "hidden_project_names": false }
 ```
 
-- 每个项目只保留 `id`、`name`、`cost`、`tokens`、`sessions`、`first_active`、`last_active`、`by_agent`、`by_model`、`by_day`；去掉 `config`、`paths`、`remote`、`path_missing`、`by_branch`、`sessions_detail`。
-- `buckets` 只保留汇总：`unattributed` / `excluded` 为 Aggregate 字段（不含 `sessions_detail`），`parse_failed` 只留 `sessions`（不含 `files` 路径）。
-- `--hide-project-names`（只能和 `--mobile` 一起用）：项目名按 cost 顺序替换为 `Project 1`…`Project N`，`id` 替换为原 id 的 sha256 前 12 位十六进制，`mobile.hidden_project_names` 为 `true`。顺序不变。
+- 每个项目只保留 `id`、`name`、`cost`、`tokens`、`sessions`、`first_active`、`last_active`、`by_agent`、`by_model`、`by_day`、`sessions_detail`；去掉 `config`、`paths`、`remote`、`path_missing`、`by_branch`。
+- `sessions_detail` 是精简会话：每项只保留 `agent`、`started`、`ended`、`cost`、`tokens`（只有 `total`）、`models`；**不含** `id`、`title`、`cwd`、`branch`、`label`、`share`、`attribution`、`subagents`、`by_day`，也不含任何路径或文件名。iOS 端的 Session 解码把这些缺失字段当作可选（`id`/`label` 由 agent 与时间兜底）。
+- `buckets`：`unattributed` / `excluded` 保留 Aggregate 字段和同样精简的 `sessions_detail`；`parse_failed` 只留 `sessions`（不含 `files` 路径）。
+- `--hide-project-names`（只能和 `--mobile` 一起用）：项目名按 cost 顺序替换为 `Project 1`…`Project N`，`id` 替换为原 id 的 sha256 前 12 位十六进制，`mobile.hidden_project_names` 为 `true`。顺序不变。精简会话里没有任何字段能暴露项目名、路径或远程地址。
 - `--gzip`：把 JSON 以 gzip 压缩后写到 stdout（二进制，无缩进）；`-o` 时写入文件。适合 Mac app 直接上传。
 

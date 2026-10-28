@@ -204,6 +204,18 @@ public struct Tokens: Codable, Equatable {
         self.cacheWrite = cacheWrite; self.thinking = thinking; self.total = total
     }
 
+    /// 手机快照里的会话只有 `{"total": N}`；其余字段缺失时补 0，total 缺失时用四项之和。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        input = try c.decodeIfPresent(Int.self, forKey: .input) ?? 0
+        output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0
+        cacheRead = try c.decodeIfPresent(Int.self, forKey: .cacheRead) ?? 0
+        cacheWrite = try c.decodeIfPresent(Int.self, forKey: .cacheWrite) ?? 0
+        thinking = try c.decodeIfPresent(Int.self, forKey: .thinking) ?? 0
+        total = try c.decodeIfPresent(Int.self, forKey: .total)
+            ?? (input + output + cacheRead + cacheWrite)
+    }
+
     public static let zero = Tokens()
 
     public static func + (a: Tokens, b: Tokens) -> Tokens {
@@ -405,6 +417,27 @@ public struct Session: Codable, Equatable, Identifiable {
         self.subagents = subagents
         self.title = title
         self.byDay = byDay
+    }
+
+    /// 手机快照的精简会话没有 id / label / share / attribution / subagents / by_day。
+    /// 兜底值保证范围过滤和列表仍能工作，同时不改变完整导出的语义。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        agent = try c.decode(String.self, forKey: .agent)
+        started = try c.decode(String.self, forKey: .started)
+        ended = try c.decode(String.self, forKey: .ended)
+        cost = try c.decode(Double.self, forKey: .cost)
+        tokens = try c.decode(Tokens.self, forKey: .tokens)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? "\(agent)@\(started)"
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? AgentColors.label(for: agent)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        models = try c.decodeIfPresent([String].self, forKey: .models) ?? []
+        share = try c.decodeIfPresent(Double.self, forKey: .share) ?? 1
+        attribution = try c.decodeIfPresent(String.self, forKey: .attribution) ?? "none"
+        subagents = try c.decodeIfPresent(Int.self, forKey: .subagents) ?? 0
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        byDay = try c.decodeIfPresent([DayCost].self, forKey: .byDay)
     }
 
     public var startedDate: Date? { ReportDates.parseTimestamp(started) }
