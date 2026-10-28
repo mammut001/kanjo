@@ -5,6 +5,7 @@ import UIKit
 struct OverviewView: View {
     let report: UsageReport
     var deviceName: String? = nil
+    var accountCode: String? = nil
     @State private var range: TimeRange = .all
 
     private var currency: String { report.currency }
@@ -168,10 +169,14 @@ struct OverviewView: View {
 
     private var footerText: String {
         let updated = Fmt.timestamp(report.generatedAt)
+        var text = L10n.tr("ios.updated", updated)
         if let deviceName, !deviceName.isEmpty {
-            return L10n.tr("ios.updated_device", updated, deviceName)
+            text = L10n.tr("ios.updated_device", updated, deviceName)
         }
-        return L10n.tr("ios.updated", updated)
+        if let accountCode {
+            text += " · " + L10n.tr("sync.account_code", accountCode)
+        }
+        return text
     }
 }
 

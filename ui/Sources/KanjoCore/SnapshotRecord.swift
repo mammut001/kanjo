@@ -96,6 +96,24 @@ public enum SnapshotDevice {
     #endif
 }
 
+/// iCloud 账户识别码：CloudKit 用户记录 ID 的 SHA-256 前 6 位。
+/// Apple 不给 app 读 Apple ID 邮箱，用它在 Mac 和手机上核对是不是同一个账户；推不回原 ID。
+public enum ICloudAccountCode {
+    public static func make(userRecordName: String) -> String {
+        SHA256.hash(data: Data(userRecordName.utf8)).prefix(3).map { String(format: "%02x", $0) }.joined()
+    }
+
+    #if canImport(CloudKit)
+    /// 读当前 iCloud 账户在该容器下的识别码；未登录或出错时返回 nil。
+    public static func fetch(containerIdentifier: String = SnapshotRecord.containerIdentifier) async -> String? {
+        guard let recordID = try? await CKContainer(identifier: containerIdentifier).userRecordID() else {
+            return nil
+        }
+        return make(userRecordName: recordID.recordName)
+    }
+    #endif
+}
+
 #if canImport(CloudKit)
 public enum CloudKitEntitlement {
     #if os(macOS)

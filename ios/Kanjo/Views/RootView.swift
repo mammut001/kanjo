@@ -34,7 +34,13 @@ struct RootView: View {
             ContentUnavailableView {
                 Label(L10n.tr("ios.empty.title"), systemImage: "icloud.slash")
             } description: {
-                Text(L10n.tr("ios.empty.body"))
+                VStack(spacing: 8) {
+                    Text(L10n.tr("ios.empty.body"))
+                    if let code = store.accountCode {
+                        Text(L10n.tr("ios.empty.account", code))
+                            .font(.footnote)
+                    }
+                }
             } actions: {
                 Button(L10n.tr("common.retry")) {
                     Task { await store.load() }
@@ -51,7 +57,7 @@ struct RootView: View {
                 }
             }
         case .loaded(let report):
-            OverviewView(report: report, deviceName: store.deviceName)
+            OverviewView(report: report, deviceName: store.deviceName, accountCode: store.accountCode)
                 .refreshable { await store.refresh() }
         }
     }

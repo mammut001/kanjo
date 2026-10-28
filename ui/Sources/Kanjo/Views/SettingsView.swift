@@ -113,6 +113,12 @@ struct SettingsView: View {
                         .font(.system(size: 10.5))
                         .foregroundStyle(syncStatusColor)
                         .fixedSize(horizontal: false, vertical: true)
+                    if cloudSyncEnabled, let code = cloudSync.accountCode {
+                        Text(L10n.tr("sync.account_code", code))
+                            .font(.system(size: 10.5).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .help(L10n.tr("settings.sync.account_help"))
+                    }
                     note(L10n.tr("settings.sync.note"))
                 }
 
@@ -162,8 +168,10 @@ struct SettingsView: View {
         }
         .onChange(of: refreshMinutes) { _ in store.restartTimer() }
         .onChange(of: sourceKind) { _ in store.applySettings() }
+        .task { await cloudSync.loadAccountCode() }
         .onChange(of: cloudSyncEnabled) { enabled in
             cloudSync.setEnabled(enabled)
+            Task { await cloudSync.loadAccountCode() }
             if enabled {
                 cloudSync.resetUploadState()
                 store.refresh()
