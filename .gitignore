@@ -21,3 +21,9 @@ data.json
 
 # Xcode build output
 build-dd/
+
+# iOS: commit the generated project (regenerate with `cd ios && xcodegen` after editing project.yml)
+!ios/Kanjo.xcodeproj
+!ios/Kanjo.xcodeproj/**
+ios/Kanjo.xcodeproj/xcuserdata/
+ios/Kanjo.xcodeproj/project.xcworkspace/xcuserdata/
