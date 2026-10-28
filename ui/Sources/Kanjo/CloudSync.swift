@@ -19,6 +19,8 @@ final class CloudSyncStore: ObservableObject {
     }
 
     @Published private(set) var status: Status
+    /// 当前 iCloud 账户识别码（ICloudAccountCode），设置页显示，方便和手机核对。
+    @Published private(set) var accountCode: String?
 
     private let defaults: UserDefaults
     private var inFlight = false
@@ -48,6 +50,14 @@ final class CloudSyncStore: ObservableObject {
             return
         }
         status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
+    }
+
+    func loadAccountCode() async {
+        guard isEnabled, AppDefaults.suiteName() == nil, CloudKitEntitlement.hasContainer() else {
+            accountCode = nil
+            return
+        }
+        accountCode = await ICloudAccountCode.fetch()
     }
 
     func resetUploadState() {
@@ -125,6 +135,9 @@ final class CloudSyncStore: ObservableObject {
                 return
             }
             Self.logger.info("sync started: iCloud account available")
+            if accountCode == nil {
+                accountCode = await ICloudAccountCode.fetch()
+            }
 
             let source = CLIDataSource(
                 command: CLILaunch.command(defaults: defaults),
@@ -315,11 +328,13 @@ final class CloudSyncStore: ObservableObject {
     }
 
     @Published private(set) var status: Status = .off
+    @Published private(set) var accountCode: String?
 
     var isEnabled: Bool { false }
     var hideProjectNames: Bool { false }
 
     func setEnabled(_ enabled: Bool) {}
+    func loadAccountCode() async {}
     func reportDidRefresh(_ report: UsageReport) {}
 }
 

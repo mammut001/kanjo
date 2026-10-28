@@ -148,6 +148,8 @@
 "settings.sync.status.failed" = "同步失败：%@";
 "settings.sync.status.not_configured" = "此构建尚未配置 iCloud 签名。";
 "settings.sync.status.quota_exceeded" = "iCloud 空间已满，腾出空间后会自动恢复同步。";
+"settings.sync.account_help" = "这台 Mac 同步所用 iCloud 账户的识别码。iPhone 上登录同一个 Apple ID 时会显示相同的码。";
+"sync.account_code" = "iCloud 账户 %@";
 "gzip.error.invalid_header" = "快照不是 gzip 文件。";
 "gzip.error.truncated" = "快照文件不完整。";
 "gzip.error.unsupported_method" = "快照使用了不支持的压缩方式。";
@@ -404,6 +406,7 @@
 "ios.updated_device" = "更新于 %@ · %@";
 "ios.empty.title" = "还没有快照";
 "ios.empty.body" = "在 Mac 上打开 Kanjo 并开启 iCloud 同步，就能在这里看到 AI 用量。";
+"ios.empty.account" = "这台 iPhone 的 iCloud 账户码是 %@。如果 Mac 上 Kanjo 设置里显示的码不同，说明两台设备登录的不是同一个 Apple ID。";
 "ios.error.title" = "无法载入快照";
 "ios.error.missing_payload" = "快照记录中没有数据。";
 "ios.loading" = "正在载入…";

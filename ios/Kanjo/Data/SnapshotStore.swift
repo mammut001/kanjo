@@ -16,6 +16,7 @@ final class SnapshotStore {
 
     private(set) var state: State = .loading
     private(set) var deviceName: String?
+    private(set) var accountCode: String?
     private let source: SnapshotSource
 
     init(source: SnapshotSource? = nil) {
@@ -46,6 +47,7 @@ final class SnapshotStore {
         do {
             let report = try await source.load()
             deviceName = source.lastDeviceName
+            accountCode = source.lastAccountCode
             if let report {
                 state = .loaded(report)
                 SyncLog.sync.info("load finished: snapshot decoded")

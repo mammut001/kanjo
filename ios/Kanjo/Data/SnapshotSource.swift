@@ -12,10 +12,13 @@ protocol SnapshotSource {
     /// nil 表示还没有任何快照（显示空状态）。
     func load() async throws -> UsageReport?
     var lastDeviceName: String? { get }
+    /// 这台 iPhone 的 iCloud 账户识别码，与 Mac 设置页对照。
+    var lastAccountCode: String? { get }
 }
 
 extension SnapshotSource {
     var lastDeviceName: String? { nil }
+    var lastAccountCode: String? { nil }
 }
 
 /// 读 App bundle 里的 sample-snapshot.json（由 ui/fixtures/sample.json 复制而来）。
@@ -50,6 +53,7 @@ final class CloudKitSnapshotSource: SnapshotSource {
     private let container: CKContainer
     private let database: CKDatabase
     private(set) var lastDeviceName: String?
+    private(set) var lastAccountCode: String?
 
     init(containerIdentifier: String = SnapshotRecord.containerIdentifier) {
         let container = CKContainer(identifier: containerIdentifier)
@@ -59,6 +63,7 @@ final class CloudKitSnapshotSource: SnapshotSource {
 
     func load() async throws -> UsageReport? {
         lastDeviceName = nil
+        lastAccountCode = nil
         SyncLog.sync.info("fetch started: CloudKit private database")
         let account: CKAccountStatus
         do {
@@ -71,6 +76,7 @@ final class CloudKitSnapshotSource: SnapshotSource {
             SyncLog.sync.info("fetch skipped: iCloud account status \(Self.accountCode(account), privacy: .public)")
             return nil
         }
+        lastAccountCode = await ICloudAccountCode.fetch()
 
         let records: [CKRecord]
         do {

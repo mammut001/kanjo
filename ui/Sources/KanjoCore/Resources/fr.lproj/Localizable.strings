@@ -148,6 +148,8 @@
 "settings.sync.status.failed" = "Échec de la synchronisation : %@";
 "settings.sync.status.not_configured" = "Cette version n'est pas encore signée pour iCloud.";
 "settings.sync.status.quota_exceeded" = "Le stockage iCloud est plein. La synchronisation reprendra dès que de l'espace sera libéré.";
+"settings.sync.account_help" = "Code court du compte iCloud utilisé par ce Mac. L’app iPhone affiche le même code avec le même identifiant Apple.";
+"sync.account_code" = "Compte iCloud %@";
 "gzip.error.invalid_header" = "L'instantané n'est pas un fichier gzip.";
 "gzip.error.truncated" = "Le fichier d'instantané est incomplet.";
 "gzip.error.unsupported_method" = "L'instantané utilise une compression non prise en charge.";
@@ -404,6 +406,7 @@
 "ios.updated_device" = "Mis à jour %@ · %@";
 "ios.empty.title" = "Aucun instantané";
 "ios.empty.body" = "Activez la synchronisation iCloud dans Kanjo sur votre Mac pour voir votre usage ici.";
+"ios.empty.account" = "Le code du compte iCloud de cet iPhone est %@. Si les réglages de Kanjo sur le Mac affichent un autre code, les deux appareils utilisent des identifiants Apple différents.";
 "ios.error.title" = "Impossible de charger l'instantané";
 "ios.error.missing_payload" = "L'instantané ne contient aucune donnée.";
 "ios.loading" = "Chargement…";

@@ -20,6 +20,14 @@ final class SnapshotRecordTests: XCTestCase {
         XCTAssertEqual(String(decoding: plain, as: UTF8.self), #"{"hello":"world"}"#)
     }
 
+    func testAccountCodeIsStableShortHex() {
+        let code = ICloudAccountCode.make(userRecordName: "_0123456789abcdef")
+        XCTAssertEqual(code.count, 6)
+        XCTAssertTrue(code.allSatisfy(\.isHexDigit))
+        XCTAssertEqual(code, ICloudAccountCode.make(userRecordName: "_0123456789abcdef"))
+        XCTAssertNotEqual(code, ICloudAccountCode.make(userRecordName: "_fedcba9876543210"))
+    }
+
     func testGzipRejectsNonGzipData() {
         XCTAssertThrowsError(try Gzip.decompress(Data("not gzip".utf8)))
     }
