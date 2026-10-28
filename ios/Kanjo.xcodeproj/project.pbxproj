@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0978145B5A388F9DD6BA518E /* HeatStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */; };
 		101BE5C17F2CE1C09B39B552 /* SnapshotSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC30710793234C731B0DE10 /* SnapshotSource.swift */; };
 		2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E829F6655E532133018832 /* IOSPalette.swift */; };
+		2869CF7F6B710CA75B877D33 /* MosaicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3465A7114B6763F70C034E43 /* MosaicView.swift */; };
 		4B1C06207740050EBA332631 /* ByModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C46E10884DB3956B665DC7 /* ByModelView.swift */; };
 		6EFE2DCF6E15AFED768174E9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6942A238E68DF45A2BF1878A /* RootView.swift */; };
 		93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */; };
@@ -23,11 +25,13 @@
 /* Begin PBXFileReference section */
 		11501081076B36A53170935D /* Kanjo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kanjo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		3465A7114B6763F70C034E43 /* MosaicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MosaicView.swift; sourceTree = "<group>"; };
 		4CC30710793234C731B0DE10 /* SnapshotSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotSource.swift; sourceTree = "<group>"; };
 		624BFEF0D28FC81441D67019 /* SnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStore.swift; sourceTree = "<group>"; };
 		6942A238E68DF45A2BF1878A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
 		81E829F6655E532133018832 /* IOSPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPalette.swift; sourceTree = "<group>"; };
+		8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatStripView.swift; sourceTree = "<group>"; };
 		90EE56787B5D8F5630C8F324 /* CommonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViews.swift; sourceTree = "<group>"; };
 		ABD73AC37EBB88DAD3B2B692 /* ui */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ui; path = ../ui; sourceTree = SOURCE_ROOT; };
 		B0908A345408422DD68F8556 /* sample-snapshot.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "sample-snapshot.json"; sourceTree = "<group>"; };
@@ -123,6 +127,8 @@
 			isa = PBXGroup;
 			children = (
 				90EE56787B5D8F5630C8F324 /* CommonViews.swift */,
+				8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */,
+				3465A7114B6763F70C034E43 /* MosaicView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -217,8 +223,10 @@
 			files = (
 				4B1C06207740050EBA332631 /* ByModelView.swift in Sources */,
 				9BE13390CEC83B19C773AA19 /* CommonViews.swift in Sources */,
+				0978145B5A388F9DD6BA518E /* HeatStripView.swift in Sources */,
 				2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */,
 				FD45AEB6FBD3348CD9B5CC16 /* KanjoApp.swift in Sources */,
+				2869CF7F6B710CA75B877D33 /* MosaicView.swift in Sources */,
 				C41C7B6697DD2DCF7AD44397 /* OverviewView.swift in Sources */,
 				93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */,
 				6EFE2DCF6E15AFED768174E9 /* RootView.swift in Sources */,
