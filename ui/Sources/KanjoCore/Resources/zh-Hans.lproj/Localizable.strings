@@ -147,6 +147,7 @@
 "settings.sync.status.uploaded" = "上次上传 %@";
 "settings.sync.status.failed" = "同步失败：%@";
 "settings.sync.status.not_configured" = "此构建尚未配置 iCloud 签名。";
+"settings.sync.status.quota_exceeded" = "iCloud 空间已满，腾出空间后会自动恢复同步。";
 "gzip.error.invalid_header" = "快照不是 gzip 文件。";
 "gzip.error.truncated" = "快照文件不完整。";
 "gzip.error.unsupported_method" = "快照使用了不支持的压缩方式。";

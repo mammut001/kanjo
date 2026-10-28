@@ -147,6 +147,7 @@
 "settings.sync.status.uploaded" = "Last uploaded %@";
 "settings.sync.status.failed" = "Sync failed: %@";
 "settings.sync.status.not_configured" = "This build is not signed for iCloud yet.";
+"settings.sync.status.quota_exceeded" = "iCloud storage is full. Sync resumes automatically once space is freed.";
 "gzip.error.invalid_header" = "The snapshot is not a gzip file.";
 "gzip.error.truncated" = "The snapshot file is truncated.";
 "gzip.error.unsupported_method" = "The snapshot uses an unsupported compression method.";
