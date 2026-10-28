@@ -147,6 +147,7 @@
 "settings.sync.status.uploaded" = "Dernier envoi %@";
 "settings.sync.status.failed" = "Échec de la synchronisation : %@";
 "settings.sync.status.not_configured" = "Cette version n'est pas encore signée pour iCloud.";
+"settings.sync.status.quota_exceeded" = "Le stockage iCloud est plein. La synchronisation reprendra dès que de l'espace sera libéré.";
 "gzip.error.invalid_header" = "L'instantané n'est pas un fichier gzip.";
 "gzip.error.truncated" = "Le fichier d'instantané est incomplet.";
 "gzip.error.unsupported_method" = "L'instantané utilise une compression non prise en charge.";

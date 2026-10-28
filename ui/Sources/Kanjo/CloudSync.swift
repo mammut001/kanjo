@@ -179,9 +179,23 @@ final class CloudSyncStore: ObservableObject {
             status = .uploaded(uploaded)
         } catch {
             Self.logFailure(error)
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            status = .failed(message)
+            if Self.isQuotaExceeded(error) {
+                status = .failed(L10n.tr("settings.sync.status.quota_exceeded"))
+            } else {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                status = .failed(message)
+            }
         }
+    }
+
+    /// iCloud 空间已满：CloudKit 可能直接报 quotaExceeded，也可能包在 partialFailure 里。
+    private static func isQuotaExceeded(_ error: Error) -> Bool {
+        guard let ckError = error as? CKError else { return false }
+        if ckError.code == .quotaExceeded { return true }
+        if ckError.code == .partialFailure, let items = ckError.partialErrorsByItemID {
+            return items.values.contains { ($0 as? CKError)?.code == .quotaExceeded }
+        }
+        return false
     }
 
     private static func accountCode(_ status: CKAccountStatus) -> String {
