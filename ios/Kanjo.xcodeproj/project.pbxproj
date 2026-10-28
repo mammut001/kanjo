@@ -1,0 +1,446 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		101BE5C17F2CE1C09B39B552 /* SnapshotSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC30710793234C731B0DE10 /* SnapshotSource.swift */; };
+		2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E829F6655E532133018832 /* IOSPalette.swift */; };
+		4B1C06207740050EBA332631 /* ByModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C46E10884DB3956B665DC7 /* ByModelView.swift */; };
+		6EFE2DCF6E15AFED768174E9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6942A238E68DF45A2BF1878A /* RootView.swift */; };
+		93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */; };
+		9BE13390CEC83B19C773AA19 /* CommonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EE56787B5D8F5630C8F324 /* CommonViews.swift */; };
+		C41C7B6697DD2DCF7AD44397 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */; };
+		C8061586A8BEFE61041E99C9 /* SnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 624BFEF0D28FC81441D67019 /* SnapshotStore.swift */; };
+		E7E2189D2377ADB0FE4EDBDA /* KanjoCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9B8C72260EBD90BDF78E87A /* KanjoCore */; };
+		FD45AEB6FBD3348CD9B5CC16 /* KanjoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D70329043E5CE090994ECBC9 /* KanjoApp.swift */; };
+		FDC1B631BBF60F50C8301407 /* sample-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = B0908A345408422DD68F8556 /* sample-snapshot.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		11501081076B36A53170935D /* Kanjo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kanjo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		4CC30710793234C731B0DE10 /* SnapshotSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotSource.swift; sourceTree = "<group>"; };
+		624BFEF0D28FC81441D67019 /* SnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStore.swift; sourceTree = "<group>"; };
+		6942A238E68DF45A2BF1878A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
+		81E829F6655E532133018832 /* IOSPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPalette.swift; sourceTree = "<group>"; };
+		90EE56787B5D8F5630C8F324 /* CommonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViews.swift; sourceTree = "<group>"; };
+		ABD73AC37EBB88DAD3B2B692 /* ui */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ui; path = ../ui; sourceTree = SOURCE_ROOT; };
+		B0908A345408422DD68F8556 /* sample-snapshot.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "sample-snapshot.json"; sourceTree = "<group>"; };
+		D70329043E5CE090994ECBC9 /* KanjoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanjoApp.swift; sourceTree = "<group>"; };
+		E19E89018E4E065FC1F44B46 /* Kanjo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kanjo.entitlements; sourceTree = "<group>"; };
+		E3C46E10884DB3956B665DC7 /* ByModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByModelView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		415E59148803CE1D1D2243FA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7E2189D2377ADB0FE4EDBDA /* KanjoCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0FB3624D662C0D100280EBA6 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				D70329043E5CE090994ECBC9 /* KanjoApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		2237C690E12D731BE3780DD9 = {
+			isa = PBXGroup;
+			children = (
+				2BD481D8752F0EA85A76A767 /* Kanjo */,
+				41EC2971E25AD475F7ED623B /* Packages */,
+				44C62873AB7D9E631447F7D7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2661A010C2B5B481AF777C80 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				4CC30710793234C731B0DE10 /* SnapshotSource.swift */,
+				624BFEF0D28FC81441D67019 /* SnapshotStore.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		2BD481D8752F0EA85A76A767 /* Kanjo */ = {
+			isa = PBXGroup;
+			children = (
+				E19E89018E4E065FC1F44B46 /* Kanjo.entitlements */,
+				0FB3624D662C0D100280EBA6 /* App */,
+				2661A010C2B5B481AF777C80 /* Data */,
+				2F2B0ACB1B84C1ECAE01BDC6 /* Resources */,
+				3E42C3454F31F9ACB5014BEC /* Theme */,
+				F89ABEA8DC7358E89F569ABB /* Views */,
+			);
+			path = Kanjo;
+			sourceTree = "<group>";
+		};
+		2F2B0ACB1B84C1ECAE01BDC6 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B0908A345408422DD68F8556 /* sample-snapshot.json */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		3E42C3454F31F9ACB5014BEC /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				81E829F6655E532133018832 /* IOSPalette.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		41EC2971E25AD475F7ED623B /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				ABD73AC37EBB88DAD3B2B692 /* ui */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		44C62873AB7D9E631447F7D7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				11501081076B36A53170935D /* Kanjo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C7CA76C8EC4903C1E1D9281D /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				90EE56787B5D8F5630C8F324 /* CommonViews.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		F89ABEA8DC7358E89F569ABB /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				E3C46E10884DB3956B665DC7 /* ByModelView.swift */,
+				21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */,
+				8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */,
+				6942A238E68DF45A2BF1878A /* RootView.swift */,
+				C7CA76C8EC4903C1E1D9281D /* Components */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D130056C5C354A79AFB4A19A /* Kanjo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67261E10C61A7F55FB2FEA25 /* Build configuration list for PBXNativeTarget "Kanjo" */;
+			buildPhases = (
+				57A88771B39CE054E8B4DCD2 /* Sources */,
+				684C1279D6D8B517B93CAF6E /* Resources */,
+				415E59148803CE1D1D2243FA /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Kanjo;
+			packageProductDependencies = (
+				E9B8C72260EBD90BDF78E87A /* KanjoCore */,
+			);
+			productName = Kanjo;
+			productReference = 11501081076B36A53170935D /* Kanjo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D95072E1A052ECAA7AB40E62 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					D130056C5C354A79AFB4A19A = {
+						DevelopmentTeam = Z5D5N7CU6L;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = C30046C109021BEF0D24339B /* Build configuration list for PBXProject "Kanjo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2237C690E12D731BE3780DD9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7C9E871B4791B759B004DDE1 /* XCLocalSwiftPackageReference "../ui" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 44C62873AB7D9E631447F7D7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D130056C5C354A79AFB4A19A /* Kanjo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		684C1279D6D8B517B93CAF6E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDC1B631BBF60F50C8301407 /* sample-snapshot.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		57A88771B39CE054E8B4DCD2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4B1C06207740050EBA332631 /* ByModelView.swift in Sources */,
+				9BE13390CEC83B19C773AA19 /* CommonViews.swift in Sources */,
+				2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */,
+				FD45AEB6FBD3348CD9B5CC16 /* KanjoApp.swift in Sources */,
+				C41C7B6697DD2DCF7AD44397 /* OverviewView.swift in Sources */,
+				93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */,
+				6EFE2DCF6E15AFED768174E9 /* RootView.swift in Sources */,
+				101BE5C17F2CE1C09B39B552 /* SnapshotSource.swift in Sources */,
+				C8061586A8BEFE61041E99C9 /* SnapshotStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6EB1F689DE19AFAC916E31BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Kanjo/Kanjo.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Z5D5N7CU6L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Kanjo;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanshuagent.kanjo.ios;
+				PRODUCT_NAME = Kanjo;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A949350424AF99CF63AC7A8E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Kanjo/Kanjo.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Z5D5N7CU6L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Kanjo;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanshuagent.kanjo.ios;
+				PRODUCT_NAME = Kanjo;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C870CC4CA2DE59FE0087DFC9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C9F988E9221345049CBA4D88 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		67261E10C61A7F55FB2FEA25 /* Build configuration list for PBXNativeTarget "Kanjo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A949350424AF99CF63AC7A8E /* Debug */,
+				6EB1F689DE19AFAC916E31BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C30046C109021BEF0D24339B /* Build configuration list for PBXProject "Kanjo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9F988E9221345049CBA4D88 /* Debug */,
+				C870CC4CA2DE59FE0087DFC9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7C9E871B4791B759B004DDE1 /* XCLocalSwiftPackageReference "../ui" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ui;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E9B8C72260EBD90BDF78E87A /* KanjoCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KanjoCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D95072E1A052ECAA7AB40E62 /* Project object */;
+}
