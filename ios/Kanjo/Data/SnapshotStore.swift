@@ -28,7 +28,9 @@ final class SnapshotStore {
     }
 
     func load() async {
+        print("KANJO load start source=\(type(of: source))")
         await load(preserveState: false)
+        print("KANJO load done state=\(state)")
     }
 
     func refresh() async {

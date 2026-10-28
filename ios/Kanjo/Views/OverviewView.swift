@@ -29,6 +29,10 @@ struct OverviewView: View {
                 if !(report.subscriptions ?? [:]).isEmpty {
                     SubscriptionValueSection(report: report)
                 }
+                let used = result.projects.filter(\.hasUsage)
+                if used.contains(where: { $0.cost > 0 }) {
+                    ProjectMosaic(projects: used, report: report, range: range, currency: currency)
+                }
                 projectsSection(result)
                 modelsSection(result)
                 footer

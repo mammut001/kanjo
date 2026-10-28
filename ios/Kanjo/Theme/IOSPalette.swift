@@ -16,6 +16,11 @@ enum IOSPalette {
     static let bad = dynamic(light: 0xB3261E, dark: 0xFF8A80)
     static let quotaWarn = dynamic(light: 0xD08A12, dark: 0xF0B248)
     static let pin = dynamic(light: 0xC2861A, dark: 0xE8B44F)
+    static let heatEmpty = Color.primary.opacity(0.08)
+    static let tokenInput = dynamic(light: 0x3E79D6, dark: 0x6FA0F0)
+    static let tokenOutput = dynamic(light: 0xD97757, dark: 0xE8926F)
+    static let tokenCacheRead = dynamic(light: 0xB9CDEE, dark: 0x3D5478)
+    static let tokenCacheWrite = dynamic(light: 0x7A6AD8, dark: 0x9B8DF0)
 
     static func dynamic(light: UInt32, dark: UInt32, lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {
         Color(uiColor: UIColor { traits in
