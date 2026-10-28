@@ -107,3 +107,13 @@ T3 的代码在 `#if canImport(CloudKit)` 后面，没有 entitlements 也能编
 | T3 | Mac：设置里「同步到 iCloud」开关 + CloudKit 上传 | 需第 6 节 1–3 |
 | T4 | iOS：从 CloudKit 读取快照，替换内置示例 | T2、T3 |
 | T5 | 打包：描述文件 + entitlements + 公证；App Store 提交 | 第 6 节 |
+
+## 10. Troubleshooting iCloud sync
+
+Both apps log sync decisions through `os.Logger` (subsystem `com.lanshuagent.kanjo`, category `sync`). Stream them live:
+
+```sh
+log stream --predicate 'subsystem == "com.lanshuagent.kanjo" AND category == "sync"' --info
+```
+
+Logs cover skips (sync off, snapshot mode, missing entitlement, iCloud account status, unchanged fingerprint), export/upload timing and sizes, CloudKit error codes, and the iOS fetch → choose record → download/decompress/decode path. Record names, error descriptions, and other free-form strings are marked `.private`; codes, counts, durations, and device names are `.public`. Payload contents and project names are never logged.
