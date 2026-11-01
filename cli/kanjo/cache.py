@@ -18,7 +18,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from .sources.base import Message, ParseError, Session
 
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 REPO_CACHE_VERSION = 1
 NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
@@ -74,17 +74,23 @@ def _dump_session(s: Session) -> dict:
             ]
             for m in s.messages
         ],
-        "tool_paths": s.tool_paths,
+        "tool_paths": [list(call) for call in s.tool_paths],
         "subagent_of": s.subagent_of,
         "title": s.title,
-        "cwd_counts": s.cwd_counts,
-        "remote_hints": s.remote_hints,
+        "cwd_counts": dict(s.cwd_counts),
+        "remote_hints": dict(s.remote_hints),
     }
 
 
 def _load_session(d: dict) -> Session:
     d = dict(d)
     msgs = d.pop("messages", [])
+    if "tool_paths" in d and d["tool_paths"] is not None:
+        d["tool_paths"] = [list(call) for call in d["tool_paths"]]
+    if "cwd_counts" in d and d["cwd_counts"] is not None:
+        d["cwd_counts"] = dict(d["cwd_counts"])
+    if "remote_hints" in d and d["remote_hints"] is not None:
+        d["remote_hints"] = dict(d["remote_hints"])
     s = Session(**d)
     s.messages = [
         Message(*row) if len(row) == 11 else Message(**dict(zip(_MSG_FIELDS, row)))
@@ -255,4 +261,16 @@ class SessionCache:
                         os.unlink(tmp)
                     except OSError:
                         pass
+        try:
+            current_name = os.path.basename(self.path)
+            for fname in os.listdir(self.dir):
+                if (fname.startswith("parse-cache-v")
+                        and fname.endswith(".json")
+                        and fname != current_name):
+                    try:
+                        os.unlink(os.path.join(self.dir, fname))
+                    except OSError:
+                        pass
+        except OSError:
+            pass
         self.repo_cache.save()

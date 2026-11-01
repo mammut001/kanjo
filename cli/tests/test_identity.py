@@ -200,5 +200,65 @@ class ExtractPathsTest(unittest.TestCase):
                          ["/Users/alice/proj/a.txt", "/tmp/b"])
 
 
+def _reference_lookup_prefix(path: str, table: dict):
+    if not table:
+        return None
+    best_k = None
+    for k in table:
+        if path == k or (path.startswith(k) and (k.endswith("/") or path[len(k)] == "/")):
+            if best_k is None or len(k) > len(best_k):
+                best_k = k
+    if best_k is not None:
+        return best_k, table[best_k]
+    return None
+
+
+class LookupPrefixTest(unittest.TestCase):
+    def test_edge_cases(self):
+        cases = [
+            # (path, table, expected_key)
+            ("/a/b/c", {}, None),
+            ("/a/b/c", {"/a/b/c": "exact"}, "/a/b/c"),
+            ("/a/b/c/", {"/a/b/c/": "exact_slash"}, "/a/b/c/"),
+            ("/a/b/c", {"/a/b/c/": "longer_slash"}, None),
+            ("/a/b/c/", {"/a/b/c": "no_slash"}, "/a/b/c"),
+            ("/a/barbell/c", {"/a/bar": "prefix"}, None),
+            ("/a/bar/c", {"/a/bar": "p1", "/a/bar/": "p2"}, "/a/bar/"),
+            ("/a/b/c", {"/": "root"}, "/"),
+            ("/a/b/c", {"": "empty"}, ""),
+            ("relative/b", {"": "empty"}, None),
+            ("", {"": "empty"}, ""),
+            ("", {"/": "root"}, None),
+            ("//a///b", {"/a": "a", "//a": "slashes"}, "//a"),
+            ("/Users/alice/repo/src/main.py", {
+                "/Users/alice": "home",
+                "/Users/alice/repo": "repo",
+                "/Users/alice/repo/": "repo_slash",
+                "/Users/alice/repo/src": "src",
+            }, "/Users/alice/repo/src"),
+        ]
+        for path, table, expected in cases:
+            res = Resolver._lookup_prefix(path, table)
+            ref = _reference_lookup_prefix(path, table)
+            self.assertEqual(res, ref, f"Mismatch on path={path!r}, table={table}")
+            if expected is None:
+                self.assertIsNone(res)
+            else:
+                self.assertIsNotNone(res)
+                self.assertEqual(res[0], expected)
+
+    def test_random_cases_match_reference(self):
+        import random
+        chars = ["a", "b", "c", "/", "", "foo", "bar"]
+        for _ in range(5000):
+            table = {}
+            for _ in range(random.randint(0, 15)):
+                k = "/".join(random.choice(chars) for _ in range(random.randint(0, 5)))
+                table[k] = "val_" + k
+            test_path = "/".join(random.choice(chars) for _ in range(random.randint(0, 6)))
+            self.assertEqual(Resolver._lookup_prefix(test_path, table),
+                             _reference_lookup_prefix(test_path, table))
+
+
 if __name__ == "__main__":
     unittest.main()

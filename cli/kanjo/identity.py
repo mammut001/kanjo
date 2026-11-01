@@ -546,13 +546,21 @@ class Resolver:
         """Longest whole-component prefix of ``path`` that is a key of ``table``."""
         if not table:
             return None
-        best_k = None
-        for k in table:
-            if path == k or (path.startswith(k) and (k.endswith("/") or path[len(k)] == "/")):
-                if best_k is None or len(k) > len(best_k):
-                    best_k = k
-        if best_k is not None:
-            return best_k, table[best_k]
+        if path in table:
+            return path, table[path]
+        idx = len(path)
+        while True:
+            idx = path.rfind("/", 0, idx)
+            if idx == -1:
+                break
+            cand_slash = path[:idx + 1]
+            if cand_slash in table:
+                return cand_slash, table[cand_slash]
+            cand_no_slash = path[:idx]
+            if cand_no_slash and cand_no_slash in table:
+                return cand_no_slash, table[cand_no_slash]
+        if path.startswith("/") and "" in table:
+            return "", table[""]
         return None
 
     def prewarm(self, paths) -> None:
