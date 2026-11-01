@@ -15,7 +15,7 @@ from kanjo.sources import base, antigravity, codex
 from kanjo.cache import RepoCache, SessionCache, _dump_session, _load_session
 from kanjo.sources.base import Message, Session, open_sqlite_ro, extract_paths
 from kanjo.config import Config
-from kanjo.export import _apportion_by_weight, build_export, check_invariants
+from kanjo.export import _apportion_by_weight, build_export, check_invariants, dedupe
 
 from tests.support import ALICE, FIXTURE_DIRS, FIXTURES, GITHUB, standard_fs, validate_contract
 
@@ -333,6 +333,80 @@ class CacheExportComparisonTest(unittest.TestCase):
         # Expired negative entry (11 min later)
         hit_expired, _ = repo_cache.get(dummy_path, now=now + 660)  # 11 min later: past 10 min TTL
         self.assertFalse(hit_expired)
+
+    def test_multi_file_session_cache_growth_regression(self):
+        f1 = os.path.join(self.cache_dir, "rollout-f1.jsonl")
+        f2 = os.path.join(self.cache_dir, "rollout-f2.jsonl")
+        with open(f1, "w", encoding="utf-8") as h:
+            h.write('{"timestamp": "2026-07-01T00:00:00Z", "type": "session_meta", "payload": {"id": "shared-uuid", "cwd": "/repo"}}\n')
+            h.write('{"timestamp": "2026-07-01T00:00:01Z", "type": "event_msg", "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": 100, "output_tokens": 50}}}}\n')
+            h.write('{"timestamp": "2026-07-01T00:00:02Z", "type": "response_item", "payload": {"type": "function_call", "arguments": "{\\"cmd\\": \\"cat /repo/file1.py\\"}"}}\n')
+        with open(f2, "w", encoding="utf-8") as h:
+            h.write('{"timestamp": "2026-07-01T00:00:03Z", "type": "session_meta", "payload": {"id": "shared-uuid", "cwd": "/repo/sub"}}\n')
+            h.write('{"timestamp": "2026-07-01T00:00:04Z", "type": "event_msg", "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": 200, "output_tokens": 80}}}}\n')
+            h.write('{"timestamp": "2026-07-01T00:00:05Z", "type": "response_item", "payload": {"type": "function_call", "arguments": "{\\"cmd\\": \\"cat /repo/sub/file2.py\\"}"}}\n')
+
+        # Run 1: parse both files cold, dedupe, save
+        cache1 = SessionCache(self.cache_dir)
+        s1_r1 = cache1.get("codex", f1, None, codex.parse_file)
+        s2_r1 = cache1.get("codex", f2, None, codex.parse_file)
+        dedupe([s1_r1, s2_r1])
+        cache1.save()
+
+        with open(cache1.path, "r", encoding="utf-8") as h:
+            data1 = json.load(h)
+
+        k1 = "codex\0%s\0" % f1
+        k2 = "codex\0%s\0" % f2
+        t1_r1 = data1["files"][k1]["session"]["tool_paths"]
+        c1_r1 = data1["files"][k1]["session"]["cwd_counts"]
+        t2_r1 = data1["files"][k2]["session"]["tool_paths"]
+        c2_r1 = data1["files"][k2]["session"]["cwd_counts"]
+
+        # Run 2: warm cache, parse both files, dedupe, save
+        cache2 = SessionCache(self.cache_dir)
+        s1_r2 = cache2.get("codex", f1, None, codex.parse_file)
+        s2_r2 = cache2.get("codex", f2, None, codex.parse_file)
+        dedupe([s1_r2, s2_r2])
+        cache2.dirty = True  # force save to test in-memory cache mutation
+        cache2.save()
+
+        with open(cache2.path, "r", encoding="utf-8") as h:
+            data2 = json.load(h)
+
+        self.assertEqual(data2["files"][k1]["session"]["tool_paths"], t1_r1)
+        self.assertEqual(data2["files"][k1]["session"]["cwd_counts"], c1_r1)
+        self.assertEqual(data2["files"][k2]["session"]["tool_paths"], t2_r1)
+        self.assertEqual(data2["files"][k2]["session"]["cwd_counts"], c2_r1)
+        self.assertEqual(len(t1_r1), 1)
+        self.assertEqual(len(t2_r1), 1)
+
+        # Run 3: warm cache again
+        cache3 = SessionCache(self.cache_dir)
+        s1_r3 = cache3.get("codex", f1, None, codex.parse_file)
+        s2_r3 = cache3.get("codex", f2, None, codex.parse_file)
+        dedupe([s1_r3, s2_r3])
+        cache3.dirty = True
+        cache3.save()
+
+        with open(cache3.path, "r", encoding="utf-8") as h:
+            data3 = json.load(h)
+
+        self.assertEqual(data3["files"][k1]["session"]["tool_paths"], t1_r1)
+        self.assertEqual(data3["files"][k1]["session"]["cwd_counts"], c1_r1)
+
+    def test_save_deletes_stale_cache_versions(self):
+        old_v3 = os.path.join(self.cache_dir, "parse-cache-v3.json")
+        old_v2 = os.path.join(self.cache_dir, "parse-cache-v2.json")
+        repo_v1 = os.path.join(self.cache_dir, "repo-cache-v1.json")
+        for p in (old_v3, old_v2, repo_v1):
+            with open(p, "w", encoding="utf-8") as h:
+                h.write("{}")
+        cache = SessionCache(self.cache_dir)
+        cache.save()
+        self.assertFalse(os.path.exists(old_v3))
+        self.assertFalse(os.path.exists(old_v2))
+        self.assertTrue(os.path.exists(repo_v1))
 
 
 class ColdExportOptimizationsTest(unittest.TestCase):

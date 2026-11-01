@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from . import attribution as attr
 from . import quota
@@ -149,16 +149,39 @@ def _merged_copy(group: List[Session]) -> Session:
 def _merge_same_id(sessions: List[Session]) -> List[Session]:
     """Codex can keep one thread in two files (sessions/ and archived_sessions/)."""
     by_key: Dict[Tuple[str, str], Session] = {}
+    out_indices: Dict[Tuple[str, str], int] = {}
+    cloned: Set[Tuple[str, str]] = set()
     out: List[Session] = []
     for s in sessions:
         key = (s.agent, s.id)
         first = by_key.get(key)
         if first is None:
             by_key[key] = s
+            out_indices[key] = len(out)
             out.append(s)
             continue
+        if key not in cloned:
+            first = Session(
+                id=first.id,
+                agent=first.agent,
+                file=first.file,
+                started=first.started,
+                ended=first.ended,
+                origin_ts=first.origin_ts,
+                cwd=first.cwd,
+                branch=first.branch,
+                messages=list(first.messages),
+                tool_paths=[list(call) for call in first.tool_paths],
+                subagent_of=first.subagent_of,
+                title=first.title,
+                cwd_counts=dict(first.cwd_counts),
+                remote_hints=dict(first.remote_hints),
+            )
+            by_key[key] = first
+            out[out_indices[key]] = first
+            cloned.add(key)
         first.messages.extend(s.messages)
-        first.tool_paths.extend(s.tool_paths)
+        first.tool_paths.extend([list(call) for call in s.tool_paths])
         first.note_time(s.started)
         first.note_time(s.ended)
         if s.origin_ts is not None and (first.origin_ts is None or s.origin_ts < first.origin_ts):
@@ -333,12 +356,26 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     for s in sessions:
         for path, remote in s.remote_hints.items():
             resolver.add_remote_hint(path, remote)
-    resolver.prewarm(p for s in sessions for p in list(s.cwd_counts) + [x for call in s.tool_paths for x in call])
+    prewarm_paths = set()
+    for s in sessions:
+        prewarm_paths.update(s.cwd_counts)
+        for call in s.tool_paths:
+            prewarm_paths.update(call)
+    resolver.prewarm(prewarm_paths)
 
     projects: Dict[str, ProjectAgg] = defaultdict(ProjectAgg)
     buckets = {attr.UNATTRIBUTED: ProjectAgg(), attr.EXCLUDED: ProjectAgg()}
     totals = Agg()
     unique_sessions = 0
+    day_cache: Dict[int, str] = {}
+
+    def get_day(ts: float) -> str:
+        bucket = int(ts // 60)
+        day = day_cache.get(bucket)
+        if day is None:
+            day = local_day(ts)
+            day_cache[bucket] = day
+        return day
 
     for unit in units:
         decision = attr.decide(unit.top, resolver, scratch, config)
@@ -352,13 +389,13 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
             agent = unit.top.agent
             cost, estimated = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
                                           m.cache_write, m.cache_write_1h)
-            priced.append((m, cost, estimated))
+            day = get_day(m.ts)
+            priced.append((m, cost, estimated, day))
             unit_cost += cost
             for k in TOKEN_FIELDS:
                 unit_tokens[k] += getattr(m, k)
             if m.model != "<synthetic>":
                 model_cost[m.model] += cost
-            day = local_day(m.ts)
             totals.add_day(day)
         totals.cost += unit_cost
         for k in TOKEN_FIELDS:
@@ -390,8 +427,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 for k in TOKEN_FIELDS:
                     a.tokens[k] += s_tokens[k]
             branches_seen = set()
-            for m, cost, estimated in priced:
-                day = local_day(m.ts)
+            for m, cost, estimated, day in priced:
                 agg.add_day(day)
                 if target in buckets:
                     continue
