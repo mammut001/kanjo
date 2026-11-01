@@ -182,14 +182,20 @@ struct OverviewView: View {
 
 private struct SubscriptionValueSection: View {
     let report: UsageReport
+    @State private var isExpanded = false
+    @AppStorage(SettingsKeys.subscriptionOrder, store: AppDefaults.store) private var subscriptionOrderRaw = ""
 
     var body: some View {
-        let rows = SubscriptionValue.rows(of: report)
+        let defaultRows = SubscriptionValue.rows(of: report)
+        let order = SubscriptionOrder.parse(subscriptionOrderRaw)
+        let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
+        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded, limit: 3)
         let timezone = RangeEngine.timezone(of: report)
+
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: L10n.tr("overview.section.subscription_value"))
             VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                ForEach(Array(visibleRows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 {
                         Divider().padding(.horizontal, 14)
                     }
@@ -233,6 +239,28 @@ private struct SubscriptionValueSection: View {
                         }
                     }
                     .padding(14)
+                }
+
+                if orderedRows.count > 3 {
+                    Divider().padding(.horizontal, 14)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            isExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(isExpanded
+                                ? L10n.tr("overview.subscription_value.show_less")
+                                : L10n.tr("overview.subscription_value.show_more", orderedRows.count - 3))
+                                .font(.footnote)
+                                .foregroundStyle(Color.accentColor)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .kanjoCard()
