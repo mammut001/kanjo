@@ -239,11 +239,60 @@ class PricingTest(unittest.TestCase):
         self.assertEqual(self.book.resolve("claude-opus-5-5"), ("anthropic/claude-opus-5.5", False))
         self.assertEqual(self.book.resolve("claude-opus-5-5-20260921"), ("anthropic/claude-opus-5.5", False))
         self.assertEqual(self.book.resolve("gpt-5.6-sol"), ("openai/gpt-5.6-sol", False))
-        self.assertEqual(self.book.resolve("gemini-3.8-flash-n"), ("google/gemini-3.8-flash", True))
-        self.assertEqual(self.book.resolve("claude-opus-5-5-high"), ("anthropic/claude-opus-5.5", True))
-        self.assertEqual(self.book.resolve("gemini-pro-default"), ("google/gemini-3.1-pro-preview", True))
+        self.assertEqual(self.book.resolve("gemini-3.8-flash-n"), ("google/gemini-3.8-flash", False))
+        self.assertEqual(self.book.resolve("claude-opus-5-5-high"), ("anthropic/claude-opus-5.5", False))
+        self.assertEqual(self.book.resolve("gemini-pro-default"), ("google/gemini-3.1-pro-preview", False))
         self.assertEqual(self.book.resolve("totally-new-model", "codex"), ("openai/gpt-6-astra", True))
+        self.assertEqual(self.book.resolve("totally-new-model-high", "codex"), ("openai/gpt-6-astra", True))
         self.assertEqual(self.book.resolve("<synthetic>"), (None, False))
+
+    def test_gpt_6_1_terra_priced(self):
+        self.assertEqual(self.book.resolve("gpt-6.1-terra"), ("openai/gpt-6.1-terra", False))
+        p = self.book.price("openai/gpt-6.1-terra")
+        self.assertEqual((p["in"], p["out"], p["cache_read"], p["cache_write"]), (2.0, 12.0, 0.2, 2.5))
+        cost, est = self.book.cost("gpt-6.1-terra", None, 1_000_000, 1_000_000)
+        self.assertFalse(est)
+        self.assertAlmostEqual(cost, 14.0)
+
+    def test_gemini_4_argon_trial_resolves_to_argon(self):
+        argon = self.book.resolve("gemini-4-argon")
+        trial = self.book.resolve("gemini-4-argon-trial")
+        self.assertEqual(trial, argon)
+        self.assertEqual(trial, ("google/gemini-3.1-pro-preview", True))
+
+    def test_antigravity_variant_suffixes(self):
+        self.assertEqual(self.book.resolve("gemini-3.8-flash-n"), ("google/gemini-3.8-flash", False))
+        self.assertEqual(self.book.resolve("claude-sonnet-5-5-low"), ("anthropic/claude-sonnet-5.5", False))
+        self.assertEqual(self.book.resolve("claude-opus-5-5-high"), ("anthropic/claude-opus-5.5", False))
+        self.assertEqual(self.book.resolve("claude-opus-4-6-thinking"), ("anthropic/claude-opus-4.6", False))
+        self.assertEqual(self.book.resolve("gemini-3.1-pro-low"), ("google/gemini-3.1-pro-preview", False))
+        self.assertEqual(self.book.resolve("gemini-pro-default"), ("google/gemini-3.1-pro-preview", False))
+        # Unknown base does not strip suffix and keeps old fallback behavior
+        self.assertEqual(self.book.resolve("unknown-random-model-high"), ("anthropic/claude-fable-5.1", True))
+
+    def test_grok_build_variants(self):
+        self.assertEqual(self.book.resolve("grok-4.7-build"), ("x-ai/grok-4.7", False))
+        self.assertEqual(self.book.resolve("grok-4.7-build-fast"), ("x-ai/grok-4.7", False))
+        self.assertEqual(self.book.resolve("grok-4.6-build"), ("x-ai/grok-4.6", False))
+        self.assertEqual(self.book.resolve("grok-4.5-build"), ("x-ai/grok-4.5", False))
+
+    def test_agent_defaults(self):
+        self.assertEqual(self.book.resolve("unknown", "grok"), ("x-ai/grok-4.6", True))
+        self.assertEqual(self.book.resolve("nonexistent-model", "grok"), ("x-ai/grok-4.6", True))
+        self.assertEqual(self.book.resolve("unknown", "qwen"), ("qwen/qwen3.7-plus", True))
+        self.assertEqual(self.book.resolve("nonexistent-model", "qwen"), ("qwen/qwen3.7-plus", True))
+        self.assertEqual(self.book.resolve("unknown", "commandcode"), ("cohere/command-r-08-2024", True))
+        self.assertEqual(self.book.resolve("nonexistent-model", "commandcode"), ("cohere/command-r-08-2024", True))
+
+    def test_free_tier_resolution(self):
+        # Known base keeps price and resolves without expensive default
+        self.assertEqual(self.book.resolve("deepseek-v4-flash-free"), ("deepseek/deepseek-v4-flash", False))
+        # Unknown base resolves to zero cost
+        self.assertEqual(self.book.resolve("custom-model:free"), (None, False))
+        self.assertEqual(self.book.resolve("unknown-model-free"), (None, False))
+        cost, est = self.book.cost("custom-model:free", "opencode", 1_000_000, 1_000_000)
+        self.assertEqual(cost, 0.0)
+        self.assertFalse(est)
 
     def test_cost_formula(self):
         # opus 5.5: in 4, out 20, cache read 0.2, 5m write 5, 1h write 8 (2x input) per 1M
