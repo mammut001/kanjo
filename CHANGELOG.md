@@ -6,6 +6,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+### Added
+
+- **First iOS companion app (`ios/`).** View token spend on iPhone powered by the shared `KanjoCore` package. Features full Overview (Total, Treemap Mosaic, Subscription Value, Projects), Project Detail, By Model breakdown, and live iCloud sync via CloudKit private database.
+- **Collapsible subscription value card on iOS.** Mirrors macOS behavior on iOS, showing the top 3 subscriptions by default with a "Show N more" / "Show less" toggle button and preserving custom order.
+- **Mobile export format (`kanjo export --mobile`).** Adds `--mobile` flag and optional `--hide-project-names` to export compact JSON snapshots tailored for mobile and cloud sync.
+- **iCloud account matching code.** Displays a 4-character account verification code in macOS and iOS footers to verify device pairing.
+
+### Fixed & Performance
+
+- **Parse cache bloat and speedup (v4).** Fixed a session aliasing bug where multi-file rollouts (e.g. Codex) compounded `tool_paths` and `cwd_counts` across runs, bloating the parse cache up to 276 MB. Deep-copying sessions on cache load and copy-on-write merging reduced warm export times by ~3.3x and shrunk cache size by 75% to 69 MB.
+- **O(depth) path prefix resolution.** Replaced linear $O(|table|)$ scans in `Resolver._lookup_prefix` with parent-component traversal.
+- **Model price coverage & normalization.** Added `openai/gpt-6.1-terra` to pricing table; normalized Antigravity variant suffixes (`-low`, `-high`, `-thinking`, `-n`, `-tiered`, etc.) and Grok build suffixes (`-build`, `-build-fast`); added agent fallback defaults for `grok`, `qwen`, and `commandcode`; resolved `:free` tiers on uncatalogued models to $0 cost.
+- **Refreshed README & deterministic sample screenshots.** Updated all screenshots in `docs/screenshots/` generated from test fixtures.
+
 ## [0.3.4] - 2026-10-27
 
 ### Added
