@@ -18,6 +18,12 @@
       "cache_read": 0.1,
       "cache_write": 2.5
     },
+    "openai/gpt-6.1-terra": {
+      "in": 2.0,
+      "out": 12.0,
+      "cache_read": 0.2,
+      "cache_write": 2.5
+    },
     "openai/gpt-6-luna": {
       "in": 0.1,
       "out": 0.5,
@@ -45,6 +51,8 @@
     "qwen3.8-max-2026-09-02": "qwen/qwen3.8-max",
     "qwen3.8-max-preview": "qwen/qwen3.8-max",
     "qwen3.8:27b": "qwen/qwen3.8-27b",
-    "gemini-3-pro-preview": "google/gemini-3.1-pro-preview"
+    "gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
+    "gemini-3.1-pro": "google/gemini-3.1-pro-preview",
+    "gemini-pro": "google/gemini-3.1-pro-preview"
   }
 }

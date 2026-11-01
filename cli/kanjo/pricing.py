@@ -50,6 +50,7 @@ BUILTIN_PRICES = {
     "openai/gpt-6-astra": {"in": 10.0, "out": 50.0, "cache_read": 1.0, "cache_write": 12.5},
     "openai/gpt-6-sol": {"in": 2.0, "out": 10.0, "cache_read": 0.2, "cache_write": 2.5},
     "openai/gpt-6.1-sol": {"in": 2.0, "out": 10.0, "cache_read": 0.1, "cache_write": 2.5},
+    "openai/gpt-6.1-terra": {"in": 2.0, "out": 12.0, "cache_read": 0.2, "cache_write": 2.5},
     "openai/gpt-6-luna": {"in": 0.1, "out": 0.5, "cache_read": 0.01, "cache_write": 0.125},
     "qwen/qwen3.8-max": {"in": 2.0, "out": 6.0, "cache_read": 0.25, "cache_write": 2.5},
     "qwen/qwen3.7-max": {"in": 1.25, "out": 3.75, "cache_read": 0.25, "cache_write": 1.5625},
@@ -102,6 +103,9 @@ AGENT_DEFAULT = {
     "minimax": "minimax/minimax-m3",
     "opencode": "deepseek/deepseek-v4-pro",
     "copilot": "anthropic/claude-haiku-4.5",
+    "grok": "x-ai/grok-4.6",
+    "qwen": "qwen/qwen3.7-plus",
+    "commandcode": "cohere/command-r-08-2024",
 }
 GLOBAL_DEFAULT = "anthropic/claude-fable-5.1"
 
@@ -109,6 +113,7 @@ ZERO = {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "write1h":
 
 _MODEL_LINE_RE = re.compile(r"^(.*?)(\d+)(?:\.(\d+))?((?:-[a-z][a-z0-9.]*)*)$")
 _UNSTABLE_SUFFIX_RE = re.compile(r"(?:-(?:preview|latest|exp|\d{8}|\d{4}-\d{2}-\d{2}|\d{4}))+$")
+_ANTIGRAVITY_SUFFIX_RE = re.compile(r"-(?:low|medium|high|thinking|n|tiered|control|default)$")
 
 
 def _load_json(path):
@@ -183,6 +188,41 @@ class PriceBook:
                 return max(same, key=lambda c: (c[1], c[3]))[4]
         return None
 
+    def _known_base(self, name):
+        if not name:
+            return None
+        alias = self.aliases.get(name.lower())
+        if self.known(alias):
+            return alias
+        norm = self.normalize(name)
+        if self.known(norm):
+            return norm
+        return None
+
+    def _strip_variant_suffix(self, raw):
+        cur = (raw or "").strip().lower()
+        while True:
+            m = _ANTIGRAVITY_SUFFIX_RE.search(cur)
+            if not m:
+                break
+            cand = cur[:m.start()]
+            test_cand = cand
+            found = False
+            while test_cand:
+                if self._known_base(test_cand):
+                    found = True
+                    break
+                sub_m = _ANTIGRAVITY_SUFFIX_RE.search(test_cand)
+                if sub_m:
+                    test_cand = test_cand[:sub_m.start()]
+                else:
+                    break
+            if found:
+                cur = cand
+            else:
+                break
+        return cur
+
     @staticmethod
     def normalize(model):
         """Local model name -> catalog-style id (port of Tokei's _normalize, trimmed)."""
@@ -191,6 +231,9 @@ class PriceBook:
             return None
         m = re.sub(r"\s+", "-", m)
         m = re.sub(r"[:\-]free$", "", m)
+        m = re.sub(r"-trial$", "", m)
+        if m.startswith("grok") or m.startswith("x-ai/grok") or m.startswith("xai/grok"):
+            m = re.sub(r"-(?:build-fast|build)$", "", m)
         seg = m.rsplit("/", 1)[-1]
         if seg.startswith("muse-"):
             return "meta/" + seg
@@ -227,14 +270,27 @@ class PriceBook:
             return None, False
         if not raw or raw.lower() == "unknown":
             return AGENT_DEFAULT.get(agent or "", GLOBAL_DEFAULT), True
-        alias = self.aliases.get(raw.lower())
+
+        is_free = bool(re.search(r"[:\-]free$", raw, re.IGNORECASE))
+        free_base = re.sub(r"[:\-]free$", "", raw, flags=re.IGNORECASE) if is_free else raw
+
+        free_base = re.sub(r"-trial$", "", free_base, flags=re.IGNORECASE)
+
+        target = self._strip_variant_suffix(free_base)
+
+        alias = self.aliases.get(target.lower())
         if self.known(alias):
             return alias, False
-        norm = self.normalize(raw)
+        norm = self.normalize(target)
         if self.known(norm):
             return norm, False
+
+        # :free / -free models whose base is not in the catalog must cost $0
+        if is_free:
+            return None, False
+
         # closest known model: strip trailing variant suffixes, then version line
-        low = raw.lower()
+        low = target.lower()
         variants = []
         parts = low.split("-")
         for cut in range(len(parts) - 1, 0, -1):
@@ -254,7 +310,7 @@ class PriceBook:
         for keyword, representative in FAMILY_FALLBACK:
             if keyword in low:
                 if keyword == "gemini":
-                    return (GEMINI_PRO if "pro" in low else GEMINI_FLASH), True
+                    return (GEMINI_FLASH if "flash" in low else GEMINI_PRO), True
                 return representative, True
         return AGENT_DEFAULT.get(agent or "", GLOBAL_DEFAULT), True
 
