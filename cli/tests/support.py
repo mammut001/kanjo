@@ -15,8 +15,22 @@ def ensure_test_data_dir():
     if current:
         absolute = os.path.abspath(os.path.expanduser(current))
         if absolute != home and not absolute.startswith(home + os.sep):
-            return
-    os.environ["KANJO_DATA_DIR"] = tempfile.mkdtemp(prefix="kanjo-test-data-")
+            test_dir = absolute
+        else:
+            test_dir = tempfile.mkdtemp(prefix="kanjo-test-data-")
+            os.environ["KANJO_DATA_DIR"] = test_dir
+    else:
+        test_dir = tempfile.mkdtemp(prefix="kanjo-test-data-")
+        os.environ["KANJO_DATA_DIR"] = test_dir
+
+    for var, filename in [
+        ("KANJO_CLAUDE_CONFIG", "no-claude.json"),
+        ("KANJO_CODEX_AUTH", "no-codex-auth.json"),
+        ("KANJO_GROK_AUTH", "no-grok-auth.json"),
+    ]:
+        val = os.environ.get(var, "")
+        if not val or val == os.path.join(home, ".claude.json") or val.startswith(home + os.sep + "."):
+            os.environ[var] = os.path.join(test_dir, filename)
 
 
 ensure_test_data_dir()
@@ -182,7 +196,17 @@ def check_subscriptions(tc, subs):
     for agent, sub in subs.items():
         where = "subscriptions.%s" % agent
         tc.assertIsInstance(sub, dict, where)
-        tc.assertEqual(set(sub), SUBSCRIPTION_KEYS, where)
+        keys = set(sub)
+        if "account" in keys:
+            acc = sub["account"]
+            tc.assertIsInstance(acc, dict, where + " account")
+            tc.assertIn("email", acc, where + " account.email")
+            tc.assertIsInstance(acc["email"], str, where + " account.email")
+            tc.assertTrue(acc["email"], where + " account.email non-empty")
+            name = acc.get("name")
+            tc.assertTrue(name is None or isinstance(name, str), where + " account.name")
+            keys.remove("account")
+        tc.assertEqual(keys, SUBSCRIPTION_KEYS, where)
         tc.assertIsInstance(sub["plan"], str, where)
         tc.assertTrue(sub["plan"], where + " plan")
         tc.assertIsInstance(sub["plan_label"], str, where)

@@ -23,6 +23,7 @@ AGENT_LABELS = {
     "minimax": "MiniMax",
     "opencode": "OpenCode",
     "copilot": "Copilot CLI",
+    "pi": "Pi",
 }
 
 

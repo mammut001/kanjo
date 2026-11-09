@@ -33,7 +33,9 @@ in the manual table overrides them. Detection never raises.
 
 from __future__ import annotations
 
+import base64
 import calendar
+import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -296,8 +298,12 @@ def _detect_claude(explicit: Optional[str], now: datetime, tz_name: str) -> Opti
         anchor, cycle_source = None, "rolling_30d"
     else:
         anchor, cycle_source = created.day, "subscription_date"
-    return _finish(plan, label, price, anchor, cycle_source, oauth.get("hasExtraUsageEnabled"),
-                   "detected", now, tz_name)
+    entry = _finish(plan, label, price, anchor, cycle_source, oauth.get("hasExtraUsageEnabled"),
+                    "detected", now, tz_name)
+    acc = _claude_account_from_oauth(oauth)
+    if acc:
+        entry["account"] = acc
+    return entry
 
 
 def _codex_plan(data: dict) -> Optional[str]:
@@ -367,8 +373,161 @@ def _from_manual(agent: str, spec, now: datetime, tz_name: str,
     anchor = spec.get("anchor_day", entry.get("anchor_day"))
     cycle_source = "manual" if "anchor_day" in spec else entry.get("cycle_source", "rolling_30d")
     extra = spec.get("extra_usage_enabled", entry.get("extra_usage_enabled", False))
-    return _finish(entry["plan"], entry["plan_label"], entry["monthly_price_usd"], anchor, cycle_source, extra,
-                   "manual", now, tz_name)
+    res = _finish(entry["plan"], entry["plan_label"], entry["monthly_price_usd"], anchor, cycle_source, extra,
+                  "manual", now, tz_name)
+    if "account" in spec and isinstance(spec["account"], dict):
+        res["account"] = spec["account"]
+    elif "account" in entry:
+        res["account"] = entry["account"]
+    return res
+
+
+def _claude_account_from_oauth(oauth: dict) -> Optional[dict]:
+    if not isinstance(oauth, dict):
+        return None
+    email = oauth.get("emailAddress")
+    if not isinstance(email, str) or not email.strip():
+        return None
+    email = email.strip()
+
+    display_name = oauth.get("displayName")
+    name = None
+    if isinstance(display_name, str) and display_name.strip():
+        name = display_name.strip()
+    else:
+        org_name = oauth.get("organizationName")
+        if isinstance(org_name, str) and org_name.strip():
+            org_stripped = org_name.strip()
+            # Ignore auto-generated "<anything>'s Organization"
+            if not re.search(r"['\u2019]s\s+organization$", org_stripped, re.IGNORECASE):
+                name = org_stripped
+
+    if name and (name == email or name.lower() == email.lower()):
+        name = None
+
+    return {"email": email, "name": name}
+
+
+def _claude_account(explicit: Optional[str] = None) -> Optional[dict]:
+    try:
+        data = _load(_claude_config_path(explicit))
+        if not isinstance(data, dict):
+            return None
+        oauth = data.get("oauthAccount")
+        if not isinstance(oauth, dict):
+            return None
+        return _claude_account_from_oauth(oauth)
+    except Exception:
+        return None
+
+
+def _codex_auth_path(codex_dir: Optional[str] = None) -> str:
+    override = os.environ.get("KANJO_CODEX_AUTH")
+    if override:
+        return os.path.expanduser(override)
+    path = os.path.expanduser(os.path.join("~", ".codex", "auth.json"))
+    c_dir = codex_dir or os.environ.get("KANJO_CODEX_DIR")
+    if c_dir:
+        for p in c_dir.split(os.pathsep):
+            parent_auth = os.path.join(os.path.dirname(os.path.expanduser(p)), "auth.json")
+            if os.path.isfile(parent_auth):
+                return parent_auth
+            cand = os.path.join(os.path.expanduser(p), "auth.json")
+            if os.path.isfile(cand):
+                return cand
+    return path
+
+
+def _decode_jwt_payload(token: str) -> Optional[dict]:
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return None
+        payload_b64 = parts[1]
+        rem = len(payload_b64) % 4
+        if rem > 0:
+            payload_b64 += "=" * (4 - rem)
+        raw = base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8")
+        obj = json.loads(raw)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def _codex_account(codex_dir: Optional[str] = None) -> Optional[dict]:
+    try:
+        path = _codex_auth_path(codex_dir)
+        data = _load(path)
+        if not isinstance(data, dict):
+            return None
+        tokens = data.get("tokens") if isinstance(data.get("tokens"), dict) else data
+        if not isinstance(tokens, dict):
+            return None
+        id_token = tokens.get("id_token") or tokens.get("idToken")
+        if not isinstance(id_token, str) or not id_token.strip():
+            return None
+        payload = _decode_jwt_payload(id_token.strip())
+        if not isinstance(payload, dict):
+            return None
+        email = payload.get("email")
+        if not isinstance(email, str) or not email.strip():
+            return None
+        return {"email": email.strip(), "name": None}
+    except Exception:
+        return None
+
+
+def _grok_auth_path() -> str:
+    override = os.environ.get("KANJO_GROK_AUTH")
+    if override:
+        return os.path.expanduser(override)
+    grok_dir = os.environ.get("KANJO_GROK_DIR") or os.environ.get("GROK_HOME")
+    if grok_dir:
+        path = os.path.join(os.path.expanduser(grok_dir), "auth.json")
+        if os.path.isfile(path):
+            return path
+        cand = os.path.expanduser(grok_dir)
+        if os.path.isfile(cand):
+            return cand
+    return os.path.expanduser(os.path.join("~", ".grok", "auth.json"))
+
+
+def _grok_account() -> Optional[dict]:
+    try:
+        path = _grok_auth_path()
+        data = _load(path)
+        if not isinstance(data, dict):
+            return None
+        email = None
+        name = None
+        if "email" in data and isinstance(data["email"], str) and data["email"].strip():
+            email = data["email"].strip()
+            raw_name = data.get("first_name")
+            name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else None
+        else:
+            for entry in data.values():
+                if isinstance(entry, dict) and "email" in entry:
+                    raw_email = entry.get("email")
+                    if isinstance(raw_email, str) and raw_email.strip():
+                        email = raw_email.strip()
+                        raw_name = entry.get("first_name")
+                        name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else None
+                        break
+        if not email:
+            return None
+        return {"email": email, "name": name}
+    except Exception:
+        return None
+
+
+def _detect_account(agent: str, claude_config: Optional[str] = None) -> Optional[dict]:
+    if agent == "claude":
+        return _claude_account(claude_config)
+    if agent == "codex":
+        return _codex_account()
+    if agent == "grok":
+        return _grok_account()
+    return None
 
 
 def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[str] = None,
@@ -431,4 +590,9 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         entry = _from_manual(str(agent), spec, now_dt, tz_name, out.get(str(agent)))
         if entry:
             out[str(agent)] = entry
+    for agent, entry in out.items():
+        if "account" not in entry:
+            acc = _detect_account(agent, claude_config=claude_config)
+            if acc:
+                entry["account"] = acc
     return {agent: out[agent] for agent in sorted(out)}

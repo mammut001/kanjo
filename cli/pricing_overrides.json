@@ -41,6 +41,12 @@
       "out": 1.16,
       "cache_read": 0.078,
       "cache_write": 0.49
+    },
+    "stepfun/step-5-preview": {
+      "in": 1.0,
+      "out": 2.7,
+      "cache_read": 0.05,
+      "cache_write": 0.0
     }
   },
   "aliases": {
@@ -53,6 +59,7 @@
     "qwen3.8:27b": "qwen/qwen3.8-27b",
     "gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
     "gemini-3.1-pro": "google/gemini-3.1-pro-preview",
-    "gemini-pro": "google/gemini-3.1-pro-preview"
+    "gemini-pro": "google/gemini-3.1-pro-preview",
+    "step-5-preview": "stepfun/step-5-preview"
   }
 }

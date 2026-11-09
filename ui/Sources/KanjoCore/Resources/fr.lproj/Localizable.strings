@@ -212,6 +212,7 @@
 "overview.show_these_sessions" = "Afficher ces sessions";
 "overview.section.subscription_value" = "Valeur de l'abonnement";
 "overview.subscription_value.explanation" = "Vous payez le forfait fixe à gauche. Le montant à droite correspond au coût du même travail avec la facturation API.";
+"overview.account" = "Compte";
 "overview.cycle_usage" = "Utilisation équivalente API ce cycle";
 "overview.subscription_value.show_more" = "Afficher %d de plus";
 "overview.subscription_value.show_less" = "Afficher moins";
