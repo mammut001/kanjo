@@ -30,7 +30,11 @@ final class CloudSyncStore: ObservableObject {
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
         if defaults.bool(forKey: SettingsKeys.cloudSyncEnabled) {
-            status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
+            if AppDefaults.suiteName() == nil && !CloudKitEntitlement.hasContainer() {
+                status = .failed(L10n.tr("settings.sync.status.not_configured"))
+            } else {
+                status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
+            }
         } else {
             status = .off
         }
@@ -47,6 +51,10 @@ final class CloudSyncStore: ObservableObject {
     func setEnabled(_ enabled: Bool) {
         guard enabled else {
             status = .off
+            return
+        }
+        if AppDefaults.suiteName() == nil && !CloudKitEntitlement.hasContainer() {
+            status = .failed(L10n.tr("settings.sync.status.not_configured"))
             return
         }
         status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
@@ -105,6 +113,12 @@ final class CloudSyncStore: ObservableObject {
                 return
             }
 
+            guard CloudKitEntitlement.hasContainer() else {
+                Self.logger.error("sync skipped: no CloudKit entitlement")
+                status = .failed(L10n.tr("settings.sync.status.not_configured"))
+                return
+            }
+
             let fingerprint = SyncFingerprint.make(for: report)
             let force = forceNextUpload
             if force {
@@ -123,11 +137,6 @@ final class CloudSyncStore: ObservableObject {
                 Self.logger.info("sync forced: upload state was reset")
             }
 
-            guard CloudKitEntitlement.hasContainer() else {
-                Self.logger.error("sync skipped: no CloudKit entitlement")
-                status = .failed(L10n.tr("settings.sync.status.not_configured"))
-                return
-            }
             let account = try await accountStatus()
             guard account == .available else {
                 Self.logger.info("sync skipped: iCloud account status \(Self.accountCode(account), privacy: .public)")
@@ -248,16 +257,21 @@ final class CloudSyncStore: ObservableObject {
     }
 
     private func save(_ snapshot: SnapshotRecord, payloadURL: URL, database: CKDatabase) async throws {
-        let recordID = CKRecord.ID(recordName: snapshot.deviceID)
+        try await saveRecord(recordName: snapshot.deviceID, snapshot: snapshot, payloadURL: payloadURL, database: database)
+        try await saveRecord(recordName: SnapshotRecord.latestRecordName, snapshot: snapshot, payloadURL: payloadURL, database: database)
+    }
+
+    private func saveRecord(recordName: String, snapshot: SnapshotRecord, payloadURL: URL, database: CKDatabase) async throws {
+        let recordID = CKRecord.ID(recordName: recordName)
         var existing: CKRecord?
         do {
             existing = try await fetch(recordID, in: database)
         } catch let error as CKError where error.code == .unknownItem {
-            Self.logger.info("no existing record for \(snapshot.deviceID, privacy: .private); creating new one")
+            Self.logger.info("no existing record for \(recordName, privacy: .private); creating new one")
             existing = nil
         }
 
-        let record = snapshot.makeRecord(payloadURL: payloadURL, existing: existing)
+        let record = snapshot.makeRecord(payloadURL: payloadURL, existing: existing, recordName: recordName)
         let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
         operation.savePolicy = .changedKeys
         operation.isAtomic = true

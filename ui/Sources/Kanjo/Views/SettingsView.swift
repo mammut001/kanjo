@@ -207,10 +207,12 @@ struct SettingsView: View {
         }
     }
 
-    private static func clock(_ date: Date) -> String {
+    static func clock(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: L10n.currentLanguage)
-        formatter.setLocalizedDateFormatFromTemplate("HHmm")
+        formatter.timeZone = calendar.timeZone
+        let template = calendar.isDate(date, inSameDayAs: now) ? "HHmm" : "MMMdHHmm"
+        formatter.setLocalizedDateFormatFromTemplate(template)
         return formatter.string(from: date)
     }
 

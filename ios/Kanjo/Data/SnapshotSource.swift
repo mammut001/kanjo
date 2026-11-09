@@ -152,6 +152,112 @@ final class CloudKitSnapshotSource: SnapshotSource {
     }
 
     private func fetchMetadata() async throws -> [CKRecord] {
+        let latestRecord: CKRecord?
+        do {
+            latestRecord = try await fetchLatestRecord()
+            if let latestRecord {
+                SyncLog.sync.info("fetch latest record finished: \(latestRecord.recordID.recordName, privacy: .public)")
+            } else {
+                SyncLog.sync.info("fetch latest record finished: no latest record")
+            }
+        } catch {
+            SyncLog.sync.info("fetch latest record failed: \(error.localizedDescription, privacy: .private)")
+            latestRecord = nil
+        }
+
+        let queryRecords: [CKRecord]
+        do {
+            queryRecords = try await fetchMetadataByQuery()
+        } catch let error as CKError {
+            if latestRecord != nil {
+                SyncLog.sync.info("query supplementary fetch ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
+                queryRecords = []
+            } else if error.code == .unknownItem || error.code == .invalidArguments {
+                SyncLog.sync.info("query fetch ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
+                queryRecords = []
+            } else {
+                throw error
+            }
+        }
+
+        var combined: [CKRecord] = []
+        var seenIDs = Set<String>()
+        if let latestRecord {
+            combined.append(latestRecord)
+            seenIDs.insert(latestRecord.recordID.recordName)
+        }
+        for record in queryRecords {
+            if seenIDs.insert(record.recordID.recordName).inserted {
+                combined.append(record)
+            }
+        }
+
+        return combined
+    }
+
+    private func fetchLatestRecord() async throws -> CKRecord? {
+        let recordID = CKRecord.ID(recordName: SnapshotRecord.latestRecordName)
+        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+        operation.desiredKeys = [
+            SnapshotRecord.fieldDeviceName,
+            SnapshotRecord.fieldGeneratedAt,
+            SnapshotRecord.fieldSchemaVersion,
+        ]
+        return try await withCheckedThrowingContinuation { continuation in
+            let lock = NSLock()
+            var fetchedRecord: CKRecord?
+            var recordError: Error?
+
+            operation.perRecordResultBlock = { _, result in
+                lock.lock()
+                defer { lock.unlock() }
+                switch result {
+                case .success(let record):
+                    fetchedRecord = record
+                case .failure(let error):
+                    recordError = error
+                }
+            }
+
+            operation.fetchRecordsResultBlock = { result in
+                lock.lock()
+                let record = fetchedRecord
+                let err = recordError
+                lock.unlock()
+
+                switch result {
+                case .success:
+                    if let record {
+                        continuation.resume(returning: record)
+                    } else if let error = err as? CKError, error.code == .unknownItem {
+                        continuation.resume(returning: nil)
+                    } else if let err {
+                        continuation.resume(throwing: err)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                case .failure(let error):
+                    if let ckError = error as? CKError {
+                        if ckError.code == .unknownItem {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                        if ckError.code == .partialFailure,
+                           let itemError = ckError.partialErrorsByItemID?[recordID] as? CKError,
+                           itemError.code == .unknownItem {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                    }
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            database.add(operation)
+        }
+    }
+
+    private func fetchMetadataByQuery() async throws -> [CKRecord] {
         let query = CKQuery(recordType: SnapshotRecord.recordType,
                             predicate: NSPredicate(value: true))
         var records: [CKRecord] = []
