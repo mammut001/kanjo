@@ -1313,6 +1313,9 @@ class PublicPeriodAgg:
             "by_provider": provider_items,
             "by_agent": agent_items,
             "top_models": top_models,
+            # Every model seen in the period, so a consumer can count distinct models
+            # across several periods; top_models is capped and cannot be used for that.
+            "models_used": sorted(self.by_model),
         })
         return res
 
@@ -1480,6 +1483,12 @@ def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[
                 if mod_tokens_sum > prov["tokens"]["total"]:
                     problems.append("%s: provider %s models tokens_total sum %d > tokens.total %d"
                                     % (pk, prov_name, mod_tokens_sum, prov["tokens"]["total"]))
+
+        used = p.get("models_used")
+        if used is not None:
+            missing = sorted({m["model"] for m in p.get("top_models", [])} - set(used))
+            if missing:
+                problems.append("%s: top_models not in models_used: %s" % (pk, ", ".join(missing)))
 
     months = doc.get("months", [])
     all_time = doc.get("all_time", {})
