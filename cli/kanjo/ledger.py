@@ -25,7 +25,7 @@ import json
 import os
 import time
 import uuid
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from .cache import _dump_session, _load_session, _signature
 from .sources.base import Session, iso_utc
@@ -127,29 +127,102 @@ class Ledger:
     def __init__(self, directory: Optional[str] = None):
         self.dir = directory or data_dir()
         self.path = os.path.join(self.dir, "ledger.json")
-        self.entries: Dict[str, dict] = {}
+        self.journal_path = os.path.join(self.dir, "ledger.journal.jsonl")
+        self.meta_path = os.path.join(self.dir, "ledger.meta.json")
+        self._entries: Dict[str, dict] = {}
         self.updated_at: Optional[str] = None
         self.dirty = False
+        self.dirty_keys: Set[str] = set()
+        self._loaded = False
         self._load()
 
+    @property
+    def entries(self) -> Dict[str, dict]:
+        if not self._loaded:
+            self._load_full()
+        return self._entries
+
+    @entries.setter
+    def entries(self, val: Dict[str, dict]) -> None:
+        self._entries = val
+
+    def _ensure_loaded(self) -> None:
+        if not self._loaded:
+            self._load_full()
+
     def _load(self) -> None:
+        if os.path.isfile(self.meta_path) and os.path.isfile(self.path) and not os.path.isfile(self.journal_path):
+            try:
+                st = os.stat(self.path)
+                with open(self.meta_path, "r", encoding="utf-8") as handle:
+                    meta = json.load(handle)
+                if (isinstance(meta, dict)
+                        and meta.get("version") == LEDGER_VERSION
+                        and meta.get("mtime_ns") == st.st_mtime_ns
+                        and meta.get("size") == st.st_size):
+                    self.updated_at = meta.get("updated_at")
+                    self._summary = meta.get("summary")
+                    self._known_keys = set(meta.get("known_keys") or [])
+                    self._meta_source_paths = meta.get("source_paths") or {}
+                    self._meta_orphans = meta.get("orphans") or {}
+                    self._loaded = False
+                    return
+            except (OSError, ValueError):
+                pass
+        self._load_full()
+
+    def _load_full(self) -> None:
+        self._loaded = True
         try:
             with open(self.path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
         except (OSError, ValueError):
-            return
-        if not isinstance(data, dict) or data.get("version") != LEDGER_VERSION:
-            return
-        entries = data.get("entries")
-        if isinstance(entries, dict):
-            for entry in entries.values():
-                _migrate_entry(entry)
-            self.entries = entries
-        updated = data.get("updated_at")
-        if isinstance(updated, str):
-            self.updated_at = updated
+            data = None
+        if isinstance(data, dict) and data.get("version") == LEDGER_VERSION:
+            entries = data.get("entries")
+            if isinstance(entries, dict):
+                for entry in entries.values():
+                    _migrate_entry(entry)
+                self.entries = entries
+            updated = data.get("updated_at")
+            if isinstance(updated, str):
+                self.updated_at = updated
+
+        if os.path.isfile(self.journal_path):
+            try:
+                with open(self.journal_path, "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        row = json.loads(line)
+                        k = row.get("k")
+                        if not k:
+                            continue
+                        if row.get("d"):
+                            self.entries.pop(k, None)
+                        elif "v" in row:
+                            _migrate_entry(row["v"])
+                            self.entries[k] = row["v"]
+                        if "u" in row:
+                            self.updated_at = row["u"]
+            except (OSError, ValueError):
+                pass
+
+        if not os.path.isfile(self.meta_path) and os.path.isfile(self.path) and not os.path.isfile(self.journal_path):
+            self._save_meta()
+
+    def is_known_key(self, key: str) -> bool:
+        if not self._loaded and hasattr(self, "_known_keys"):
+            return key in self._known_keys
+        return key in self.entries
+
+    def is_known(self, agent: str, session_id: str, parent: Optional[str]) -> bool:
+        key = entry_key(agent, session_id, parent)
+        return self.is_known_key(key)
 
     def note_file(self, session: Session, source_paths: Union[str, List[str]]) -> None:
+        self._ensure_loaded()
         """Upsert ``session``, unioning ``source_paths`` with any already stored.
 
         ``source_paths`` is one path or a list. No-op when every path is already
@@ -175,6 +248,19 @@ class Ledger:
         if (old_is_session and set(deduped) <= set(old_paths)
                 and all(old_sigs.get(path) == sigs_now[path] for path in deduped)):
             return
+        dumped = _dump_session(session)
+        if old_is_session and old.get("session") == dumped:
+            known = dict(old_sigs)
+            known.update(sigs_now)
+            old["source_paths"] = new_paths
+            old["source_path"] = new_paths[0]
+            if len(new_paths) > 1:
+                old["path_sigs"] = {path: known[path] for path in new_paths if path in known}
+            old["file_sig"] = known.get(new_paths[0])
+            if set(deduped) > set(old_paths):
+                self.dirty = True
+                self.dirty_keys.add(key)
+            return
         known = dict(old_sigs)
         known.update(sigs_now)
         primary = new_paths[0]
@@ -182,7 +268,7 @@ class Ledger:
         if file_sig is None:
             file_sig = _signature(primary)
         entry = {
-            "session": _dump_session(session),
+            "session": dumped,
             "source_path": primary,
             "source_paths": new_paths,
             "imported_at": iso_utc(time.time()),
@@ -192,6 +278,7 @@ class Ledger:
             entry["path_sigs"] = {path: known[path] for path in new_paths if path in known}
         self.entries[key] = entry
         self.dirty = True
+        self.dirty_keys.add(key)
 
     def note_unparsed(self, agent: str, source_path: str, error: Optional[str] = None) -> None:
         """Record a discovered file that did not become a session.
@@ -200,8 +287,7 @@ class Ledger:
         messages and any session row that listed this path loses it, so the file
         is not exported as a session later.
         """
-        if error is None:
-            self._detach_path(agent, source_path)
+        self._ensure_loaded()
         sig = _signature(source_path)
         key = marker_key(agent, source_path)
         paths = [source_path]
@@ -212,6 +298,8 @@ class Ledger:
             return
         if same_file and error is not None and old.get("error") == error:
             return
+        if error is None:
+            self._detach_path(agent, source_path)
         entry = {
             "source_paths": paths,
             "file_sig": sig,
@@ -223,12 +311,14 @@ class Ledger:
             entry["error"] = error
         self.entries[key] = entry
         self.dirty = True
+        self.dirty_keys.add(key)
 
     def _drop_marker(self, agent: str, source_path: str) -> None:
         key = marker_key(agent, source_path)
         if key in self.entries:
             del self.entries[key]
             self.dirty = True
+            self.dirty_keys.add(key)
 
     def _detach_path(self, agent: str, source_path: str) -> None:
         """Remove ``source_path`` from session rows. Drop a row whose last path it was."""
@@ -242,6 +332,7 @@ class Ledger:
             if not remaining:
                 del self.entries[key]
                 self.dirty = True
+                self.dirty_keys.add(key)
                 continue
             sigs = _known_sigs(entry)
             sigs.pop(source_path, None)
@@ -254,15 +345,38 @@ class Ledger:
             if remaining[0] in sigs:
                 entry["file_sig"] = sigs[remaining[0]]
             self.dirty = True
+            self.dirty_keys.add(key)
 
-    def orphan_sessions(self) -> List[Tuple[str, Session]]:
+    def orphan_sessions(self, exclude_keys=None) -> List[Tuple[str, Session]]:
         """Session entries whose log files are all gone, as ``(key, session)``.
 
         Empty and error rows are not sessions. A row that still has one file on
         disk is skipped; the scan reads that file.
         """
+        if not self._loaded and hasattr(self, "_meta_source_paths") and not self.dirty:
+            new_orphan_possible = False
+            for k, paths in self._meta_source_paths.items():
+                if exclude_keys and k in exclude_keys:
+                    continue
+                if k not in self._meta_orphans:
+                    if all(not os.path.exists(p.split("::", 1)[0] if "::" in p else p) for p in paths):
+                        new_orphan_possible = True
+                        break
+            if not new_orphan_possible:
+                found = []
+                for k, s in self._meta_orphans.items():
+                    if exclude_keys and k in exclude_keys:
+                        continue
+                    try:
+                        found.append((k, _load_session(dict(s))))
+                    except (TypeError, KeyError, ValueError):
+                        pass
+                return found
+        self._ensure_loaded()
         found = []
-        for key, entry in self.entries.items():
+        for key, entry in self._entries.items():
+            if exclude_keys and key in exclude_keys:
+                continue
             if not _is_session_entry(entry) or not _all_missing(entry):
                 continue
             try:
@@ -272,8 +386,9 @@ class Ledger:
         return found
 
     def signatures_by_path(self) -> Dict[str, list]:
+        self._ensure_loaded()
         found: Dict[str, list] = {}
-        for entry in self.entries.values():
+        for entry in self._entries.values():
             if not isinstance(entry, dict):
                 continue
             sigs = _known_sigs(entry)
@@ -282,8 +397,14 @@ class Ledger:
         return found
 
     def summary(self) -> dict:
+        if not self._loaded and hasattr(self, "_summary") and not self.dirty:
+            return dict(self._summary)
+        return self._compute_summary()
+
+    def _compute_summary(self) -> dict:
+        self._ensure_loaded()
         sessions = orphaned = empty = errors = 0
-        for entry in self.entries.values():
+        for entry in self._entries.values():
             if isinstance(entry, dict) and entry.get("empty") is True and not _is_session_entry(entry):
                 empty += 1
                 continue
@@ -309,6 +430,7 @@ class Ledger:
             return 0
 
     def forget_orphans(self) -> int:
+        self._ensure_loaded()
         gone = []
         for key, entry in self.entries.items():
             if _is_session_entry(entry) and _all_missing(entry):
@@ -317,15 +439,36 @@ class Ledger:
             del self.entries[key]
         if gone:
             self.dirty = True
+            self.dirty_keys.update(gone)
             self.save()
         return len(gone)
 
     def save(self) -> None:
-        """Atomic replace, same pattern as ``kanjo export -o`` (temp file + rename)."""
+        """Atomic replace, or append to journal when change is proportional."""
         if not self.dirty:
             return
         os.makedirs(self.dir, exist_ok=True)
         stamp = iso_utc(time.time())
+
+        # Proportional save: append to journal if under threshold and ledger.json exists
+        if os.path.isfile(self.path) and self.dirty_keys and len(self.dirty_keys) <= 500:
+            try:
+                j_size = os.path.getsize(self.journal_path) if os.path.isfile(self.journal_path) else 0
+                if j_size < 5 * 1024 * 1024:
+                    with open(self.journal_path, "a", encoding="utf-8") as handle:
+                        for key in sorted(self.dirty_keys):
+                            if key in self.entries:
+                                handle.write(json.dumps({"k": key, "v": self.entries[key], "u": stamp}, ensure_ascii=False) + "\n")
+                            else:
+                                handle.write(json.dumps({"k": key, "d": 1, "u": stamp}, ensure_ascii=False) + "\n")
+                    self.updated_at = stamp
+                    self.dirty = False
+                    self.dirty_keys.clear()
+                    self._save_meta()
+                    return
+            except OSError:
+                pass
+
         payload = {"version": LEDGER_VERSION, "updated_at": stamp, "entries": self.entries}
         tmp = "%s.%d.%s.tmp" % (self.path, os.getpid(), uuid.uuid4().hex[:8])
         try:
@@ -335,6 +478,11 @@ class Ledger:
                 handle.write("\n")
             del data
             os.replace(tmp, self.path)
+            try:
+                if os.path.isfile(self.journal_path):
+                    os.unlink(self.journal_path)
+            except OSError:
+                pass
         except Exception:
             try:
                 os.remove(tmp)
@@ -343,3 +491,35 @@ class Ledger:
             raise
         self.updated_at = stamp
         self.dirty = False
+        self.dirty_keys.clear()
+        self._save_meta()
+
+    def _save_meta(self) -> None:
+        try:
+            if not os.path.isfile(self.path):
+                return
+            st = os.stat(self.path)
+            orphans = {}
+            source_paths = {}
+            for k, entry in self.entries.items():
+                if _is_session_entry(entry):
+                    paths = paths_of(entry)
+                    source_paths[k] = paths
+                    if _all_missing(entry):
+                        orphans[k] = entry["session"]
+            meta = {
+                "version": LEDGER_VERSION,
+                "mtime_ns": st.st_mtime_ns,
+                "size": st.st_size,
+                "updated_at": self.updated_at,
+                "summary": self.summary(),
+                "known_keys": list(self.entries.keys()),
+                "source_paths": source_paths,
+                "orphans": orphans,
+            }
+            tmp = "%s.%d.part" % (self.meta_path, os.getpid())
+            with open(tmp, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(meta, ensure_ascii=False, separators=(",", ":")))
+            os.replace(tmp, self.meta_path)
+        except OSError:
+            pass

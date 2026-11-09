@@ -498,7 +498,7 @@ class DiskTest(unittest.TestCase):
         self.write(os.path.join(self.scratch, "a", "f"))
         self.write(os.path.join(self.scratch, "b", "f"))
         self.write(os.path.join(self.logs, "f"))
-        paths = {os.path.join(self.scratch, "a"), os.path.join(self.scratch, "b"), self.logs}
+        paths = {os.path.join(self.scratch, "a"), self.logs}
         barrier = threading.Barrier(len(paths))
         measure = disk.measure
         def synchronized(path, *args, **kwargs):

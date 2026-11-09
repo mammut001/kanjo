@@ -143,6 +143,7 @@ class PriceBook:
                 self.prices[model_id] = merged
         self._lines = None
         self._cache: Dict[Tuple[str, str], Tuple[Optional[str], bool]] = {}
+        self._price_cache: Dict[str, dict] = {}
 
     # ---- catalog helpers -------------------------------------------------
     def known(self, model_id):
@@ -332,6 +333,9 @@ class PriceBook:
     def price(self, model_id):
         if not model_id:
             return dict(ZERO)
+        cached = self._price_cache.get(model_id)
+        if cached is not None:
+            return cached
         p = self.prices.get(model_id, {})
         out = {
             "in": float(p.get("in", 0.0) or 0.0),
@@ -345,6 +349,7 @@ class PriceBook:
             out["write1h"] = out["in"] * 2  # Anthropic 1h cache write = 2x input
         else:
             out["write1h"] = out["cache_write"]
+        self._price_cache[model_id] = out
         return out
 
     def cost(self, model, agent, input_tokens=0, output_tokens=0, cache_read=0,

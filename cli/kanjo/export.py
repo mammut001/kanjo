@@ -17,7 +17,7 @@ from . import attribution as attr
 from . import quota
 from .config import Config
 from .cache import _cache_dir, _dump_session, _load_session
-from .ledger import Ledger, entry_key
+from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
@@ -103,7 +103,9 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
                 ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             if not session.messages:
-                ledger.note_unparsed(agent, path)
+                m_key = marker_key(agent, path)
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(m_key):
+                    ledger.note_unparsed(agent, path)
                 continue
             st.messages += len(session.messages)
             if session.subagent_of:
@@ -115,11 +117,18 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             sessions.append(session)
             grouped.setdefault(key, []).append(session)
             grouped_paths.setdefault(key, []).append(path)
+    modified_keys = getattr(cache, "modified_keys", None) if cache else None
     for key, group in grouped.items():
         # Copy before merging: ``_merge_same_id`` mutates its input, and the
         # originals still go through export dedupe one file at a time.
-        ledger.note_file(_merged_copy(group), grouped_paths[key])
-    for key, session in ledger.orphan_sessions():
+        # Skip rewriting unchanged sessions already recorded in ledger.
+        head = group[0]
+        paths = grouped_paths[key]
+        if (modified_keys is not None and not any(p in modified_keys for p in paths)
+                and ledger.is_known(head.agent, head.id, head.subagent_of)):
+            continue
+        ledger.note_file(_merged_copy(group), paths)
+    for key, session in ledger.orphan_sessions(exclude_keys=seen):
         if key in seen:
             continue
         sessions.append(session)
@@ -396,8 +405,11 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
             day = get_day(m.ts)
             priced.append((m, cost, estimated, day))
             unit_cost += cost
-            for k in TOKEN_FIELDS:
-                unit_tokens[k] += getattr(m, k)
+            unit_tokens["input"] += m.input
+            unit_tokens["output"] += m.output
+            unit_tokens["cache_read"] += m.cache_read
+            unit_tokens["cache_write"] += m.cache_write
+            unit_tokens["thinking"] += m.thinking
             if m.model != "<synthetic>":
                 model_cost[m.model] += cost
             totals.add_day(day)
@@ -439,15 +451,21 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                     mk = (m.model, agent)
                     ma = agg.by_model[mk]
                     ma.cost += cost * share
-                    for k in TOKEN_FIELDS:
-                        ma.tokens[k] += getattr(m, k) * share
+                    ma.tokens["input"] += m.input * share
+                    ma.tokens["output"] += m.output * share
+                    ma.tokens["cache_read"] += m.cache_read * share
+                    ma.tokens["cache_write"] += m.cache_write * share
+                    ma.tokens["thinking"] += m.thinking * share
                     agg.model_estimated[mk] = agg.model_estimated.get(mk, False) or estimated
                 da = agg.by_day[day]
                 da.cost += cost * share
                 agg.by_day_agent[day][agent] += cost * share
                 agg.by_day_agent_tokens[day][agent] += (m.input + m.output + m.cache_read + m.cache_write) * share
-                for k in TOKEN_FIELDS:
-                    da.tokens[k] += getattr(m, k) * share
+                da.tokens["input"] += m.input * share
+                da.tokens["output"] += m.output * share
+                da.tokens["cache_read"] += m.cache_read * share
+                da.tokens["cache_write"] += m.cache_write * share
+                da.tokens["thinking"] += m.thinking * share
                 if m.branch:
                     agg.any_branch = True
                 branch = m.branch or "(unknown)"

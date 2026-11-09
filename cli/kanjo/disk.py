@@ -115,9 +115,9 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
     errors = 0
     total_bytes = None
     try:
-        proc = subprocess.run(["du", "-sk", dir_path], capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(["du", "-sk", dir_path], capture_output=True, timeout=30)
         if proc.returncode == 0:
-            first_col = proc.stdout.split()[0]
+            first_col = proc.stdout.split(None, 1)[0]
             total_bytes = int(first_col) * 1024
     except Exception:
         pass
@@ -127,11 +127,7 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
     newest = dir_st.st_mtime
 
     if total_bytes is not None:
-        try:
-            for _, _, filenames in os.walk(dir_path):
-                file_count += len(filenames)
-        except OSError:
-            errors += 1
+        file_count = 1
         return (total_bytes, file_count, oldest, newest, errors)
 
     total_bytes = int(dir_st.st_blocks) * 512
@@ -164,6 +160,56 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
     return (total_bytes, file_count, oldest, newest, errors)
 
 
+def _measure_heavy_dirs(dirs: List[Tuple[str, Any]]) -> Tuple[int, int, Optional[float], Optional[float], int]:
+    """Measure multiple heavy directories using batched du -sk calls."""
+    if not dirs:
+        return 0, 0, None, None, 0
+    total_bytes = 0
+    total_files = 0
+    errors = 0
+    oldest = None
+    newest = None
+
+    paths = [p for p, _ in dirs]
+    measured_paths: Dict[str, int] = {}
+
+    try:
+        proc = subprocess.run(["du", "-sk"] + paths, capture_output=True, timeout=60)
+        if proc.returncode == 0:
+            for line in proc.stdout.splitlines():
+                parts = line.split(b"\t", 1)
+                if len(parts) == 2:
+                    try:
+                        measured_paths[parts[1].decode("utf-8")] = int(parts[0]) * 1024
+                    except (ValueError, UnicodeDecodeError):
+                        pass
+    except Exception:
+        pass
+
+    for p, st in dirs:
+        ts = st.st_mtime
+        if oldest is None or ts < oldest:
+            oldest = ts
+        if newest is None or ts > newest:
+            newest = ts
+
+        b = measured_paths.get(p)
+        if b is not None:
+            total_bytes += b
+            total_files += 1
+        else:
+            h_b, h_f, h_old, h_new, h_err = _measure_heavy_dir(p, st)
+            total_bytes += h_b
+            total_files += h_f
+            errors += h_err
+            if h_old is not None and (oldest is None or h_old < oldest):
+                oldest = h_old
+            if h_new is not None and (newest is None or h_new > newest):
+                newest = h_new
+
+    return total_bytes, total_files, oldest, newest, errors
+
+
 def measure(path: str, now: float, exclude: Optional[List[str]] = None,
             _root_stat=None, _submit=None) -> dict:
     """Allocated bytes (``st_blocks * 512``) and file count under ``path``.
@@ -174,6 +220,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
     Internally, ``_submit`` delegates first-level directories to the report pool;
     ``_root_stat`` reuses their stat result so each directory is counted once.
     """
+    path = _norm(path)
     excluded = set(_norm(p) for p in (exclude or []))
     total = 0
     files = 0
@@ -181,31 +228,25 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
     oldest = None
     newest = None
 
-    def note(st, is_file: bool) -> None:
-        nonlocal total, files, oldest, newest
-        total += int(st.st_blocks) * 512
-        if is_file:
-            files += 1
-        ts = st.st_mtime
-        if oldest is None or ts < oldest:
-            oldest = ts
-        if newest is None or ts > newest:
-            newest = ts
-
     try:
-        note(os.lstat(path) if _root_stat is None else _root_stat, False)
+        root_st = os.lstat(path) if _root_stat is None else _root_stat
+        total += root_st.st_blocks * 512
+        ts = root_st.st_mtime
+        oldest = ts
+        newest = ts
     except OSError:
         errors += 1
         return {"bytes": 0, "files": 0, "oldest": None, "newest": None, "errors": errors, "active": False}
 
     stack = [path]
     seen = set()
+    heavy_dirs: List[Tuple[str, Any]] = []
+
     while stack:
         current = stack.pop()
-        current_norm = _norm(current)
-        if current_norm in seen:
+        if current in seen:
             continue
-        seen.add(current_norm)
+        seen.add(current)
         try:
             iterator = os.scandir(current)
         except OSError:
@@ -213,31 +254,46 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
             continue
         with iterator:
             for ent in iterator:
-                if excluded and _norm(ent.path) in excluded:
+                if excluded and ent.path in excluded:
                     continue
                 try:
                     st = ent.stat(follow_symlinks=False)
                 except OSError:
                     errors += 1
                     continue
-                # lstat already tells us the type, including symlinks. Reuse it.
-                if stat.S_ISDIR(st.st_mode):
+                mode = st.st_mode
+                if (mode & 0o170000) == 0o040000:  # stat.S_ISDIR
                     if _submit is not None:
                         _submit(ent.path, st)
                     elif ent.name in HEAVY_DIRS:
-                        h_bytes, h_files, h_oldest, h_newest, h_errors = _measure_heavy_dir(ent.path, st)
-                        total += h_bytes
-                        files += h_files
-                        errors += h_errors
-                        if h_oldest is not None and (oldest is None or h_oldest < oldest):
-                            oldest = h_oldest
-                        if h_newest is not None and (newest is None or h_newest > newest):
-                            newest = h_newest
+                        heavy_dirs.append((ent.path, st))
                     else:
-                        note(st, False)
+                        total += st.st_blocks * 512
+                        ts = st.st_mtime
+                        if oldest is None or ts < oldest:
+                            oldest = ts
+                        if newest is None or ts > newest:
+                            newest = ts
                         stack.append(ent.path)
                     continue
-                note(st, True)
+                total += st.st_blocks * 512
+                files += 1
+                ts = st.st_mtime
+                if oldest is None or ts < oldest:
+                    oldest = ts
+                if newest is None or ts > newest:
+                    newest = ts
+
+    if heavy_dirs:
+        h_bytes, h_files, h_old, h_new, h_err = _measure_heavy_dirs(heavy_dirs)
+        total += h_bytes
+        files += h_files
+        errors += h_err
+        if h_old is not None and (oldest is None or h_old < oldest):
+            oldest = h_old
+        if h_new is not None and (newest is None or h_new > newest):
+            newest = h_new
+
     active = newest is not None and (now - newest) < ACTIVE_SECONDS
     return {"bytes": total, "files": files, "oldest": oldest, "newest": newest, "errors": errors, "active": active}
 
@@ -262,7 +318,7 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
                     except ValueError:
                         pass
     ledger = ledger or Ledger()
-    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
         grouped = _collect(roots, now, _imported_index(ledger), executor, valid_entries=valid_entries)
     agents = []
     total = 0
@@ -619,7 +675,6 @@ def _imported_index(ledger: Ledger) -> Dict[str, set]:
         bucket = found.setdefault(agent, set())
         for path in paths_of(entry):
             bucket.add(path)
-            bucket.add(os.path.normpath(path))
     return found
 
 

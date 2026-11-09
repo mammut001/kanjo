@@ -124,4 +124,47 @@ final class RefreshSchedulerTests: XCTestCase {
         let t30 = Date(timeIntervalSince1970: 30 * 60)
         XCTAssertEqual(scheduler.onFallbackTimerFired(at: t30), .refreshNow)
     }
+
+    func testDebounceStarvationMaxWait() {
+        var scheduler = RefreshScheduler(lastRefreshTime: nil)
+        let t0 = Date(timeIntervalSince1970: 1000)
+        var refreshStartTimes: [Date] = []
+        var scheduledRefreshTime: Date? = nil
+
+        // Continuous events every 5s for 10 minutes (600s = 120 intervals)
+        for step in 0...120 {
+            let currentTime = t0.addingTimeInterval(Double(step * 5))
+
+            // Check if scheduled refresh is due before/at this event
+            if let scheduled = scheduledRefreshTime, currentTime >= scheduled {
+                refreshStartTimes.append(scheduled)
+                scheduler.onRefreshStarted(at: scheduled)
+                scheduledRefreshTime = nil
+
+                // Refresh finishes after 1s
+                let finishTime = scheduled.addingTimeInterval(1.0)
+                let finishAction = scheduler.onRefreshFinished(at: finishTime)
+                if case .scheduleRefresh(let delay) = finishAction {
+                    scheduledRefreshTime = finishTime.addingTimeInterval(delay)
+                }
+            }
+
+            let action = scheduler.onFileEvent(at: currentTime)
+            if case .scheduleRefresh(let delay) = action {
+                scheduledRefreshTime = currentTime.addingTimeInterval(delay)
+            }
+        }
+
+        // At least one refresh within 180s of the first event
+        XCTAssertFalse(refreshStartTimes.isEmpty)
+        XCTAssertLessThanOrEqual(refreshStartTimes[0].timeIntervalSince(t0), 180.0)
+
+        // Refreshes happen at most every ~3 minutes (>= 120s min interval, <= 190s with 5s steps)
+        XCTAssertGreaterThanOrEqual(refreshStartTimes.count, 3)
+        for i in 1..<refreshStartTimes.count {
+            let interval = refreshStartTimes[i].timeIntervalSince(refreshStartTimes[i - 1])
+            XCTAssertGreaterThanOrEqual(interval, 120.0)
+            XCTAssertLessThanOrEqual(interval, 190.0)
+        }
+    }
 }

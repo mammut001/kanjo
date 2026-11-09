@@ -7,6 +7,7 @@ public struct RefreshScheduler: Equatable {
     public static let minimumFallbackMinutes = 15
     public static let debounceInterval: TimeInterval = 60
     public static let minimumRefreshInterval: TimeInterval = 120
+    public static let maxDebounceWait: TimeInterval = 180
 
     public enum Action: Equatable {
         case none
@@ -16,6 +17,7 @@ public struct RefreshScheduler: Equatable {
 
     public private(set) var lastRefreshTime: Date?
     public private(set) var lastEventTime: Date?
+    public private(set) var firstUnhandledEventTime: Date?
     public private(set) var isRefreshing: Bool = false
     public private(set) var hasPendingEventWhileRefreshing: Bool = false
     public private(set) var isAsleep: Bool = false
@@ -42,6 +44,9 @@ public struct RefreshScheduler: Equatable {
     /// Called when an FSEvent notifies us of a file change in an agent log directory.
     public mutating func onFileEvent(at date: Date = Date()) -> Action {
         lastEventTime = date
+        if firstUnhandledEventTime == nil {
+            firstUnhandledEventTime = date
+        }
         if isAsleep || isLowPowerMode {
             pendingWakeRefresh = true
             return .none
@@ -50,9 +55,12 @@ public struct RefreshScheduler: Equatable {
             hasPendingEventWhileRefreshing = true
             return .none
         }
+        let firstEvent = firstUnhandledEventTime ?? date
+        let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
         let debounceTarget = date.addingTimeInterval(Self.debounceInterval)
+        let effectiveTarget = min(debounceTarget, deadline)
         let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(Self.minimumRefreshInterval)
-        let scheduledTarget = max(debounceTarget, minIntervalTarget)
+        let scheduledTarget = max(effectiveTarget, minIntervalTarget)
         let delay = max(0, scheduledTarget.timeIntervalSince(date))
         return .scheduleRefresh(after: delay)
     }
@@ -61,6 +69,7 @@ public struct RefreshScheduler: Equatable {
     public mutating func onRefreshStarted(at date: Date = Date()) {
         isRefreshing = true
         hasPendingEventWhileRefreshing = false
+        firstUnhandledEventTime = nil
     }
 
     /// Called when a refresh finishes.
@@ -74,9 +83,12 @@ public struct RefreshScheduler: Equatable {
 
         if hasPendingEventWhileRefreshing {
             hasPendingEventWhileRefreshing = false
+            let firstEvent = firstUnhandledEventTime ?? (lastEventTime ?? date)
+            let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
             let debounceTarget = (lastEventTime ?? date).addingTimeInterval(Self.debounceInterval)
+            let effectiveTarget = min(debounceTarget, deadline)
             let minIntervalTarget = date.addingTimeInterval(Self.minimumRefreshInterval)
-            let scheduledTarget = max(debounceTarget, minIntervalTarget)
+            let scheduledTarget = max(effectiveTarget, minIntervalTarget)
             let delay = max(0, scheduledTarget.timeIntervalSince(date))
             return .scheduleRefresh(after: delay)
         }
