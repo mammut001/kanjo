@@ -72,7 +72,11 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
     for root in dirs if dirs is not None else roots():
         if not os.path.isdir(root):
             continue
-        for path in sorted(glob.glob(os.path.join(root, "*.blob"))):
+        search_dir = root
+        cand_sub = os.path.join(root, "sand-client-persistence")
+        if os.path.isdir(cand_sub):
+            search_dir = cand_sub
+        for path in sorted(glob.glob(os.path.join(search_dir, "*.blob"))):
             real = os.path.realpath(path)
             if real in seen:
                 continue

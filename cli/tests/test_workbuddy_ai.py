@@ -47,7 +47,7 @@ class WorkBuddyAISourceTest(unittest.TestCase):
         msg = session.messages[0]
         resolved, estimated = book.resolve(msg.model, session.agent)
         self.assertTrue(estimated)
-        cost = book.cost(
+        cost, _ = book.cost(
             msg.model,
             session.agent,
             input_tokens=msg.input,

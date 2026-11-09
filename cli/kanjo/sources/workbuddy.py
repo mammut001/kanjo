@@ -109,10 +109,11 @@ def _extract_usage(item: dict) -> Optional[Dict[str, Any]]:
     if not provider and isinstance(message.get("providerData"), dict):
         provider = message.get("providerData")
 
+    item_usage = item.get("usage") if isinstance(item.get("usage"), dict) else {}
     message_usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
     normalized = provider.get("usage") if isinstance(provider.get("usage"), dict) else {}
     raw = provider.get("rawUsage") if isinstance(provider.get("rawUsage"), dict) else {}
-    sources = [x for x in (message_usage, normalized, raw) if isinstance(x, dict) and x]
+    sources = [x for x in (item_usage, message_usage, normalized, raw) if isinstance(x, dict) and x]
 
     input_total = output = 0
     selected = None
@@ -161,6 +162,16 @@ def _extract_usage(item: dict) -> Optional[Dict[str, Any]]:
     else:
         input_tokens = max(input_total - cache_read - cache_write, 0) if (cache_read + cache_write > 0 and input_total >= cache_read + cache_write) else input_total
 
+    thinking = (
+        _number(raw, "completion_thinking_tokens", "thinking")
+        or _detail_total(raw.get("completion_tokens_details"), "reasoning_tokens")
+        or _detail_total(normalized.get("outputTokensDetails"), "reasoning_tokens")
+        or _number(item_usage, "thinking", "reasoning_tokens")
+        or 0
+    )
+    if output:
+        thinking = min(thinking, output)
+
     model = (
         provider.get("requestModelName")
         or provider.get("requestModelId")
@@ -169,13 +180,14 @@ def _extract_usage(item: dict) -> Optional[Dict[str, Any]]:
         or item.get("model")
         or "unknown"
     )
-    message_id = provider.get("messageId") or item.get("id") or ""
+    message_id = provider.get("messageId") or item.get("messageId") or item.get("id") or ""
 
     return {
         "input": input_tokens,
         "output": output,
         "cache_read": cache_read,
         "cache_write": cache_write,
+        "thinking": thinking,
         "model": str(model),
         "message_id": str(message_id),
     }
@@ -224,23 +236,30 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "workb
             if isinstance(sid, str) and sid:
                 session.id = sid
 
-            if item.get("aiTitle"):
-                ai_title = str(item.get("aiTitle"))
+            t = (
+                item.get("aiTitle")
+                or item.get("title")
+                or (item.get("message") if isinstance(item.get("message"), dict) else {}).get("aiTitle")
+            )
+            if t:
+                ai_title = str(t)
 
             item_type = item.get("type")
 
             # Extract user prompt for title fallback
             if user_first_text is None:
-                if item_type == "message" and item.get("role") == "user":
+                role = item.get("role") or (item_type if item_type == "user" else None)
+                if role == "user":
                     content = item.get("content") or item.get("rawContent")
-                    if isinstance(content, str) and content.strip():
+                    if not content and isinstance(item.get("message"), dict):
+                        content = item["message"].get("content")
+                    if isinstance(content, list):
+                        for part in content:
+                            if isinstance(part, dict) and part.get("text"):
+                                user_first_text = str(part["text"]).strip()
+                                break
+                    elif isinstance(content, str) and content.strip():
                         user_first_text = content.strip()
-                elif item.get("role") == "user":
-                    msg = item.get("message")
-                    if isinstance(msg, dict):
-                        content = msg.get("content")
-                        if isinstance(content, str) and content.strip():
-                            user_first_text = content.strip()
 
             # Tool call path tracking
             if item_type == "function_call":
@@ -257,12 +276,28 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "workb
                     tools[call_id] = set()
                     tool_order.append(call_id)
                 tools[call_id].update(found)
+            elif isinstance(item.get("tool_calls"), list):
+                for tc in item["tool_calls"]:
+                    if isinstance(tc, dict):
+                        args = tc.get("arguments")
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except Exception:
+                                args = {}
+                        found = paths_from_args(args, session.cwd, PATH_KEYS, CMD_KEYS)
+                        call_id = tc.get("id") or tc.get("name") or f"tool_{line_no}"
+                        if call_id not in tools:
+                            tools[call_id] = set()
+                            tool_order.append(call_id)
+                        tools[call_id].update(found)
 
             # Usage recording
             usage = _extract_usage(item)
             if usage is not None:
-                mid = usage["message_id"] or f"msg_{line_no}"
+                mid = usage["message_id"]
                 m_ts = ts or session.origin_ts or 0.0
+                key = f"{session.agent}:{session.id}:{mid}" if mid else f"{session.agent}:{session.id}:{line_no}"
                 m = Message(
                     ts=m_ts,
                     model=usage["model"],
@@ -270,8 +305,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "workb
                     output=usage["output"],
                     cache_read=usage["cache_read"],
                     cache_write=usage["cache_write"],
+                    thinking=usage.get("thinking", 0),
                     cwd=session.cwd,
-                    key=f"{session.agent}:{session.id}:{mid}:{line_no}",
+                    key=key,
                 )
                 messages.append(m)
 

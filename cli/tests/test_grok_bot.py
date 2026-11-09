@@ -42,7 +42,7 @@ class GrokBotSourceTest(unittest.TestCase):
         session = grok_bot.parse_file(discovered[0][0])
         book = default_book()
         msg = session.messages[0]
-        cost = book.cost(
+        cost, _ = book.cost(
             msg.model,
             session.agent,
             input_tokens=msg.input,

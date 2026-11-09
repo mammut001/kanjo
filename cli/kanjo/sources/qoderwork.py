@@ -40,7 +40,7 @@ def roots() -> List[str]:
 def _db_path(root: str) -> Optional[str]:
     if os.path.isfile(root) and (root.endswith(".db") or root.endswith(".sqlite")):
         return root
-    for name in ("agents.db", "local.db", "sqlite.db"):
+    for name in ("agents.db", "local.db", "sqlite.db", "data/agents.db"):
         cand = os.path.join(root, name)
         if os.path.isfile(cand):
             return cand
