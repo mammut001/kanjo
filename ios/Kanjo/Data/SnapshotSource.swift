@@ -152,6 +152,88 @@ final class CloudKitSnapshotSource: SnapshotSource {
     }
 
     private func fetchMetadata() async throws -> [CKRecord] {
+        let zoneRecords: [CKRecord]
+        do {
+            zoneRecords = try await fetchZoneRecords()
+        } catch {
+            SyncLog.sync.info("fetch zone changes failed, falling back to query: \(error.localizedDescription, privacy: .private)")
+            return try await fetchMetadataByQuery()
+        }
+
+        if !zoneRecords.isEmpty {
+            SyncLog.sync.info("fetch zone changes finished: \(zoneRecords.count, privacy: .public) records")
+            return zoneRecords
+        }
+
+        SyncLog.sync.info("fetch zone changes returned empty, trying query fallback")
+        do {
+            let queryRecords = try await fetchMetadataByQuery()
+            return queryRecords
+        } catch let error as CKError where error.code == .unknownItem || error.code == .invalidArguments {
+            SyncLog.sync.info("query fallback ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
+            return []
+        }
+    }
+
+    private func fetchZoneRecords() async throws -> [CKRecord] {
+        let zoneID = CKRecordZone.default().zoneID
+        let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
+            previousServerChangeToken: nil,
+            resultsLimit: nil,
+            desiredKeys: [
+                SnapshotRecord.fieldDeviceName,
+                SnapshotRecord.fieldGeneratedAt,
+                SnapshotRecord.fieldSchemaVersion,
+            ]
+        )
+        let operation = CKFetchRecordZoneChangesOperation(
+            recordZoneIDs: [zoneID],
+            configurationsByRecordZoneID: [zoneID: config]
+        )
+        operation.fetchAllChanges = true
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let lock = NSLock()
+            var records: [CKRecord] = []
+
+            operation.recordWasChangedBlock = { _, result in
+                if case .success(let record) = result, record.recordType == SnapshotRecord.recordType {
+                    lock.lock()
+                    records.append(record)
+                    lock.unlock()
+                }
+            }
+
+            operation.fetchRecordZoneChangesResultBlock = { result in
+                lock.lock()
+                let collected = records
+                lock.unlock()
+
+                switch result {
+                case .success:
+                    continuation.resume(returning: collected)
+                case .failure(let error):
+                    if let ckError = error as? CKError {
+                        if ckError.code == .unknownItem || ckError.code == .zoneNotFound {
+                            continuation.resume(returning: [])
+                            return
+                        }
+                        if ckError.code == .partialFailure,
+                           let zoneError = ckError.partialErrorsByItemID?[zoneID] as? CKError,
+                           zoneError.code == .unknownItem || zoneError.code == .zoneNotFound {
+                            continuation.resume(returning: [])
+                            return
+                        }
+                    }
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            database.add(operation)
+        }
+    }
+
+    private func fetchMetadataByQuery() async throws -> [CKRecord] {
         let query = CKQuery(recordType: SnapshotRecord.recordType,
                             predicate: NSPredicate(value: true))
         var records: [CKRecord] = []

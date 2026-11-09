@@ -30,7 +30,11 @@ final class CloudSyncStore: ObservableObject {
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
         if defaults.bool(forKey: SettingsKeys.cloudSyncEnabled) {
-            status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
+            if AppDefaults.suiteName() == nil && !CloudKitEntitlement.hasContainer() {
+                status = .failed(L10n.tr("settings.sync.status.not_configured"))
+            } else {
+                status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
+            }
         } else {
             status = .off
         }
@@ -47,6 +51,10 @@ final class CloudSyncStore: ObservableObject {
     func setEnabled(_ enabled: Bool) {
         guard enabled else {
             status = .off
+            return
+        }
+        if AppDefaults.suiteName() == nil && !CloudKitEntitlement.hasContainer() {
+            status = .failed(L10n.tr("settings.sync.status.not_configured"))
             return
         }
         status = Self.storedUploadDate(defaults: defaults).map(Status.uploaded) ?? .waitingForICloud
@@ -105,6 +113,12 @@ final class CloudSyncStore: ObservableObject {
                 return
             }
 
+            guard CloudKitEntitlement.hasContainer() else {
+                Self.logger.error("sync skipped: no CloudKit entitlement")
+                status = .failed(L10n.tr("settings.sync.status.not_configured"))
+                return
+            }
+
             let fingerprint = SyncFingerprint.make(for: report)
             let force = forceNextUpload
             if force {
@@ -123,11 +137,6 @@ final class CloudSyncStore: ObservableObject {
                 Self.logger.info("sync forced: upload state was reset")
             }
 
-            guard CloudKitEntitlement.hasContainer() else {
-                Self.logger.error("sync skipped: no CloudKit entitlement")
-                status = .failed(L10n.tr("settings.sync.status.not_configured"))
-                return
-            }
             let account = try await accountStatus()
             guard account == .available else {
                 Self.logger.info("sync skipped: iCloud account status \(Self.accountCode(account), privacy: .public)")
