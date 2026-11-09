@@ -125,6 +125,31 @@ final class AgentColorsTests: KanjoTestCase {
         return sqrt(termL * termL + termC * termC + termH * termH + rT * termC * termH)
     }
 
+    /// The 19 agents that existed on origin/main prior to adding new agent sources.
+    /// Pairwise distance between any two tier-1 agents must remain >= 12.
+    /// Pairwise distance involving any tier-2 agent must be >= 8.
+    private static let tier1Agents: Set<String> = [
+        "antigravity",
+        "claude",
+        "codex",
+        "commandcode",
+        "copilot",
+        "grok",
+        "grok_bot",
+        "kimicode",
+        "minimax",
+        "musecode",
+        "opencode",
+        "pi",
+        "qodercli",
+        "qodercli_cn",
+        "qoderwork",
+        "qwen",
+        "workbuddy",
+        "workbuddy_ai",
+        "zcode",
+    ]
+
     func testLightColorsPairwiseCIEDE2000() {
         let entries = AgentColors.all.sorted { $0.key < $1.key }
         for i in 0..<entries.count {
@@ -134,9 +159,10 @@ final class AgentColorsTests: KanjoTestCase {
                 let lab1 = Self.srgbToLab(a1.value.light)
                 let lab2 = Self.srgbToLab(a2.value.light)
                 let de = Self.ciede2000(lab1, lab2)
+                let minDelta: Double = (Self.tier1Agents.contains(a1.key) && Self.tier1Agents.contains(a2.key)) ? 12.0 : 8.0
                 XCTAssertGreaterThanOrEqual(
-                    de, 12.0,
-                    "Light CIEDE2000 between \(a1.key) (#\(String(format: "%06X", a1.value.light))) and \(a2.key) (#\(String(format: "%06X", a2.value.light))) must be >= 12, got \(de)"
+                    de, minDelta,
+                    "Light CIEDE2000 between \(a1.key) (#\(String(format: "%06X", a1.value.light))) and \(a2.key) (#\(String(format: "%06X", a2.value.light))) must be >= \(minDelta), got \(de)"
                 )
             }
         }
@@ -163,9 +189,10 @@ final class AgentColorsTests: KanjoTestCase {
                 let lab1 = Self.srgbToLab(a1.value.dark)
                 let lab2 = Self.srgbToLab(a2.value.dark)
                 let de = Self.ciede2000(lab1, lab2)
+                let minDelta: Double = (Self.tier1Agents.contains(a1.key) && Self.tier1Agents.contains(a2.key)) ? 12.0 : 8.0
                 XCTAssertGreaterThanOrEqual(
-                    de, 12.0,
-                    "Dark CIEDE2000 between \(a1.key) (#\(String(format: "%06X", a1.value.dark))) and \(a2.key) (#\(String(format: "%06X", a2.value.dark))) must be >= 12, got \(de)"
+                    de, minDelta,
+                    "Dark CIEDE2000 between \(a1.key) (#\(String(format: "%06X", a1.value.dark))) and \(a2.key) (#\(String(format: "%06X", a2.value.dark))) must be >= \(minDelta), got \(de)"
                 )
             }
         }

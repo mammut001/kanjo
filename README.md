@@ -84,6 +84,15 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | ZCode | `~/.zcode/cli/db/db.sqlite` | directory |
 | Kimi Code | `~/.kimi-code/sessions/**/wire.jsonl` | files touched, cwd |
 | Muse Code | `~/.local/share/muse/sessions/**/session.jsonl` | files touched, cwd |
+| CodeBuddy | `~/.codebuddy/projects/**/*.jsonl` | files touched, cwd |
+| Qoder IDE | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | cwd |
+| Hermes | `~/.hermes/state.db` | files touched, cwd |
+| OpenClaw | `~/.openclaw` | files touched, cwd |
+| Devin | `~/.local/share/devin/cli/sessions.db` | files touched, cwd |
+| MiMo Code | `~/Library/Application Support/mimocode/data/*.db` | files touched, cwd |
+| Prime Agent | `~/.prime/agent/sessions/**/*.jsonl` | files touched, cwd |
+| OMP | `~/.omp/agent/sessions/**/*.jsonl` | files touched, cwd |
+| DeepSeek Harness | `~/.tokei/cache/dsh-sessions/**/*.jsonl` | files touched, cwd |
 
 Antigravity sessions are detected automatically from both `~/.gemini/antigravity-cli` and `~/.gemini/antigravity` (Antigravity 2.0 app). MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
@@ -204,7 +213,7 @@ The CLI and the app are developed independently and meet only at the JSON in [CO
 
 [Tokei](https://github.com/cclank/tokei) (時計, clock) watches your quotas and daily usage across 30+ tools. Kanjo (勘定, the bill) asks a different question: the total bill of one repo. They read the same logs and share a price table, nothing else. Use both.
 
-Parsers for workbuddy, workbuddy_ai, grok_bot, qoderwork, qodercli, qodercli_cn, zcode, kimicode, and musecode are adapted from Tokei (MIT, github.com/cclank/tokei).
+Parsers for workbuddy, workbuddy_ai, grok_bot, qoderwork, qodercli, qodercli_cn, zcode, kimicode, musecode, codebuddy, qoder_ide, hermes, openclaw, devin, mimocode, prime_agent, omp, and deepseek_harness are adapted from Tokei (MIT, github.com/cclank/tokei).
 
 ## License
 
@@ -261,6 +270,15 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 | ZCode | `~/.zcode/cli/db/db.sqlite` | 目录 |
 | Kimi Code | `~/.kimi-code/sessions/**/wire.jsonl` | 碰过的文件、当前工作目录 |
 | Muse Code | `~/.local/share/muse/sessions/**/session.jsonl` | 碰过的文件、当前工作目录 |
+| CodeBuddy | `~/.codebuddy/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| Qoder IDE | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | 当前工作目录 |
+| Hermes | `~/.hermes/state.db` | 碰过的文件、当前工作目录 |
+| OpenClaw | `~/.openclaw` | 碰过的文件、当前工作目录 |
+| Devin | `~/.local/share/devin/cli/sessions.db` | 碰过的文件、当前工作目录 |
+| MiMo Code | `~/Library/Application Support/mimocode/data/*.db` | 碰过的文件、当前工作目录 |
+| Prime Agent | `~/.prime/agent/sessions/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| OMP | `~/.omp/agent/sessions/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| DeepSeek Harness | `~/.tokei/cache/dsh-sessions/**/*.jsonl` | 碰过的文件、当前工作目录 |
 
 Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`（Antigravity 2.0 app）。MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 
@@ -299,6 +317,6 @@ cd kanjo && ./install.sh
 
 [Tokei](https://github.com/cclank/tokei)（時計）看额度和每日用量，Kanjo（勘定）看一个 repo 的总账。两者读同样的日志、共用一份价格表，仅此而已。
 
-workbuddy、workbuddy_ai、grok_bot、qoderwork、qodercli、qodercli_cn、zcode、kimicode 与 musecode 的日志解析器改写自 Tokei（MIT 协议，github.com/cclank/tokei）。
+workbuddy、workbuddy_ai、grok_bot、qoderwork、qodercli、qodercli_cn、zcode、kimicode、musecode、codebuddy、qoder_ide、hermes、openclaw、devin、mimocode、prime_agent、omp 与 deepseek_harness 的日志解析器改写自 Tokei（MIT 协议，github.com/cclank/tokei）。
 
 MIT 协议。

@@ -1,0 +1,5 @@
+{"type": "session", "id": "dsh-sess-1", "cwd": "/Users/alice/Projects/dsh-proj", "createdAt": 1794000000000}
+{"type": "request/header", "time": 1794000001000, "data": {"header": {"config": {"provider": "deepseek-official", "model": "deepseek-v4-pro"}}}}
+{"type": "user/message", "time": 1794000002000, "data": {"text": "Refactor deepseek harness"}}
+{"type": "assistant/chunk", "time": 1794000004000, "data": {"turn": 1, "step": 1, "chunk": {"type": "usage", "usage": {"inputTokens": 1000, "outputTokens": 200, "cacheReadTokens": 500, "cacheWriteTokens": 10, "reasoningTokens": 30}}}}
+{"type": "assistant/message", "time": 1794000005000, "data": {"turn": 1, "step": 1, "usage": {"inputTokens": 1000, "outputTokens": 350, "cacheReadTokens": 500, "cacheWriteTokens": 10, "reasoningTokens": 50}, "message": {"source": {"model": "deepseek-v4-pro", "provider": "deepseek-official"}}}}

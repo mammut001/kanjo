@@ -33,12 +33,29 @@ PATH_KEYS = {
 CMD_KEYS = {"command", "cmd"}
 
 
-def roots() -> List[str]:
-    explicit = (
-        os.environ.get("KANJO_PI_DIR")
-        or os.environ.get("PI_CODING_AGENT_SESSION_DIR")
-        or os.environ.get("PI_CODING_AGENT_DIR")
-    )
+def roots(agent: str = "pi") -> List[str]:
+    if agent == "omp":
+        explicit = (
+            os.environ.get("KANJO_OMP_DIR")
+            or os.environ.get("OMP_CODING_AGENT_SESSION_DIR")
+        )
+        default_dir = "~/.omp/agent/sessions"
+    elif agent == "prime_agent":
+        explicit = (
+            os.environ.get("KANJO_PRIME_AGENT_DIR")
+            or os.environ.get("PRIME_AGENT_SESSION_DIR")
+            or os.environ.get("PRIME_AGENT_CODING_AGENT_SESSION_DIR")
+            or os.environ.get("PRIME_AGENT_CODING_AGENT_DIR")
+        )
+        default_dir = "~/.prime/agent/sessions"
+    else:
+        explicit = (
+            os.environ.get("KANJO_PI_DIR")
+            or os.environ.get("PI_CODING_AGENT_SESSION_DIR")
+            or os.environ.get("PI_CODING_AGENT_DIR")
+        )
+        default_dir = "~/.pi/agent/sessions"
+
     if explicit:
         paths = []
         for p in explicit.split(os.pathsep):
@@ -52,14 +69,14 @@ def roots() -> List[str]:
         return paths
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.expanduser("~/.pi/agent/sessions")]
+    return [os.path.expanduser(default_dir)]
 
 
-def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
+def discover(dirs: Optional[List[str]] = None, agent: str = "pi") -> List[Tuple[str, Optional[str]]]:
     """[(jsonl_path, parent session id)]"""
     found = []
     seen = set()
-    for root in dirs if dirs is not None else roots():
+    for root in dirs if dirs is not None else roots(agent=agent):
         if not os.path.isdir(root):
             continue
         candidates = (
@@ -89,9 +106,9 @@ def _user_text(message: dict) -> Optional[str]:
     return None
 
 
-def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
+def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "pi") -> Session:
     stem = os.path.splitext(os.path.basename(path))[0]
-    session = Session(id=stem, agent=AGENT, file=path, subagent_of=subagent_of)
+    session = Session(id=stem, agent=agent, file=path, subagent_of=subagent_of)
 
     tools: Dict[str, Set[str]] = {}
     tool_order: List[str] = []
@@ -185,14 +202,14 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
 
             inp = int(usage.get("input") or 0)
             out = int(usage.get("output") or 0)
-            cache_read = int(usage.get("cacheRead") or 0)
-            cache_write = int(usage.get("cacheWrite") or 0)
-            reasoning = int(usage.get("reasoning") or 0)
+            cache_read = int(usage.get("cacheRead") or usage.get("cache_read") or 0)
+            cache_write = int(usage.get("cacheWrite") or usage.get("cache_write") or 0)
+            reasoning = int(usage.get("reasoning") or usage.get("reasoningTokens") or usage.get("reason") or 0)
             thinking = min(reasoning, out) if out else reasoning
 
             model = msg.get("model") or current_model or "unknown"
             mid = msg.get("responseId") or msg.get("id") or obj.get("id") or f"line_{idx}"
-            key = f"pi:{session.id}:{mid}" if mid else None
+            key = f"{agent}:{session.id}:{mid}" if mid else None
 
             messages.append(
                 Message(

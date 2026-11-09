@@ -50,6 +50,8 @@ def roots() -> List[str]:
     return env_dirs("KANJO_ANTIGRAVITY_DIR", [
         "~/.gemini/antigravity-cli/conversations",
         "~/.gemini/antigravity/conversations",
+        "~/.gemini/antigravity-ide/conversations",
+        "~/.gemini/gemini-cli/conversations",
     ])
 
 

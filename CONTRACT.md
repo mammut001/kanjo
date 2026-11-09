@@ -153,6 +153,15 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `zcode` | ZCode |
 | `kimicode` | Kimi Code |
 | `musecode` | Muse Code |
+| `codebuddy` | CodeBuddy |
+| `qoder_ide` | Qoder IDE |
+| `hermes` | Hermes |
+| `openclaw` | OpenClaw |
+| `devin` | Devin |
+| `mimocode` | MiMo Code |
+| `prime_agent` | Prime Agent |
+| `omp` | OMP |
+| `deepseek_harness` | DeepSeek Harness |
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 

@@ -39,6 +39,9 @@ def roots(agent: str = "workbuddy") -> List[str]:
     if agent == "workbuddy_ai":
         env_val = os.environ.get("KANJO_WORKBUDDY_AI_DIR") or os.environ.get("WORKBUDDY_AI_DIR")
         default = "~/.workbuddy-ai/projects"
+    elif agent == "codebuddy":
+        env_val = os.environ.get("KANJO_CODEBUDDY_DIR") or os.environ.get("TOKEI_CODEBUDDY_DIR") or os.environ.get("CODEBUDDY_DIR")
+        default = "~/.codebuddy/projects"
     else:
         env_val = os.environ.get("KANJO_WORKBUDDY_DIR") or os.environ.get("WORKBUDDY_DIR")
         default = "~/.workbuddy/projects"
@@ -195,8 +198,12 @@ def _extract_usage(item: dict) -> Optional[Dict[str, Any]]:
 
 def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "workbuddy") -> Session:
     stem = os.path.splitext(os.path.basename(path))[0]
-    # Check if path indicates workbuddy_ai
-    actual_agent = "workbuddy_ai" if (".workbuddy-ai" in path or agent == "workbuddy_ai") else "workbuddy"
+    if ".codebuddy" in path or agent == "codebuddy":
+        actual_agent = "codebuddy"
+    elif ".workbuddy-ai" in path or agent == "workbuddy_ai":
+        actual_agent = "workbuddy_ai"
+    else:
+        actual_agent = "workbuddy"
     session = Session(id=stem, agent=actual_agent, file=path, subagent_of=subagent_of)
 
     tools: Dict[str, Set[str]] = {}

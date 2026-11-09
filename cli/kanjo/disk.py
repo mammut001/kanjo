@@ -22,9 +22,10 @@ from typing import Dict, List, Optional, Tuple
 from . import disk_cache
 from .ledger import Ledger, paths_of
 from .sources import (
-    antigravity, claude, codex, copilot, grok_bot, kimicode, minimax,
-    musecode, opencode, pi, qodercli, qodercli_cn, qoderwork,
-    workbuddy, workbuddy_ai, zcode,
+    antigravity, claude, codebuddy, codex, copilot, deepseek_harness,
+    devin, grok_bot, hermes, kimicode, mimocode, minimax, musecode,
+    omp, openclaw, opencode, pi, prime_agent, qoder_ide, qodercli,
+    qodercli_cn, qoderwork, workbuddy, workbuddy_ai, zcode,
 )
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
@@ -51,6 +52,8 @@ AGENT_ORDER = [
     "claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax",
     "opencode", "copilot", "pi", "workbuddy", "workbuddy_ai", "grok_bot",
     "qoderwork", "qodercli", "qodercli_cn", "zcode", "kimicode", "musecode",
+    "codebuddy", "qoder_ide", "hermes", "openclaw", "devin", "mimocode",
+    "prime_agent", "omp", "deepseek_harness",
     "claude-desktop",
 ]
 _PARSERS = {
@@ -70,6 +73,15 @@ _PARSERS = {
     "zcode": zcode,
     "kimicode": kimicode,
     "musecode": musecode,
+    "codebuddy": codebuddy,
+    "qoder_ide": qoder_ide,
+    "hermes": hermes,
+    "openclaw": openclaw,
+    "devin": devin,
+    "mimocode": mimocode,
+    "prime_agent": prime_agent,
+    "omp": omp,
+    "deepseek_harness": deepseek_harness,
 }
 _OLDER = re.compile(r"^(\d+)d$")
 
@@ -104,6 +116,8 @@ def default_roots() -> dict:
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
             "~/.gemini/antigravity-cli/conversations",
             "~/.gemini/antigravity/conversations",
+            "~/.gemini/antigravity-ide/conversations",
+            "~/.gemini/gemini-cli/conversations",
         ]),
         "grok": os.path.expanduser(os.environ["KANJO_GROK_DIR"]) if os.environ.get("KANJO_GROK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.grok")),
         "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
@@ -129,6 +143,15 @@ def default_roots() -> dict:
         "zcode": os.path.expanduser(os.environ["KANJO_ZCODE_DIR"]) if os.environ.get("KANJO_ZCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.zcode")),
         "kimicode": os.path.expanduser(os.environ["KANJO_KIMICODE_DIR"]) if os.environ.get("KANJO_KIMICODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.kimi-code")),
         "musecode": os.path.expanduser(os.environ["KANJO_MUSECODE_DIR"]) if os.environ.get("KANJO_MUSECODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/muse")),
+        "codebuddy": os.path.expanduser(os.environ["KANJO_CODEBUDDY_DIR"]) if os.environ.get("KANJO_CODEBUDDY_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.codebuddy")),
+        "qoder_ide": os.path.expanduser(os.environ["KANJO_QODER_IDE_DIR"]) if os.environ.get("KANJO_QODER_IDE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/Qoder/SharedClientCache/cache/db")),
+        "hermes": os.path.expanduser(os.environ["KANJO_HERMES_DIR"]) if os.environ.get("KANJO_HERMES_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.hermes")),
+        "openclaw": os.path.expanduser(os.environ["KANJO_OPENCLAW_DIR"]) if os.environ.get("KANJO_OPENCLAW_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.openclaw")),
+        "devin": os.path.expanduser(os.environ["KANJO_DEVIN_DIR"]) if os.environ.get("KANJO_DEVIN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/devin/cli")),
+        "mimocode": os.path.expanduser(os.environ["KANJO_MIMOCODE_DIR"]) if os.environ.get("KANJO_MIMOCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/mimocode")),
+        "prime_agent": os.path.expanduser(os.environ["KANJO_PRIME_AGENT_DIR"]) if os.environ.get("KANJO_PRIME_AGENT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.prime/agent/sessions")),
+        "omp": os.path.expanduser(os.environ["KANJO_OMP_DIR"]) if os.environ.get("KANJO_OMP_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.omp/agent/sessions")),
+        "deepseek_harness": os.path.expanduser(os.environ["KANJO_DEEPSEEK_HARNESS_DIR"]) if os.environ.get("KANJO_DEEPSEEK_HARNESS_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.tokei/cache/dsh-sessions")),
     }
 
 
@@ -661,6 +684,54 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         cand = os.path.join(mc_root, "sessions") if os.path.basename(mc_root) != "sessions" and _isdir(os.path.join(mc_root, "sessions")) else mc_root
         add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
 
+    cb_root = roots.get("codebuddy")
+    if cb_root and _isdir(cb_root):
+        cand = os.path.join(cb_root, "projects") if os.path.basename(cb_root) != "projects" and _isdir(os.path.join(cb_root, "projects")) else cb_root
+        add("codebuddy", take_id("codebuddy:sessions"), "sessions", cand, note="CodeBuddy sessions.")
+
+    qi_root = roots.get("qoder_ide")
+    if qi_root and (_isdir(qi_root) or os.path.isfile(qi_root)):
+        add("qoder_ide", take_id("qoder_ide:sessions"), "sessions", qi_root,
+            note="Qoder IDE SQLite database. DB-backed sessions are never deleted by disk clean.",
+            deletable="never")
+
+    hm_root = roots.get("hermes")
+    if hm_root and (_isdir(hm_root) or os.path.isfile(hm_root)):
+        add("hermes", take_id("hermes:sessions"), "sessions", hm_root,
+            note="Hermes SQLite database. DB-backed sessions are never deleted by disk clean.",
+            deletable="never")
+
+    oc_root = roots.get("openclaw")
+    if oc_root and _isdir(oc_root):
+        cand = os.path.join(oc_root, "agents") if _isdir(os.path.join(oc_root, "agents")) else oc_root
+        add("openclaw", take_id("openclaw:sessions"), "sessions", cand, note="OpenClaw sessions.")
+
+    dv_root = roots.get("devin")
+    if dv_root and (_isdir(dv_root) or os.path.isfile(dv_root)):
+        add("devin", take_id("devin:sessions"), "sessions", dv_root,
+            note="Devin SQLite database. DB-backed sessions are never deleted by disk clean.",
+            deletable="never")
+
+    mimo_root = roots.get("mimocode")
+    if mimo_root and (_isdir(mimo_root) or os.path.isfile(mimo_root)):
+        add("mimocode", take_id("mimocode:sessions"), "sessions", mimo_root,
+            note="MiMo Code SQLite database. DB-backed sessions are never deleted by disk clean.",
+            deletable="never")
+
+    prime_root = roots.get("prime_agent")
+    if prime_root and _isdir(prime_root):
+        cand = os.path.join(prime_root, "sessions") if os.path.basename(prime_root) != "sessions" and _isdir(os.path.join(prime_root, "sessions")) else prime_root
+        add("prime_agent", take_id("prime_agent:sessions"), "sessions", cand, note="Prime Agent sessions.")
+
+    omp_root = roots.get("omp")
+    if omp_root and _isdir(omp_root):
+        cand = os.path.join(omp_root, "sessions") if os.path.basename(omp_root) != "sessions" and _isdir(os.path.join(omp_root, "sessions")) else omp_root
+        add("omp", take_id("omp:sessions"), "sessions", cand, note="OMP sessions.")
+
+    dsh_root = roots.get("deepseek_harness")
+    if dsh_root and _isdir(dsh_root):
+        add("deepseek_harness", take_id("deepseek_harness:sessions"), "sessions", dsh_root, note="DeepSeek Harness sessions.")
+
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
     for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable, cached_e in pending:
         if cached_e is not None:
@@ -940,7 +1011,7 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     root = entry["path"]
     if not os.path.exists(root):
         return [], 0, "not_found", []
-    if agent in ("minimax", "opencode", "qoderwork", "zcode"):
+    if agent in ("minimax", "opencode", "qoderwork", "zcode", "qoder_ide", "hermes", "devin", "mimocode"):
         return [], 0, "never", []
     if days is None:
         if do_it:

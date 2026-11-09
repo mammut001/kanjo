@@ -33,6 +33,15 @@ AGENT_LABELS = {
     "zcode": "ZCode",
     "kimicode": "Kimi Code",
     "musecode": "Muse Code",
+    "codebuddy": "CodeBuddy",
+    "qoder_ide": "Qoder IDE",
+    "hermes": "Hermes",
+    "openclaw": "OpenClaw",
+    "devin": "Devin",
+    "mimocode": "MiMo Code",
+    "prime_agent": "Prime Agent",
+    "omp": "OMP",
+    "deepseek_harness": "DeepSeek Harness",
 }
 
 

@@ -51,6 +51,7 @@ AGENT_FALLBACK: Dict[str, str] = {
     "kimicode": "moonshot",
     "zcode": "zhipu",
     "musecode": "meta",
+    "deepseek_harness": "deepseek",
 }
 
 
