@@ -47,6 +47,7 @@ AGENT_FALLBACK: Dict[str, str] = {
     "grok": "xai",
     "grok_bot": "xai",
     "qwen": "alibaba",
+    "qwenwork": "alibaba",
     "minimax": "minimax",
     "kimicode": "moonshot",
     "zcode": "zhipu",

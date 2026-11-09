@@ -26,6 +26,7 @@ AGENT_LABELS = {
     "pi": "Pi",
     "workbuddy": "WorkBuddy",
     "workbuddy_ai": "WorkBuddy Intl.",
+    "qwenwork": "QwenWork",
     "grok_bot": "Grok Bot",
     "qoderwork": "QoderWork",
     "qodercli": "Qoder CLI",

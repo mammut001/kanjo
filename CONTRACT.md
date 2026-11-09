@@ -162,6 +162,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `prime_agent` | Prime Agent |
 | `omp` | OMP |
 | `deepseek_harness` | DeepSeek Harness |
+| `qwenwork` | QwenWork |
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 
@@ -390,9 +391,9 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
   "last_day": "2026-10-31",
   "tokens": { "input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0 },
   "cost_usd": 0.0,
-  "by_provider": [ { "provider": "anthropic", "label": "Anthropic", "tokens": Tokens, "cost_usd": 0.0 } ],  // 按 tokens.total 降序
+  "by_provider": [ { "provider": "anthropic", "label": "Anthropic", "tokens": Tokens, "cost_usd": 0.0, "models": [ { "model": "claude-opus-5.5", "tokens_total": 0, "cost_usd": 0.0 } ] } ],  // 按 tokens.total 降序，models 为该 provider 下 tokens_total 前 5
   "by_agent":    [ { "agent": "claude", "label": "Claude Code", "tokens_total": 0, "cost_usd": 0.0 } ],  // 按 tokens_total 降序
-  "top_models":  [ { "model": "claude-opus-5-5", "provider": "anthropic", "tokens_total": 0, "cost_usd": 0.0 } ]  // 前 8 个，按 tokens_total 降序
+  "top_models":  [ { "model": "claude-opus-5.5", "provider": "anthropic", "tokens_total": 0, "cost_usd": 0.0 } ]  // 前 8 个，按 tokens_total 降序
 }
 ```
 
@@ -405,4 +406,5 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 1. 每个 Period 里：`by_provider` 的 tokens 各字段之和等于 `tokens`；`by_agent` 的 `tokens_total` 之和等于 `tokens.total`；cost 之和与 `cost_usd` 的差不超过 0.01。
 2. 所有 `months` 加起来等于 `all_time`（tokens 精确相等，cost 误差不超过 0.01）。
 3. 按比例拆分的会话（`split`）在公开汇总里只按原值算一次，不能重复计入。公开汇总不看归属，只看消息本身。
+4. 每个 provider 的 `models` 中 `tokens_total` 之和不超过该 provider 的 `tokens.total`。
 

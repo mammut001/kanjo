@@ -45,6 +45,7 @@ public enum AgentColors {
     public static let prime_agent = AgentColorPair(light: 0x8F32D0, dark: 0x7C6AB8)
     public static let omp = AgentColorPair(light: 0x005462, dark: 0x589094)
     public static let deepseek_harness = AgentColorPair(light: 0x0044A0, dark: 0x1056B8)
+    public static let qwenwork = AgentColorPair(light: 0x00A06B, dark: 0x20C58A)
 
     public static let all: [String: AgentColorPair] = [
         "claude": claude,
@@ -75,6 +76,7 @@ public enum AgentColors {
         "prime_agent": prime_agent,
         "omp": omp,
         "deepseek_harness": deepseek_harness,
+        "qwenwork": qwenwork,
     ]
 
     public static func pair(for agent: String) -> AgentColorPair {
@@ -110,6 +112,7 @@ public enum AgentColors {
         "prime_agent": "Prime Agent",
         "omp": "OMP",
         "deepseek_harness": "DeepSeek Harness",
+        "qwenwork": "QwenWork",
     ]
 
     public static func label(for agent: String) -> String {
