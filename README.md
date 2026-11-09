@@ -105,7 +105,20 @@ This installs `kanjo` for terminal use; the app already includes its own CLI. Py
 kanjo doctor      # which logs were found
 kanjo projects    # table of repos by cost
 kanjo export      # the full JSON the app renders
+kanjo export --public-summary  # public high-level summary JSON
 ```
+
+### Publish usage to a website (optional)
+
+Kanjo can periodically summarize your AI token usage and publish it to a website or resume git repository:
+
+- **Disabled by default**: This feature is entirely optional and opt-in.
+- **Privacy-safe**: Only publishes aggregate token numbers, API-equivalent costs, and breakdowns by provider, agent, and top models across all-time, monthly, and weekly periods. It **never** includes project names, git remotes, file paths, branch names, session IDs, conversation titles, or account emails.
+- **Automated**: The menu bar app can publish on a daily, weekly, or monthly schedule, or on demand via Settings.
+- **CLI usage**:
+  ```bash
+  kanjo publish-usage --repo /path/to/website-repo [--file src/data/token-usage.json] [--branch main]
+  ```
 
 ### From source
 

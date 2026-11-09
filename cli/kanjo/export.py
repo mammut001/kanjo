@@ -21,6 +21,7 @@ from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
+from .providers import provider_for, PROVIDER_LABELS
 from .sources import antigravity, claude, codex, commandcode, copilot, grok, minimax, opencode, pi, qwen
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
@@ -547,7 +548,10 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         "timezone": tz_name,
         "currency": "USD",
         "cost_note": COST_NOTE,
-        "config": {"dominant_threshold": config.dominant_threshold},
+        "config": {
+            "dominant_threshold": config.dominant_threshold,
+            "no_network": getattr(config, "no_network", False),
+        },
         "quota_windows": quota.quota_windows(config.quota_windows, tokei_dir, now.timestamp(),
                                              timezone_name=tz_name,
                                              no_network=getattr(config, "no_network", False)),
@@ -749,6 +753,308 @@ def save_fast_export(fingerprint: str, doc: dict, directory: Optional[str] = Non
     try:
         os.makedirs(cdir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".export-last-", dir=cdir)
+        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        del data
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+# ---- public summary ---------------------------------------------------------------
+class PublicPeriodAgg:
+    def __init__(self, period: str, start: Optional[str] = None):
+        self.period = period
+        self.start = start
+        self.first_day: Optional[str] = None
+        self.last_day: Optional[str] = None
+        self.tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}
+        self.cost = 0.0
+        self.by_provider: Dict[str, dict] = defaultdict(lambda: {
+            "tokens": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0},
+            "cost": 0.0,
+        })
+        self.by_agent: Dict[str, dict] = defaultdict(lambda: {
+            "tokens_total": 0,
+            "cost": 0.0,
+        })
+        self.by_model: Dict[str, dict] = defaultdict(lambda: {
+            "tokens_total": 0,
+            "cost": 0.0,
+            "provider": "",
+        })
+
+    def add_message(self, m: Message, agent: str, provider: str, cost: float, day: str):
+        if self.first_day is None or day < self.first_day:
+            self.first_day = day
+        if self.last_day is None or day > self.last_day:
+            self.last_day = day
+
+        inp = int(m.input)
+        out = int(m.output)
+        cr = int(m.cache_read)
+        cw = int(m.cache_write)
+        tot = inp + out + cr + cw
+
+        self.tokens["input"] += inp
+        self.tokens["output"] += out
+        self.tokens["cache_read"] += cr
+        self.tokens["cache_write"] += cw
+        self.tokens["total"] += tot
+        self.cost += cost
+
+        pt = self.by_provider[provider]["tokens"]
+        pt["input"] += inp
+        pt["output"] += out
+        pt["cache_read"] += cr
+        pt["cache_write"] += cw
+        pt["total"] += tot
+        self.by_provider[provider]["cost"] += cost
+
+        self.by_agent[agent]["tokens_total"] += tot
+        self.by_agent[agent]["cost"] += cost
+
+        if m.model and m.model != "<synthetic>":
+            me = self.by_model[m.model]
+            me["provider"] = provider
+            me["tokens_total"] += tot
+            me["cost"] += cost
+
+    def to_json(self, cost_usd_override: Optional[float] = None) -> dict:
+        period_cost_usd = cost_usd_override if cost_usd_override is not None else round(self.cost, 2)
+
+        provider_items = []
+        for p, data in self.by_provider.items():
+            provider_items.append({
+                "provider": p,
+                "label": PROVIDER_LABELS.get(p, p.capitalize()),
+                "tokens": dict(data["tokens"]),
+                "cost_usd": round(data["cost"], 2),
+            })
+        if provider_items:
+            sum_prov_cost = round(sum(p["cost_usd"] for p in provider_items), 2)
+            diff = round(period_cost_usd - sum_prov_cost, 2)
+            if diff != 0:
+                largest = max(provider_items, key=lambda x: (x["tokens"]["total"], x["cost_usd"]))
+                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        provider_items.sort(key=lambda x: (-x["tokens"]["total"], -x["cost_usd"], x["provider"]))
+
+        agent_items = []
+        for a, data in self.by_agent.items():
+            agent_items.append({
+                "agent": a,
+                "label": AGENT_LABELS.get(a, a),
+                "tokens_total": data["tokens_total"],
+                "cost_usd": round(data["cost"], 2),
+            })
+        if agent_items:
+            sum_agent_cost = round(sum(a["cost_usd"] for a in agent_items), 2)
+            diff = round(period_cost_usd - sum_agent_cost, 2)
+            if diff != 0:
+                largest = max(agent_items, key=lambda x: (x["tokens_total"], x["cost_usd"]))
+                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        agent_items.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["agent"]))
+
+        model_items = []
+        for mod, data in self.by_model.items():
+            model_items.append({
+                "model": mod,
+                "provider": data["provider"],
+                "tokens_total": data["tokens_total"],
+                "cost_usd": round(data["cost"], 2),
+            })
+        model_items.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
+        top_models = model_items[:8]
+
+        res = {"period": self.period}
+        if self.start is not None:
+            res["start"] = self.start
+        res.update({
+            "first_day": self.first_day,
+            "last_day": self.last_day,
+            "tokens": dict(self.tokens),
+            "cost_usd": period_cost_usd,
+            "by_provider": provider_items,
+            "by_agent": agent_items,
+            "top_models": top_models,
+        })
+        return res
+
+
+def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
+                         prices: Optional[PriceBook] = None, home: Optional[str] = None,
+                         now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
+                         cache=None, repo_cache=None, fs_root: Optional[str] = None) -> dict:
+    config = config or Config()
+    prices = prices or default_book()
+    result = scan_result or scan(dirs, cache=cache)
+    sessions = dedupe(result.sessions)
+    units = build_units(sessions)
+
+    if repo_cache is None and cache is not None:
+        repo_cache = getattr(cache, "repo_cache", None)
+
+    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root, repo_cache=repo_cache)
+    scratch = ScratchpadDecoder(fs_root=fs_root)
+    for s in sessions:
+        for path, remote in s.remote_hints.items():
+            resolver.add_remote_hint(path, remote)
+
+    tz_name = local_timezone_name()
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = datetime.now().astimezone().tzinfo or timezone.utc
+
+    all_time = PublicPeriodAgg("all")
+    months: Dict[str, PublicPeriodAgg] = {}
+    weeks: Dict[str, PublicPeriodAgg] = {}
+
+    for unit in units:
+        decision = attr.decide(unit.top, resolver, scratch, config)
+        if decision.kind == "excluded":
+            continue
+
+        for m in unit.messages:
+            agent = unit.top.agent
+            cost, _ = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
+                                  m.cache_write, m.cache_write_1h)
+            provider = provider_for(m.model, agent)
+            dt = datetime.fromtimestamp(m.ts, tz=tz)
+            day = dt.strftime("%Y-%m-%d")
+            month_key = dt.strftime("%Y-%m")
+            iso_year, iso_week, _ = dt.isocalendar()
+            week_key = "%04d-W%02d" % (iso_year, iso_week)
+            import datetime as _dt
+            week_start = _dt.date.fromisocalendar(iso_year, iso_week, 1).strftime("%Y-%m-%d")
+
+            all_time.add_message(m, agent, provider, cost, day)
+            if month_key not in months:
+                months[month_key] = PublicPeriodAgg(month_key)
+            months[month_key].add_message(m, agent, provider, cost, day)
+
+            if week_key not in weeks:
+                weeks[week_key] = PublicPeriodAgg(week_key, start=week_start)
+            weeks[week_key].add_message(m, agent, provider, cost, day)
+
+    month_periods = [months[k].to_json() for k in sorted(months.keys())]
+
+    if month_periods:
+        months_cost_sum = round(sum(m["cost_usd"] for m in month_periods), 2)
+        all_time_period = all_time.to_json(cost_usd_override=months_cost_sum)
+    else:
+        all_time_period = all_time.to_json()
+
+    week_periods = [weeks[k].to_json() for k in sorted(weeks.keys())]
+    if len(week_periods) > 26:
+        week_periods = week_periods[-26:]
+
+    now = now or datetime.now(timezone.utc)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "kanjo-public-summary",
+        "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_by": "kanjo " + __version__,
+        "timezone": tz_name,
+        "currency": "USD",
+        "cost_note": COST_NOTE,
+        "all_time": all_time_period,
+        "months": month_periods,
+        "weeks": week_periods,
+    }
+
+
+def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[str]:
+    """Check invariants defined in CONTRACT.md section 12 for kanjo-public-summary."""
+    problems = []
+    periods = [doc["all_time"]] + list(doc.get("months", [])) + list(doc.get("weeks", []))
+    for p in periods:
+        pk = p["period"]
+        p_tokens = p["tokens"]
+        for k in ("input", "output", "cache_read", "cache_write", "total"):
+            prov_sum = sum(prov["tokens"][k] for prov in p["by_provider"])
+            if prov_sum != p_tokens[k]:
+                problems.append("%s: by_provider tokens.%s %d != tokens.%s %d"
+                                % (pk, k, prov_sum, k, p_tokens[k]))
+
+        agent_tokens_sum = sum(a["tokens_total"] for a in p["by_agent"])
+        if agent_tokens_sum != p_tokens["total"]:
+            problems.append("%s: by_agent tokens_total %d != tokens.total %d"
+                            % (pk, agent_tokens_sum, p_tokens["total"]))
+
+        prov_cost = sum(prov["cost_usd"] for prov in p["by_provider"])
+        if abs(prov_cost - p["cost_usd"]) > tolerance + 1e-6:
+            problems.append("%s: by_provider cost_usd %.2f != cost_usd %.2f"
+                            % (pk, prov_cost, p["cost_usd"]))
+
+        agent_cost = sum(a["cost_usd"] for a in p["by_agent"])
+        if abs(agent_cost - p["cost_usd"]) > tolerance + 1e-6:
+            problems.append("%s: by_agent cost_usd %.2f != cost_usd %.2f"
+                            % (pk, agent_cost, p["cost_usd"]))
+
+    months = doc.get("months", [])
+    all_time = doc.get("all_time", {})
+    if all_time and months:
+        for k in ("input", "output", "cache_read", "cache_write", "total"):
+            months_token_sum = sum(m["tokens"][k] for m in months)
+            if months_token_sum != all_time["tokens"][k]:
+                problems.append("months sum tokens.%s %d != all_time tokens.%s %d"
+                                % (k, months_token_sum, k, all_time["tokens"][k]))
+
+        months_cost_sum = sum(m["cost_usd"] for m in months)
+        if abs(months_cost_sum - all_time["cost_usd"]) > tolerance + 1e-6:
+            problems.append("months sum cost_usd %.2f != all_time cost_usd %.2f"
+                            % (months_cost_sum, all_time["cost_usd"]))
+
+    if len(doc.get("weeks", [])) > 26:
+        problems.append("weeks count %d > 26" % len(doc["weeks"]))
+
+    return problems
+
+
+def load_fast_public_summary(fingerprint: str, directory: Optional[str] = None,
+                              now: Optional[float] = None) -> Optional[dict]:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "public-summary-last.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("fingerprint") != fingerprint:
+            return None
+        scanned_at = payload.get("scanned_at")
+        if not isinstance(scanned_at, (int, float)):
+            return None
+        current = time.time() if now is None else now
+        if current - scanned_at < 0 or current - scanned_at >= 1800.0:  # 30 minutes
+            return None
+        doc = payload.get("doc")
+        if isinstance(doc, dict):
+            return doc
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def save_fast_public_summary(fingerprint: str, doc: dict, directory: Optional[str] = None,
+                              now: Optional[float] = None) -> None:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "public-summary-last.json")
+    current = time.time() if now is None else now
+    tmp = None
+    try:
+        os.makedirs(cdir, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".public-summary-last-", dir=cdir)
         payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

@@ -75,13 +75,16 @@ public struct UsageReport: Codable, Equatable {
 
 public struct ReportConfig: Codable, Equatable {
     public var dominantThreshold: Double
+    public var noNetwork: Bool?
 
     enum CodingKeys: String, CodingKey {
         case dominantThreshold = "dominant_threshold"
+        case noNetwork = "no_network"
     }
 
-    public init(dominantThreshold: Double) {
+    public init(dominantThreshold: Double, noNetwork: Bool? = nil) {
         self.dominantThreshold = dominantThreshold
+        self.noNetwork = noNetwork
     }
 }
 

@@ -82,7 +82,7 @@ public struct CLIDataSource: UsageDataSource {
         return out
     }
 
-    static func run(command: String, cwd: URL?, timeout: TimeInterval, qualityOfService: QualityOfService = .background) throws -> (Int32, Data, Data, Bool) {
+    public static func run(command: String, cwd: URL?, timeout: TimeInterval, qualityOfService: QualityOfService = .background) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
         p.qualityOfService = qualityOfService
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
