@@ -80,6 +80,95 @@ public enum SnapshotPayload {
     }
 }
 
+public enum UbiquitousSnapshotStore {
+    public static let kvStoreIdentifier = "Z5D5N7CU6L.com.lanshuagent.kanjo"
+    public static let chunkSize = 48 * 1024
+    public static let maxPayloadBytes = 900 * 1024
+
+    public static let keyDeviceID = "kanjo.snapshot.deviceID"
+    public static let keyDeviceName = "kanjo.snapshot.deviceName"
+    public static let keyGeneratedAt = "kanjo.snapshot.generatedAt"
+    public static let keySchemaVersion = "kanjo.snapshot.schemaVersion"
+    public static let keyChunkCount = "kanjo.snapshot.chunkCount"
+
+    public static func chunkKey(_ index: Int) -> String {
+        "kanjo.snapshot.chunk.\(index)"
+    }
+
+    public static func splitPayload(_ data: Data, chunkSize: Int = chunkSize) -> [Data] {
+        guard !data.isEmpty, chunkSize > 0 else { return [] }
+        var chunks: [Data] = []
+        var offset = 0
+        while offset < data.count {
+            let length = min(chunkSize, data.count - offset)
+            chunks.append(data.subdata(in: offset..<(offset + length)))
+            offset += length
+        }
+        return chunks
+    }
+
+    public static func save(_ snapshot: SnapshotRecord, to store: NSUbiquitousKeyValueStore = .default) -> Bool {
+        guard let payload = snapshot.payload, !payload.isEmpty, payload.count <= maxPayloadBytes else {
+            return false
+        }
+        let chunks = splitPayload(payload)
+        guard !chunks.isEmpty else { return false }
+
+        let previousCount = Int(store.longLong(forKey: keyChunkCount))
+        if previousCount > chunks.count {
+            for i in chunks.count..<previousCount {
+                store.removeObject(forKey: chunkKey(i))
+            }
+        }
+
+        for (index, chunk) in chunks.enumerated() {
+            store.set(chunk, forKey: chunkKey(index))
+        }
+
+        store.set(snapshot.deviceID, forKey: keyDeviceID)
+        store.set(snapshot.deviceName, forKey: keyDeviceName)
+        store.set(snapshot.generatedAt.timeIntervalSince1970, forKey: keyGeneratedAt)
+        store.set(Int64(snapshot.schemaVersion), forKey: keySchemaVersion)
+        store.set(Int64(chunks.count), forKey: keyChunkCount)
+
+        _ = store.synchronize()
+        return true
+    }
+
+    public static func load(from store: NSUbiquitousKeyValueStore = .default) -> SnapshotRecord? {
+        _ = store.synchronize()
+
+        guard let deviceID = store.string(forKey: keyDeviceID), !deviceID.isEmpty,
+              let deviceName = store.string(forKey: keyDeviceName), !deviceName.isEmpty else {
+            return nil
+        }
+
+        let generatedAtSeconds = store.double(forKey: keyGeneratedAt)
+        let schemaVersion = Int(store.longLong(forKey: keySchemaVersion))
+        let chunkCount = Int(store.longLong(forKey: keyChunkCount))
+
+        guard generatedAtSeconds > 0, chunkCount > 0 else {
+            return nil
+        }
+
+        var combined = Data()
+        for i in 0..<chunkCount {
+            guard let chunk = store.data(forKey: chunkKey(i)) else {
+                return nil
+            }
+            combined.append(chunk)
+        }
+
+        return SnapshotRecord(
+            deviceID: deviceID,
+            deviceName: deviceName,
+            generatedAt: Date(timeIntervalSince1970: generatedAtSeconds),
+            schemaVersion: schemaVersion,
+            payload: combined
+        )
+    }
+}
+
 public enum SnapshotDevice {
     public static func deviceID(defaults: UserDefaults = AppDefaults.store) -> String {
         if let existing = defaults.string(forKey: SettingsKeys.cloudSyncDeviceID), !existing.isEmpty {

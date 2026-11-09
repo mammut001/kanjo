@@ -189,10 +189,22 @@ final class CloudSyncStore: ObservableObject {
             defer { try? fileManager.removeItem(at: assetURL) }
 
             Self.logger.info("upload started: record \(snapshot.deviceID, privacy: .private), device \(snapshot.deviceName, privacy: .public), bytes \(payload.count, privacy: .public)")
+            let kvsSaved = UbiquitousSnapshotStore.save(snapshot)
+            Self.logger.info("kvs save: \(kvsSaved, privacy: .public), bytes \(payload.count, privacy: .public)")
+
             let uploadStart = Date()
-            try await save(snapshot, payloadURL: assetURL, database: database())
-            let uploadMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
-            Self.logger.info("upload succeeded: record \(snapshot.deviceID, privacy: .private), bytes \(payload.count, privacy: .public), ms \(uploadMs, privacy: .public)")
+            do {
+                try await save(snapshot, payloadURL: assetURL, database: database())
+                let uploadMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
+                Self.logger.info("upload succeeded: record \(snapshot.deviceID, privacy: .private), bytes \(payload.count, privacy: .public), ms \(uploadMs, privacy: .public)")
+            } catch {
+                Self.logFailure(error)
+                if kvsSaved {
+                    Self.logger.info("CloudKit save failed but iCloud KVS succeeded; continuing")
+                } else {
+                    throw error
+                }
+            }
 
             let uploaded = Date()
             defaults.set(hash, forKey: SettingsKeys.cloudSyncLastUploadHash)
@@ -276,12 +288,31 @@ final class CloudSyncStore: ObservableObject {
         operation.savePolicy = .changedKeys
         operation.isAtomic = true
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let lock = NSLock()
+            var recordError: Error?
+
+            operation.perRecordSaveBlock = { _, result in
+                if case .failure(let error) = result {
+                    lock.lock()
+                    recordError = error
+                    lock.unlock()
+                }
+            }
+
             operation.modifyRecordsResultBlock = { result in
+                lock.lock()
+                let perRecordErr = recordError
+                lock.unlock()
+
                 switch result {
                 case .success:
-                    continuation.resume()
+                    if let perRecordErr {
+                        continuation.resume(throwing: perRecordErr)
+                    } else {
+                        continuation.resume()
+                    }
                 case .failure(let error):
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: perRecordErr ?? error)
                 }
             }
             database.add(operation)
@@ -292,9 +323,13 @@ final class CloudSyncStore: ObservableObject {
         let operation = CKFetchRecordsOperation(recordIDs: [recordID])
         operation.desiredKeys = [SnapshotRecord.fieldGeneratedAt]
         return try await withCheckedThrowingContinuation { continuation in
+            let lock = NSLock()
             var record: CKRecord?
             var recordError: Error?
+
             operation.perRecordResultBlock = { _, result in
+                lock.lock()
+                defer { lock.unlock() }
                 switch result {
                 case .success(let fetched):
                     record = fetched
@@ -302,19 +337,41 @@ final class CloudSyncStore: ObservableObject {
                     recordError = error
                 }
             }
+
             operation.fetchRecordsResultBlock = { result in
+                lock.lock()
+                let fetchedRecord = record
+                let err = recordError
+                lock.unlock()
+
                 switch result {
                 case .success:
-                    if let record {
-                        continuation.resume(returning: record)
-                    } else if let error = recordError as? CKError, error.code == .unknownItem {
+                    if let fetchedRecord {
+                        continuation.resume(returning: fetchedRecord)
+                    } else if let error = err as? CKError, error.code == .unknownItem {
                         continuation.resume(returning: nil)
-                    } else if let recordError {
-                        continuation.resume(throwing: recordError)
+                    } else if let err {
+                        continuation.resume(throwing: err)
                     } else {
                         continuation.resume(returning: nil)
                     }
                 case .failure(let error):
+                    if let ckError = error as? CKError {
+                        if ckError.code == .unknownItem {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                        if ckError.code == .partialFailure,
+                           let itemError = ckError.partialErrorsByItemID?[recordID] as? CKError,
+                           itemError.code == .unknownItem {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                    }
+                    if let ckRecordError = err as? CKError, ckRecordError.code == .unknownItem {
+                        continuation.resume(returning: nil)
+                        return
+                    }
                     continuation.resume(throwing: error)
                 }
             }
