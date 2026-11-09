@@ -257,16 +257,21 @@ final class CloudSyncStore: ObservableObject {
     }
 
     private func save(_ snapshot: SnapshotRecord, payloadURL: URL, database: CKDatabase) async throws {
-        let recordID = CKRecord.ID(recordName: snapshot.deviceID)
+        try await saveRecord(recordName: snapshot.deviceID, snapshot: snapshot, payloadURL: payloadURL, database: database)
+        try await saveRecord(recordName: SnapshotRecord.latestRecordName, snapshot: snapshot, payloadURL: payloadURL, database: database)
+    }
+
+    private func saveRecord(recordName: String, snapshot: SnapshotRecord, payloadURL: URL, database: CKDatabase) async throws {
+        let recordID = CKRecord.ID(recordName: recordName)
         var existing: CKRecord?
         do {
             existing = try await fetch(recordID, in: database)
         } catch let error as CKError where error.code == .unknownItem {
-            Self.logger.info("no existing record for \(snapshot.deviceID, privacy: .private); creating new one")
+            Self.logger.info("no existing record for \(recordName, privacy: .private); creating new one")
             existing = nil
         }
 
-        let record = snapshot.makeRecord(payloadURL: payloadURL, existing: existing)
+        let record = snapshot.makeRecord(payloadURL: payloadURL, existing: existing, recordName: recordName)
         let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
         operation.savePolicy = .changedKeys
         operation.isAtomic = true

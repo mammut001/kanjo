@@ -28,6 +28,22 @@ final class SnapshotRecordTests: XCTestCase {
         XCTAssertNotEqual(code, ICloudAccountCode.make(userRecordName: "_fedcba9876543210"))
     }
 
+    func testLatestRecordNameConstant() {
+        XCTAssertEqual(SnapshotRecord.latestRecordName, "latest")
+    }
+
+    #if canImport(CloudKit)
+    func testMakeRecordUsesCustomRecordNameOrDefaultsToDeviceID() {
+        let snapshot = SnapshotRecord(deviceID: "device-xyz", deviceName: "MacBook", generatedAt: Date(), schemaVersion: 1)
+        let dummyURL = URL(fileURLWithPath: "/tmp/dummy-payload")
+        let defaultRecord = snapshot.makeRecord(payloadURL: dummyURL)
+        XCTAssertEqual(defaultRecord.recordID.recordName, "device-xyz")
+
+        let customRecord = snapshot.makeRecord(payloadURL: dummyURL, recordName: SnapshotRecord.latestRecordName)
+        XCTAssertEqual(customRecord.recordID.recordName, "latest")
+    }
+    #endif
+
     func testGzipRejectsNonGzipData() {
         XCTAssertThrowsError(try Gzip.decompress(Data("not gzip".utf8)))
     }

@@ -12,6 +12,7 @@ public struct SnapshotRecord: Equatable {
     public static let containerIdentifier = "iCloud.com.lanshuagent.kanjo"
     public static let recordType = "Snapshot"
     public static let zoneName = "_defaultZone"
+    public static let latestRecordName = "latest"
 
     public static let fieldDeviceName = "deviceName"
     public static let fieldGeneratedAt = "generatedAt"
@@ -139,10 +140,10 @@ public enum CloudKitEntitlement {
 }
 
 public extension SnapshotRecord {
-    func makeRecord(payloadURL: URL, existing: CKRecord? = nil) -> CKRecord {
+    func makeRecord(payloadURL: URL, existing: CKRecord? = nil, recordName: String? = nil) -> CKRecord {
         let record = existing ?? CKRecord(
             recordType: Self.recordType,
-            recordID: CKRecord.ID(recordName: deviceID)
+            recordID: CKRecord.ID(recordName: recordName ?? deviceID)
         )
         record[Self.fieldDeviceName] = deviceName as CKRecordValue
         record[Self.fieldGeneratedAt] = generatedAt as CKRecordValue

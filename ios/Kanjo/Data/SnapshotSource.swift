@@ -152,76 +152,100 @@ final class CloudKitSnapshotSource: SnapshotSource {
     }
 
     private func fetchMetadata() async throws -> [CKRecord] {
-        let zoneRecords: [CKRecord]
+        let latestRecord: CKRecord?
         do {
-            zoneRecords = try await fetchZoneRecords()
+            latestRecord = try await fetchLatestRecord()
+            if let latestRecord {
+                SyncLog.sync.info("fetch latest record finished: \(latestRecord.recordID.recordName, privacy: .public)")
+            } else {
+                SyncLog.sync.info("fetch latest record finished: no latest record")
+            }
         } catch {
-            SyncLog.sync.info("fetch zone changes failed, falling back to query: \(error.localizedDescription, privacy: .private)")
-            return try await fetchMetadataByQuery()
+            SyncLog.sync.info("fetch latest record failed: \(error.localizedDescription, privacy: .private)")
+            latestRecord = nil
         }
 
-        if !zoneRecords.isEmpty {
-            SyncLog.sync.info("fetch zone changes finished: \(zoneRecords.count, privacy: .public) records")
-            return zoneRecords
-        }
-
-        SyncLog.sync.info("fetch zone changes returned empty, trying query fallback")
+        let queryRecords: [CKRecord]
         do {
-            let queryRecords = try await fetchMetadataByQuery()
-            return queryRecords
-        } catch let error as CKError where error.code == .unknownItem || error.code == .invalidArguments {
-            SyncLog.sync.info("query fallback ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
-            return []
+            queryRecords = try await fetchMetadataByQuery()
+        } catch let error as CKError {
+            if latestRecord != nil {
+                SyncLog.sync.info("query supplementary fetch ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
+                queryRecords = []
+            } else if error.code == .unknownItem || error.code == .invalidArguments {
+                SyncLog.sync.info("query fetch ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
+                queryRecords = []
+            } else {
+                throw error
+            }
         }
+
+        var combined: [CKRecord] = []
+        var seenIDs = Set<String>()
+        if let latestRecord {
+            combined.append(latestRecord)
+            seenIDs.insert(latestRecord.recordID.recordName)
+        }
+        for record in queryRecords {
+            if seenIDs.insert(record.recordID.recordName).inserted {
+                combined.append(record)
+            }
+        }
+
+        return combined
     }
 
-    private func fetchZoneRecords() async throws -> [CKRecord] {
-        let zoneID = CKRecordZone.default().zoneID
-        let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
-            previousServerChangeToken: nil,
-            resultsLimit: nil,
-            desiredKeys: [
-                SnapshotRecord.fieldDeviceName,
-                SnapshotRecord.fieldGeneratedAt,
-                SnapshotRecord.fieldSchemaVersion,
-            ]
-        )
-        let operation = CKFetchRecordZoneChangesOperation(
-            recordZoneIDs: [zoneID],
-            configurationsByRecordZoneID: [zoneID: config]
-        )
-        operation.fetchAllChanges = true
-
+    private func fetchLatestRecord() async throws -> CKRecord? {
+        let recordID = CKRecord.ID(recordName: SnapshotRecord.latestRecordName)
+        let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+        operation.desiredKeys = [
+            SnapshotRecord.fieldDeviceName,
+            SnapshotRecord.fieldGeneratedAt,
+            SnapshotRecord.fieldSchemaVersion,
+        ]
         return try await withCheckedThrowingContinuation { continuation in
             let lock = NSLock()
-            var records: [CKRecord] = []
+            var fetchedRecord: CKRecord?
+            var recordError: Error?
 
-            operation.recordWasChangedBlock = { _, result in
-                if case .success(let record) = result, record.recordType == SnapshotRecord.recordType {
-                    lock.lock()
-                    records.append(record)
-                    lock.unlock()
+            operation.perRecordResultBlock = { _, result in
+                lock.lock()
+                defer { lock.unlock() }
+                switch result {
+                case .success(let record):
+                    fetchedRecord = record
+                case .failure(let error):
+                    recordError = error
                 }
             }
 
-            operation.fetchRecordZoneChangesResultBlock = { result in
+            operation.fetchRecordsResultBlock = { result in
                 lock.lock()
-                let collected = records
+                let record = fetchedRecord
+                let err = recordError
                 lock.unlock()
 
                 switch result {
                 case .success:
-                    continuation.resume(returning: collected)
+                    if let record {
+                        continuation.resume(returning: record)
+                    } else if let error = err as? CKError, error.code == .unknownItem {
+                        continuation.resume(returning: nil)
+                    } else if let err {
+                        continuation.resume(throwing: err)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
                 case .failure(let error):
                     if let ckError = error as? CKError {
-                        if ckError.code == .unknownItem || ckError.code == .zoneNotFound {
-                            continuation.resume(returning: [])
+                        if ckError.code == .unknownItem {
+                            continuation.resume(returning: nil)
                             return
                         }
                         if ckError.code == .partialFailure,
-                           let zoneError = ckError.partialErrorsByItemID?[zoneID] as? CKError,
-                           zoneError.code == .unknownItem || zoneError.code == .zoneNotFound {
-                            continuation.resume(returning: [])
+                           let itemError = ckError.partialErrorsByItemID?[recordID] as? CKError,
+                           itemError.code == .unknownItem {
+                            continuation.resume(returning: nil)
                             return
                         }
                     }
