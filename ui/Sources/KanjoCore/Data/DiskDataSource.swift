@@ -3,8 +3,16 @@ import Foundation
 /// 从设置里的导出命令推出磁盘命令。只替换最后一个独立的 `export`，
 /// 这样前面的 `export PATH=...` 不会被改掉。
 public enum DiskCommand {
-    public static func report(from cliCommand: String, rescan: Bool = false) -> String {
-        replacingExport(in: cliCommand, with: rescan ? "disk --json --rescan" : "disk --json")
+    public static func report(from cliCommand: String, rescan: Bool = false, maxAge: TimeInterval? = nil) -> String {
+        let flag: String
+        if rescan {
+            flag = "disk --json --rescan"
+        } else if let maxAge = maxAge {
+            flag = "disk --json --max-age \(Int(maxAge))"
+        } else {
+            flag = "disk --json"
+        }
+        return replacingExport(in: cliCommand, with: flag)
             .trimmingCharacters(in: .whitespaces)
     }
 
@@ -65,30 +73,36 @@ public struct DiskDataSource: DiskSource {
     public let workingDirectory: URL?
     public let timeout: TimeInterval
     public let rescan: Bool
+    public let maxAge: TimeInterval?
 
-    public init(cliCommand: String, workingDirectory: URL? = nil, timeout: TimeInterval = 300, rescan: Bool = false) {
+    public init(cliCommand: String, workingDirectory: URL? = nil, timeout: TimeInterval = 300, rescan: Bool = false, maxAge: TimeInterval? = nil) {
         self.cliCommand = cliCommand
         self.workingDirectory = workingDirectory
         self.timeout = timeout
         self.rescan = rescan
+        self.maxAge = maxAge
     }
 
-    public var reportCommand: String { DiskCommand.report(from: cliCommand, rescan: rescan) }
+    public var reportCommand: String { DiskCommand.report(from: cliCommand, rescan: rescan, maxAge: maxAge) }
 
     public func load() async throws -> DiskReport {
-        try DiskDecoder.decode(try await run(reportCommand))
+        try await load(qualityOfService: .background)
+    }
+
+    public func load(qualityOfService: QualityOfService) async throws -> DiskReport {
+        try DiskDecoder.decode(try await run(reportCommand, qualityOfService: qualityOfService))
     }
 
     public func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
         let command = DiskCommand.clean(from: cliCommand, ids: ids, olderThan: olderThan, confirmed: confirmed)
-        return try DiskDecoder.decodeClean(try await run(command))
+        return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .userInitiated))
     }
 
-    private func run(_ command: String) async throws -> Data {
+    private func run(_ command: String, qualityOfService: QualityOfService = .background) async throws -> Data {
         let cwd = workingDirectory
         let timeout = self.timeout
         let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
         }.value
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {

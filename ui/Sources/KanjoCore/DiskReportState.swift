@@ -21,6 +21,14 @@ public struct DiskReportState {
         if let report { self.report = report }
         isLoading = false
     }
+
+    public func isStale(maxAge: TimeInterval = 6 * 3600, now: Date = Date()) -> Bool {
+        guard let report else { return true }
+        guard let date = ReportDates.parseTimestamp(report.scannedAt ?? report.generatedAt) else {
+            return true
+        }
+        return now.timeIntervalSince(date) > maxAge
+    }
 }
 
 public enum DiskScanCaption {

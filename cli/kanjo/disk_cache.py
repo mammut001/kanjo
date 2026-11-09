@@ -29,41 +29,61 @@ def cache_age(now: Optional[float] = None) -> Optional[float]:
         return None
 
 
-def load(roots: dict, now: float, max_age: float) -> Optional[dict]:
+def load_cached_report(roots: dict, now: float, max_age: float) -> Tuple[Optional[dict], Dict[str, dict], dict]:
+    """Return (full_hit_doc, valid_entries_by_id, worktree_dirty_cache)."""
     if max_age <= 0:
-        return None
+        return None, {}, {}
     try:
         with open(cache_path(), encoding="utf-8") as handle:
             payload = json.load(handle)
-        if payload["roots"] != roots:
-            return None
-        doc = payload["report"]
+        if payload.get("roots") != roots:
+            return None, {}, {}
+        doc = payload.get("report")
+        if not isinstance(doc, dict):
+            return None, {}, {}
         scanned = _scan_time(doc)
-        # ISO timestamps round to microseconds; tolerate that rounding at age zero.
-        if now - scanned < -0.000001 or now - scanned >= max_age or doc["schema_version"] != 1:
-            return None
-        # Only stat entry roots: never rediscover or walk trees on a cache hit.
-        for agent in doc["agents"]:
-            for entry in agent["entries"]:
-                if os.stat(entry["path"]).st_mtime > scanned:
-                    return None
-        doc["cached"] = True
-        return doc
+        if now - scanned < -0.000001 or now - scanned >= max_age or doc.get("schema_version") != 1:
+            return None, {}, {}
+        worktrees = payload.get("worktrees") or {}
+        valid_entries = {}
+        all_valid = True
+        for agent in doc.get("agents", []):
+            for entry in agent.get("entries", []):
+                p = entry.get("path")
+                try:
+                    st = os.stat(p)
+                    if st.st_mtime <= scanned:
+                        valid_entries[entry["id"]] = entry
+                    else:
+                        all_valid = False
+                except OSError:
+                    all_valid = False
+        if all_valid and len(valid_entries) > 0:
+            doc["cached"] = True
+            return doc, valid_entries, worktrees
+        return None, valid_entries, worktrees
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return None
+        return None, {}, {}
 
 
-def save(doc: dict, roots: dict) -> None:
+def load(roots: dict, now: float, max_age: float) -> Optional[dict]:
+    doc, _, _ = load_cached_report(roots, now, max_age)
+    return doc
+
+
+def save(doc: dict, roots: dict, worktrees: Optional[dict] = None) -> None:
     path = cache_path()
     tmp = None
     try:
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".disk-report-", dir=directory)
+        payload = {"roots": roots, "report": doc, "worktrees": worktrees or {}}
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({"roots": roots, "report": doc}, handle,
-                      ensure_ascii=False, separators=(",", ":"))
+            handle.write(data)
             handle.write("\n")
+        del data
         os.replace(tmp, path)
     except OSError:
         pass  # A cache that cannot be written only costs speed.

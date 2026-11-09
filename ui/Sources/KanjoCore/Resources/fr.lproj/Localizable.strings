@@ -87,7 +87,8 @@
 "settings.json_file" = "Fichier JSON";
 "settings.file_note" = "Laisser vide pour utiliser l'échantillon inclus : fixtures/sample.json.";
 "settings.section.refresh" = "Actualisation";
-"settings.auto_refresh" = "Actualisation automatique";
+"settings.auto_refresh" = "Intervalle de secours";
+"settings.refresh_note" = "Kanjo s'actualise automatiquement dès que les journaux changent. Cet intervalle sert de sécurité.";
 "settings.refresh_off" = "Désactivé";
 "settings.refresh_minutes" = "Toutes les %d min";
 "settings.menu_bar_shows" = "Affichage barre des menus";

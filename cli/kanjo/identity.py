@@ -191,6 +191,9 @@ class Resolver:
         self._seen_common: Set[str] = set()
         self._hints: Dict[str, str] = {}          # path prefix -> remote url from logs
         self.hints_enabled = True
+        self._worktree_prefix_cache: Dict[str, Optional[Tuple[str, str]]] = {}
+        self._hint_prefix_cache: Dict[str, Optional[Tuple[str, str]]] = {}
+        self._fast_resolve_cache: Dict[Tuple[str, bool], Optional[Project]] = {}
         self._alias_of: Dict[str, str] = {}       # member id/path -> canonical id
         self.repo_cache = repo_cache
         for canonical, members in (aliases or {}).items():
@@ -312,7 +315,7 @@ class Resolver:
         alt_p = _private_alias(path)
         if alt_p != path:
             self._dir_repo[alt_p] = result
-        if self.repo_cache is not None:
+        if self.repo_cache is not None and leaf_checked:
             if result is None:
                 self.repo_cache.put(path, None)
                 if alt_p != path:
@@ -443,6 +446,7 @@ class Resolver:
                 target = os.path.normpath(target)
                 self._worktrees[target] = pid
                 self._worktrees[_private_alias(target)] = pid
+        self._worktree_prefix_cache.clear()
 
     def add_remote_hint(self, path: str, remote_url: str) -> None:
         """A log recorded that ``path`` was a checkout of ``remote_url``
@@ -453,6 +457,7 @@ class Resolver:
         if path and remote_url and normalize_remote(remote_url):
             self._hints[path] = remote_url
             self._hints.setdefault(_private_alias(path), remote_url)
+            self._hint_prefix_cache.clear()
 
     # ---- public API ------------------------------------------------------
     @staticmethod
@@ -483,20 +488,69 @@ class Resolver:
         _CLEAN_CACHE[path] = res
         return res
 
+    def _lookup_prefix_cached(self, path: str, table: Dict[str, str]):
+        if not table:
+            return None
+        cache = self._worktree_prefix_cache if table is self._worktrees else self._hint_prefix_cache
+        if path in cache:
+            return cache[path]
+        res = self._lookup_prefix(path, table)
+        cache[path] = res
+        return res
+
     def resolve(self, path: str, allow_missing_fallback: bool = False) -> Optional[Project]:
         """Path -> Project or None (not a project). ``allow_missing_fallback``
         marks ``path`` as a working directory: it is checked for ``.git`` even
         if it looks like a file name, and a deleted directory becomes its own
         project (ATTRIBUTION.md section 9)."""
+        if not path:
+            return None
+        fast_key = (path, allow_missing_fallback)
+        if fast_key in self._fast_resolve_cache:
+            return self._fast_resolve_cache[fast_key]
+
         p = self.clean(path)
         if not p:
+            self._fast_resolve_cache[fast_key] = None
             return None
         cache_key = p + ("\0m" if allow_missing_fallback else "")
         if cache_key in self._resolve_cache:
             pid = self._resolve_cache[cache_key]
-            return self.projects.get(pid) if pid else None
+            res = self.projects.get(pid) if pid else None
+            self._fast_resolve_cache[fast_key] = res
+            return res
+
+        if self.repo_cache is not None:
+            hit, cached = self.repo_cache.get(p, self.fs_root)
+            if hit:
+                if cached is not None:
+                    info = _load_repo(cached)
+                    project = self._project_for_repo(info)
+                    self._resolve_cache[cache_key] = project.id
+                    self._fast_resolve_cache[fast_key] = project
+                    return project
+                elif not allow_missing_fallback:
+                    if self._worktrees:
+                        alt = _private_alias(p)
+                        if self._lookup_prefix_cached(p, self._worktrees) or (alt != p and self._lookup_prefix_cached(alt, self._worktrees)):
+                            project = self._resolve_uncached(p, allow_missing_fallback)
+                            self._resolve_cache[cache_key] = project.id if project else None
+                            self._fast_resolve_cache[fast_key] = project
+                            return project
+                    if self.hints_enabled and self._hints:
+                        alt = _private_alias(p)
+                        if self._lookup_prefix_cached(p, self._hints) or (alt != p and self._lookup_prefix_cached(alt, self._hints)):
+                            project = self._resolve_uncached(p, allow_missing_fallback)
+                            self._resolve_cache[cache_key] = project.id if project else None
+                            self._fast_resolve_cache[fast_key] = project
+                            return project
+                    self._resolve_cache[cache_key] = None
+                    self._fast_resolve_cache[fast_key] = None
+                    return None
+
         project = self._resolve_uncached(p, allow_missing_fallback)
         self._resolve_cache[cache_key] = project.id if project else None
+        self._fast_resolve_cache[fast_key] = project
         return project
 
     def _resolve_uncached(self, p: str, allow_missing_fallback: bool) -> Optional[Project]:
@@ -509,7 +563,7 @@ class Resolver:
             return self._project_for_repo(info)
         # 2. registered worktrees (git worktree list), even if the directory is gone
         for candidate in (p, alt):
-            found = self._lookup_prefix(candidate, self._worktrees)
+            found = self._lookup_prefix_cached(candidate, self._worktrees)
             if found:
                 return self.projects.get(found[1])
         # 3. remote recorded in the logs for this checkout. Only folds a deleted
@@ -518,7 +572,7 @@ class Resolver:
         #    projects have a path id and no remote).
         if self.hints_enabled:
             for candidate in (p, alt):
-                found = self._lookup_prefix(candidate, self._hints)
+                found = self._lookup_prefix_cached(candidate, self._hints)
                 if found:
                     hint_path, hint = found
                     project = self.projects.get(self.canonical_id(normalize_remote(hint) or ""))
@@ -580,6 +634,8 @@ class Resolver:
             # now resolve using hints (hints were disabled during prewarm).
             # Entries that already resolved to a project will never change.
             self._resolve_cache = {k: v for k, v in self._resolve_cache.items() if v is not None}
+            self._fast_resolve_cache = {k: v for k, v in self._fast_resolve_cache.items() if v is not None}
+            self._hint_prefix_cache.clear()
 
     def project(self, pid: str) -> Optional[Project]:
         return self.projects.get(pid)

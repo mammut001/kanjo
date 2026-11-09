@@ -16,7 +16,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.filePath, store: AppDefaults.store) private var filePath = ""
     @AppStorage(SettingsKeys.cliCommand, store: AppDefaults.store) private var cliCommand = CLIDataSource.defaultCommand
     @AppStorage(SettingsKeys.cliWorkingDirectory, store: AppDefaults.store) private var cliWorkingDirectory = ""
-    @AppStorage(SettingsKeys.refreshMinutes, store: AppDefaults.store) private var refreshMinutes = 5
+    @AppStorage(SettingsKeys.refreshMinutes, store: AppDefaults.store) private var refreshMinutes = 30
     @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
     @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
     @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
@@ -24,7 +24,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.cloudSyncHideProjectNames, store: AppDefaults.store) private var cloudSyncHideNames = false
     @StateObject private var cloudSync = CloudSyncStore.shared
 
-    private let intervals = [0, 1, 5, 15, 30, 60]
+    private let intervals = [0, 15, 30, 60]
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -92,6 +92,7 @@ struct SettingsView: View {
                         }
                     }
                     .font(.system(size: 12))
+                    note(L10n.tr("settings.refresh_note"))
                     Picker(L10n.tr("settings.menu_bar_shows"), selection: $menuBarMode) {
                         ForEach(MenuBarMode.allCases) { mode in
                             Text(mode.label).tag(mode.rawValue)

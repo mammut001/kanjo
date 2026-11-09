@@ -80,7 +80,12 @@ final class AppDefaultsTests: XCTestCase {
     func testResolvesIsolatedStore() {
         let suite = "kanjo-test-\(UUID().uuidString)"
         let store = AppDefaults.resolveStore(arguments: ["--defaults-suite", suite], environment: [:])
-        defer { store.removePersistentDomain(forName: suite) }
+        defer {
+            store.removePersistentDomain(forName: suite)
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+            let path = ("~/Library/Preferences/\(suite).plist" as NSString).expandingTildeInPath
+            try? FileManager.default.removeItem(atPath: path)
+        }
 
         XCTAssertNotEqual(store, UserDefaults.standard)
         store.set("isolatedValue", forKey: "kanjo_isolated_key")
@@ -91,7 +96,12 @@ final class AppDefaultsTests: XCTestCase {
     func testSuiteStoreIsIsolatedFromStandard() {
         let suite = "kanjo-test-suite-\(UUID().uuidString)"
         let store = AppDefaults.store(arguments: ["--defaults-suite", suite], environment: [:])
-        defer { store.removePersistentDomain(forName: suite) }
+        defer {
+            store.removePersistentDomain(forName: suite)
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+            let path = ("~/Library/Preferences/\(suite).plist" as NSString).expandingTildeInPath
+            try? FileManager.default.removeItem(atPath: path)
+        }
 
         store.set("suiteValue", forKey: "testKey")
         XCTAssertEqual(store.string(forKey: "testKey"), "suiteValue")

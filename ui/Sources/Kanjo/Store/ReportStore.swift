@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import KanjoCore
+import AppKit
 
 @MainActor
 final class ReportStore: ObservableObject {
@@ -19,8 +20,10 @@ final class ReportStore: ObservableObject {
     let dataOverride: URL? = DefaultPaths.dataOverride()
 
     private var timer: Timer?
+    private var scheduler = RefreshScheduler()
+    private var logWatcher: LogWatcher?
+    private var scheduledTask: Task<Void, Never>?
     private var generation = 0
-    private var didScheduleDiskPrefetch = false
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = AppDefaults.store) {
@@ -32,13 +35,127 @@ final class ReportStore: ObservableObject {
             SettingsKeys.filePath: "",
             SettingsKeys.cliCommand: CLIDataSource.defaultCommand,
             SettingsKeys.cliWorkingDirectory: "",
-            SettingsKeys.refreshMinutes: 5,
+            SettingsKeys.refreshMinutes: 30,
             SettingsKeys.showAmountInMenuBar: true,
         ])
+        var storedMinutes = defaults.integer(forKey: SettingsKeys.refreshMinutes)
+        storedMinutes = RefreshScheduler.migrateFallbackMinutes(storedMinutes)
+        if storedMinutes != defaults.integer(forKey: SettingsKeys.refreshMinutes) {
+            defaults.set(storedMinutes, forKey: SettingsKeys.refreshMinutes)
+        }
+        scheduler.fallbackMinutes = storedMinutes
+
+        setupNotifications()
         Task { await checkPython() }
         Task { await loadKnownPlans() }
         refresh()
         restartTimer()
+        setupWatcher()
+    }
+
+    private func setupNotifications() {
+        let wsCenter = NSWorkspace.shared.notificationCenter
+        wsCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.onWillSleep()
+            }
+        }
+        wsCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.onDidWake()
+            }
+        }
+        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.onPowerStateDidChange()
+            }
+        }
+    }
+
+    private func onWillSleep() {
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        scheduler.onSleep()
+    }
+
+    private func onDidWake() {
+        let action = scheduler.onWake()
+        handleSchedulerAction(action)
+    }
+
+    private func onPowerStateDidChange() {
+        let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let action = scheduler.onLowPowerModeChanged(enabled: isLowPower)
+        handleSchedulerAction(action)
+    }
+
+    func setupWatcher() {
+        guard dataOverride == nil else {
+            logWatcher?.stop()
+            logWatcher = nil
+            return
+        }
+        let kind = SourceKind(rawValue: defaults.string(forKey: SettingsKeys.sourceKind) ?? "") ?? .file
+        guard kind == .cli else {
+            logWatcher?.stop()
+            logWatcher = nil
+            return
+        }
+        let cli = CLILaunch.command(defaults: defaults)
+        let cwd = CLILaunch.workingDirectory(defaults: defaults)
+        let cliSource = CLIDataSource(command: cli, workingDirectory: cwd)
+        Task { [weak self] in
+            do {
+                let pathsMap = try await cliSource.loadPaths(qualityOfService: .background)
+                let paths = Array(Set(pathsMap.values.flatMap { $0 }))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self?.startLogWatcher(paths: paths)
+                }
+            } catch {
+                // CLI paths unavailable; safety fallback timer will handle refreshes
+            }
+        }
+    }
+
+    private func startLogWatcher(paths: [String]) {
+        logWatcher?.stop()
+        logWatcher = LogWatcher(paths: paths) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.handleFileEvent()
+            }
+        }
+    }
+
+    private func handleFileEvent() {
+        let action = scheduler.onFileEvent()
+        handleSchedulerAction(action)
+    }
+
+    private func handleSchedulerAction(_ action: RefreshScheduler.Action) {
+        switch action {
+        case .none:
+            break
+        case .refreshNow:
+            scheduledTask?.cancel()
+            scheduledTask = nil
+            refresh(qualityOfService: .background)
+        case .scheduleRefresh(let delay):
+            scheduledTask?.cancel()
+            scheduledTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch { return }
+                guard !Task.isCancelled else { return }
+                self?.refresh(qualityOfService: .background)
+            }
+        }
+    }
+
+    func onPanelOpened() {
+        if scheduler.shouldRefreshOnOpen() {
+            refresh(qualityOfService: .background)
+        }
     }
 
     func checkPython() async {
@@ -133,9 +250,10 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
-    func refresh() {
-        // 先初始化磁盘缓存，并暂停尚未开始的预取，避免与用量导出同时启动。
-        DiskStore.shared.cancelPrefetch()
+    func refresh(qualityOfService: QualityOfService = .userInitiated) {
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        scheduler.onRefreshStarted()
         generation += 1
         let gen = generation
         let (source, desc) = makeSource()
@@ -146,7 +264,12 @@ final class ReportStore: ObservableObject {
         }
         Task {
             do {
-                let r = try await source.load()
+                let r: UsageReport
+                if let cliSource = source as? CLIDataSource {
+                    r = try await cliSource.load(qualityOfService: qualityOfService)
+                } else {
+                    r = try await source.load()
+                }
                 guard gen == generation else { return }
                 report = r
                 error = nil
@@ -162,24 +285,34 @@ final class ReportStore: ObservableObject {
             lastRefresh = Date()
             isLoading = false
             loadingStartedAt = nil
-            DiskStore.shared.schedulePrefetch(delay: didScheduleDiskPrefetch ? 0 : 15)
-            didScheduleDiskPrefetch = true
+            let followUpAction = scheduler.onRefreshFinished()
+            handleSchedulerAction(followUpAction)
         }
     }
 
     func restartTimer() {
         timer?.invalidate()
         timer = nil
-        let minutes = defaults.integer(forKey: SettingsKeys.refreshMinutes)
+        var minutes = defaults.integer(forKey: SettingsKeys.refreshMinutes)
+        minutes = RefreshScheduler.migrateFallbackMinutes(minutes)
+        if minutes != defaults.integer(forKey: SettingsKeys.refreshMinutes) {
+            defaults.set(minutes, forKey: SettingsKeys.refreshMinutes)
+        }
+        scheduler.fallbackMinutes = minutes
         guard minutes > 0 else { return }
         timer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes * 60), repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor in
+                guard let self = self else { return }
+                let action = self.scheduler.onFallbackTimerFired()
+                self.handleSchedulerAction(action)
+            }
         }
     }
 
-    /// 设置改动后调用：重建数据源、重排定时器，用量刷新完成后预取磁盘报告。
+    /// 设置改动后调用：重建数据源、重排定时器。
     func applySettings() {
         restartTimer()
+        setupWatcher()
         DiskStore.shared.applySettings()
         Task { await loadKnownPlans() }
         refresh()

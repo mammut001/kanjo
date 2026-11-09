@@ -37,9 +37,14 @@ class Decision:
 
 def score(session: Session, resolver: Resolver) -> Counter:
     points: Counter = Counter()
+    resolved: Dict[str, Optional[Project]] = {}
     for call in session.tool_paths:
         for path in set(call):  # the same path twice in one call scores once
-            project = resolver.resolve(path)
+            if path in resolved:
+                project = resolved[path]
+            else:
+                project = resolver.resolve(path)
+                resolved[path] = project
             if project is not None:
                 points[project.id] += 1
     return points
