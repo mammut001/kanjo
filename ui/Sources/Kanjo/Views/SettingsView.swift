@@ -23,6 +23,13 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.cloudSyncEnabled, store: AppDefaults.store) private var cloudSyncEnabled = false
     @AppStorage(SettingsKeys.cloudSyncHideProjectNames, store: AppDefaults.store) private var cloudSyncHideNames = false
     @StateObject private var cloudSync = CloudSyncStore.shared
+    @AppStorage(SettingsKeys.publishEnabled, store: AppDefaults.store) private var publishEnabled = false
+    @AppStorage(SettingsKeys.publishFrequency, store: AppDefaults.store) private var publishFrequency = PublishFrequency.weekly.rawValue
+    @AppStorage(SettingsKeys.publishRepoPath, store: AppDefaults.store) private var publishRepoPath = ""
+    @AppStorage(SettingsKeys.publishFilePath, store: AppDefaults.store) private var publishFilePath = "src/data/token-usage.json"
+    @AppStorage(SettingsKeys.publishBranch, store: AppDefaults.store) private var publishBranch = "main"
+    @StateObject private var publishStore = PublishStore.shared
+    @State private var gitMissingError = false
 
     private let intervals = [0, 15, 30, 60]
 
@@ -123,6 +130,76 @@ struct SettingsView: View {
                     note(L10n.tr("settings.sync.note"))
                 }
 
+                PanelSection(L10n.tr("settings.section.publish"), inset: true) {
+                    Toggle(L10n.tr("settings.publish.enable"), isOn: $publishEnabled)
+                        .font(.system(size: 12))
+                    if publishEnabled {
+                        Picker(L10n.tr("settings.publish.frequency"), selection: $publishFrequency) {
+                            ForEach(PublishFrequency.allCases) { freq in
+                                Text(freq.label).tag(freq.rawValue)
+                            }
+                        }
+                        .font(.system(size: 12))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.publish.repo_path"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Text(publishRepoPath.isEmpty ? "—" : publishRepoPath)
+                                    .font(.system(size: 11))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .foregroundStyle(publishRepoPath.isEmpty ? .secondary : .primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button(L10n.tr("settings.publish.choose_repo")) {
+                                    chooseRepoDirectory()
+                                }
+                                .font(.system(size: 11))
+                            }
+                            if gitMissingError {
+                                Text(L10n.tr("settings.publish.git_missing"))
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.publish.file_path"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            TextField("src/data/token-usage.json", text: $publishFilePath)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.publish.branch"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            TextField("main", text: $publishBranch)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                        }
+
+                        HStack {
+                            Text(publishStatusText)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(publishStatusColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Button(L10n.tr("settings.publish.now")) {
+                                Task {
+                                    await publishStore.publishNow()
+                                }
+                            }
+                            .font(.system(size: 11))
+                            .disabled(publishRepoPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || publishStore.isPublishing)
+                        }
+                    }
+                    note(L10n.tr("settings.publish.note"))
+                }
+
                 PanelSection(L10n.tr("settings.section.projects"), inset: true) {
                     let hidden = ProjectPrefs.parse(hiddenRaw).count
                     HStack {
@@ -205,6 +282,53 @@ struct SettingsView: View {
             return .secondary
         case .failed:
             return .red
+        }
+    }
+
+    private var publishStatusText: String {
+        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
+            return L10n.tr("settings.publish.status.no_network")
+        }
+        if publishStore.isPublishing {
+            return L10n.tr("settings.publish.status.in_progress")
+        }
+        if let err = publishStore.lastError {
+            return L10n.tr("settings.publish.status.failed", err)
+        }
+        if let success = publishStore.lastSuccessAt {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            let relative = formatter.localizedString(for: success, relativeTo: Date())
+            return L10n.tr("settings.publish.status.last_published", relative)
+        }
+        return L10n.tr("settings.publish.status.never")
+    }
+
+    private var publishStatusColor: Color {
+        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
+            return .orange
+        }
+        if publishStore.lastError != nil {
+            return .red
+        }
+        return .secondary
+    }
+
+    private func chooseRepoDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            let gitDir = url.appendingPathComponent(".git")
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDir)
+            if exists {
+                publishRepoPath = url.path
+                gitMissingError = false
+            } else {
+                gitMissingError = true
+            }
         }
     }
 

@@ -20,6 +20,29 @@ public enum SettingsKeys {
     public static let cloudSyncLastUploadHash = "cloudSyncLastUploadHash"
     public static let cloudSyncLastFingerprint = "cloudSyncLastFingerprint"
     public static let cloudSyncLastUploadedAt = "cloudSyncLastUploadedAt"
+    public static let publishEnabled = "publishEnabled"
+    public static let publishFrequency = "publishFrequency"
+    public static let publishRepoPath = "publishRepoPath"
+    public static let publishFilePath = "publishFilePath"
+    public static let publishBranch = "publishBranch"
+    public static let publishLastAttemptAt = "publishLastAttemptAt"
+    public static let publishLastSuccessAt = "publishLastSuccessAt"
+    public static let publishLastResult = "publishLastResult"
+}
+
+public enum PublishFrequency: String, CaseIterable, Identifiable {
+    case daily = "daily"
+    case weekly = "weekly"
+    case monthly = "monthly"
+
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .daily: return L10n.tr("settings.publish.frequency.daily")
+        case .weekly: return L10n.tr("settings.publish.frequency.weekly")
+        case .monthly: return L10n.tr("settings.publish.frequency.monthly")
+        }
+    }
 }
 
 public enum SourceKind: String, CaseIterable, Identifiable {

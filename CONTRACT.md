@@ -341,3 +341,50 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 - `--hide-project-names`（只能和 `--mobile` 一起用）：项目名按 cost 顺序替换为 `Project 1`…`Project N`，`id` 替换为原 id 的 sha256 前 12 位十六进制，`mobile.hidden_project_names` 为 `true`。顺序不变。精简会话里没有任何字段能暴露项目名、路径或远程地址。
 - `--gzip`：把 JSON 以 gzip 压缩后写到 stdout（二进制，无缩进）；`-o` 时写入文件。适合 Mac app 直接上传。
 
+## 12. 公开汇总 (`kanjo export --public-summary`)
+
+`--public-summary` 输出面向外部网站公开展示的高层汇总数据（如个人简历网站）；数值基于逐条消息统计，与完整导出用同一套解析、去重、定价逻辑。
+计入所有项目与 `unattributed` 桶，**排除 `excluded` 桶**。不包含任何项目名、仓库 remote、文件路径、分支名、会话 id、会话标题或账号邮箱。
+
+### 顶层结构
+
+```jsonc
+{
+  "schema_version": 1,
+  "kind": "kanjo-public-summary",
+  "generated_at": "2026-11-09T14:00:00Z",
+  "generated_by": "kanjo 0.4.0",
+  "timezone": "America/Toronto",
+  "currency": "USD",
+  "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "all_time": Period,
+  "months": [Period],      // Period.period = "2026-10"
+  "weeks":  [Period]       // Period.period = "2026-W45"，另有 "start": "2026-11-02"
+}
+```
+
+`Period` 结构：
+
+```jsonc
+{
+  "period": "2026-10",            // all_time 时为 "all"
+  "first_day": "2026-10-01",      // 该时间段内实际有用量的第一天和最后一天
+  "last_day": "2026-10-31",
+  "tokens": { "input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0 },
+  "cost_usd": 0.0,
+  "by_provider": [ { "provider": "anthropic", "label": "Anthropic", "tokens": Tokens, "cost_usd": 0.0 } ],  // 按 tokens.total 降序
+  "by_agent":    [ { "agent": "claude", "label": "Claude Code", "tokens_total": 0, "cost_usd": 0.0 } ],  // 按 tokens_total 降序
+  "top_models":  [ { "model": "claude-opus-5-5", "provider": "anthropic", "tokens_total": 0, "cost_usd": 0.0 } ]  // 前 8 个，按 tokens_total 降序
+}
+```
+
+- 月份和周按导出文档的 `timezone` 划分。周是 ISO 周（周一开始），key 写成 `2026-W45`，同时给出 `start`（周一的 `YYYY-MM-DD`）。
+- `months` 包含有数据的所有月份，升序；`weeks` 只保留最近 26 周，升序。
+- tokens 用整数，cost 保留 2 位小数。
+
+### 不变量
+
+1. 每个 Period 里：`by_provider` 的 tokens 各字段之和等于 `tokens`；`by_agent` 的 `tokens_total` 之和等于 `tokens.total`；cost 之和与 `cost_usd` 的差不超过 0.01。
+2. 所有 `months` 加起来等于 `all_time`（tokens 精确相等，cost 误差不超过 0.01）。
+3. 按比例拆分的会话（`split`）在公开汇总里只按原值算一次，不能重复计入。公开汇总不看归属，只看消息本身。
+

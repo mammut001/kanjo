@@ -15,10 +15,13 @@ from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import (
-    COST_NOTE, SOURCES, build_export, check_invariants, mobile_document, scan,
-    load_fast_export, save_fast_export, source_fingerprint
+    COST_NOTE, SOURCES, build_export, build_public_summary, check_invariants,
+    check_public_summary_invariants, mobile_document, scan,
+    load_fast_export, save_fast_export, load_fast_public_summary,
+    save_fast_public_summary, source_fingerprint
 )
 from .ledger import Ledger
+from .publish import cmd_publish_usage
 from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions as load_subscriptions
 
@@ -43,21 +46,37 @@ def cmd_export(args) -> int:
     if args.hide_project_names and not args.mobile:
         print("kanjo: --hide-project-names requires --mobile", file=sys.stderr)
         return 2
+    if getattr(args, "public_summary", False) and args.mobile:
+        print("kanjo: --public-summary cannot be combined with --mobile", file=sys.stderr)
+        return 2
     cfg = _config(args)
     doc = None
     fp = None
     use_cache = not getattr(args, "no_cache", False)
-    if use_cache:
-        fp = source_fingerprint(config=cfg)
-        doc = load_fast_export(fp)
-    if doc is None:
-        doc = build_export(config=cfg, cache=_cache(args))
+
+    if getattr(args, "public_summary", False):
         if use_cache:
-            if fp is None:
-                fp = source_fingerprint(config=cfg)
-            save_fast_export(fp, doc)
-    if args.mobile:
-        doc = mobile_document(doc, hide_project_names=args.hide_project_names)
+            fp = source_fingerprint(config=cfg)
+            doc = load_fast_public_summary(fp)
+        if doc is None:
+            doc = build_public_summary(config=cfg, cache=_cache(args))
+            if use_cache:
+                if fp is None:
+                    fp = source_fingerprint(config=cfg)
+                save_fast_public_summary(fp, doc)
+    else:
+        if use_cache:
+            fp = source_fingerprint(config=cfg)
+            doc = load_fast_export(fp)
+        if doc is None:
+            doc = build_export(config=cfg, cache=_cache(args))
+            if use_cache:
+                if fp is None:
+                    fp = source_fingerprint(config=cfg)
+                save_fast_export(fp, doc)
+        if args.mobile:
+            doc = mobile_document(doc, hide_project_names=args.hide_project_names)
+
     if args.gzip:
         payload = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         data = gzip.compress(payload, mtime=0)
@@ -76,14 +95,22 @@ def cmd_export(args) -> int:
             except OSError:
                 pass
             raise
-        print("wrote %s (%d projects, total $%.2f)" % (args.output, len(doc["projects"]), doc["totals"]["cost"]),
-              file=sys.stderr)
+        if getattr(args, "public_summary", False):
+            print("wrote %s (%d months, %d weeks, total $%.2f)" % (
+                args.output, len(doc["months"]), len(doc["weeks"]), doc["all_time"]["cost_usd"]),
+                file=sys.stderr)
+        else:
+            print("wrote %s (%d projects, total $%.2f)" % (args.output, len(doc["projects"]), doc["totals"]["cost"]),
+                  file=sys.stderr)
     elif args.gzip:
         sys.stdout.buffer.write(data)
         sys.stdout.buffer.flush()
     else:
         sys.stdout.write(data.decode("utf-8"))
-    problems = check_invariants(doc)
+    if getattr(args, "public_summary", False):
+        problems = check_public_summary_invariants(doc)
+    else:
+        problems = check_invariants(doc)
     for p in problems:
         print("warning: invariant: %s" % p, file=sys.stderr)
     return 0
@@ -324,6 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--compact", action="store_true", help="no indentation")
     p.add_argument("--mobile", action="store_true",
                    help="trim the document to the phone snapshot (CONTRACT.md section 11)")
+    p.add_argument("--public-summary", action="store_true",
+                   help="export public usage summary document (CONTRACT.md section 12)")
     p.add_argument("--hide-project-names", action="store_true",
                    help="with --mobile, replace project names and ids with opaque values")
     p.add_argument("--gzip", action="store_true", help="write gzip-compressed JSON to stdout")
@@ -371,6 +400,15 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--dry-run", action="store_true", help="print the plan and do not move anything")
     c.add_argument("--yes", action="store_true", help="actually move files; without this, nothing moves")
     c.set_defaults(func=cmd_disk)
+
+    p = sub.add_parser("publish-usage", help="commit and push public usage summary to website repo")
+    p.add_argument("--repo", required=True, metavar="PATH", help="path to git repository")
+    p.add_argument("--file", default="src/data/token-usage.json", metavar="PATH",
+                   help="relative path for token usage JSON (default: src/data/token-usage.json)")
+    p.add_argument("--branch", default="main", metavar="BRANCH", help="target branch (default: main)")
+    p.add_argument("--dry-run", action="store_true", help="do not write, commit or push")
+    common(p, threshold=False)
+    p.set_defaults(func=cmd_publish_usage)
     return parser
 
 
