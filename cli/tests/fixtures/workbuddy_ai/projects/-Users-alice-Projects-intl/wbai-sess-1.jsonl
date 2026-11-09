@@ -1,0 +1,2 @@
+{"type":"user","cwd":"/Users/alice/Projects/intl","message":{"content":"translate docs","aiTitle":"Translate Docs"},"timestamp":1794000000000}
+{"type":"assistant","model":"Balanced","usage":{"input":800,"output":250,"cache_read":100,"cache_write":0},"tool_calls":[{"name":"read_file","arguments":{"path":"/Users/alice/Projects/intl/README.md"}}],"timestamp":1794000010000,"messageId":"msg-2"}

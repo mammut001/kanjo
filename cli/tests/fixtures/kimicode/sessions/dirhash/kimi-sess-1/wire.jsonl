@@ -1,0 +1,2 @@
+{"type":"message","role":"user","content":"hello"}
+{"type":"usage.record","usage":{"inputOther":600,"output":250,"inputCacheRead":150,"inputCacheCreation":50},"model":"moonshotai/kimi-k3","timestamp":1794000000000}

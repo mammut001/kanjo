@@ -24,6 +24,15 @@ AGENT_LABELS = {
     "opencode": "OpenCode",
     "copilot": "Copilot CLI",
     "pi": "Pi",
+    "workbuddy": "WorkBuddy",
+    "workbuddy_ai": "WorkBuddy Intl.",
+    "grok_bot": "Grok Bot",
+    "qoderwork": "QoderWork",
+    "qodercli": "Qoder CLI",
+    "qodercli_cn": "Qoder CN",
+    "zcode": "ZCode",
+    "kimicode": "Kimi Code",
+    "musecode": "Muse Code",
 }
 
 

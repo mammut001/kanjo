@@ -21,7 +21,11 @@ from typing import Dict, List, Optional, Tuple
 
 from . import disk_cache
 from .ledger import Ledger, paths_of
-from .sources import antigravity, claude, codex, copilot, minimax, opencode, pi
+from .sources import (
+    antigravity, claude, codex, copilot, grok_bot, kimicode, minimax,
+    musecode, opencode, pi, qodercli, qodercli_cn, qoderwork,
+    workbuddy, workbuddy_ai, zcode,
+)
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
 ACTIVE_SECONDS = 24 * 60 * 60
@@ -43,7 +47,12 @@ NOTES = {
 }
 LABELS = dict(AGENT_LABELS)
 LABELS["claude-desktop"] = "Claude Desktop"
-AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax", "opencode", "copilot", "pi", "claude-desktop"]
+AGENT_ORDER = [
+    "claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax",
+    "opencode", "copilot", "pi", "workbuddy", "workbuddy_ai", "grok_bot",
+    "qoderwork", "qodercli", "qodercli_cn", "zcode", "kimicode", "musecode",
+    "claude-desktop",
+]
 _PARSERS = {
     "claude": claude,
     "codex": codex,
@@ -52,6 +61,15 @@ _PARSERS = {
     "opencode": opencode,
     "copilot": copilot,
     "pi": pi,
+    "workbuddy": workbuddy,
+    "workbuddy_ai": workbuddy_ai,
+    "grok_bot": grok_bot,
+    "qoderwork": qoderwork,
+    "qodercli": qodercli,
+    "qodercli_cn": qodercli_cn,
+    "zcode": zcode,
+    "kimicode": kimicode,
+    "musecode": musecode,
 }
 _OLDER = re.compile(r"^(\d+)d$")
 
@@ -102,6 +120,15 @@ def default_roots() -> dict:
                 )
             )
         ),
+        "workbuddy": os.path.expanduser(os.environ["KANJO_WORKBUDDY_DIR"]) if os.environ.get("KANJO_WORKBUDDY_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy")),
+        "workbuddy_ai": os.path.expanduser(os.environ["KANJO_WORKBUDDY_AI_DIR"]) if os.environ.get("KANJO_WORKBUDDY_AI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy-ai")),
+        "grok_bot": os.path.expanduser(os.environ["KANJO_GROK_BOT_DIR"]) if os.environ.get("KANJO_GROK_BOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/Grok Bot")),
+        "qoderwork": os.path.expanduser(os.environ["KANJO_QODERWORK_DIR"]) if os.environ.get("KANJO_QODERWORK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/QoderWork")),
+        "qodercli": os.path.expanduser(os.environ["KANJO_QODERCLI_DIR"]) if os.environ.get("KANJO_QODERCLI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qoder")),
+        "qodercli_cn": os.path.expanduser(os.environ["KANJO_QODERCLI_CN_DIR"]) if os.environ.get("KANJO_QODERCLI_CN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qoder-cn")),
+        "zcode": os.path.expanduser(os.environ["KANJO_ZCODE_DIR"]) if os.environ.get("KANJO_ZCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.zcode")),
+        "kimicode": os.path.expanduser(os.environ["KANJO_KIMICODE_DIR"]) if os.environ.get("KANJO_KIMICODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.kimi-code")),
+        "musecode": os.path.expanduser(os.environ["KANJO_MUSECODE_DIR"]) if os.environ.get("KANJO_MUSECODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/muse")),
     }
 
 
@@ -577,6 +604,63 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             add("pi", take_id("pi:sessions"), "sessions", pi_sessions,
                 note="Pi agent sessions.")
 
+    wb_root = roots.get("workbuddy")
+    if wb_root and _isdir(wb_root):
+        cand = os.path.join(wb_root, "projects") if os.path.basename(wb_root) != "projects" and _isdir(os.path.join(wb_root, "projects")) else wb_root
+        add("workbuddy", take_id("workbuddy:sessions"), "sessions", cand, note="WorkBuddy sessions.")
+
+    wb_ai_root = roots.get("workbuddy_ai")
+    if wb_ai_root and _isdir(wb_ai_root):
+        cand = os.path.join(wb_ai_root, "projects") if os.path.basename(wb_ai_root) != "projects" and _isdir(os.path.join(wb_ai_root, "projects")) else wb_ai_root
+        add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
+
+    gb_root = roots.get("grok_bot")
+    if gb_root and _isdir(gb_root):
+        cand = os.path.join(gb_root, "sand-client-persistence") if os.path.basename(gb_root) != "sand-client-persistence" and _isdir(os.path.join(gb_root, "sand-client-persistence")) else gb_root
+        add("grok_bot", take_id("grok_bot:sessions"), "sessions", cand, note="Grok Bot sessions.")
+
+    qw_root = roots.get("qoderwork")
+    if qw_root and (_isdir(qw_root) or os.path.isfile(qw_root)):
+        db = os.path.join(qw_root, "data", "agents.db") if _isdir(qw_root) and _isdir(os.path.join(qw_root, "data")) else (os.path.join(qw_root, "agents.db") if _isdir(qw_root) else qw_root)
+        if not os.path.isfile(db) and _isdir(qw_root):
+            cand_db = os.path.join(qw_root, "data", "sqlite.db")
+            if os.path.isfile(cand_db):
+                db = cand_db
+            else:
+                db = os.path.join(qw_root, "sqlite.db")
+        if os.path.isfile(db) or _isdir(qw_root):
+            add("qoderwork", take_id("qoderwork:sessions"), "sessions", qw_root,
+                note="QoderWork SQLite database. DB-backed sessions are never deleted by disk clean.",
+                deletable="never")
+
+    qc_root = roots.get("qodercli")
+    if qc_root and _isdir(qc_root):
+        cand = os.path.join(qc_root, "projects") if os.path.basename(qc_root) != "projects" and _isdir(os.path.join(qc_root, "projects")) else qc_root
+        add("qodercli", take_id("qodercli:sessions"), "sessions", cand, note="Qoder CLI sessions.")
+
+    qc_cn_root = roots.get("qodercli_cn")
+    if qc_cn_root and _isdir(qc_cn_root):
+        cand = os.path.join(qc_cn_root, "projects") if os.path.basename(qc_cn_root) != "projects" and _isdir(os.path.join(qc_cn_root, "projects")) else qc_cn_root
+        add("qodercli_cn", take_id("qodercli_cn:sessions"), "sessions", cand, note="Qoder CN sessions.")
+
+    zc_root = roots.get("zcode")
+    if zc_root and (_isdir(zc_root) or os.path.isfile(zc_root)):
+        db = os.path.join(zc_root, "cli", "db", "db.sqlite") if _isdir(zc_root) and _isdir(os.path.join(zc_root, "cli", "db")) else (os.path.join(zc_root, "db.sqlite") if _isdir(zc_root) else zc_root)
+        if os.path.isfile(db) or _isdir(zc_root):
+            add("zcode", take_id("zcode:sessions"), "sessions", zc_root,
+                note="ZCode SQLite database. DB-backed sessions are never deleted by disk clean.",
+                deletable="never")
+
+    kc_root = roots.get("kimicode")
+    if kc_root and _isdir(kc_root):
+        cand = os.path.join(kc_root, "sessions") if os.path.basename(kc_root) != "sessions" and _isdir(os.path.join(kc_root, "sessions")) else kc_root
+        add("kimicode", take_id("kimicode:sessions"), "sessions", cand, note="Kimi Code sessions.")
+
+    mc_root = roots.get("musecode")
+    if mc_root and _isdir(mc_root):
+        cand = os.path.join(mc_root, "sessions") if os.path.basename(mc_root) != "sessions" and _isdir(os.path.join(mc_root, "sessions")) else mc_root
+        add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
+
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
     for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable, cached_e in pending:
         if cached_e is not None:
@@ -856,7 +940,7 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     root = entry["path"]
     if not os.path.exists(root):
         return [], 0, "not_found", []
-    if agent in ("minimax", "opencode"):
+    if agent in ("minimax", "opencode", "qoderwork", "zcode"):
         return [], 0, "never", []
     if days is None:
         if do_it:
