@@ -155,6 +155,7 @@ if [[ -n "$PROFILE" ]]; then
         <string>CloudKit</string>
     </array>
     <key>com.apple.developer.icloud-container-environment</key><string>Production</string>
+    <key>com.apple.developer.ubiquity-kvstore-identifier</key><string>${TEAM_ID}.${BUNDLE_ID}</string>
 </dict>
 </plist>
 PLIST

@@ -64,16 +64,30 @@ final class CloudKitSnapshotSource: SnapshotSource {
     func load() async throws -> UsageReport? {
         lastDeviceName = nil
         lastAccountCode = nil
+
+        let kvsSnapshot = UbiquitousSnapshotStore.load()
+        if let kvsSnapshot {
+            SyncLog.sync.info("kvs snapshot found: device \(kvsSnapshot.deviceName, privacy: .public), bytes \(kvsSnapshot.payload?.count ?? 0, privacy: .public)")
+        }
+
         SyncLog.sync.info("fetch started: CloudKit private database")
         let account: CKAccountStatus
         do {
             account = try await accountStatus()
         } catch {
             Self.logFailure("account status failed", error)
+            if let kvsSnapshot, let payload = kvsSnapshot.payload {
+                SyncLog.sync.info("falling back to KVS snapshot due to account status error")
+                return try decodeReport(payload: payload, deviceName: kvsSnapshot.deviceName)
+            }
             throw SnapshotSourceError.cloudKit(error)
         }
         guard account == .available else {
             SyncLog.sync.info("fetch skipped: iCloud account status \(Self.accountCode(account), privacy: .public)")
+            if let kvsSnapshot, let payload = kvsSnapshot.payload {
+                SyncLog.sync.info("falling back to KVS snapshot due to unavailable iCloud account")
+                return try decodeReport(payload: payload, deviceName: kvsSnapshot.deviceName)
+            }
             return nil
         }
         lastAccountCode = await ICloudAccountCode.fetch()
@@ -83,16 +97,34 @@ final class CloudKitSnapshotSource: SnapshotSource {
             records = try await fetchMetadata()
         } catch {
             Self.logFailure("fetch failed", error)
+            if let kvsSnapshot, let payload = kvsSnapshot.payload {
+                SyncLog.sync.info("falling back to KVS snapshot due to fetchMetadata error")
+                return try decodeReport(payload: payload, deviceName: kvsSnapshot.deviceName)
+            }
             throw SnapshotSourceError.cloudKit(error)
         }
         SyncLog.sync.info("fetch finished: \(records.count, privacy: .public) records found")
 
         let snapshots = records.compactMap { SnapshotRecord.metadata(from: $0) }
-        guard let newest = SnapshotRecord.newest(in: snapshots) else {
+        let cloudKitNewest = SnapshotRecord.newest(in: snapshots)
+
+        if let kvsSnapshot, let kvsPayload = kvsSnapshot.payload {
+            let useKvs: Bool
+            if let ck = cloudKitNewest {
+                useKvs = kvsSnapshot.generatedAt >= ck.generatedAt
+            } else {
+                useKvs = true
+            }
+            if useKvs {
+                SyncLog.sync.info("chosen KVS snapshot: device \(kvsSnapshot.deviceName, privacy: .public), generatedAt \(kvsSnapshot.generatedAt, privacy: .public)")
+                return try decodeReport(payload: kvsPayload, deviceName: kvsSnapshot.deviceName)
+            }
+        }
+
+        guard let newest = cloudKitNewest else {
             SyncLog.sync.info("fetch finished: no usable snapshot records")
             return nil
         }
-        lastDeviceName = newest.deviceName
         SyncLog.sync.info("chosen record: device \(newest.deviceName, privacy: .public), generatedAt \(newest.generatedAt, privacy: .public)")
 
         let payload: Data?
@@ -100,14 +132,27 @@ final class CloudKitSnapshotSource: SnapshotSource {
             payload = try await downloadPayload(recordID: CKRecord.ID(recordName: newest.deviceID))
         } catch {
             Self.logFailure("download failed", error)
+            if let kvsSnapshot, let kvsPayload = kvsSnapshot.payload {
+                SyncLog.sync.info("falling back to KVS snapshot due to download error")
+                return try decodeReport(payload: kvsPayload, deviceName: kvsSnapshot.deviceName)
+            }
             throw SnapshotSourceError.cloudKit(error)
         }
         guard let payload else {
+            if let kvsSnapshot, let kvsPayload = kvsSnapshot.payload {
+                SyncLog.sync.info("falling back to KVS snapshot due to missing payload asset")
+                return try decodeReport(payload: kvsPayload, deviceName: kvsSnapshot.deviceName)
+            }
             SyncLog.sync.error("download failed: no payload asset")
             throw SnapshotSourceError.missingPayload
         }
         SyncLog.sync.info("download finished: bytes \(payload.count, privacy: .public)")
 
+        return try decodeReport(payload: payload, deviceName: newest.deviceName)
+    }
+
+    private func decodeReport(payload: Data, deviceName: String) throws -> UsageReport {
+        lastDeviceName = deviceName
         do {
             let json = try Gzip.decompress(payload)
             SyncLog.sync.info("decompress finished: bytes \(json.count, privacy: .public)")

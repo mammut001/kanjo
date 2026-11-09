@@ -148,4 +148,35 @@ final class SnapshotRecordTests: XCTestCase {
         XCTAssertEqual(report.buckets.unattributed.sessionsDetail, [])
         XCTAssertEqual(report.buckets.parseFailed.files, [])
     }
+
+    func testSplitPayloadHandlesEmptyData() {
+        XCTAssertEqual(UbiquitousSnapshotStore.splitPayload(Data()), [])
+    }
+
+    func testSplitPayloadSmallerThanChunkSize() {
+        let original = Data((0..<100).map { UInt8($0) })
+        let chunks = UbiquitousSnapshotStore.splitPayload(original, chunkSize: 1024)
+        XCTAssertEqual(chunks.count, 1)
+        XCTAssertEqual(chunks[0], original)
+    }
+
+    func testSplitPayloadExactMultipleOfChunkSize() {
+        let chunkSize = 100
+        let original = Data((0..<300).map { UInt8($0 % 256) })
+        let chunks = UbiquitousSnapshotStore.splitPayload(original, chunkSize: chunkSize)
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks[0].count, chunkSize)
+        XCTAssertEqual(chunks[1].count, chunkSize)
+        XCTAssertEqual(chunks[2].count, chunkSize)
+        XCTAssertEqual(chunks.reduce(Data(), +), original)
+    }
+
+    func testSplitPayloadMultiChunkReassembly() {
+        let chunkSize = 50
+        let original = Data((0..<235).map { UInt8($0 % 256) })
+        let chunks = UbiquitousSnapshotStore.splitPayload(original, chunkSize: chunkSize)
+        XCTAssertEqual(chunks.count, 5)
+        XCTAssertEqual(chunks.map(\.count), [50, 50, 50, 50, 35])
+        XCTAssertEqual(chunks.reduce(Data(), +), original)
+    }
 }

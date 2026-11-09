@@ -189,10 +189,22 @@ final class CloudSyncStore: ObservableObject {
             defer { try? fileManager.removeItem(at: assetURL) }
 
             Self.logger.info("upload started: record \(snapshot.deviceID, privacy: .private), device \(snapshot.deviceName, privacy: .public), bytes \(payload.count, privacy: .public)")
+            let kvsSaved = UbiquitousSnapshotStore.save(snapshot)
+            Self.logger.info("kvs save: \(kvsSaved, privacy: .public), bytes \(payload.count, privacy: .public)")
+
             let uploadStart = Date()
-            try await save(snapshot, payloadURL: assetURL, database: database())
-            let uploadMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
-            Self.logger.info("upload succeeded: record \(snapshot.deviceID, privacy: .private), bytes \(payload.count, privacy: .public), ms \(uploadMs, privacy: .public)")
+            do {
+                try await save(snapshot, payloadURL: assetURL, database: database())
+                let uploadMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
+                Self.logger.info("upload succeeded: record \(snapshot.deviceID, privacy: .private), bytes \(payload.count, privacy: .public), ms \(uploadMs, privacy: .public)")
+            } catch {
+                Self.logFailure(error)
+                if kvsSaved {
+                    Self.logger.info("CloudKit save failed but iCloud KVS succeeded; continuing")
+                } else {
+                    throw error
+                }
+            }
 
             let uploaded = Date()
             defaults.set(hash, forKey: SettingsKeys.cloudSyncLastUploadHash)
