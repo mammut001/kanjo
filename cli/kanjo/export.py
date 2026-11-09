@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 import time
 from collections import defaultdict
@@ -21,13 +22,13 @@ from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
-from .providers import provider_for, PROVIDER_LABELS
+from .providers import provider_for, PROVIDER_LABELS, strip_vendor_prefix
 from .sources import (
     antigravity, claude, codebuddy, codex, commandcode, copilot,
     deepseek_harness, devin, grok, grok_bot, hermes, kimicode,
     mimocode, minimax, musecode, omp, openclaw, opencode, pi,
     prime_agent, qoder_ide, qodercli, qodercli_cn, qoderwork, qwen,
-    workbuddy, workbuddy_ai, zcode,
+    qwenwork, workbuddy, workbuddy_ai, zcode,
 )
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
@@ -47,6 +48,7 @@ SOURCES = {
     "pi": pi,
     "workbuddy": workbuddy,
     "workbuddy_ai": workbuddy_ai,
+    "qwenwork": qwenwork,
     "grok_bot": grok_bot,
     "qoderwork": qoderwork,
     "qodercli": qodercli,
@@ -1161,6 +1163,26 @@ def save_fast_export(fingerprint: str, doc: dict, directory: Optional[str] = Non
 
 
 # ---- public summary ---------------------------------------------------------------
+_PUBLIC_SUMMARY_STRIP_SUFFIXES_RE = re.compile(
+    r"-(?:high|medium|low|thinking|trial)$", re.IGNORECASE
+)
+
+
+def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) -> Optional[str]:
+    if not raw_model or raw_model == "<synthetic>":
+        return None
+    model_id, estimated = prices.resolve(raw_model, agent)
+    if model_id and not estimated:
+        return strip_vendor_prefix(model_id)
+    name = strip_vendor_prefix(raw_model)
+    while True:
+        m = _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE.search(name)
+        if not m:
+            break
+        name = name[:m.start()]
+    return name
+
+
 class PublicPeriodAgg:
     def __init__(self, period: str, start: Optional[str] = None):
         self.period = period
@@ -1172,6 +1194,7 @@ class PublicPeriodAgg:
         self.by_provider: Dict[str, dict] = defaultdict(lambda: {
             "tokens": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0},
             "cost": 0.0,
+            "models": defaultdict(lambda: {"tokens_total": 0, "cost": 0.0}),
         })
         self.by_agent: Dict[str, dict] = defaultdict(lambda: {
             "tokens_total": 0,
@@ -1183,7 +1206,8 @@ class PublicPeriodAgg:
             "provider": "",
         })
 
-    def add_message(self, m: Message, agent: str, provider: str, cost: float, day: str):
+    def add_message(self, m: Message, agent: str, provider: str, cost: float, day: str,
+                    model_name: Optional[str] = None):
         if self.first_day is None or day < self.first_day:
             self.first_day = day
         if self.last_day is None or day > self.last_day:
@@ -1202,19 +1226,23 @@ class PublicPeriodAgg:
         self.tokens["total"] += tot
         self.cost += cost
 
-        pt = self.by_provider[provider]["tokens"]
+        prov_entry = self.by_provider[provider]
+        pt = prov_entry["tokens"]
         pt["input"] += inp
         pt["output"] += out
         pt["cache_read"] += cr
         pt["cache_write"] += cw
         pt["total"] += tot
-        self.by_provider[provider]["cost"] += cost
+        prov_entry["cost"] += cost
 
         self.by_agent[agent]["tokens_total"] += tot
         self.by_agent[agent]["cost"] += cost
 
-        if m.model and m.model != "<synthetic>":
-            me = self.by_model[m.model]
+        if model_name:
+            prov_entry["models"][model_name]["tokens_total"] += tot
+            prov_entry["models"][model_name]["cost"] += cost
+
+            me = self.by_model[model_name]
             me["provider"] = provider
             me["tokens_total"] += tot
             me["cost"] += cost
@@ -1224,11 +1252,20 @@ class PublicPeriodAgg:
 
         provider_items = []
         for p, data in self.by_provider.items():
+            p_models = []
+            for mod, mod_data in data["models"].items():
+                p_models.append({
+                    "model": mod,
+                    "tokens_total": mod_data["tokens_total"],
+                    "cost_usd": round(mod_data["cost"], 2),
+                })
+            p_models.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
             provider_items.append({
                 "provider": p,
                 "label": PROVIDER_LABELS.get(p, p.capitalize()),
                 "tokens": dict(data["tokens"]),
                 "cost_usd": round(data["cost"], 2),
+                "models": p_models[:5],
             })
         if provider_items:
             sum_prov_cost = round(sum(p["cost_usd"] for p in provider_items), 2)
@@ -1357,6 +1394,7 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
             cost, _ = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
                                   m.cache_write, m.cache_write_1h)
             provider = provider_for(m.model, agent)
+            pub_model = _public_model_name(m.model, agent, prices)
             dt = datetime.fromtimestamp(m.ts, tz=tz)
             day = dt.strftime("%Y-%m-%d")
             month_key = dt.strftime("%Y-%m")
@@ -1365,14 +1403,14 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
             import datetime as _dt
             week_start = _dt.date.fromisocalendar(iso_year, iso_week, 1).strftime("%Y-%m-%d")
 
-            all_time.add_message(m, agent, provider, cost, day)
+            all_time.add_message(m, agent, provider, cost, day, model_name=pub_model)
             if month_key not in months:
                 months[month_key] = PublicPeriodAgg(month_key)
-            months[month_key].add_message(m, agent, provider, cost, day)
+            months[month_key].add_message(m, agent, provider, cost, day, model_name=pub_model)
 
             if week_key not in weeks:
                 weeks[week_key] = PublicPeriodAgg(week_key, start=week_start)
-            weeks[week_key].add_message(m, agent, provider, cost, day)
+            weeks[week_key].add_message(m, agent, provider, cost, day, model_name=pub_model)
 
     month_periods = [months[k].to_json() for k in sorted(months.keys())]
 
@@ -1430,6 +1468,18 @@ def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[
         if abs(agent_cost - p["cost_usd"]) > tolerance + 1e-6:
             problems.append("%s: by_agent cost_usd %.2f != cost_usd %.2f"
                             % (pk, agent_cost, p["cost_usd"]))
+
+        for prov in p.get("by_provider", []):
+            prov_name = prov.get("provider", "unknown")
+            models = prov.get("models")
+            if models is not None:
+                if len(models) > 5:
+                    problems.append("%s: provider %s has %d models > 5"
+                                    % (pk, prov_name, len(models)))
+                mod_tokens_sum = sum(m.get("tokens_total", 0) for m in models)
+                if mod_tokens_sum > prov["tokens"]["total"]:
+                    problems.append("%s: provider %s models tokens_total sum %d > tokens.total %d"
+                                    % (pk, prov_name, mod_tokens_sum, prov["tokens"]["total"]))
 
     months = doc.get("months", [])
     all_time = doc.get("all_time", {})

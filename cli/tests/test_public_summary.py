@@ -160,6 +160,17 @@ class PublicSummaryExportTest(unittest.TestCase):
         prov_tokens_total = sum(p["tokens"]["total"] for p in all_time["by_provider"])
         self.assertEqual(prov_tokens_total, all_time["tokens"]["total"])
 
+        # Per-provider models invariants
+        for p in all_time["by_provider"]:
+            self.assertIn("models", p)
+            self.assertLessEqual(len(p["models"]), 5)
+            mod_tokens = sum(m["tokens_total"] for m in p["models"])
+            self.assertLessEqual(mod_tokens, p["tokens"]["total"])
+            for m in p["models"]:
+                self.assertIn("model", m)
+                self.assertIn("tokens_total", m)
+                self.assertIn("cost_usd", m)
+
         # Agent tokens sum equals period tokens
         agent_tokens_total = sum(a["tokens_total"] for a in all_time["by_agent"])
         self.assertEqual(agent_tokens_total, all_time["tokens"]["total"])
@@ -245,6 +256,58 @@ class PublicSummaryExportTest(unittest.TestCase):
         code2, out2, _ = self._run_cli("export", "--public-summary")
         self.assertEqual(code2, 0)
         self.assertEqual(out1, out2)
+
+    def test_merged_model_variants_and_provider_models(self):
+        from kanjo.pricing import PriceBook
+        from kanjo.sources.base import Message, Session
+
+        book = PriceBook()
+        # Verify display names merge
+        name1 = export._public_model_name("gemini-4-argon", "antigravity", book)
+        name2 = export._public_model_name("gemini-4-argon-trial", "antigravity", book)
+        name3 = export._public_model_name("gemini-4-argon-s", "antigravity", book)
+        self.assertEqual(name1, "gemini-4-argon")
+        self.assertEqual(name2, "gemini-4-argon")
+        self.assertEqual(name3, "gemini-4-argon")
+
+        # Unknown model variant suffixes
+        unknown_high = export._public_model_name("custom-model-high", "unknown", book)
+        unknown_thinking = export._public_model_name("custom-model-thinking", "unknown", book)
+        self.assertEqual(unknown_high, "custom-model")
+        self.assertEqual(unknown_thinking, "custom-model")
+
+        # Create session with multiple Argon variants
+        s = Session(id="test-argon-merge", agent="antigravity", file="/path/test.db")
+        s.messages = [
+            Message(ts=1793500000.0, model="gemini-4-argon", input=1000, output=500),
+            Message(ts=1793500100.0, model="gemini-4-argon-trial", input=2000, output=1000),
+            Message(ts=1793500200.0, model="gemini-4-argon-s", input=3000, output=1500),
+        ]
+        scan_res = export.ScanResult(sessions=[s], failed_files=[], stats={})
+        summary = export.build_public_summary(prices=book, scan_result=scan_res)
+
+        google_prov = next(p for p in summary["all_time"]["by_provider"] if p["provider"] == "google")
+        argon_models = [m for m in google_prov["models"] if m["model"] == "gemini-4-argon"]
+        self.assertEqual(len(argon_models), 1)
+        self.assertEqual(argon_models[0]["tokens_total"], (1000 + 500) + (2000 + 1000) + (3000 + 1500))
+
+        top_argon = [m for m in summary["all_time"]["top_models"] if m["model"] == "gemini-4-argon"]
+        self.assertEqual(len(top_argon), 1)
+        self.assertEqual(top_argon[0]["tokens_total"], argon_models[0]["tokens_total"])
+
+    def test_provider_models_invariant_check(self):
+        code, out, _ = self._run_cli("export", "--public-summary")
+        self.assertEqual(code, 0)
+        doc = json.loads(out)
+        self.assertEqual(export.check_public_summary_invariants(doc), [])
+
+        # Corrupt a provider models tokens_total to exceed provider tokens.total
+        corrupt = json.loads(out)
+        prov = corrupt["all_time"]["by_provider"][0]
+        if prov["models"]:
+            prov["models"][0]["tokens_total"] = prov["tokens"]["total"] + 1000
+            problems = export.check_public_summary_invariants(corrupt)
+            self.assertTrue(any("models tokens_total sum" in p for p in problems))
 
 
 if __name__ == "__main__":

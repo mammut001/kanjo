@@ -272,8 +272,12 @@ class PricingTest(unittest.TestCase):
     def test_gemini_4_argon_trial_resolves_to_argon(self):
         argon = self.book.resolve("gemini-4-argon")
         trial = self.book.resolve("gemini-4-argon-trial")
-        self.assertEqual(trial, argon)
-        self.assertEqual(trial, ("google/gemini-3.1-pro-preview", True))
+        argon_s = self.book.resolve("gemini-4-argon-s")
+        self.assertEqual(argon, ("google/gemini-4-argon", False))
+        self.assertEqual(trial, ("google/gemini-4-argon", False))
+        self.assertEqual(argon_s, ("google/gemini-4-argon", False))
+        p = self.book.price("google/gemini-4-argon")
+        self.assertEqual((p["in"], p["out"], p["cache_read"]), (2.0, 10.0, 0.1))
 
     def test_antigravity_variant_suffixes(self):
         self.assertEqual(self.book.resolve("gemini-3.8-flash-n"), ("google/gemini-3.8-flash", False))

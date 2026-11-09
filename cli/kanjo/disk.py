@@ -25,7 +25,7 @@ from .sources import (
     antigravity, claude, codebuddy, codex, copilot, deepseek_harness,
     devin, grok_bot, hermes, kimicode, mimocode, minimax, musecode,
     omp, openclaw, opencode, pi, prime_agent, qoder_ide, qodercli,
-    qodercli_cn, qoderwork, workbuddy, workbuddy_ai, zcode,
+    qodercli_cn, qoderwork, qwenwork, workbuddy, workbuddy_ai, zcode,
 )
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
@@ -53,7 +53,7 @@ AGENT_ORDER = [
     "opencode", "copilot", "pi", "workbuddy", "workbuddy_ai", "grok_bot",
     "qoderwork", "qodercli", "qodercli_cn", "zcode", "kimicode", "musecode",
     "codebuddy", "qoder_ide", "hermes", "openclaw", "devin", "mimocode",
-    "prime_agent", "omp", "deepseek_harness",
+    "prime_agent", "omp", "deepseek_harness", "qwenwork",
     "claude-desktop",
 ]
 _PARSERS = {
@@ -66,6 +66,7 @@ _PARSERS = {
     "pi": pi,
     "workbuddy": workbuddy,
     "workbuddy_ai": workbuddy_ai,
+    "qwenwork": qwenwork,
     "grok_bot": grok_bot,
     "qoderwork": qoderwork,
     "qodercli": qodercli,
@@ -136,6 +137,11 @@ def default_roots() -> dict:
         ),
         "workbuddy": os.path.expanduser(os.environ["KANJO_WORKBUDDY_DIR"]) if os.environ.get("KANJO_WORKBUDDY_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy")),
         "workbuddy_ai": os.path.expanduser(os.environ["KANJO_WORKBUDDY_AI_DIR"]) if os.environ.get("KANJO_WORKBUDDY_AI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy-ai")),
+        "qwenwork": os.path.expanduser(os.environ["KANJO_QWENWORK_DIR"]) if os.environ.get("KANJO_QWENWORK_DIR") else (
+            os.path.expanduser(os.environ["TOKEI_QWENWORK_HOME"]) if os.environ.get("TOKEI_QWENWORK_HOME") else (
+                None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwenworkcn")
+            )
+        ),
         "grok_bot": os.path.expanduser(os.environ["KANJO_GROK_BOT_DIR"]) if os.environ.get("KANJO_GROK_BOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/Grok Bot")),
         "qoderwork": os.path.expanduser(os.environ["KANJO_QODERWORK_DIR"]) if os.environ.get("KANJO_QODERWORK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/QoderWork")),
         "qodercli": os.path.expanduser(os.environ["KANJO_QODERCLI_DIR"]) if os.environ.get("KANJO_QODERCLI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qoder")),
@@ -636,6 +642,11 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
     if wb_ai_root and _isdir(wb_ai_root):
         cand = os.path.join(wb_ai_root, "projects") if os.path.basename(wb_ai_root) != "projects" and _isdir(os.path.join(wb_ai_root, "projects")) else wb_ai_root
         add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
+
+    qwork_root = roots.get("qwenwork")
+    if qwork_root and _isdir(qwork_root):
+        cand = os.path.join(qwork_root, "logs", "sessions") if os.path.basename(qwork_root) != "sessions" and _isdir(os.path.join(qwork_root, "logs", "sessions")) else qwork_root
+        add("qwenwork", take_id("qwenwork:sessions"), "sessions", cand, note="QwenWork sessions.")
 
     gb_root = roots.get("grok_bot")
     if gb_root and _isdir(gb_root):
