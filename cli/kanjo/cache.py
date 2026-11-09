@@ -184,9 +184,11 @@ class RepoCache:
         try:
             os.makedirs(self.dir, exist_ok=True)
             fd, tmp = tempfile.mkstemp(prefix=".repo-cache-", dir=self.dir)
+            data = json.dumps({"version": REPO_CACHE_VERSION, "paths": self.entries},
+                              ensure_ascii=False, separators=(",", ":"))
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump({"version": REPO_CACHE_VERSION, "paths": self.entries}, handle,
-                          ensure_ascii=False, separators=(",", ":"))
+                handle.write(data)
+            del data
             os.replace(tmp, self.path)
             self.dirty = False
         except OSError:
@@ -248,9 +250,11 @@ class SessionCache:
             try:
                 os.makedirs(self.dir, exist_ok=True)
                 fd, tmp = tempfile.mkstemp(prefix=".parse-cache-", dir=self.dir)
+                data = json.dumps({"version": CACHE_VERSION, "files": self.entries},
+                                  ensure_ascii=False, separators=(",", ":"))
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump({"version": CACHE_VERSION, "files": self.entries}, handle,
-                              ensure_ascii=False, separators=(",", ":"))
+                    handle.write(data)
+                del data
                 os.replace(tmp, self.path)
                 self.dirty = False
             except OSError:

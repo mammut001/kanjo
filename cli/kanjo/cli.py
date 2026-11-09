@@ -1,4 +1,4 @@
-"""Command line interface: ``kanjo export | projects | doctor | ledger | disk | config``."""
+"""Command line interface: ``kanjo export | projects | doctor | ledger | disk | config | paths``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,10 @@ from . import __version__, disk_cache
 from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
-from .export import COST_NOTE, SOURCES, build_export, check_invariants, mobile_document, scan
+from .export import (
+    COST_NOTE, SOURCES, build_export, check_invariants, mobile_document, scan,
+    load_fast_export, save_fast_export, source_fingerprint
+)
 from .ledger import Ledger
 from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions as load_subscriptions
@@ -40,7 +43,19 @@ def cmd_export(args) -> int:
     if args.hide_project_names and not args.mobile:
         print("kanjo: --hide-project-names requires --mobile", file=sys.stderr)
         return 2
-    doc = build_export(config=_config(args), cache=_cache(args))
+    cfg = _config(args)
+    doc = None
+    fp = None
+    use_cache = not getattr(args, "no_cache", False)
+    if use_cache:
+        fp = source_fingerprint(config=cfg)
+        doc = load_fast_export(fp)
+    if doc is None:
+        doc = build_export(config=cfg, cache=_cache(args))
+        if use_cache:
+            if fp is None:
+                fp = source_fingerprint(config=cfg)
+            save_fast_export(fp, doc)
     if args.mobile:
         doc = mobile_document(doc, hide_project_names=args.hide_project_names)
     if args.gzip:
@@ -101,7 +116,19 @@ def _table(rows: List[List[str]], align: str) -> str:
 
 
 def cmd_projects(args) -> int:
-    doc = build_export(config=_config(args), cache=_cache(args))
+    cfg = _config(args)
+    doc = None
+    fp = None
+    use_cache = not getattr(args, "no_cache", False)
+    if use_cache:
+        fp = source_fingerprint(config=cfg)
+        doc = load_fast_export(fp)
+    if doc is None:
+        doc = build_export(config=cfg, cache=_cache(args))
+        if use_cache:
+            if fp is None:
+                fp = source_fingerprint(config=cfg)
+            save_fast_export(fp, doc)
     agents = list(AGENT_LABELS)
     rows = [["#", "Project", "Cost", "Sessions", "Last active"] + [AGENT_LABELS[a] for a in agents]]
     projects = doc["projects"] if args.all else doc["projects"][:args.limit]
@@ -237,6 +264,20 @@ def _format_disk(doc: dict) -> str:
     return "\n".join(lines)
 
 
+def cmd_paths(args) -> int:
+    result = {}
+    for agent, module in SOURCES.items():
+        existing = [os.path.abspath(r) for r in module.roots() if os.path.exists(r)]
+        result[agent] = existing
+    if args.json:
+        sys.stdout.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    else:
+        for agent, paths in result.items():
+            for p in paths:
+                print("%s\t%s" % (agent, p))
+    return 0
+
+
 def cmd_disk(args) -> int:
     if getattr(args, "disk_cmd", None) == "clean":
         try:
@@ -298,6 +339,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="list log directories, session counts and subscriptions")
     common(p, threshold=False)
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("paths", help="list existing log roots per agent")
+    p.add_argument("--json", action="store_true", help="output as JSON")
+    p.set_defaults(func=cmd_paths)
 
     p = sub.add_parser("config", help="get, set or unset subscription and quota overrides")
     p.add_argument("config_cmd", choices=("get", "set", "unset", "path", "plans"))

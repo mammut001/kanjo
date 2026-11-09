@@ -126,8 +126,8 @@ public struct ConfigDataSource {
         let command = try ConfigCommand.command(from: cliCommand, arguments: args)
         let cwd = workingDirectory
         let timeout = self.timeout
-        let (status, _, err, timedOut) = try await Task.detached(priority: .utility) {
-            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout)
+        let (status, _, err, timedOut) = try await Task.detached(priority: .userInitiated) {
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: .userInitiated)
         }.value
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {

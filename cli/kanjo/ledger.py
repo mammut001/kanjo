@@ -329,9 +329,11 @@ class Ledger:
         payload = {"version": LEDGER_VERSION, "updated_at": stamp, "entries": self.entries}
         tmp = "%s.%d.%s.tmp" % (self.path, os.getpid(), uuid.uuid4().hex[:8])
         try:
+            data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             with open(tmp, "w", encoding="utf-8") as handle:
-                json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
+                handle.write(data)
                 handle.write("\n")
+            del data
             os.replace(tmp, self.path)
         except Exception:
             try:

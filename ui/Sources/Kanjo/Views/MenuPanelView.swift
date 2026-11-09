@@ -142,7 +142,10 @@ struct MenuPanelView: View {
                 HoverCardOverlayHost(payload: payload, containerSize: rootGeo.size)
             }
         }
-        .onAppear { applyDevRoute(report: store.report) }
+        .onAppear {
+            store.onPanelOpened()
+            applyDevRoute(report: store.report)
+        }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
     }
 

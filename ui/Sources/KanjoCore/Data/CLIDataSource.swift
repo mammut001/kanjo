@@ -18,11 +18,15 @@ public struct CLIDataSource: UsageDataSource {
     }
 
     public func load() async throws -> UsageReport {
+        try await load(qualityOfService: .background)
+    }
+
+    public func load(qualityOfService: QualityOfService) async throws -> UsageReport {
         let command = self.command
         let cwd = self.workingDirectory
         let timeout = self.timeout
         let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try Self.run(command: command, cwd: cwd, timeout: timeout)
+            try Self.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
         }.value
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {
@@ -33,6 +37,27 @@ public struct CLIDataSource: UsageDataSource {
         return try ReportDecoder.decode(out)
     }
 
+    public static func pathsCommand(_ command: String) -> String {
+        let base = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        return DiskCommand.replacingExport(in: base, with: "paths --json")
+    }
+
+    public func loadPaths(qualityOfService: QualityOfService = .background) async throws -> [String: [String]] {
+        let cmd = Self.pathsCommand(self.command)
+        let cwd = self.workingDirectory
+        let timeout = self.timeout
+        let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
+            try Self.run(command: cmd, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
+        }.value
+        if timedOut { throw DataSourceError.commandTimedOut(command: cmd, seconds: Int(timeout)) }
+        guard status == 0 else {
+            throw DataSourceError.commandFailed(command: cmd, status: status,
+                                                stderr: String(decoding: err, as: UTF8.self))
+        }
+        if out.isEmpty { return [:] }
+        return try JSONDecoder().decode([String: [String]].self, from: out)
+    }
+
     public static func mobileExportCommand(_ command: String, hideProjectNames: Bool) -> String {
         let base = command.trimmingCharacters(in: .whitespacesAndNewlines)
         let flags = hideProjectNames
@@ -41,12 +66,12 @@ public struct CLIDataSource: UsageDataSource {
         return base + flags
     }
 
-    public func loadMobileSnapshot(hideProjectNames: Bool) async throws -> Data {
+    public func loadMobileSnapshot(hideProjectNames: Bool, qualityOfService: QualityOfService = .background) async throws -> Data {
         let command = Self.mobileExportCommand(self.command, hideProjectNames: hideProjectNames)
         let cwd = self.workingDirectory
         let timeout = self.timeout
         let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try Self.run(command: command, cwd: cwd, timeout: timeout)
+            try Self.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
         }.value
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {
@@ -57,8 +82,9 @@ public struct CLIDataSource: UsageDataSource {
         return out
     }
 
-    static func run(command: String, cwd: URL?, timeout: TimeInterval) throws -> (Int32, Data, Data, Bool) {
+    static func run(command: String, cwd: URL?, timeout: TimeInterval, qualityOfService: QualityOfService = .background) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
+        p.qualityOfService = qualityOfService
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-l", "-c", command]
         // 内置 Python 包属于签名资源，运行时不能写入 __pycache__。

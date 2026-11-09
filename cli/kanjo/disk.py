@@ -105,6 +105,65 @@ def default_roots() -> dict:
     }
 
 
+HEAVY_DIRS = {"node_modules", ".build", "DerivedData", ".venv", "target", "Pods"}
+
+
+def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float], Optional[float], int]:
+    """Measure a heavy build/dependency directory with du -sk and fast file count.
+    Returns (bytes, files, oldest, newest, errors).
+    """
+    errors = 0
+    total_bytes = None
+    try:
+        proc = subprocess.run(["du", "-sk", dir_path], capture_output=True, text=True, timeout=30)
+        if proc.returncode == 0:
+            first_col = proc.stdout.split()[0]
+            total_bytes = int(first_col) * 1024
+    except Exception:
+        pass
+
+    file_count = 0
+    oldest = dir_st.st_mtime
+    newest = dir_st.st_mtime
+
+    if total_bytes is not None:
+        try:
+            for _, _, filenames in os.walk(dir_path):
+                file_count += len(filenames)
+        except OSError:
+            errors += 1
+        return (total_bytes, file_count, oldest, newest, errors)
+
+    total_bytes = int(dir_st.st_blocks) * 512
+    stack = [dir_path]
+    while stack:
+        cur = stack.pop()
+        try:
+            it = os.scandir(cur)
+        except OSError:
+            errors += 1
+            continue
+        with it:
+            for ent in it:
+                try:
+                    st = ent.stat(follow_symlinks=False)
+                except OSError:
+                    errors += 1
+                    continue
+                if stat.S_ISDIR(st.st_mode):
+                    total_bytes += int(st.st_blocks) * 512
+                    stack.append(ent.path)
+                else:
+                    total_bytes += int(st.st_blocks) * 512
+                    file_count += 1
+                ts = st.st_mtime
+                if oldest is None or ts < oldest:
+                    oldest = ts
+                if newest is None or ts > newest:
+                    newest = ts
+    return (total_bytes, file_count, oldest, newest, errors)
+
+
 def measure(path: str, now: float, exclude: Optional[List[str]] = None,
             _root_stat=None, _submit=None) -> dict:
     """Allocated bytes (``st_blocks * 512``) and file count under ``path``.
@@ -165,6 +224,15 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
                 if stat.S_ISDIR(st.st_mode):
                     if _submit is not None:
                         _submit(ent.path, st)
+                    elif ent.name in HEAVY_DIRS:
+                        h_bytes, h_files, h_oldest, h_newest, h_errors = _measure_heavy_dir(ent.path, st)
+                        total += h_bytes
+                        files += h_files
+                        errors += h_errors
+                        if h_oldest is not None and (oldest is None or h_oldest < oldest):
+                            oldest = h_oldest
+                        if h_newest is not None and (newest is None or h_newest > newest):
+                            newest = h_newest
                     else:
                         note(st, False)
                         stack.append(ent.path)
@@ -180,13 +248,22 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
     started = time.monotonic()
     now = time.time() if now is None else now
     roots = default_roots() if roots is None else roots
+    valid_entries = {}
     if not rescan:
-        cached = disk_cache.load(roots, now, max_age)
+        cached, valid_entries, wt_cache = disk_cache.load_cached_report(roots, now, max_age)
         if cached is not None:
             return cached
+        if wt_cache:
+            for k, v in wt_cache.items():
+                parts = k.split("\0")
+                if len(parts) == 3:
+                    try:
+                        _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = v
+                    except ValueError:
+                        pass
     ledger = ledger or Ledger()
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as executor:
-        grouped = _collect(roots, now, _imported_index(ledger), executor)
+        grouped = _collect(roots, now, _imported_index(ledger), executor, valid_entries=valid_entries)
     agents = []
     total = 0
     reclaim = 0
@@ -219,7 +296,8 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
         "cached": False,
         "scanned_at": datetime.fromtimestamp(now, timezone.utc).isoformat().replace("+00:00", "Z"),
     }
-    disk_cache.save(doc, roots)
+    wt_dict = {("%s\0%d\0%d" % (k[0], k[1], k[2])): v for k, v in _WORKTREE_DIRTY_CACHE.items()}
+    disk_cache.save(doc, roots, worktrees=wt_dict)
     return doc
 
 
@@ -293,7 +371,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
 
 # ---- scanning targets -----------------------------------------------------------------
 def _collect(roots: dict, now: float, imported: Dict[str, set],
-             executor: ThreadPoolExecutor) -> Dict[str, List[dict]]:
+             executor: ThreadPoolExecutor,
+             valid_entries: Optional[Dict[str, dict]] = None) -> Dict[str, List[dict]]:
     grouped: Dict[str, List[dict]] = {}
     used = set()
     pending = []
@@ -308,6 +387,10 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     def add(agent: str, eid: str, kind: str, path: str, blocked=None, note=None, exclude=None, deletable=None) -> None:
         used.add(eid)
+        cached_e = valid_entries.get(eid) if valid_entries else None
+        if cached_e is not None and cached_e.get("path") == path:
+            pending.append((agent, eid, kind, path, blocked or [], note, None, None, None, None, deletable, cached_e))
+            return
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
         dirty = executor.submit(_worktree_dirty, path) if kind == "worktrees" else None
         parts = []
@@ -320,7 +403,7 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             shallow = measure(path, now, _submit=submit)
         else:
             parts.append(executor.submit(measure, path, now, exclude))
-        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts, deletable))
+        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts, deletable, None))
 
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
@@ -439,7 +522,10 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
                 note="Pi agent sessions.")
 
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
-    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable in pending:
+    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable, cached_e in pending:
+        if cached_e is not None:
+            grouped.setdefault(agent, []).append(dict(cached_e))
+            continue
         measured = _sum_measurements(([shallow] if shallow is not None else [])
                                      + [part.result() for part in parts], now)
         if dirty is not None and dirty.result():
@@ -619,8 +705,45 @@ def _brain_scratches(brain_root: str) -> List[Tuple[str, str]]:
     return found
 
 
+_WORKTREE_DIRTY_CACHE: Dict[Tuple[str, int, int], bool] = {}
+
+
+def _git_head_index_mtimes(path: str) -> Optional[Tuple[int, int]]:
+    git_path = os.path.join(path, ".git")
+    gitdir = None
+    if os.path.isfile(git_path):
+        try:
+            with open(git_path, "r", encoding="utf-8") as f:
+                line = f.read().strip()
+            if line.startswith("gitdir:"):
+                raw = line.split(":", 1)[1].strip()
+                gitdir = raw if os.path.isabs(raw) else os.path.normpath(os.path.join(path, raw))
+        except OSError:
+            return None
+    elif os.path.isdir(git_path):
+        gitdir = git_path
+    if not gitdir or not os.path.isdir(gitdir):
+        return None
+    try:
+        head_st = os.stat(os.path.join(gitdir, "HEAD"))
+        head_mtime = head_st.st_mtime_ns
+    except OSError:
+        head_mtime = 0
+    try:
+        index_st = os.stat(os.path.join(gitdir, "index"))
+        index_mtime = index_st.st_mtime_ns
+    except OSError:
+        index_mtime = 0
+    return (head_mtime, index_mtime)
+
+
 def _worktree_dirty(path: str) -> bool:
     """True when ``git status --porcelain`` is non-empty, or git cannot say."""
+    mtimes = _git_head_index_mtimes(path)
+    if mtimes is not None:
+        key = (path, mtimes[0], mtimes[1])
+        if key in _WORKTREE_DIRTY_CACHE:
+            return _WORKTREE_DIRTY_CACHE[key]
     try:
         proc = subprocess.run(
             ["git", "-c", "core.hooksPath=/dev/null", "-C", path, "status", "--porcelain"],
@@ -630,7 +753,10 @@ def _worktree_dirty(path: str) -> bool:
         return True
     if proc.returncode != 0:
         return True
-    return bool(proc.stdout.strip())
+    is_dirty = bool(proc.stdout.strip())
+    if mtimes is not None:
+        _WORKTREE_DIRTY_CACHE[(path, mtimes[0], mtimes[1])] = is_dirty
+    return is_dirty
 
 
 def _main_repo(path: str) -> Optional[str]:

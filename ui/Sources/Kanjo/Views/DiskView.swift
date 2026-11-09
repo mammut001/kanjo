@@ -59,7 +59,9 @@ struct DiskView: View {
             }
         }
         .onAppear {
-            if !disk.hasReport && disk.error == nil && !disk.isLoading { disk.refresh() }
+            if !disk.isLoading && ((!disk.hasReport && disk.error == nil) || disk.isStale) {
+                disk.refresh()
+            }
             applyExpanded()
         }
         .onChange(of: disk.report?.generatedAt) { _ in

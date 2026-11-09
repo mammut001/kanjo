@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
+import tempfile
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -13,7 +16,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 from . import attribution as attr
 from . import quota
 from .config import Config
-from .cache import _dump_session, _load_session
+from .cache import _cache_dir, _dump_session, _load_session
 from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
@@ -634,3 +637,111 @@ def check_invariants(doc: dict, tolerance: float = 0.01) -> List[str]:
     if costs != sorted(costs, reverse=True):
         problems.append("projects are not sorted by cost descending")
     return problems
+
+
+def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
+                       config: Optional[Config] = None) -> str:
+    """Stat fingerprint of all source log files/dbs + config files."""
+    items = []
+    for agent, module in SOURCES.items():
+        if dirs is not None:
+            roots = dirs.get(agent, [])
+        else:
+            roots = module.roots()
+        for path, parent in module.discover(roots):
+            try:
+                st = os.stat(path)
+                items.append((path, st.st_size, st.st_mtime_ns))
+            except OSError:
+                items.append((path, None, None))
+            extra = path + "-wal"
+            try:
+                st_extra = os.stat(extra)
+                items.append((extra, st_extra.st_size, st_extra.st_mtime_ns))
+            except OSError:
+                pass
+
+    cfg = config or Config()
+    config_paths = []
+    if cfg.source:
+        config_paths.append(cfg.source)
+    config_paths.append(os.path.expanduser("~/.config/kanjo/attribution.toml"))
+    config_paths.append(os.path.expanduser("~/.config/kanjo/attribution.json"))
+    config_paths.append(os.path.expanduser("~/.config/kanjo/overrides.json"))
+    if cfg.source:
+        config_paths.append(os.path.join(os.path.dirname(cfg.source), "overrides.json"))
+
+    claude_cfg = os.environ.get("KANJO_CLAUDE_CONFIG") or os.path.expanduser("~/.claude.json")
+    config_paths.append(claude_cfg)
+
+    t_dir = os.environ.get("KANJO_TOKEI_DIR") or os.path.expanduser("~/.tokei")
+    config_paths.append(os.path.join(t_dir, "codex_quota_cache.json"))
+    config_paths.append(os.path.join(t_dir, "grok_quota_cache.json"))
+
+    pricing_ov = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pricing_overrides.json")
+    config_paths.append(pricing_ov)
+
+    for cp in sorted(set(config_paths)):
+        try:
+            st = os.stat(cp)
+            items.append((cp, st.st_size, st.st_mtime_ns))
+        except OSError:
+            items.append((cp, None, None))
+
+    items.append(("__cfg_threshold__", str(cfg.dominant_threshold), 0))
+    items.append(("__cfg_aliases__", str(sorted(cfg.aliases.items())), 0))
+    items.sort(key=lambda x: str(x[0]))
+    h = hashlib.sha256()
+    for row in items:
+        h.update(("%s:%s:%s;" % (row[0], row[1], row[2])).encode("utf-8"))
+    return h.hexdigest()
+
+
+def load_fast_export(fingerprint: str, directory: Optional[str] = None,
+                     now: Optional[float] = None) -> Optional[dict]:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "export-last.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("fingerprint") != fingerprint:
+            return None
+        scanned_at = payload.get("scanned_at")
+        if not isinstance(scanned_at, (int, float)):
+            return None
+        current = time.time() if now is None else now
+        if current - scanned_at < 0 or current - scanned_at >= 1800.0:  # 30 minutes
+            return None
+        doc = payload.get("doc")
+        if isinstance(doc, dict):
+            return doc
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def save_fast_export(fingerprint: str, doc: dict, directory: Optional[str] = None,
+                     now: Optional[float] = None) -> None:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "export-last.json")
+    current = time.time() if now is None else now
+    tmp = None
+    try:
+        os.makedirs(cdir, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".export-last-", dir=cdir)
+        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        del data
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass

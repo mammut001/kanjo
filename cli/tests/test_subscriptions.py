@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -520,7 +521,7 @@ class SubscriptionTest(unittest.TestCase):
 
     def test_doctor_lists_subscriptions(self):
         self.write_claude(created="2026-09-25T18:33:26.854830Z", extra=False)
-        self.write_codex(plan="plus")
+        self.write_codex(plan="plus", fetched=time.time())
         path = os.path.join(self.dir, "attribution.toml")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write('[subscriptions.antigravity]\nplan = "google_ai_pro"\n')

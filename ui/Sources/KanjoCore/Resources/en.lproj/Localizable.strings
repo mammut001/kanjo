@@ -87,7 +87,8 @@
 "settings.json_file" = "JSON file";
 "settings.file_note" = "Leave empty to use the bundled sample: fixtures/sample.json.";
 "settings.section.refresh" = "Refresh";
-"settings.auto_refresh" = "Auto refresh";
+"settings.auto_refresh" = "Fallback refresh interval";
+"settings.refresh_note" = "Kanjo refreshes automatically when agent logs change. This interval is used as a safety fallback.";
 "settings.refresh_off" = "Off";
 "settings.refresh_minutes" = "Every %d min";
 "settings.menu_bar_shows" = "Menu bar shows";

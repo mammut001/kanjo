@@ -85,7 +85,12 @@ final class SnapshotRecordTests: XCTestCase {
     func testDeviceIDIsStableAndPersisted() {
         let suite = "kanjo-snapshot-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+            let path = ("~/Library/Preferences/\(suite).plist" as NSString).expandingTildeInPath
+            try? FileManager.default.removeItem(atPath: path)
+        }
 
         let first = SnapshotDevice.deviceID(defaults: defaults)
         XCTAssertFalse(first.isEmpty)
