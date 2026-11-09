@@ -19,6 +19,7 @@ PROVIDER_LABELS: Dict[str, str] = {
     "deepseek": "DeepSeek",
     "zhipu": "Zhipu (GLM)",
     "stepfun": "StepFun",
+    "meta": "Meta",
     "other": "Other",
 }
 
@@ -34,17 +35,22 @@ PROVIDER_RULES: List[Tuple[str, re.Pattern]] = [
     ("deepseek", re.compile(r"^deepseek", re.IGNORECASE)),
     ("zhipu", re.compile(r"^(?:glm|chatglm)", re.IGNORECASE)),
     ("stepfun", re.compile(r"^step", re.IGNORECASE)),
+    ("meta", re.compile(r"^(?:muse|llama)", re.IGNORECASE)),
 ]
 
 # Single-vendor agents fallback to their provider when model cannot be identified.
-# Multi-vendor agents (commandcode, opencode, copilot, pi) have no fallback.
+# Multi-vendor agents (commandcode, opencode, copilot, pi, workbuddy, workbuddy_ai, qoderwork, qodercli, qodercli_cn) have no fallback.
 AGENT_FALLBACK: Dict[str, str] = {
     "claude": "anthropic",
     "codex": "openai",
     "antigravity": "google",
     "grok": "xai",
+    "grok_bot": "xai",
     "qwen": "alibaba",
     "minimax": "minimax",
+    "kimicode": "moonshot",
+    "zcode": "zhipu",
+    "musecode": "meta",
 }
 
 

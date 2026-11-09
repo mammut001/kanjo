@@ -1,0 +1,5 @@
+{"payload_type":"runtime.session.metadata","payload":{"record":{"workspace_root":"/Users/alice/Projects/muse-demo"}}}
+{"payload_type":"session.workspace_branch.observed","payload":{"branch":"feature/muse-ui"}}
+{"payload_type":"session.name.changed","payload":{"new_name":"Implement Muse UI"}}
+{"payload_type":"run.model.configured","payload":{"record":{"run_stream":{"id":"run-1"},"model_id":"muse-spark-1.2"}}}
+{"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"model_completed","model":"muse-spark-1.2","usage":{"input_tokens":1000,"cached_tokens":300,"output_tokens":400,"cache_write_tokens":100,"reasoning_tokens":50}}},"recorded_at":"2026-11-08T10:00:00Z","source_run_record_id":"rec-1"}

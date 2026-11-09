@@ -85,6 +85,8 @@ FAMILY_FALLBACK = [
     ("hy3", "tencent/hy3"),
     ("minimax", "minimax/minimax-m3"),
     ("stepfun", "stepfun/step-5-preview"),
+    ("kimi", "moonshotai/kimi-k3"),
+    ("muse", "meta/muse-spark-1.2"),
     ("kat", "kwaipilot/kat-coder-pro-v2.5"),
     ("kwaipilot", "kwaipilot/kat-coder-pro-v2.5"),
     # vendor-only: most expensive tier of the vendor
@@ -108,6 +110,10 @@ AGENT_DEFAULT = {
     "qwen": "qwen/qwen3.7-plus",
     "commandcode": "cohere/command-r-08-2024",
     "pi": "stepfun/step-5-preview",
+    "grok_bot": "x-ai/grok-4.6",
+    "zcode": "z-ai/glm-5.2",
+    "kimicode": "moonshotai/kimi-k3",
+    "musecode": "meta/muse-spark-1.2",
 }
 GLOBAL_DEFAULT = "anthropic/claude-fable-5.1"
 
@@ -253,7 +259,8 @@ class PriceBook:
         for prefix, vendor in (("gemini", "google"), ("grok", "x-ai"), ("qwen", "qwen"),
                                ("deepseek", "deepseek"), ("glm", "z-ai"), ("mimo", "xiaomi"),
                                ("minimax", "minimax"), ("ling", "inclusionai"),
-                               ("step", "stepfun"), ("stepfun", "stepfun")):
+                               ("step", "stepfun"), ("stepfun", "stepfun"),
+                               ("kimi", "moonshotai")):
             if m.startswith(prefix):
                 return vendor + "/" + m
         return m

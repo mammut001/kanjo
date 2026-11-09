@@ -390,7 +390,10 @@ struct SettingsView: View {
             agentList.append(a)
             seen.insert(a)
         }
-        let knownOrder = ["claude", "codex", "antigravity", "grok", "copilot", "minimax", "qwen", "commandcode", "opencode", "pi"]
+        let knownOrder = [
+            "claude", "codex", "antigravity", "grok", "copilot", "minimax", "qwen", "commandcode", "opencode", "pi",
+            "workbuddy", "workbuddy_ai", "grok_bot", "qoderwork", "qodercli", "qodercli_cn", "zcode", "kimicode", "musecode",
+        ]
         for a in knownOrder where !seen.contains(a) {
             agentList.append(a)
             seen.insert(a)

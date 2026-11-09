@@ -75,6 +75,15 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | OpenCode | `~/.local/share/opencode/opencode.db` | files touched, directory / worktree |
 | Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot/session-store.db` | files touched, cwd |
 | Pi | `~/.pi/agent/sessions/**/*.jsonl` | files touched, cwd |
+| WorkBuddy | `~/.workbuddy/projects/**/*.jsonl` | files touched, cwd |
+| WorkBuddy Intl. | `~/.workbuddy-ai/projects/**/*.jsonl` | files touched, cwd |
+| Grok Bot | `~/Library/Application Support/Grok Bot/sand-client-persistence/*.blob` | files touched, cwd |
+| QoderWork | `~/Library/Application Support/QoderWork/data/agents.db` | files touched, cwd |
+| Qoder CLI | `~/.qoder/projects/**` | files touched, cwd |
+| Qoder CN | `~/.qoder-cn/projects/**` | files touched, cwd |
+| ZCode | `~/.zcode/cli/db/db.sqlite` | directory |
+| Kimi Code | `~/.kimi-code/sessions/**/wire.jsonl` | files touched, cwd |
+| Muse Code | `~/.local/share/muse/sessions/**/session.jsonl` | files touched, cwd |
 
 Antigravity sessions are detected automatically from both `~/.gemini/antigravity-cli` and `~/.gemini/antigravity` (Antigravity 2.0 app). MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
@@ -195,6 +204,8 @@ The CLI and the app are developed independently and meet only at the JSON in [CO
 
 [Tokei](https://github.com/cclank/tokei) (時計, clock) watches your quotas and daily usage across 30+ tools. Kanjo (勘定, the bill) asks a different question: the total bill of one repo. They read the same logs and share a price table, nothing else. Use both.
 
+Parsers for workbuddy, workbuddy_ai, grok_bot, qoderwork, qodercli, qodercli_cn, zcode, kimicode, and musecode are adapted from Tokei (MIT, github.com/cclank/tokei).
+
 ## License
 
 MIT.
@@ -241,6 +252,15 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 | OpenCode | `~/.local/share/opencode/opencode.db` | 碰过的文件、目录／worktree |
 | Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot/session-store.db` | 碰过的文件、当前工作目录 |
 | Pi | `~/.pi/agent/sessions/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| WorkBuddy | `~/.workbuddy/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| WorkBuddy Intl. | `~/.workbuddy-ai/projects/**/*.jsonl` | 碰过的文件、当前工作目录 |
+| Grok Bot | `~/Library/Application Support/Grok Bot/sand-client-persistence/*.blob` | 碰过的文件、当前工作目录 |
+| QoderWork | `~/Library/Application Support/QoderWork/data/agents.db` | 碰过的文件、当前工作目录 |
+| Qoder CLI | `~/.qoder/projects/**` | 碰过的文件、当前工作目录 |
+| Qoder CN | `~/.qoder-cn/projects/**` | 碰过的文件、当前工作目录 |
+| ZCode | `~/.zcode/cli/db/db.sqlite` | 目录 |
+| Kimi Code | `~/.kimi-code/sessions/**/wire.jsonl` | 碰过的文件、当前工作目录 |
+| Muse Code | `~/.local/share/muse/sessions/**/session.jsonl` | 碰过的文件、当前工作目录 |
 
 Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`（Antigravity 2.0 app）。MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 
@@ -278,5 +298,7 @@ cd kanjo && ./install.sh
 ### 和 Tokei 的关系
 
 [Tokei](https://github.com/cclank/tokei)（時計）看额度和每日用量，Kanjo（勘定）看一个 repo 的总账。两者读同样的日志、共用一份价格表，仅此而已。
+
+workbuddy、workbuddy_ai、grok_bot、qoderwork、qodercli、qodercli_cn、zcode、kimicode 与 musecode 的日志解析器改写自 Tokei（MIT 协议，github.com/cclank/tokei）。
 
 MIT 协议。

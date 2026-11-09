@@ -144,6 +144,15 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `opencode` | OpenCode |
 | `copilot` | Copilot CLI |
 | `pi` | Pi |
+| `workbuddy` | WorkBuddy |
+| `workbuddy_ai` | WorkBuddy Intl. |
+| `grok_bot` | Grok Bot |
+| `qoderwork` | QoderWork |
+| `qodercli` | Qoder CLI |
+| `qodercli_cn` | Qoder CN |
+| `zcode` | ZCode |
+| `kimicode` | Kimi Code |
+| `musecode` | Muse Code |
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 

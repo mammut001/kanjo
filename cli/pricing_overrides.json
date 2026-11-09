@@ -60,6 +60,13 @@
     "gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
     "gemini-3.1-pro": "google/gemini-3.1-pro-preview",
     "gemini-pro": "google/gemini-3.1-pro-preview",
-    "step-5-preview": "stepfun/step-5-preview"
+    "step-5-preview": "stepfun/step-5-preview",
+    "hy3": "tencent/hy3",
+    "kimi-k2.6": "moonshotai/kimi-k2.6",
+    "kimi-k2.7": "moonshotai/kimi-k2.7-code",
+    "kimi-k2.7-code": "moonshotai/kimi-k2.7-code",
+    "kimi-k3": "moonshotai/kimi-k3",
+    "moonshot/kimi-k3": "moonshotai/kimi-k3",
+    "kimi": "moonshotai/kimi-k3"
   }
 }

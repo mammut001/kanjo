@@ -22,7 +22,11 @@ from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
 from .providers import provider_for, PROVIDER_LABELS
-from .sources import antigravity, claude, codex, commandcode, copilot, grok, minimax, opencode, pi, qwen
+from .sources import (
+    antigravity, claude, codex, commandcode, copilot, grok, grok_bot,
+    kimicode, minimax, musecode, opencode, pi, qodercli, qodercli_cn,
+    qoderwork, qwen, workbuddy, workbuddy_ai, zcode,
+)
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
 
@@ -39,6 +43,15 @@ SOURCES = {
     "opencode": opencode,
     "copilot": copilot,
     "pi": pi,
+    "workbuddy": workbuddy,
+    "workbuddy_ai": workbuddy_ai,
+    "grok_bot": grok_bot,
+    "qoderwork": qoderwork,
+    "qodercli": qodercli,
+    "qodercli_cn": qodercli_cn,
+    "zcode": zcode,
+    "kimicode": kimicode,
+    "musecode": musecode,
 }
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "thinking")
 
