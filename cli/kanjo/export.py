@@ -10,13 +10,13 @@ import tempfile
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from . import attribution as attr
 from . import quota
 from .config import Config
-from .cache import _cache_dir, _dump_session, _load_session
+from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
 from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
@@ -263,6 +263,8 @@ class Unit:
 
     @property
     def messages(self) -> List[Message]:
+        if not self.subs:
+            return self.top.messages
         msgs = list(self.top.messages)
         for s in self.subs:
             msgs.extend(s.messages)
@@ -271,11 +273,13 @@ class Unit:
     # CONTRACT.md: started / ended are the first / last billed message
     @property
     def started(self):
-        return min(m.ts for m in self.messages)
+        msgs = self.messages
+        return min(m.ts for m in msgs) if msgs else 0.0
 
     @property
     def ended(self):
-        return max(m.ts for m in self.messages)
+        msgs = self.messages
+        return max(m.ts for m in msgs) if msgs else 0.0
 
 
 def build_units(sessions: List[Session]) -> List[Unit]:
@@ -388,17 +392,28 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
 
     if repo_cache is None and cache is not None:
         repo_cache = getattr(cache, "repo_cache", None)
+    worktree_cache = getattr(cache, "worktree_cache", None) if cache is not None else None
+    attr_cache = getattr(cache, "attr_cache", None) if cache is not None else None
 
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root, repo_cache=repo_cache)
+    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root,
+                        repo_cache=repo_cache, worktree_cache=worktree_cache)
     scratch = ScratchpadDecoder(fs_root=fs_root)
     for s in sessions:
         for path, remote in s.remote_hints.items():
             resolver.add_remote_hint(path, remote)
     prewarm_paths = set()
+    norm_memo = {}
+    search_file_like = _FILE_LIKE.search
+    dirname = os.path.dirname
     for s in sessions:
         prewarm_paths.update(s.cwd_counts)
         for call in s.tool_paths:
-            prewarm_paths.update(call)
+            for p in call:
+                r = norm_memo.get(p)
+                if r is None:
+                    r = dirname(p) if search_file_like(p) else p
+                    norm_memo[p] = r
+                prewarm_paths.add(r)
     resolver.prewarm(prewarm_paths)
     resolver.infer_deleted_worktrees(sessions)
 
@@ -406,116 +421,463 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     buckets = {attr.UNATTRIBUTED: ProjectAgg(), attr.EXCLUDED: ProjectAgg()}
     totals = Agg()
     unique_sessions = 0
-    day_cache: Dict[int, str] = {}
+    curr_day = ""
+    curr_day_start = -1.0
+    curr_day_end = -1.0
 
     def get_day(ts: float) -> str:
-        bucket = int(ts // 60)
-        day = day_cache.get(bucket)
-        if day is None:
-            day = local_day(ts)
-            day_cache[bucket] = day
-        return day
+        nonlocal curr_day, curr_day_start, curr_day_end
+        if curr_day_start <= ts < curr_day_end:
+            return curr_day
+        dt = datetime.fromtimestamp(ts)
+        curr_day = dt.date().isoformat()
+        start_dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        curr_day_start = start_dt.timestamp()
+        curr_day_end = (start_dt + timedelta(days=1)).timestamp()
+        return curr_day
+
+    worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
+    config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
+
+    def _unit_sig(unit) -> str:
+        s_list = [unit.top] + unit.subs
+        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
 
     for unit in units:
-        decision = attr.decide(unit.top, resolver, scratch, config)
+        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
+        if dec_data is not None:
+            decision = attr.Decision(kind=dec_data["kind"],
+                                     shares=[tuple(x) for x in dec_data["shares"]],
+                                     scores=dec_data.get("scores", {}))
+            cached_paths = dec_data.get("paths")
+            if cached_paths:
+                for pid, paths in cached_paths.items():
+                    proj = resolver.project(pid)
+                    if proj is not None:
+                        for p in paths:
+                            proj.add_path(p)
+        else:
+            resolver._hint_paths_added = []
+            decision = attr.decide(unit.top, resolver, scratch, config)
+            added_paths = {}
+            if resolver._hint_paths_added:
+                for pid, p in resolver._hint_paths_added:
+                    added_paths.setdefault(pid, []).append(p)
+            resolver._hint_paths_added = None
+            if attr_cache is not None:
+                dec_data = {
+                    "kind": decision.kind,
+                    "shares": decision.shares,
+                    "scores": decision.scores,
+                    "paths": added_paths,
+                }
+                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
         unique_sessions += 1
+        agent = unit.top.agent
         msgs = unit.messages
-        priced = []
         unit_cost = 0.0
         unit_tokens = {k: 0 for k in TOKEN_FIELDS}
         model_cost: Dict[str, float] = defaultdict(float)
-        for m in msgs:
-            agent = unit.top.agent
-            cost, estimated = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
-                                          m.cache_write, m.cache_write_1h)
-            day = get_day(m.ts)
-            priced.append((m, cost, estimated, day))
-            unit_cost += cost
-            unit_tokens["input"] += m.input
-            unit_tokens["output"] += m.output
-            unit_tokens["cache_read"] += m.cache_read
-            unit_tokens["cache_write"] += m.cache_write
-            unit_tokens["thinking"] += m.thinking
-            if m.model != "<synthetic>":
-                model_cost[m.model] += cost
-            totals.add_day(day)
-        totals.cost += unit_cost
-        for k in TOKEN_FIELDS:
-            totals.tokens[k] += unit_tokens[k]
+        if msgs:
+            if not unit.subs:
+                unit_started = msgs[0].ts
+                unit_ended = msgs[-1].ts
+            else:
+                unit_started = min(m.ts for m in msgs)
+                unit_ended = max(m.ts for m in msgs)
+        else:
+            unit_started = None
+            unit_ended = None
 
-        shares = [share for _, share in decision.shares]
-        split_tokens = {k: _apportion(unit_tokens[k], shares) for k in TOKEN_FIELDS}
-        models = [name for name, _ in sorted(model_cost.items(), key=lambda kv: -kv[1])]
-        subagent_count = sum(1 for s in unit.subs if s.messages)
-
-        for idx, (target, share) in enumerate(decision.shares):
+        if len(decision.shares) == 1:
+            target, share = decision.shares[0]
             if target in buckets:
                 agg = buckets[target]
                 kind = "none" if target == attr.UNATTRIBUTED else "excluded"
+                is_bucket = True
             else:
                 agg = projects[target]
                 kind = decision.kind
-            s_tokens = {k: split_tokens[k][idx] for k in TOKEN_FIELDS}
-            s_cost = unit_cost * share
-            agg.cost += s_cost
-            agg.sessions += 1
-            for k in TOKEN_FIELDS:
-                agg.tokens[k] += s_tokens[k]
-            agent = unit.top.agent
-            if target not in buckets:
-                a = agg.by_agent[agent]
-                a.cost += s_cost
-                a.sessions += 1
+                is_bucket = False
+
+            u_sig = _unit_sig(unit)
+            u_data = dec_data.get("unit_agg") if dec_data is not None else None
+            if u_data is not None and dec_data.get("unit_sig") == u_sig:
+                u_cost = u_data["cost"]
+                u_tok = u_data["tokens"]
+                totals.cost += u_cost
                 for k in TOKEN_FIELDS:
-                    a.tokens[k] += s_tokens[k]
+                    totals.tokens[k] += u_tok[k]
+                for day in u_data["days"]:
+                    totals.add_day(day)
+
+                agg.cost += u_cost
+                agg.sessions += 1
+                for k in TOKEN_FIELDS:
+                    agg.tokens[k] += u_tok[k]
+                for day in u_data["days"]:
+                    agg.add_day(day)
+
+                if not is_bucket:
+                    a = agg.by_agent[agent]
+                    a.cost += u_cost
+                    a.sessions += 1
+                    for k in TOKEN_FIELDS:
+                        a.tokens[k] += u_tok[k]
+
+                    if u_data.get("any_branch"):
+                        agg.any_branch = True
+
+                    for bname, b_cost in u_data.get("branches", ()):
+                        curr_ba = agg.by_branch[bname]
+                        curr_ba.cost += b_cost
+                        curr_ba.sessions += 1
+
+                    for item in u_data.get("models", ()):
+                        model = item[0]
+                        m_cost = item[1]
+                        m_tok = item[2]
+                        m_est = item[3]
+                        m_costs = item[4] if len(item) > 4 else None
+                        mk = (model, agent)
+                        curr_ma = agg.by_model[mk]
+                        if m_costs:
+                            for c in m_costs:
+                                curr_ma.cost += c
+                        else:
+                            curr_ma.cost += m_cost
+                        curr_ma_tok = curr_ma.tokens
+                        for k in TOKEN_FIELDS:
+                            curr_ma_tok[k] += m_tok[k]
+                        if m_est:
+                            agg.model_estimated[mk] = True
+
+                    for day, d_cost, d_tok in u_data.get("by_day", ()):
+                        curr_da = agg.by_day[day]
+                        curr_da.cost += d_cost
+                        curr_da_tok = curr_da.tokens
+                        for k in TOKEN_FIELDS:
+                            curr_da_tok[k] += d_tok[k]
+                        agg.by_day_agent[day][agent] += d_cost
+                        agg.by_day_agent_tokens[day][agent] += (d_tok["input"] + d_tok["output"] + d_tok["cache_read"] + d_tok["cache_write"])
+
+                detail = dict(u_data["detail"])
+                detail["attribution"] = kind
+                agg.details.append(detail)
+                continue
+
             branches_seen = set()
-            for m, cost, estimated, day in priced:
-                agg.add_day(day)
-                if target in buckets:
-                    continue
-                if m.model != "<synthetic>":
-                    mk = (m.model, agent)
-                    ma = agg.by_model[mk]
-                    ma.cost += cost * share
-                    ma.tokens["input"] += m.input * share
-                    ma.tokens["output"] += m.output * share
-                    ma.tokens["cache_read"] += m.cache_read * share
-                    ma.tokens["cache_write"] += m.cache_write * share
-                    ma.tokens["thinking"] += m.thinking * share
-                    agg.model_estimated[mk] = agg.model_estimated.get(mk, False) or estimated
-                da = agg.by_day[day]
-                da.cost += cost * share
-                agg.by_day_agent[day][agent] += cost * share
-                agg.by_day_agent_tokens[day][agent] += (m.input + m.output + m.cache_read + m.cache_write) * share
-                da.tokens["input"] += m.input * share
-                da.tokens["output"] += m.output * share
-                da.tokens["cache_read"] += m.cache_read * share
-                da.tokens["cache_write"] += m.cache_write * share
-                da.tokens["thinking"] += m.thinking * share
-                if m.branch:
-                    agg.any_branch = True
-                branch = m.branch or "(unknown)"
-                ba = agg.by_branch[branch]
-                ba.cost += cost * share
-                if branch not in branches_seen:
-                    branches_seen.add(branch)
-                    ba.sessions += 1
-            agg.details.append({
+            cached_models = defaultdict(lambda: [0.0, {k: 0 for k in TOKEN_FIELDS}, False, []])
+            cached_days = defaultdict(lambda: [0.0, {k: 0 for k in TOKEN_FIELDS}])
+            cached_branches = defaultdict(float)
+            any_branch = False
+            u_inp = u_outp = u_cr = u_cw = u_th = 0
+            da_inp = da_outp = da_cr = da_cw = da_th = 0
+            ma_inp = ma_outp = ma_cr = ma_cw = ma_th = 0
+            p_in = p_out = p_cr = p_cw = p_w1 = tier = est = None
+
+            prev_day = object()
+            curr_da = None
+            curr_da_tokens = None
+            curr_agent_cost = None
+            curr_agent_tokens = None
+
+            prev_model = object()
+            curr_ma = None
+            curr_ma_tokens = None
+
+            prev_branch = object()
+            curr_ba = None
+
+            for m in msgs:
+                ts = m.ts
+                model = m.model
+                if model != prev_model:
+                    if curr_ma_tokens is not None and not is_bucket:
+                        curr_ma_tokens["input"] += ma_inp
+                        curr_ma_tokens["output"] += ma_outp
+                        curr_ma_tokens["cache_read"] += ma_cr
+                        curr_ma_tokens["cache_write"] += ma_cw
+                        curr_ma_tokens["thinking"] += ma_th
+                        ma_inp = ma_outp = ma_cr = ma_cw = ma_th = 0
+                    prev_model = model
+                    p_in, p_out, p_cr, p_cw, p_w1, tier, est = prices.get_params(model, agent)
+                    if not is_bucket and model != "<synthetic>":
+                        mk = (model, agent)
+                        curr_ma = agg.by_model[mk]
+                        curr_ma_tokens = curr_ma.tokens
+                        if est:
+                            agg.model_estimated[mk] = True
+
+                inp = m.input
+                outp = m.output
+                cr = m.cache_read
+                cw = m.cache_write
+                th = m.thinking
+                cw1 = m.cache_write_1h
+
+                if p_in is None:
+                    cost = 0.0
+                elif cw1:
+                    w1 = min(max(cw1, 0), cw)
+                    cost = (inp * p_in + outp * p_out + cr * p_cr + (cw - w1) * p_cw + w1 * p_w1) / 1e6
+                    if tier and inp + cr + cw > tier[0]:
+                        cost *= tier[1]
+                else:
+                    cost = (inp * p_in + outp * p_out + cr * p_cr + cw * p_cw) / 1e6
+                    if tier and inp + cr + cw > tier[0]:
+                        cost *= tier[1]
+
+                day = get_day(ts)
+                if day != prev_day:
+                    if curr_da_tokens is not None and not is_bucket:
+                        curr_da_tokens["input"] += da_inp
+                        curr_da_tokens["output"] += da_outp
+                        curr_da_tokens["cache_read"] += da_cr
+                        curr_da_tokens["cache_write"] += da_cw
+                        curr_da_tokens["thinking"] += da_th
+                        curr_agent_tokens[agent] += (da_inp + da_outp + da_cr + da_cw)
+                        da_inp = da_outp = da_cr = da_cw = da_th = 0
+                    prev_day = day
+                    totals.add_day(day)
+                    agg.add_day(day)
+                    if not is_bucket:
+                        curr_da = agg.by_day[day]
+                        curr_da_tokens = curr_da.tokens
+                        curr_agent_cost = agg.by_day_agent[day]
+                        curr_agent_tokens = agg.by_day_agent_tokens[day]
+
+                unit_cost += cost
+                u_inp += inp
+                u_outp += outp
+                u_cr += cr
+                u_cw += cw
+                u_th += th
+
+                cd = cached_days[day]
+                cd[0] += cost
+                cd[1]["input"] += inp
+                cd[1]["output"] += outp
+                cd[1]["cache_read"] += cr
+                cd[1]["cache_write"] += cw
+                cd[1]["thinking"] += th
+
+                if model != "<synthetic>":
+                    model_cost[model] += cost
+                    cm = cached_models[model]
+                    cm[0] += cost
+                    cm[1]["input"] += inp
+                    cm[1]["output"] += outp
+                    cm[1]["cache_read"] += cr
+                    cm[1]["cache_write"] += cw
+                    cm[1]["thinking"] += th
+                    cm[3].append(cost)
+                    if est:
+                        cm[2] = True
+                    if not is_bucket:
+                        curr_ma.cost += cost
+                        ma_inp += inp
+                        ma_outp += outp
+                        ma_cr += cr
+                        ma_cw += cw
+                        ma_th += th
+
+                branch = m.branch
+                if branch:
+                    any_branch = True
+                bname = branch or "(unknown)"
+                cached_branches[bname] += cost
+
+                if not is_bucket:
+                    curr_da.cost += cost
+                    curr_agent_cost[agent] += cost
+                    da_inp += inp
+                    da_outp += outp
+                    da_cr += cr
+                    da_cw += cw
+                    da_th += th
+
+                    if branch:
+                        agg.any_branch = True
+                    if branch != prev_branch:
+                        prev_branch = branch
+                        curr_ba = agg.by_branch[bname]
+                        if bname not in branches_seen:
+                            branches_seen.add(bname)
+                            curr_ba.sessions += 1
+                    curr_ba.cost += cost
+
+            if not is_bucket:
+                if curr_da_tokens is not None:
+                    curr_da_tokens["input"] += da_inp
+                    curr_da_tokens["output"] += da_outp
+                    curr_da_tokens["cache_read"] += da_cr
+                    curr_da_tokens["cache_write"] += da_cw
+                    curr_da_tokens["thinking"] += da_th
+                    curr_agent_tokens[agent] += (da_inp + da_outp + da_cr + da_cw)
+                if curr_ma_tokens is not None:
+                    curr_ma_tokens["input"] += ma_inp
+                    curr_ma_tokens["output"] += ma_outp
+                    curr_ma_tokens["cache_read"] += ma_cr
+                    curr_ma_tokens["cache_write"] += ma_cw
+                    curr_ma_tokens["thinking"] += ma_th
+
+            unit_tokens["input"] = u_inp
+            unit_tokens["output"] = u_outp
+            unit_tokens["cache_read"] = u_cr
+            unit_tokens["cache_write"] = u_cw
+            unit_tokens["thinking"] = u_th
+
+            totals.cost += unit_cost
+            totals.tokens["input"] += u_inp
+            totals.tokens["output"] += u_outp
+            totals.tokens["cache_read"] += u_cr
+            totals.tokens["cache_write"] += u_cw
+            totals.tokens["thinking"] += u_th
+
+            agg.cost += unit_cost
+            agg.sessions += 1
+            agg.tokens["input"] += u_inp
+            agg.tokens["output"] += u_outp
+            agg.tokens["cache_read"] += u_cr
+            agg.tokens["cache_write"] += u_cw
+            agg.tokens["thinking"] += u_th
+            if not is_bucket:
+                a = agg.by_agent[agent]
+                a.cost += unit_cost
+                a.sessions += 1
+                a.tokens["input"] += u_inp
+                a.tokens["output"] += u_outp
+                a.tokens["cache_read"] += u_cr
+                a.tokens["cache_write"] += u_cw
+                a.tokens["thinking"] += u_th
+
+            models = [name for name, _ in sorted(model_cost.items(), key=lambda kv: -kv[1])]
+            subagent_count = sum(1 for s in unit.subs if s.messages)
+            detail = {
                 "id": unit.top.id,
                 "agent": agent,
                 "label": AGENT_LABELS.get(agent, agent),
-                "started": iso_utc(unit.started),
-                "ended": iso_utc(unit.ended),
+                "started": iso_utc(unit_started if unit_started is not None else unit.started),
+                "ended": iso_utc(unit_ended if unit_ended is not None else unit.ended),
                 "cwd": unit.top.cwd,
                 "branch": unit.top.branch,
                 "models": models,
-                "cost": round(s_cost, 4),
-                "tokens": _tokens(s_tokens),
-                "share": 1.0 if target in buckets else round(share, 6),
+                "cost": round(unit_cost, 4),
+                "tokens": _tokens(unit_tokens),
+                "share": 1.0,
                 "attribution": kind,
                 "subagents": subagent_count,
                 "title": unit.top.title,
-            })
+            }
+            agg.details.append(detail)
+            if attr_cache is not None and dec_data is not None:
+                new_u_data = {
+                    "cost": unit_cost,
+                    "tokens": dict(unit_tokens),
+                    "days": list(cached_days.keys()),
+                    "by_day": [(day, cached_days[day][0], cached_days[day][1]) for day in cached_days],
+                    "models": [(m, cached_models[m][0], cached_models[m][1], cached_models[m][2], cached_models[m][3]) for m in cached_models],
+                    "branches": list(cached_branches.items()),
+                    "any_branch": any_branch,
+                    "detail": detail,
+                }
+                dec_data["unit_sig"] = u_sig
+                dec_data["unit_agg"] = new_u_data
+                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+        else:
+            priced = []
+            for m in msgs:
+                ts = m.ts
+                cost, estimated = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
+                                              m.cache_write, m.cache_write_1h)
+                day = get_day(ts)
+                priced.append((m, cost, estimated, day))
+                unit_cost += cost
+                unit_tokens["input"] += m.input
+                unit_tokens["output"] += m.output
+                unit_tokens["cache_read"] += m.cache_read
+                unit_tokens["cache_write"] += m.cache_write
+                unit_tokens["thinking"] += m.thinking
+                if m.model != "<synthetic>":
+                    model_cost[m.model] += cost
+                totals.add_day(day)
+            totals.cost += unit_cost
+            for k in TOKEN_FIELDS:
+                totals.tokens[k] += unit_tokens[k]
+
+            shares = [share for _, share in decision.shares]
+            split_tokens = {k: _apportion(unit_tokens[k], shares) for k in TOKEN_FIELDS}
+            models = [name for name, _ in sorted(model_cost.items(), key=lambda kv: -kv[1])]
+            subagent_count = sum(1 for s in unit.subs if s.messages)
+
+            for idx, (target, share) in enumerate(decision.shares):
+                if target in buckets:
+                    agg = buckets[target]
+                    kind = "none" if target == attr.UNATTRIBUTED else "excluded"
+                else:
+                    agg = projects[target]
+                    kind = decision.kind
+                s_tokens = {k: split_tokens[k][idx] for k in TOKEN_FIELDS}
+                s_cost = unit_cost * share
+                agg.cost += s_cost
+                agg.sessions += 1
+                for k in TOKEN_FIELDS:
+                    agg.tokens[k] += s_tokens[k]
+                if target not in buckets:
+                    a = agg.by_agent[agent]
+                    a.cost += s_cost
+                    a.sessions += 1
+                    for k in TOKEN_FIELDS:
+                        a.tokens[k] += s_tokens[k]
+                branches_seen = set()
+                for m, cost, estimated, day in priced:
+                    agg.add_day(day)
+                    if target in buckets:
+                        continue
+                    if m.model != "<synthetic>":
+                        mk = (m.model, agent)
+                        ma = agg.by_model[mk]
+                        ma.cost += cost * share
+                        ma.tokens["input"] += m.input * share
+                        ma.tokens["output"] += m.output * share
+                        ma.tokens["cache_read"] += m.cache_read * share
+                        ma.tokens["cache_write"] += m.cache_write * share
+                        ma.tokens["thinking"] += m.thinking * share
+                        agg.model_estimated[mk] = agg.model_estimated.get(mk, False) or estimated
+                    da = agg.by_day[day]
+                    da.cost += cost * share
+                    agg.by_day_agent[day][agent] += cost * share
+                    agg.by_day_agent_tokens[day][agent] += (m.input + m.output + m.cache_read + m.cache_write) * share
+                    da.tokens["input"] += m.input * share
+                    da.tokens["output"] += m.output * share
+                    da.tokens["cache_read"] += m.cache_read * share
+                    da.tokens["cache_write"] += m.cache_write * share
+                    da.tokens["thinking"] += m.thinking * share
+                    if m.branch:
+                        agg.any_branch = True
+                    branch = m.branch or "(unknown)"
+                    ba = agg.by_branch[branch]
+                    ba.cost += cost * share
+                    if branch not in branches_seen:
+                        branches_seen.add(branch)
+                        ba.sessions += 1
+                agg.details.append({
+                    "id": unit.top.id,
+                    "agent": agent,
+                    "label": AGENT_LABELS.get(agent, agent),
+                    "started": iso_utc(unit_started if unit_started is not None else unit.started),
+                    "ended": iso_utc(unit_ended if unit_ended is not None else unit.ended),
+                    "cwd": unit.top.cwd,
+                    "branch": unit.top.branch,
+                    "models": models,
+                    "cost": round(s_cost, 4),
+                    "tokens": _tokens(s_tokens),
+                    "share": 1.0 if target in buckets else round(share, 6),
+                    "attribution": kind,
+                    "subagents": subagent_count,
+                    "title": unit.top.title,
+                })
 
     project_list = []
     for pid, agg in projects.items():
@@ -566,7 +928,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
 
     now = now or datetime.now(timezone.utc)
     tz_name = local_timezone_name()
-    return {
+    doc = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "generated_by": "kanjo " + __version__,
@@ -591,6 +953,9 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         },
         "ledger": ledger_doc,
     }
+    if cache is not None:
+        cache.save()
+    return doc
 
 
 MOBILE_TOP_LEVEL_KEYS = ("schema_version", "generated_at", "generated_by", "timezone", "currency",
@@ -701,12 +1066,13 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
                 items.append((path, st.st_size, st.st_mtime_ns))
             except OSError:
                 items.append((path, None, None))
-            extra = path + "-wal"
-            try:
-                st_extra = os.stat(extra)
-                items.append((extra, st_extra.st_size, st_extra.st_mtime_ns))
-            except OSError:
-                pass
+            if path.endswith((".db", ".sqlite", ".sqlite3")):
+                extra = path + "-wal"
+                try:
+                    st_extra = os.stat(extra)
+                    items.append((extra, st_extra.st_size, st_extra.st_mtime_ns))
+                except OSError:
+                    pass
 
     cfg = config or Config()
     config_paths = []
@@ -926,8 +1292,11 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
 
     if repo_cache is None and cache is not None:
         repo_cache = getattr(cache, "repo_cache", None)
+    worktree_cache = getattr(cache, "worktree_cache", None) if cache is not None else None
+    attr_cache = getattr(cache, "attr_cache", None) if cache is not None else None
 
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root, repo_cache=repo_cache)
+    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root,
+                        repo_cache=repo_cache, worktree_cache=worktree_cache)
     scratch = ScratchpadDecoder(fs_root=fs_root)
     for s in sessions:
         for path, remote in s.remote_hints.items():
@@ -944,8 +1313,42 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
     months: Dict[str, PublicPeriodAgg] = {}
     weeks: Dict[str, PublicPeriodAgg] = {}
 
+    worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
+    config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
+
+    def _unit_sig(unit) -> str:
+        s_list = [unit.top] + unit.subs
+        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
+
     for unit in units:
-        decision = attr.decide(unit.top, resolver, scratch, config)
+        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
+        if dec_data is not None:
+            decision = attr.Decision(kind=dec_data["kind"],
+                                     shares=[tuple(x) for x in dec_data["shares"]],
+                                     scores=dec_data.get("scores", {}))
+            cached_paths = dec_data.get("paths")
+            if cached_paths:
+                for pid, paths in cached_paths.items():
+                    proj = resolver.project(pid)
+                    if proj is not None:
+                        for p in paths:
+                            proj.add_path(p)
+        else:
+            resolver._hint_paths_added = []
+            decision = attr.decide(unit.top, resolver, scratch, config)
+            added_paths = {}
+            if resolver._hint_paths_added:
+                for pid, p in resolver._hint_paths_added:
+                    added_paths.setdefault(pid, []).append(p)
+            resolver._hint_paths_added = None
+            if attr_cache is not None:
+                dec_data = {
+                    "kind": decision.kind,
+                    "shares": decision.shares,
+                    "scores": decision.scores,
+                    "paths": added_paths,
+                }
+                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
         if decision.kind == "excluded":
             continue
 
@@ -984,6 +1387,8 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
         week_periods = week_periods[-26:]
 
     now = now or datetime.now(timezone.utc)
+    if cache is not None:
+        cache.save()
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "kanjo-public-summary",

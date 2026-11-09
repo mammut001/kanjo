@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import os
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import unquote
 
 # Directories that never become a project on their own (missing-path fallback).
@@ -136,9 +136,15 @@ class Project:
 
     @property
     def path_missing(self) -> bool:
+        res = getattr(self, "_cached_path_missing", None)
+        if res is not None:
+            return res
         if not self.paths:
-            return self.path_missing_hint
-        return not any(os.path.exists(self.fs_root + p) for p in self.paths)
+            res = self.path_missing_hint
+        else:
+            res = not any(os.path.exists(self.fs_root + p) for p in self.paths)
+        self._cached_path_missing = res
+        return res
 
     @property
     def local_paths(self) -> List[str]:
@@ -146,7 +152,9 @@ class Project:
 
     def add_path(self, path: str) -> None:
         if path:
-            self.paths.add(path)
+            if path not in self.paths:
+                self.paths.add(path)
+                self._cached_path_missing = None
 
 
 @dataclass
@@ -183,11 +191,21 @@ def _load_repo(d: Optional[dict]) -> Optional[RepoInfo]:
     )
 
 
+def _session_worktree_sig(s) -> str:
+    tps = getattr(s, "tool_paths", ())
+    return "%s:%s:%d:%s" % (
+        getattr(s, "cwd", "") or "",
+        len(getattr(s, "messages", ())),
+        len(tps),
+        getattr(s, "ended", 0.0),
+    )
+
+
 class Resolver:
     """Maps arbitrary paths found in logs to projects. All lookups are memoized."""
 
     def __init__(self, aliases: Optional[Dict[str, List[str]]] = None, home: Optional[str] = None,
-                 fs_root: Optional[str] = None, repo_cache=None):
+                 fs_root: Optional[str] = None, repo_cache=None, worktree_cache=None):
         # fs_root: optional directory that stands in for "/" when touching the
         # filesystem (tests); every path in logs and output stays as logged.
         self.fs_root = (fs_root or "").rstrip("/")
@@ -205,6 +223,9 @@ class Resolver:
         self._fast_resolve_cache: Dict[Tuple[str, bool], Optional[Project]] = {}
         self._alias_of: Dict[str, str] = {}       # member id/path -> canonical id
         self.repo_cache = repo_cache
+        self.worktree_cache = worktree_cache
+        self._repo_dict_projects: Dict[Tuple, Optional[Project]] = {}
+        self._hint_paths_added: Optional[List[Tuple[str, str]]] = None
         for canonical, members in (aliases or {}).items():
             for member in members or []:
                 self._alias_of[self._alias_key(member)] = canonical
@@ -328,7 +349,7 @@ class Resolver:
         alt_p = _private_alias(path)
         if alt_p != path:
             self._dir_repo[alt_p] = result
-        if self.repo_cache is not None and leaf_checked:
+        if self.repo_cache is not None:
             if result is None:
                 self.repo_cache.put(path, None)
                 if alt_p != path:
@@ -457,6 +478,7 @@ class Resolver:
             names = os.listdir(self._fs(wt_root))
         except OSError:
             return
+        added = []
         for name in names:
             try:
                 with open(self._fs(os.path.join(wt_root, name, "gitdir")), "r", encoding="utf-8") as handle:
@@ -469,7 +491,15 @@ class Resolver:
                 target = os.path.normpath(target)
                 self._worktrees[target] = pid
                 self._worktrees[_private_alias(target)] = pid
-        self._worktree_prefix_cache.clear()
+                added.append(target)
+                alt = _private_alias(target)
+                if alt != target:
+                    added.append(alt)
+        if added and self._worktree_prefix_cache:
+            for wt in added:
+                to_del = [k for k in self._worktree_prefix_cache if k == wt or k.startswith(wt + "/")]
+                for k in to_del:
+                    del self._worktree_prefix_cache[k]
 
     def add_remote_hint(self, path: str, remote_url: str) -> None:
         """A log recorded that ``path`` was a checkout of ``remote_url``
@@ -545,14 +575,25 @@ class Resolver:
 
         if self.repo_cache is not None:
             hit, cached = self.repo_cache.get(p, self.fs_root)
+            if not hit:
+                alt = _private_alias(p)
+                if alt != p:
+                    hit, cached = self.repo_cache.get(alt, self.fs_root)
             if hit:
                 if cached is not None:
-                    info = _load_repo(cached)
-                    project = self._project_for_repo(info)
+                    repo_key = (cached.get("root"), cached.get("main_root"), cached.get("remote"))
+                    if repo_key in self._repo_dict_projects:
+                        project = self._repo_dict_projects[repo_key]
+                    else:
+                        info = _load_repo(cached)
+                        project = self._project_for_repo(info)
+                        self._repo_dict_projects[repo_key] = project
                     self._resolve_cache[cache_key] = project.id if project else None
                     self._fast_resolve_cache[fast_key] = project
                     return project
                 elif not allow_missing_fallback:
+                    if not self.hints_enabled:
+                        return None
                     if self._worktrees:
                         alt = _private_alias(p)
                         if self._lookup_prefix_cached(p, self._worktrees) or (alt != p and self._lookup_prefix_cached(alt, self._worktrees)):
@@ -603,6 +644,8 @@ class Resolver:
                     project = self.projects.get(self.canonical_id(normalize_remote(hint) or ""))
                     if project is not None and not project.path_missing:
                         project.paths.add(hint_path)
+                        if self._hint_paths_added is not None:
+                            self._hint_paths_added.append((project.id, hint_path))
                         return project
                     break
         # 4. deleted project directory (cwd only): the path itself is the identity
@@ -623,7 +666,7 @@ class Resolver:
     @staticmethod
     def _lookup_prefix(path: str, table: Dict[str, str]):
         """Longest whole-component prefix of ``path`` that is a key of ``table``."""
-        if not table:
+        if not table or path is None:
             return None
         if path in table:
             return path, table[path]
@@ -632,12 +675,12 @@ class Resolver:
             idx = path.rfind("/", 0, idx)
             if idx == -1:
                 break
+            cand = path[:idx]
             cand_slash = path[:idx + 1]
             if cand_slash in table:
                 return cand_slash, table[cand_slash]
-            cand_no_slash = path[:idx]
-            if cand_no_slash and cand_no_slash in table:
-                return cand_no_slash, table[cand_no_slash]
+            if cand and cand in table:
+                return cand, table[cand]
         if path.startswith("/") and "" in table:
             return "", table[""]
         return None
@@ -670,14 +713,42 @@ class Resolver:
 
         # 1 & 2: Pre-resolve session cwds and collect known remote projects
         session_pid: Dict[int, str] = {}
+        clean_cwds: Dict[int, str] = {}
+        sessions_by_id = {}
         for s in session_list:
+            if hasattr(s, "id"):
+                sessions_by_id[s.id] = s
             cwd = getattr(s, "cwd", None)
             if cwd:
                 clean_cwd = self.clean(cwd)
                 if clean_cwd:
+                    clean_cwds[id(s)] = clean_cwd
                     proj = self.resolve(clean_cwd, allow_missing_fallback=False)
                     if proj is not None and not proj.path_missing and not (proj.remote and proj.remote.endswith(".bundle")):
                         session_pid[id(s)] = proj.id
+
+        session_sigs: Dict[str, str] = {}
+
+        def get_sig(s_id: str) -> Optional[str]:
+            if s_id not in session_sigs:
+                s = sessions_by_id.get(s_id)
+                if s is not None:
+                    session_sigs[s_id] = _session_worktree_sig(s)
+            return session_sigs.get(s_id)
+
+        class LazySessionSigs(dict):
+            def __getitem__(self, s_id):
+                sig = get_sig(s_id)
+                if sig is None:
+                    raise KeyError(s_id)
+                return sig
+            def get(self, s_id, default=None):
+                sig = get_sig(s_id)
+                return sig if sig is not None else default
+            def __contains__(self, s_id):
+                return s_id in sessions_by_id
+
+        lazy_sigs = LazySessionSigs()
 
         known_projects: Dict[str, List[str]] = {}
         for proj in self.projects.values():
@@ -689,6 +760,34 @@ class Resolver:
         if not known_projects:
             return
 
+        # Lazy tool paths and parent sessions
+        s_tool_paths: Dict[int, List[str]] = {}
+
+        def get_session_tool_paths(s) -> List[str]:
+            sid = id(s)
+            if sid not in s_tool_paths:
+                paths = []
+                for tp in self._iter_tool_paths(s):
+                    clean_tp = self.clean(tp)
+                    if clean_tp:
+                        paths.append(os.path.normpath(clean_tp))
+                s_tool_paths[sid] = paths
+            return s_tool_paths[sid]
+
+        parent_sessions_info: Optional[List[Tuple[object, str, List[str]]]] = None
+
+        def get_parent_sessions_info() -> List[Tuple[object, str, List[str]]]:
+            nonlocal parent_sessions_info
+            if parent_sessions_info is None:
+                parent_sessions_info = []
+                for parent_s in session_list:
+                    parent_pid = session_pid.get(id(parent_s))
+                    if parent_pid and parent_pid in known_projects:
+                        tps = get_session_tool_paths(parent_s)
+                        if tps:
+                            parent_sessions_info.append((parent_s, parent_pid, tps))
+            return parent_sessions_info
+
         # Fold local .bundle clone workspaces into their matching remote repo
         for bproj in list(self.projects.values()):
             if (bproj.remote and
@@ -698,32 +797,59 @@ class Resolver:
                     self._alias_key(bproj.id) not in self._alias_of and
                     bproj.id not in self._alias_of):
 
+                cached_bundle = None
+                if self.worktree_cache is not None:
+                    cached_bundle = self.worktree_cache.get_bundle(bproj.id, lazy_sigs, known_projects)
+
+                if cached_bundle is not None:
+                    best_pid, bpaths = cached_bundle
+                    alias_key = self._alias_key(bproj.id)
+                    self._alias_of[alias_key] = best_pid
+                    self._alias_of[bproj.id] = best_pid
+                    target_proj = self.projects.get(best_pid)
+                    if target_proj is not None:
+                        for p in (set(bproj.paths) | set(bpaths)):
+                            target_proj.add_path(p)
+                            self._worktrees[p] = best_pid
+                            alt_p = _private_alias(p)
+                            if alt_p != p:
+                                self._worktrees[alt_p] = best_pid
+                    if bproj.id in self.projects:
+                        del self.projects[bproj.id]
+                    self._worktree_prefix_cache.clear()
+                    self._resolve_cache.clear()
+                    self._fast_resolve_cache.clear()
+                    self._repo_dict_projects.clear()
+                    continue
+
                 distinct_rels = set()
+                bproj_relevant_sigs: Dict[str, str] = {}
                 # 1. From sessions under bproj paths
                 for s in session_list:
-                    s_cwds = [self.clean(s.cwd)] if getattr(s, "cwd", None) else []
+                    s_cwd = clean_cwds.get(id(s))
+                    s_cwds = [s_cwd] if s_cwd else []
+                    tps = get_session_tool_paths(s)
                     falls_under = False
                     for r in bproj.local_paths:
                         r_prefix = r.rstrip("/") + "/"
                         if any(c and (c == r or c.startswith(r_prefix)) for c in s_cwds):
                             falls_under = True
                             break
-                        for tp in self._iter_tool_paths(s):
-                            clean_tp = self.clean(tp)
-                            if clean_tp and (clean_tp == r or clean_tp.startswith(r_prefix)):
+                        for clean_tp in tps:
+                            if clean_tp == r or clean_tp.startswith(r_prefix):
                                 falls_under = True
                                 break
                     if falls_under:
-                        for tp in self._iter_tool_paths(s):
-                            clean_tp = self.clean(tp)
-                            if clean_tp:
-                                for r in bproj.local_paths:
-                                    r_prefix = r.rstrip("/") + "/"
-                                    if clean_tp.startswith(r_prefix):
-                                        rel = clean_tp[len(r_prefix):]
-                                        first_comp = rel.split("/", 1)[0]
-                                        if "/" in rel and first_comp not in (".git", "node_modules"):
-                                            distinct_rels.add(rel)
+                        if hasattr(s, "id"):
+                            bproj_relevant_sigs[s.id] = lazy_sigs[s.id]
+                        for clean_tp in tps:
+                            for r in bproj.local_paths:
+                                r_prefix = r.rstrip("/") + "/"
+                                if clean_tp.startswith(r_prefix):
+                                    rel = clean_tp[len(r_prefix):]
+                                    first_comp = rel.split("/", 1)[0]
+                                    if "/" in rel and first_comp not in (".git", "node_modules"):
+                                        distinct_rels.add(rel)
 
                 # 2. From on-disk files in bproj roots
                 for r in bproj.local_paths:
@@ -779,18 +905,23 @@ class Resolver:
                     if bproj.id in self.projects:
                         del self.projects[bproj.id]
 
+                    if self.worktree_cache is not None:
+                        self.worktree_cache.put_bundle(bproj.id, best_pid, bproj.paths, bproj_relevant_sigs)
+
                     self._worktree_prefix_cache.clear()
                     self._resolve_cache.clear()
                     self._fast_resolve_cache.clear()
+                    self._repo_dict_projects.clear()
 
         # 3. Find candidate deleted cwd directories
         candidate_cwds = set()
+        sessions_by_norm_cwd = defaultdict(list)
         for s in session_list:
-            cwd = getattr(s, "cwd", None)
-            if cwd:
-                clean = self.clean(cwd)
-                if clean:
-                    candidate_cwds.add(os.path.normpath(clean))
+            clean = clean_cwds.get(id(s))
+            if clean:
+                norm = os.path.normpath(clean)
+                candidate_cwds.add(norm)
+                sessions_by_norm_cwd[norm].append(s)
 
         candidates = [
             d for d in candidate_cwds
@@ -804,29 +935,45 @@ class Resolver:
             if self.resolve(d, allow_missing_fallback=False) is not None:
                 continue
 
+            if self.worktree_cache is not None:
+                cached_pid = self.worktree_cache.get_worktree(d, lazy_sigs, known_projects, self._exists_cached)
+                if cached_pid is not None:
+                    if cached_pid == "":
+                        continue
+                    if cached_pid in self.projects:
+                        self._worktrees[d] = cached_pid
+                        alt_d = _private_alias(d)
+                        if alt_d != d:
+                            self._worktrees[alt_d] = cached_pid
+                        self.projects[cached_pid].add_path(d)
+                        self._worktree_prefix_cache.clear()
+                        self._resolve_cache.clear()
+                        self._fast_resolve_cache.clear()
+                        self._repo_dict_projects.clear()
+                        known_projects[cached_pid].append(d)
+                        continue
+
             # Gather sessions whose normalized cwd == d or inside d + "/"
+            d_slash = d + "/"
             d_sessions = []
-            for s in session_list:
-                cwd = getattr(s, "cwd", None)
-                if cwd:
-                    clean = self.clean(cwd)
-                    if clean:
-                        norm = os.path.normpath(clean)
-                        if norm == d or norm.startswith(d + "/"):
-                            d_sessions.append(s)
+            for norm_cwd, slist in sessions_by_norm_cwd.items():
+                if norm_cwd == d or norm_cwd.startswith(d_slash):
+                    d_sessions.extend(slist)
+
+            d_relevant_sigs: Dict[str, str] = {}
+            for s in d_sessions:
+                if hasattr(s, "id"):
+                    d_relevant_sigs[s.id] = lazy_sigs[s.id]
 
             # Signal A: relative file paths matching against existing repos
             distinct_rels = set()
             for s in d_sessions:
-                for tp in self._iter_tool_paths(s):
-                    clean_tp = self.clean(tp)
-                    if clean_tp:
-                        norm_tp = os.path.normpath(clean_tp)
-                        if norm_tp.startswith(d + "/"):
-                            rel = norm_tp[len(d) + 1:]
-                            first_comp = rel.split("/", 1)[0]
-                            if "/" in rel and first_comp not in (".git", "node_modules"):
-                                distinct_rels.add(rel)
+                for norm_tp in get_session_tool_paths(s):
+                    if norm_tp.startswith(d_slash):
+                        rel = norm_tp[len(d_slash):]
+                        first_comp = rel.split("/", 1)[0]
+                        if "/" in rel and first_comp not in (".git", "node_modules"):
+                            distinct_rels.add(rel)
 
             matches: Dict[str, int] = {}
             for pid, roots in known_projects.items():
@@ -850,16 +997,15 @@ class Resolver:
             # Signal B: parent session / tool_paths cross-reference
             if best_pid is None:
                 parent_refs: Counter = Counter()
-                for parent_s in session_list:
-                    parent_pid = session_pid.get(id(parent_s))
-                    if not parent_pid or parent_pid not in known_projects:
-                        continue
-                    for tp in self._iter_tool_paths(parent_s):
-                        clean_tp = self.clean(tp)
-                        if clean_tp:
-                            norm_tp = os.path.normpath(clean_tp)
-                            if norm_tp == d or norm_tp.startswith(d + "/"):
-                                parent_refs[parent_pid] += 1
+                matching_parents: List[Tuple[object, str]] = []
+                for parent_s, parent_pid, tps in get_parent_sessions_info():
+                    matched = False
+                    for norm_tp in tps:
+                        if norm_tp == d or norm_tp.startswith(d_slash):
+                            parent_refs[parent_pid] += 1
+                            matched = True
+                    if matched:
+                        matching_parents.append((parent_s, parent_pid))
                 if parent_refs:
                     max_refs = max(parent_refs.values())
                     top_parent_pids = sorted([pid for pid, cnt in parent_refs.items() if cnt == max_refs])
@@ -868,6 +1014,9 @@ class Resolver:
                         top_parent_pids,
                         key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
                     )
+                    for parent_s, p_pid in matching_parents:
+                        if p_pid == best_pid and hasattr(parent_s, "id"):
+                            d_relevant_sigs[parent_s.id] = lazy_sigs[parent_s.id]
 
             if best_pid is not None and best_pid in self.projects:
                 self._worktrees[d] = best_pid
@@ -875,10 +1024,16 @@ class Resolver:
                 if alt_d != d:
                     self._worktrees[alt_d] = best_pid
                 self.projects[best_pid].add_path(d)
+                if self.worktree_cache is not None:
+                    self.worktree_cache.put_worktree(d, best_pid, d_relevant_sigs)
                 self._worktree_prefix_cache.clear()
                 self._resolve_cache.clear()
                 self._fast_resolve_cache.clear()
+                self._repo_dict_projects.clear()
                 known_projects[best_pid].append(d)
+            elif self.worktree_cache is not None:
+                self.worktree_cache.put_worktree(d, None, d_relevant_sigs)
+        self._repo_dict_projects.clear()
 
     @staticmethod
     def _iter_tool_paths(session) -> Iterable[str]:

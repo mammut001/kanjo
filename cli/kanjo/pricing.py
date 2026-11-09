@@ -152,6 +152,14 @@ class PriceBook:
         self._lines = None
         self._cache: Dict[Tuple[str, str], Tuple[Optional[str], bool]] = {}
         self._price_cache: Dict[str, dict] = {}
+        self._fast_cost_cache: Dict[Tuple[str, str], Tuple] = {}
+
+    @property
+    def sig(self) -> str:
+        if not hasattr(self, "_sig"):
+            import hashlib
+            self._sig = hashlib.sha1(json.dumps(sorted(self.prices.items())).encode("utf-8")).hexdigest()
+        return self._sig
 
     # ---- catalog helpers -------------------------------------------------
     def known(self, model_id):
@@ -361,19 +369,36 @@ class PriceBook:
         self._price_cache[model_id] = out
         return out
 
+    def get_params(self, model, agent):
+        key = (model, agent)
+        params = self._fast_cost_cache.get(key)
+        if params is None:
+            model_id, estimated = self.resolve(model, agent)
+            if model_id is None:
+                params = (None, None, None, None, None, None, estimated)
+            else:
+                p = self.price(model_id)
+                tier = LONG_PROMPT_TIERS.get(model_id)
+                params = (p["in"], p["out"], p["cache_read"], p["cache_write"], p["write1h"], tier, estimated)
+            self._fast_cost_cache[key] = params
+        return params
+
     def cost(self, model, agent, input_tokens=0, output_tokens=0, cache_read=0,
              cache_write=0, cache_write_1h=0):
         """USD cost of one message. ``cache_write`` is the total cache write;
         ``cache_write_1h`` is the part of it written with the 1h TTL."""
-        model_id, estimated = self.resolve(model, agent)
-        if model_id is None:
+        p_in, p_out, p_cr, p_cw, p_w1, tier, estimated = self.get_params(model, agent)
+        if p_in is None:
             return 0.0, estimated
-        p = self.price(model_id)
-        w1 = min(max(cache_write_1h, 0), cache_write)
-        w5 = cache_write - w1
-        cost = (input_tokens * p["in"] + output_tokens * p["out"] + cache_read * p["cache_read"]
-                + w5 * p["cache_write"] + w1 * p["write1h"]) / 1e6
-        tier = LONG_PROMPT_TIERS.get(model_id)
+
+        if cache_write_1h:
+            w1 = min(max(cache_write_1h, 0), cache_write)
+            w5 = cache_write - w1
+            cost = (input_tokens * p_in + output_tokens * p_out + cache_read * p_cr
+                    + w5 * p_cw + w1 * p_w1) / 1e6
+        else:
+            cost = (input_tokens * p_in + output_tokens * p_out + cache_read * p_cr
+                    + cache_write * p_cw) / 1e6
         if tier and input_tokens + cache_read + cache_write > tier[0]:
             cost *= tier[1]
         return cost, estimated
