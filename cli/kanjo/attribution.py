@@ -62,11 +62,11 @@ def _ranked_cwds(session: Session) -> List[str]:
     return [cwd for cwd, _ in items]
 
 
-def _cwd_project(session: Session, resolver: Resolver) -> Optional[str]:
+def _cwd_project(session: Session, resolver: Resolver, allow_missing: bool = True) -> Optional[str]:
     weights: Counter = Counter()
     first_seen: Dict[str, int] = {}
     for rank, cwd in enumerate(_ranked_cwds(session)):
-        project = resolver.resolve(cwd, allow_missing_fallback=True)
+        project = resolver.resolve(cwd, allow_missing_fallback=allow_missing)
         if project is not None:
             weights[project.id] += max(session.cwd_counts.get(cwd, 0), 1)
             first_seen.setdefault(project.id, rank)
@@ -112,10 +112,13 @@ def decide(session: Session, resolver: Resolver, scratch: ScratchpadDecoder, con
                         key=lambda kv: (-kv[1], kv[0]))
         return Decision("split", shares, dict(points))
 
-    pid = _cwd_project(session, resolver)
+    pid = _cwd_project(session, resolver, allow_missing=False)
     if pid:
         return Decision("cwd", [(pid, 1.0)])
     pid = _scratchpad_project(session, resolver, scratch)
     if pid:
         return Decision("scratchpad", [(pid, 1.0)])
+    pid = _cwd_project(session, resolver, allow_missing=True)
+    if pid:
+        return Decision("cwd", [(pid, 1.0)])
     return Decision("none", [(UNATTRIBUTED, 1.0)])

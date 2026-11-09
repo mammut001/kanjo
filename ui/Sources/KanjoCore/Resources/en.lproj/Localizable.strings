@@ -435,3 +435,10 @@
 "ios.quota_no_data" = "No quota data";
 "ios.projects" = "Projects";
 "ios.language" = "Language";
+"ios.empty.try_sample" = "Preview Sample Data";
+"ios.sample.banner" = "Sample data · Turn on iCloud sync on your Mac for your own usage";
+"ios.sample.exit" = "Exit";
+"ios.empty.steps.title" = "How to connect your Mac";
+"ios.empty.step1" = "Install Kanjo on your Mac (free & open-source on GitHub)";
+"ios.empty.step2" = "Open Kanjo Settings → General and turn on iCloud sync";
+"ios.empty.step3" = "Make sure both devices are signed in to the same Apple ID";

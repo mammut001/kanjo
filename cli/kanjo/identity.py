@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import unquote
 
 # Directories that never become a project on their own (missing-path fallback).
@@ -139,6 +140,14 @@ class Project:
             return self.path_missing_hint
         return not any(os.path.exists(self.fs_root + p) for p in self.paths)
 
+    @property
+    def local_paths(self) -> List[str]:
+        return list(self.paths)
+
+    def add_path(self, path: str) -> None:
+        if path:
+            self.paths.add(path)
+
 
 @dataclass
 class RepoInfo:
@@ -199,6 +208,10 @@ class Resolver:
         for canonical, members in (aliases or {}).items():
             for member in members or []:
                 self._alias_of[self._alias_key(member)] = canonical
+
+    @property
+    def _projects(self) -> Dict[str, Project]:
+        return self.projects
 
     # ---- aliases ---------------------------------------------------------
     @staticmethod
@@ -353,6 +366,11 @@ class Resolver:
         elif os.path.basename(os.path.dirname(gitdir)) == "worktrees":
             # pruned worktree: admin dir is gone, but the layout tells us the main repo
             common = os.path.dirname(os.path.dirname(gitdir))
+        if not (self._exists_cached(os.path.join(common, "HEAD")) or
+                self._exists_cached(os.path.join(common, "config")) or
+                self._exists_cached(os.path.join(dotgit, "HEAD")) or
+                self._exists_cached(os.path.join(dotgit, "config"))):
+            return None
         main_root = os.path.dirname(common) if os.path.basename(common) == ".git" else root
         remote_url = None
         try:
@@ -380,15 +398,20 @@ class Resolver:
         return outer
 
     # ---- project registry ------------------------------------------------
-    def _project_for_repo(self, info: RepoInfo) -> Project:
+    def _project_for_repo(self, info: RepoInfo) -> Optional[Project]:
+        if not self.fs_root and info.remote_url is None and info.outer is None and not self._aliased(info):
+            roots = [r for r in (info.main_root, info.root) if r]
+            if any((r.rstrip("/") + "/").startswith(_TEMP_PREFIXES) for r in roots):
+                return None
         if info.outer is not None and not self._aliased(info):
             # remote-less repo nested in another repo: the outer repo's project
             # (ATTRIBUTION.md 2.2); user aliases on the inner path still win
             project = self._project_for_repo(info.outer)
-            for p in (info.root, info.main_root):
-                if p:
-                    project.paths.add(p)
-            self._register_worktrees(info, project.id)
+            if project is not None:
+                for p in (info.root, info.main_root):
+                    if p:
+                        project.paths.add(p)
+                self._register_worktrees(info, project.id)
             return project
         remote = normalize_remote(info.remote_url) if info.remote_url else None
         if remote:
@@ -526,7 +549,7 @@ class Resolver:
                 if cached is not None:
                     info = _load_repo(cached)
                     project = self._project_for_repo(info)
-                    self._resolve_cache[cache_key] = project.id
+                    self._resolve_cache[cache_key] = project.id if project else None
                     self._fast_resolve_cache[fast_key] = project
                     return project
                 elif not allow_missing_fallback:
@@ -560,7 +583,9 @@ class Resolver:
         if info is None and alt != p:
             info = self._repo_for_path(alt, allow_missing_fallback)
         if info is not None:
-            return self._project_for_repo(info)
+            proj = self._project_for_repo(info)
+            if proj is not None:
+                return proj
         # 2. registered worktrees (git worktree list), even if the directory is gone
         for candidate in (p, alt):
             found = self._lookup_prefix_cached(candidate, self._worktrees)
@@ -637,6 +662,234 @@ class Resolver:
             self._fast_resolve_cache = {k: v for k, v in self._fast_resolve_cache.items() if v is not None}
             self._hint_prefix_cache.clear()
 
+    def infer_deleted_worktrees(self, sessions: Iterable) -> None:
+        """Folds deleted temporary worktrees (Pi / Claude) back into their main repository.
+        Uses relative file paths touched by tool calls (Signal A) and cross-session
+        references in parent sessions' tool calls (Signal B)."""
+        session_list = list(sessions)
+
+        # 1 & 2: Pre-resolve session cwds and collect known remote projects
+        session_pid: Dict[int, str] = {}
+        for s in session_list:
+            cwd = getattr(s, "cwd", None)
+            if cwd:
+                clean_cwd = self.clean(cwd)
+                if clean_cwd:
+                    proj = self.resolve(clean_cwd, allow_missing_fallback=False)
+                    if proj is not None and not proj.path_missing and not (proj.remote and proj.remote.endswith(".bundle")):
+                        session_pid[id(s)] = proj.id
+
+        known_projects: Dict[str, List[str]] = {}
+        for proj in self.projects.values():
+            if proj.remote and not proj.path_missing and not proj.remote.endswith(".bundle"):
+                roots = [r for r in proj.local_paths if self._exists_cached(r)]
+                if roots:
+                    known_projects[proj.id] = roots
+
+        if not known_projects:
+            return
+
+        # Fold local .bundle clone workspaces into their matching remote repo
+        for bproj in list(self.projects.values()):
+            if (bproj.remote and
+                    isinstance(bproj.remote, str) and
+                    bproj.remote.startswith("/") and
+                    bproj.remote.endswith(".bundle") and
+                    self._alias_key(bproj.id) not in self._alias_of and
+                    bproj.id not in self._alias_of):
+
+                distinct_rels = set()
+                # 1. From sessions under bproj paths
+                for s in session_list:
+                    s_cwds = [self.clean(s.cwd)] if getattr(s, "cwd", None) else []
+                    falls_under = False
+                    for r in bproj.local_paths:
+                        r_prefix = r.rstrip("/") + "/"
+                        if any(c and (c == r or c.startswith(r_prefix)) for c in s_cwds):
+                            falls_under = True
+                            break
+                        for tp in self._iter_tool_paths(s):
+                            clean_tp = self.clean(tp)
+                            if clean_tp and (clean_tp == r or clean_tp.startswith(r_prefix)):
+                                falls_under = True
+                                break
+                    if falls_under:
+                        for tp in self._iter_tool_paths(s):
+                            clean_tp = self.clean(tp)
+                            if clean_tp:
+                                for r in bproj.local_paths:
+                                    r_prefix = r.rstrip("/") + "/"
+                                    if clean_tp.startswith(r_prefix):
+                                        rel = clean_tp[len(r_prefix):]
+                                        first_comp = rel.split("/", 1)[0]
+                                        if "/" in rel and first_comp not in (".git", "node_modules"):
+                                            distinct_rels.add(rel)
+
+                # 2. From on-disk files in bproj roots
+                for r in bproj.local_paths:
+                    fs_r = self._fs(r)
+                    if self._exists_cached(r) and os.path.isdir(fs_r):
+                        try:
+                            entries = os.listdir(fs_r)
+                        except OSError:
+                            entries = []
+                        if "package.json" in entries:
+                            distinct_rels.add("package.json")
+                        for entry in entries:
+                            if entry in (".git", "node_modules", "dist", "build", ".next", ".turbo"):
+                                continue
+                            sub_path = os.path.join(fs_r, entry)
+                            if os.path.isdir(sub_path):
+                                try:
+                                    sub_entries = os.listdir(sub_path)
+                                except OSError:
+                                    sub_entries = []
+                                for f in sub_entries[:15]:
+                                    if not f.startswith("."):
+                                        distinct_rels.add(os.path.join(entry, f))
+
+                # Match against known_projects
+                matches: Dict[str, int] = {}
+                for pid, roots in known_projects.items():
+                    count = 0
+                    for rel in distinct_rels:
+                        if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                            count += 1
+                    if count > 0:
+                        matches[pid] = count
+
+                if matches:
+                    max_count = max(matches.values())
+                    top_pids = sorted([pid for pid, cnt in matches.items() if cnt == max_count])
+                    best_pid = top_pids[0]
+
+                    alias_key = self._alias_key(bproj.id)
+                    self._alias_of[alias_key] = best_pid
+                    self._alias_of[bproj.id] = best_pid
+
+                    target_proj = self.projects.get(best_pid)
+                    if target_proj is not None:
+                        for p in bproj.paths:
+                            target_proj.add_path(p)
+                            self._worktrees[p] = best_pid
+                            alt_p = _private_alias(p)
+                            if alt_p != p:
+                                self._worktrees[alt_p] = best_pid
+
+                    if bproj.id in self.projects:
+                        del self.projects[bproj.id]
+
+                    self._worktree_prefix_cache.clear()
+                    self._resolve_cache.clear()
+                    self._fast_resolve_cache.clear()
+
+        # 3. Find candidate deleted cwd directories
+        candidate_cwds = set()
+        for s in session_list:
+            cwd = getattr(s, "cwd", None)
+            if cwd:
+                clean = self.clean(cwd)
+                if clean:
+                    candidate_cwds.add(os.path.normpath(clean))
+
+        candidates = [
+            d for d in candidate_cwds
+            if not self._exists_cached(d)
+            and self.resolve(d, allow_missing_fallback=False) is None
+            and self._missing_ok(d)
+        ]
+        candidates.sort(key=len)
+
+        for d in candidates:
+            if self.resolve(d, allow_missing_fallback=False) is not None:
+                continue
+
+            # Gather sessions whose normalized cwd == d or inside d + "/"
+            d_sessions = []
+            for s in session_list:
+                cwd = getattr(s, "cwd", None)
+                if cwd:
+                    clean = self.clean(cwd)
+                    if clean:
+                        norm = os.path.normpath(clean)
+                        if norm == d or norm.startswith(d + "/"):
+                            d_sessions.append(s)
+
+            # Signal A: relative file paths matching against existing repos
+            distinct_rels = set()
+            for s in d_sessions:
+                for tp in self._iter_tool_paths(s):
+                    clean_tp = self.clean(tp)
+                    if clean_tp:
+                        norm_tp = os.path.normpath(clean_tp)
+                        if norm_tp.startswith(d + "/"):
+                            rel = norm_tp[len(d) + 1:]
+                            first_comp = rel.split("/", 1)[0]
+                            if "/" in rel and first_comp not in (".git", "node_modules"):
+                                distinct_rels.add(rel)
+
+            matches: Dict[str, int] = {}
+            for pid, roots in known_projects.items():
+                count = 0
+                for rel in distinct_rels:
+                    if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                        count += 1
+                if count > 0:
+                    matches[pid] = count
+
+            best_pid = None
+            if matches:
+                max_count = max(matches.values())
+                top_pids = sorted([pid for pid, cnt in matches.items() if cnt == max_count])
+                d_parent = os.path.dirname(d)
+                best_pid = max(
+                    top_pids,
+                    key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                )
+
+            # Signal B: parent session / tool_paths cross-reference
+            if best_pid is None:
+                parent_refs: Counter = Counter()
+                for parent_s in session_list:
+                    parent_pid = session_pid.get(id(parent_s))
+                    if not parent_pid or parent_pid not in known_projects:
+                        continue
+                    for tp in self._iter_tool_paths(parent_s):
+                        clean_tp = self.clean(tp)
+                        if clean_tp:
+                            norm_tp = os.path.normpath(clean_tp)
+                            if norm_tp == d or norm_tp.startswith(d + "/"):
+                                parent_refs[parent_pid] += 1
+                if parent_refs:
+                    max_refs = max(parent_refs.values())
+                    top_parent_pids = sorted([pid for pid, cnt in parent_refs.items() if cnt == max_refs])
+                    d_parent = os.path.dirname(d)
+                    best_pid = max(
+                        top_parent_pids,
+                        key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                    )
+
+            if best_pid is not None and best_pid in self.projects:
+                self._worktrees[d] = best_pid
+                alt_d = _private_alias(d)
+                if alt_d != d:
+                    self._worktrees[alt_d] = best_pid
+                self.projects[best_pid].add_path(d)
+                self._worktree_prefix_cache.clear()
+                self._resolve_cache.clear()
+                self._fast_resolve_cache.clear()
+                known_projects[best_pid].append(d)
+
+    @staticmethod
+    def _iter_tool_paths(session) -> Iterable[str]:
+        for call in getattr(session, "tool_paths", ()):
+            if isinstance(call, (list, tuple, set)):
+                for p in call:
+                    if isinstance(p, str):
+                        yield p
+            elif isinstance(call, str):
+                yield call
+
     def project(self, pid: str) -> Optional[Project]:
         return self.projects.get(pid)
 
@@ -653,6 +906,7 @@ class Resolver:
 
 # ---- scratchpad paths ------------------------------------------------------
 _SCRATCH_RE = re.compile(r"^(?:/private)?/tmp/claude-\d+/(-[^/]+)(?:/|$)")
+_CLAUDE_PROJECT_DIR_RE = re.compile(r"/\.claude/projects/(-[^/]+)(?:/|$)")
 
 
 def _encode_component(name: str) -> str:
@@ -674,7 +928,12 @@ class ScratchpadDecoder:
         if not path:
             return None
         m = _SCRATCH_RE.match(path)
-        return m.group(1) if m else None
+        if m:
+            return m.group(1)
+        m = _CLAUDE_PROJECT_DIR_RE.search(path)
+        if m:
+            return m.group(1)
+        return None
 
     def decode(self, encoded: str) -> Optional[str]:
         if encoded in self._cache:

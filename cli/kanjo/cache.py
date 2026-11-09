@@ -19,7 +19,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 from .sources.base import Message, ParseError, Session
 
 CACHE_VERSION = 4
-REPO_CACHE_VERSION = 1
+REPO_CACHE_VERSION = 2
 NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
                "thinking", "cwd", "branch", "key")

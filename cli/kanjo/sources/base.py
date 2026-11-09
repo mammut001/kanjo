@@ -454,14 +454,18 @@ short_title = clean_title
 # whitespace, quotes, semicolons and backticks (ATTRIBUTION.md section 9), and
 # at shell operators.
 _UNQUOTED_PATH = re.compile(r"""(?<![^\s"'`=(<>|&;,])((?:~|/)[^\s"'`;|&<>(){}$,]*)""")
-_QUOTED_PATH = re.compile(r"""(["'])((?:~|/)[^"'\n`;]*?)\1""")
+_QUOTED_PATH = re.compile(r"""(["'])((?:~|/)[^"'\r\n`;]*?)\1""")
 _TRAILING = ".,:;)]}\\"
 _VALID_SECOND_CHAR = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~-")
 _HOME = os.path.expanduser("~")
 
 
 def _finish(path: str, home: str) -> Optional[str]:
+    if "\n" in path or "\r" in path:
+        return None
     p = path.rstrip(_TRAILING)
+    if "\n" in p or "\r" in p:
+        return None
     if p.startswith("~"):
         if not (p == "~" or p.startswith("~/")):
             return None
