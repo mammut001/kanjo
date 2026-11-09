@@ -26,6 +26,7 @@ public enum AgentColors {
     public static let commandcode = AgentColorPair(light: 0x2E1B9C, dark: 0x6741D9)
     public static let opencode = AgentColorPair(light: 0xB08A1E, dark: 0xDEB135)
     public static let copilot = AgentColorPair(light: 0x1F883D, dark: 0x3FB950)
+    public static let pi = AgentColorPair(light: 0xC41E3A, dark: 0xE63946)
 
     public static let all: [String: AgentColorPair] = [
         "claude": claude,
@@ -37,6 +38,7 @@ public enum AgentColors {
         "commandcode": commandcode,
         "opencode": opencode,
         "copilot": copilot,
+        "pi": pi,
     ]
 
     public static func pair(for agent: String) -> AgentColorPair {
@@ -53,6 +55,7 @@ public enum AgentColors {
         "minimax": "MiniMax",
         "opencode": "OpenCode",
         "copilot": "Copilot CLI",
+        "pi": "Pi",
     ]
 
     public static func label(for agent: String) -> String {

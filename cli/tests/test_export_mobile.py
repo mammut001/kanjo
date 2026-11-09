@@ -45,6 +45,26 @@ class MobileDocumentTest(unittest.TestCase):
             self.assertNotIn(key, self.mobile)
         self.assertIn("sessions_detail", self.mobile["projects"][0])
 
+    def test_subscriptions_omit_account_and_no_at_sign(self):
+        doc = dict(self.full)
+        doc["subscriptions"] = {
+            "claude": {
+                "plan": "pro",
+                "plan_label": "Claude Pro",
+                "monthly_price_usd": 20.0,
+                "cycle_start": "2026-10-01T00:00:00Z",
+                "cycle_end": "2026-11-01T00:00:00Z",
+                "anchor_day": 1,
+                "cycle_source": "subscription_date",
+                "extra_usage_enabled": False,
+                "source": "detected",
+                "account": {"email": "alice@example.com", "name": "Alice"},
+            }
+        }
+        mob = mobile_document(doc)
+        self.assertNotIn("account", mob["subscriptions"]["claude"])
+        self.assertNotIn("@", json.dumps(mob["subscriptions"]))
+
     def test_projects_keep_only_phone_fields(self):
         self.assertEqual(len(self.mobile["projects"]), len(self.full["projects"]))
         for mobile_project, full_project in zip(self.mobile["projects"], self.full["projects"]):
@@ -89,8 +109,14 @@ class MobileDocumentTest(unittest.TestCase):
     def test_numbers_and_shared_sections_match_full_export(self):
         self.assertEqual(self.mobile["totals"], self.full["totals"])
         for key in ("schema_version", "generated_at", "generated_by", "timezone", "currency",
-                    "cost_note", "quota_windows", "subscriptions"):
+                    "cost_note", "quota_windows"):
             self.assertEqual(self.mobile[key], self.full[key])
+        full_subs = {
+            agent: {k: v for k, v in sub.items() if k != "account"}
+            if isinstance(sub, dict) else sub
+            for agent, sub in self.full.get("subscriptions", {}).items()
+        }
+        self.assertEqual(self.mobile["subscriptions"], full_subs)
         text = json.dumps(self.mobile)
         for needle in ('"paths"', '"remote"', '"path_missing"', '"by_branch"',
                        '"cwd"', '"attribution"', '"subagents"', '"share"', '"title"'):

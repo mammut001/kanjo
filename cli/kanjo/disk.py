@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from . import disk_cache
 from .ledger import Ledger, paths_of
-from .sources import antigravity, claude, codex, copilot, minimax, opencode
+from .sources import antigravity, claude, codex, copilot, minimax, opencode, pi
 from .sources.base import AGENT_LABELS, env_dirs, iso_utc, local_day
 
 ACTIVE_SECONDS = 24 * 60 * 60
@@ -43,7 +43,7 @@ NOTES = {
 }
 LABELS = dict(AGENT_LABELS)
 LABELS["claude-desktop"] = "Claude Desktop"
-AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax", "opencode", "copilot", "claude-desktop"]
+AGENT_ORDER = ["claude", "codex", "antigravity", "grok", "qwen", "commandcode", "minimax", "opencode", "copilot", "pi", "claude-desktop"]
 _PARSERS = {
     "claude": claude,
     "codex": codex,
@@ -51,6 +51,7 @@ _PARSERS = {
     "minimax": minimax,
     "opencode": opencode,
     "copilot": copilot,
+    "pi": pi,
 }
 _OLDER = re.compile(r"^(\d+)d$")
 
@@ -94,6 +95,13 @@ def default_roots() -> dict:
         "minimax": os.path.expanduser(os.environ["KANJO_MINIMAX_DIR"]) if os.environ.get("KANJO_MINIMAX_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.minimax")),
         "opencode": os.path.expanduser(os.environ["KANJO_OPENCODE_DIR"]) if os.environ.get("KANJO_OPENCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/opencode")),
         "copilot": os.path.expanduser(os.environ["KANJO_COPILOT_DIR"]) if os.environ.get("KANJO_COPILOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.copilot")),
+        "pi": os.path.expanduser(os.environ["KANJO_PI_DIR"]) if os.environ.get("KANJO_PI_DIR") else (
+            os.path.expanduser(os.environ["PI_CODING_AGENT_DIR"]) if os.environ.get("PI_CODING_AGENT_DIR") else (
+                os.path.expanduser(os.environ["PI_CODING_AGENT_SESSION_DIR"]) if os.environ.get("PI_CODING_AGENT_SESSION_DIR") else (
+                    None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.pi")
+                )
+            )
+        ),
     }
 
 
@@ -418,6 +426,17 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         elif os.path.isfile(os.path.join(copilot_root, "session-store.db")):
             add("copilot", take_id("copilot:sessions"), "sessions", copilot_root,
                 note="Copilot CLI session database.", deletable="never")
+
+    pi_root = roots.get("pi")
+    if pi_root and _isdir(pi_root):
+        pi_sessions = None
+        for cand in [os.path.join(pi_root, "agent", "sessions"), os.path.join(pi_root, "sessions"), pi_root]:
+            if _isdir(cand) and (cand.endswith("sessions") or os.path.basename(cand) == "sessions"):
+                pi_sessions = cand
+                break
+        if pi_sessions:
+            add("pi", take_id("pi:sessions"), "sessions", pi_sessions,
+                note="Pi agent sessions.")
 
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
     for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable in pending:

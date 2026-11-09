@@ -18,7 +18,7 @@ from .ledger import Ledger, entry_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
-from .sources import antigravity, claude, codex, commandcode, copilot, grok, minimax, opencode, qwen
+from .sources import antigravity, claude, codex, commandcode, copilot, grok, minimax, opencode, pi, qwen
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
 
@@ -34,6 +34,7 @@ SOURCES = {
     "minimax": minimax,
     "opencode": opencode,
     "copilot": copilot,
+    "pi": pi,
 }
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "thinking")
 
@@ -591,6 +592,14 @@ def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
         mobile_buckets[name]["sessions_detail"] = mobile_sessions(buckets[name])
 
     mobile = {key: doc[key] for key in MOBILE_TOP_LEVEL_KEYS}
+    if "subscriptions" in mobile and isinstance(mobile["subscriptions"], dict):
+        clean_subs = {}
+        for agent, sub in mobile["subscriptions"].items():
+            if isinstance(sub, dict):
+                clean_subs[agent] = {k: v for k, v in sub.items() if k != "account"}
+            else:
+                clean_subs[agent] = sub
+        mobile["subscriptions"] = clean_subs
     mobile["projects"] = projects
     mobile["buckets"] = mobile_buckets
     mobile["mobile"] = {"trimmed": True, "hidden_project_names": bool(hide_project_names)}

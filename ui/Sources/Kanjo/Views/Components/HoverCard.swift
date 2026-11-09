@@ -604,6 +604,7 @@ struct SubscriptionValueHoverCard: View {
     let usage: Double
     let multiplier: Double?
     let currency: String
+    let account: SubscriptionAccount?
 
     init(
         agent: String,
@@ -611,7 +612,8 @@ struct SubscriptionValueHoverCard: View {
         monthlyPriceUsd: Double?,
         usage: Double,
         multiplier: Double?,
-        currency: String
+        currency: String,
+        account: SubscriptionAccount? = nil
     ) {
         self.agent = agent
         self.planLabel = planLabel
@@ -619,6 +621,14 @@ struct SubscriptionValueHoverCard: View {
         self.usage = usage
         self.multiplier = multiplier
         self.currency = currency
+        self.account = account
+    }
+
+    private func accountText(_ acc: SubscriptionAccount) -> String {
+        if let name = acc.name, !name.isEmpty {
+            return "\(acc.email) (\(name))"
+        }
+        return acc.email
     }
 
     var body: some View {
@@ -635,6 +645,16 @@ struct SubscriptionValueHoverCard: View {
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
+                if let account = account {
+                    HStack {
+                        Text(L10n.tr("overview.account"))
+                            .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(accountText(account))
+                            .font(.system(size: 10.5))
+                            .lineLimit(1)
+                    }
+                }
                 HStack {
                     Text(L10n.tr("settings.subscriptions.price"))
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)

@@ -70,12 +70,19 @@ class SubscriptionTest(unittest.TestCase):
 
     def write_claude(self, tier="default_claude_max_5x", created="2026-09-25T18:33:26.854830123Z",
                      billing="stripe_subscription", extra=False, user_tier=None,
-                     drop_created=False, drop_oauth=False, drop_extra=False):
+                     drop_created=False, drop_oauth=False, drop_extra=False,
+                     email=None, org_name=None, display_name=None):
         account = {
             "billingType": billing,
             "organizationRateLimitTier": tier,
             "userRateLimitTier": user_tier,
         }
+        if email is not None:
+            account["emailAddress"] = email
+        if org_name is not None:
+            account["organizationName"] = org_name
+        if display_name is not None:
+            account["displayName"] = display_name
         if not drop_created:
             account["subscriptionCreatedAt"] = created
         if not drop_extra:
@@ -572,6 +579,116 @@ class SubscriptionTest(unittest.TestCase):
             self.assertNotIn("antigravity", doc["subscriptions"])
         finally:
             fs.cleanup()
+
+    def test_claude_account_extracted_when_present(self):
+        self.write_claude(email="alice@example.com", org_name="Acme Corp")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": "Acme Corp"})
+
+        self.write_claude(email="alice@example.com", display_name="Alice Smith")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": "Alice Smith"})
+
+        self.write_claude(email="alice@example.com")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        self.write_claude()
+        sub = self.collect()["claude"]
+        self.assertNotIn("account", sub)
+
+    def test_claude_account_name_resolution(self):
+        # displayName takes precedence over organizationName
+        self.write_claude(email="alice@example.com", display_name="Alice Smith", org_name="Acme Corp")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": "Alice Smith"})
+
+        # auto-generated "<email>'s Organization" is ignored -> None
+        self.write_claude(email="alice@example.com", org_name="alice@example.com's Organization")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        # "<anything>'s Organization" with curly apostrophe is also ignored -> None
+        self.write_claude(email="alice@example.com", org_name="Alice’s Organization")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        # Real organization name not matching "<anything>'s Organization" is kept
+        self.write_claude(email="alice@example.com", org_name="Acme Corp")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": "Acme Corp"})
+
+        # If resulting name equals email, use None
+        self.write_claude(email="alice@example.com", display_name="alice@example.com")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        self.write_claude(email="alice@example.com", display_name="Alice@example.com")
+        sub = self.collect()["claude"]
+        self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+    def test_codex_account_jwt_extracted(self):
+        import base64
+        self.write_codex(plan="plus")
+        header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode("utf-8").rstrip("=")
+        payload = base64.urlsafe_b64encode(b'{"email":"alice@example.com","sub":"123"}').decode("utf-8").rstrip("=")
+        token = f"{header}.{payload}."
+
+        auth_path = os.path.join(self.dir, "codex_auth.json")
+        with open(auth_path, "w", encoding="utf-8") as f:
+            json.dump({"tokens": {"id_token": token}}, f)
+
+        with mock.patch.dict(os.environ, {"KANJO_CODEX_AUTH": auth_path}):
+            sub = self.collect()["codex"]
+            self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        bad_payload = base64.urlsafe_b64encode(b'{"sub":"123"}').decode("utf-8").rstrip("=")
+        bad_token = f"{header}.{bad_payload}."
+        with open(auth_path, "w", encoding="utf-8") as f:
+            json.dump({"tokens": {"id_token": bad_token}}, f)
+
+        with mock.patch.dict(os.environ, {"KANJO_CODEX_AUTH": auth_path}):
+            sub = self.collect()["codex"]
+            self.assertNotIn("account", sub)
+
+    def test_grok_account_extracted(self):
+        self.write_grok(plan="SuperGrok")
+        auth_path = os.path.join(self.dir, "grok_auth.json")
+        with open(auth_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "acc_1": {
+                    "email": "alice@example.com",
+                    "first_name": "Alice",
+                    "key": "test_key",
+                }
+            }, f)
+
+        with mock.patch.dict(os.environ, {"KANJO_GROK_AUTH": auth_path}):
+            sub = self.collect()["grok"]
+            self.assertEqual(sub["account"], {"email": "alice@example.com", "name": "Alice"})
+
+        with open(auth_path, "w", encoding="utf-8") as f:
+            json.dump({"acc_1": {"email": "alice@example.com"}}, f)
+
+        with mock.patch.dict(os.environ, {"KANJO_GROK_AUTH": auth_path}):
+            sub = self.collect()["grok"]
+            self.assertEqual(sub["account"], {"email": "alice@example.com", "name": None})
+
+        with open(auth_path, "w", encoding="utf-8") as f:
+            json.dump({"acc_1": {"key": "test_key"}}, f)
+
+        with mock.patch.dict(os.environ, {"KANJO_GROK_AUTH": auth_path}):
+            sub = self.collect()["grok"]
+            self.assertNotIn("account", sub)
+
+    def test_manual_subscription_attaches_detected_account(self):
+        self.write_claude(email="alice@example.com", org_name="Acme Corp")
+        manual = {"claude": {"plan": "max_20x"}}
+        subs = self.collect(manual=manual)
+        claude = subs["claude"]
+        self.assertEqual(claude["plan"], "max_20x")
+        self.assertEqual(claude["source"], "manual")
+        self.assertEqual(claude["account"], {"email": "alice@example.com", "name": "Acme Corp"})
 
 
 if __name__ == "__main__":

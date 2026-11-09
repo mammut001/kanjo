@@ -69,7 +69,11 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "anchor_day": 25,                       // 每月几号开新账期；rolling_30d 时为 null
       "cycle_source": "subscription_date",    // subscription_date（从订阅创建日推出）| manual（用户设置）| rolling_30d（不知道续费日：cycle_start = 现在往前 30 天，cycle_end = 现在，anchor_day 为 null；UI 标「day assumed」并引导设置）
       "extra_usage_enabled": false,           // Claude 的 hasExtraUsageEnabled：true 表示超额会真实扣款，UI 要单独标出
-      "source": "detected"                    // detected（本机读到）| manual（用户配置）
+      "source": "detected",                   // detected（本机读到）| manual（用户配置）
+      "account": {                            // 可选：检测到的账号信息；拿不到时不出现；--mobile 导出不含该字段
+        "email": "user@example.com",          // 账号邮箱
+        "name": "Jane Doe"                    // 显示名或组织名；无对应信息时为 null
+      }
     }
   },
   "totals": { /* Aggregate */ },
@@ -139,6 +143,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `minimax` | MiniMax |
 | `opencode` | OpenCode |
 | `copilot` | Copilot CLI |
+| `pi` | Pi |
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 
@@ -329,6 +334,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 "mobile": { "trimmed": true, "hidden_project_names": false }
 ```
 
+- `subscriptions`：保留，但剥离 `account` 字段（保护隐私）。
 - 每个项目只保留 `id`、`name`、`cost`、`tokens`、`sessions`、`first_active`、`last_active`、`by_agent`、`by_model`、`by_day`、`sessions_detail`；去掉 `config`、`paths`、`remote`、`path_missing`、`by_branch`。
 - `sessions_detail` 是精简会话：每项只保留 `agent`、`started`、`ended`、`cost`、`tokens`（只有 `total`）、`models`；**不含** `id`、`title`、`cwd`、`branch`、`label`、`share`、`attribution`、`subagents`、`by_day`，也不含任何路径或文件名。iOS 端的 Session 解码把这些缺失字段当作可选（`id`/`label` 由 agent 与时间兜底）。
 - `buckets`：`unattributed` / `excluded` 保留 Aggregate 字段和同样精简的 `sessions_detail`；`parse_failed` 只留 `sessions`（不含 `files` 路径）。

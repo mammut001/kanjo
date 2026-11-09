@@ -147,7 +147,8 @@ public enum SubscriptionValue {
             return SubscriptionRow(
                 agent: agent, planLabel: sub.planLabel, monthlyPriceUsd: sub.monthlyPriceUsd,
                 usage: cost, multiplier: multiplier(usage: cost, monthlyPriceUsd: sub.monthlyPriceUsd),
-                extraUsageEnabled: sub.extraUsageEnabled)
+                extraUsageEnabled: sub.extraUsageEnabled,
+                account: sub.account)
         }.sorted { a, b in
             a.usage != b.usage ? a.usage > b.usage : a.agent < b.agent
         }
@@ -248,7 +249,26 @@ public struct SubscriptionRow: Equatable, Identifiable {
     public var usage: Double
     public var multiplier: Double?
     public var extraUsageEnabled: Bool
+    public var account: SubscriptionAccount?
     public var id: String { agent }
+
+    public init(
+        agent: String,
+        planLabel: String,
+        monthlyPriceUsd: Double?,
+        usage: Double,
+        multiplier: Double?,
+        extraUsageEnabled: Bool,
+        account: SubscriptionAccount? = nil
+    ) {
+        self.agent = agent
+        self.planLabel = planLabel
+        self.monthlyPriceUsd = monthlyPriceUsd
+        self.usage = usage
+        self.multiplier = multiplier
+        self.extraUsageEnabled = extraUsageEnabled
+        self.account = account
+    }
 }
 
 public struct CycleShare: Equatable, Identifiable {

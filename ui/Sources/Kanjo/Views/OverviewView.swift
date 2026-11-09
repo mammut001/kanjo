@@ -367,8 +367,10 @@ struct OverviewView: View {
                       sessions: e.sessions,
                       value: Fmt.money(e.cost, currency: cur),
                       action: e.sessionsDetail.isEmpty ? nil : { onSelect(.bucket(.excluded)) })
-            RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
-            ParseFailedRow(bucket: b.parseFailed)
+            if b.parseFailed.sessions > 0 {
+                RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
+                ParseFailedRow(bucket: b.parseFailed)
+            }
         }
     }
 }
@@ -528,7 +530,8 @@ private struct SubscriptionValueCard: View {
                     monthlyPriceUsd: row.monthlyPriceUsd,
                     usage: row.usage,
                     multiplier: row.multiplier,
-                    currency: cur
+                    currency: cur,
+                    account: row.account
                 )
             }
             .accessibilityHint(help(row))

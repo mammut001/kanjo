@@ -146,6 +146,22 @@ public struct QuotaWindow: Codable, Equatable {
     }
 }
 
+/// 检测到的账号信息（邮箱，以及可选的显示名／组织名）。
+public struct SubscriptionAccount: Codable, Equatable, Sendable {
+    public var email: String
+    public var name: String?
+
+    enum CodingKeys: String, CodingKey {
+        case email
+        case name
+    }
+
+    public init(email: String, name: String? = nil) {
+        self.email = email
+        self.name = name
+    }
+}
+
 /// 一个 agent 的订阅档位（契约第 2 节 subscriptions）。月费未知时 monthlyPriceUsd 为 nil。
 public struct Subscription: Codable, Equatable {
     public var plan: String
@@ -157,6 +173,7 @@ public struct Subscription: Codable, Equatable {
     public var cycleSource: String         // subscription_date | manual | rolling_30d；容忍未知值
     public var extraUsageEnabled: Bool
     public var source: String              // detected | manual
+    public var account: SubscriptionAccount?
 
     enum CodingKeys: String, CodingKey {
         case plan
@@ -168,10 +185,12 @@ public struct Subscription: Codable, Equatable {
         case cycleSource = "cycle_source"
         case extraUsageEnabled = "extra_usage_enabled"
         case source
+        case account
     }
 
     public init(plan: String, planLabel: String, monthlyPriceUsd: Double?, cycleStart: String, cycleEnd: String,
-                anchorDay: Int?, cycleSource: String, extraUsageEnabled: Bool, source: String) {
+                anchorDay: Int?, cycleSource: String, extraUsageEnabled: Bool, source: String,
+                account: SubscriptionAccount? = nil) {
         self.plan = plan
         self.planLabel = planLabel
         self.monthlyPriceUsd = monthlyPriceUsd
@@ -181,6 +200,7 @@ public struct Subscription: Codable, Equatable {
         self.cycleSource = cycleSource
         self.extraUsageEnabled = extraUsageEnabled
         self.source = source
+        self.account = account
     }
 }
 

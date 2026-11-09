@@ -74,6 +74,7 @@ Every number is an **API-equivalent cost**: tokens × public API price. It is wh
 | MiniMax | `~/.minimax/sqlite.db` | files touched, workspace |
 | OpenCode | `~/.local/share/opencode/opencode.db` | files touched, directory / worktree |
 | Copilot CLI | `~/.copilot/session-state/**`, `~/.copilot/session-store.db` | files touched, cwd |
+| Pi | `~/.pi/agent/sessions/**/*.jsonl` | files touched, cwd |
 
 Antigravity sessions are detected automatically from both `~/.gemini/antigravity-cli` and `~/.gemini/antigravity` (Antigravity 2.0 app). MiniMax and OpenCode shared sessions are identified and counted only once. Everything runs locally. Nothing is uploaded. Kanjo reads token counts, paths and timestamps; it never stores conversation text.
 
@@ -226,6 +227,7 @@ Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git
 | MiniMax | `~/.minimax/sqlite.db` | 碰过的文件、工作区 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | 碰过的文件、目录／worktree |
 | Copilot CLI | `~/.copilot/session-state/**`、`~/.copilot/session-store.db` | 碰过的文件、当前工作目录 |
+| Pi | `~/.pi/agent/sessions/**/*.jsonl` | 碰过的文件、当前工作目录 |
 
 Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`（Antigravity 2.0 app）。MiniMax 与 OpenCode 的共享会话仅计一次。全部本地运行，不上传任何东西，只读 token 数、路径和时间戳，不存对话内容。
 

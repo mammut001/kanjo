@@ -212,6 +212,7 @@
 "overview.show_these_sessions" = "Show these sessions";
 "overview.section.subscription_value" = "Subscription value";
 "overview.subscription_value.explanation" = "You pay the flat fee on the left. The number on the right is what the same work would cost on API billing.";
+"overview.account" = "Account";
 "overview.cycle_usage" = "API-equivalent usage this cycle";
 "overview.subscription_value.show_more" = "Show %d more";
 "overview.subscription_value.show_less" = "Show less";
