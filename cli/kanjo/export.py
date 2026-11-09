@@ -375,6 +375,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         for call in s.tool_paths:
             prewarm_paths.update(call)
     resolver.prewarm(prewarm_paths)
+    resolver.infer_deleted_worktrees(sessions)
 
     projects: Dict[str, ProjectAgg] = defaultdict(ProjectAgg)
     buckets = {attr.UNATTRIBUTED: ProjectAgg(), attr.EXCLUDED: ProjectAgg()}

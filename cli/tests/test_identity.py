@@ -2,7 +2,7 @@ import os
 import unittest
 
 from kanjo.identity import Resolver, ScratchpadDecoder, normalize_remote, parse_git_config_remotes, pick_remote
-from kanjo.sources.base import extract_paths
+from kanjo.sources.base import Session, extract_paths
 
 from tests.support import ALICE, GITHUB, FakeFS
 
@@ -167,6 +167,76 @@ class ResolverTest(unittest.TestCase):
         self.assertEqual(r.resolve(kit + "/a.swift").id, "github.com/alice/focuskit")
         self.assertEqual(r.resolve(GITHUB + "/FocusApp/b.swift").id, "github.com/alice/focusapp")
 
+    def test_broken_dotgit_without_head_or_config_ignored(self):
+        broken = ALICE + "/broken"
+        self.fs.mkdir(broken + "/.git/objects")
+        self.fs.mkdir(broken + "/.git/refs")
+        r = self.resolver()
+        self.assertIsNone(r.resolve(broken + "/file.txt"))
+
+    def test_infer_deleted_worktrees_signal_a(self):
+        # Existing repo at ALICE + "/code/app" with Button.tsx
+        app = ALICE + "/code/app"
+        self.fs.repo(app, [("origin", "https://github.com/alice/app.git")])
+        self.fs.write(app + "/src/components/Button.tsx", "export const Button = () => null;\n")
+
+        # Session worked in deleted worktree wt-feature touching Button.tsx
+        wt = ALICE + "/code/wt-feature"
+        s = Session(id="s1", agent="claude", file="/x/s1", cwd=wt,
+                    tool_paths=[[wt + "/src/components/Button.tsx"]])
+        r = self.resolver()
+        r.resolve(app)
+        r.infer_deleted_worktrees([s])
+        res = r.resolve(wt, allow_missing_fallback=False)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.id, "github.com/alice/app")
+
+    def test_infer_deleted_worktrees_signal_b(self):
+        app = ALICE + "/code/app"
+        self.fs.repo(app, [("origin", "https://github.com/alice/app.git")])
+        wt = ALICE + "/code/wt-empty"
+
+        # Parent session in app ran git worktree add wt-empty
+        parent_s = Session(id="p1", agent="claude", file="/x/p1", cwd=app,
+                           tool_paths=[[wt + "/init.log"]])
+        # Child session in wt-empty
+        child_s = Session(id="c1", agent="claude", file="/x/c1", cwd=wt,
+                          tool_paths=[])
+
+        r = self.resolver()
+        r.infer_deleted_worktrees([parent_s, child_s])
+        res = r.resolve(wt, allow_missing_fallback=False)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.id, "github.com/alice/app")
+
+    def test_infer_bundle_cloned_workspace_folds_into_remote_repo(self):
+        app = ALICE + "/code/app"
+        self.fs.repo(app, [("origin", "https://github.com/alice/app.git")])
+        self.fs.write(app + "/src/components/Button.tsx", "export const Button = () => null;\n")
+        self.fs.write(app + "/package.json", '{"name": "app"}\n')
+
+        clone_dir = ALICE + "/work/app-clone"
+        bundle_file = ALICE + "/work/app.bundle"
+        self.fs.repo(clone_dir, [("origin", bundle_file)])
+        self.fs.write(clone_dir + "/src/components/Button.tsx", "export const Button = () => null;\n")
+        self.fs.write(clone_dir + "/package.json", '{"name": "app"}\n')
+
+        s = Session(id="s1", agent="claude", file="/x/s1", cwd=clone_dir,
+                    tool_paths=[[clone_dir + "/src/components/Button.tsx"]])
+
+        r = self.resolver()
+        r.resolve(app)
+        r.resolve(clone_dir)
+        self.assertIn(bundle_file, r.projects)
+
+        r.infer_deleted_worktrees([s])
+
+        self.assertNotIn(bundle_file, r.projects)
+        res = r.resolve(clone_dir, allow_missing_fallback=False)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.id, "github.com/alice/app")
+        self.assertIn(clone_dir, r.project("github.com/alice/app").paths)
+
 
 class ScratchpadTest(unittest.TestCase):
     def test_decodes_dashed_names(self):
@@ -182,6 +252,10 @@ class ScratchpadTest(unittest.TestCase):
                              GITHUB + "/China easy go")
             self.assertIsNone(d.project_path("/private/tmp/claude-501/-Users-alice-Documents-GitHub-deleted/s"))
             self.assertIsNone(d.project_path(GITHUB + "/tcf-canada"))
+            self.assertEqual(
+                d.project_path(ALICE + "/.claude/projects/-Users-alice-Documents-GitHub-tcf-canada/memory/MEMORY.md"),
+                GITHUB + "/tcf-canada"
+            )
         finally:
             fs.cleanup()
 
@@ -191,6 +265,13 @@ class ExtractPathsTest(unittest.TestCase):
         cmd = "cd /Users/alice/repo; ls /Users/alice/repo2`echo x` && cat '/Users/alice/My Dir/f.txt' \"/opt/x\""
         self.assertEqual(extract_paths(cmd, home="/Users/alice"),
                          ["/Users/alice/My Dir/f.txt", "/opt/x", "/Users/alice/repo", "/Users/alice/repo2"])
+
+    def test_finish_rejects_newlines_and_carriage_returns(self):
+        from kanjo.sources.base import _finish
+        self.assertIsNone(_finish("/Users/alice/foo\nbar", "/Users/alice"))
+        self.assertIsNone(_finish("/Users/alice/foo\rbar", "/Users/alice"))
+        paths = extract_paths("cat /Users/alice/norm.txt", home="/Users/alice")
+        self.assertEqual(paths, ["/Users/alice/norm.txt"])
 
     def test_urls_and_relative_paths_ignored(self):
         self.assertEqual(extract_paths("curl https://github.com/a/b && ls src/x ../y", home="/h"), [])

@@ -82,6 +82,21 @@ class DecisionTest(unittest.TestCase):
         d = self.decide(session(cwd=cwd, calls=[[cwd + "/deleted/file.ts"]]))
         self.assertEqual((d.kind, d.shares), ("scratchpad", [(ID_B, 1.0)]))
 
+    def test_deleted_cwd_with_scratchpad_or_project_memory_attributes_to_scratchpad(self):
+        deleted_cwd = GITHUB + "/deleted-wt"
+        memory_file = ALICE + "/.claude/projects/-Users-alice-Documents-GitHub-proj-a/memory/MEMORY.md"
+        s = session(cwd=deleted_cwd, calls=[[memory_file]])
+        d = self.decide(s)
+        self.assertEqual((d.kind, d.shares), ("scratchpad", [(ID_A, 1.0)]))
+        self.assertNotIn(deleted_cwd, self.resolver.projects)
+
+        deleted_cwd2 = GITHUB + "/deleted-wt-2"
+        scratch_file = "/private/tmp/claude-501/-Users-alice-Documents-GitHub-proj-b/sess/scratchpad/plan.md"
+        s2 = session(cwd=deleted_cwd2, calls=[[scratch_file]])
+        d2 = self.decide(s2)
+        self.assertEqual((d2.kind, d2.shares), ("scratchpad", [(ID_B, 1.0)]))
+        self.assertNotIn(deleted_cwd2, self.resolver.projects)
+
     def test_unattributed(self):
         d = self.decide(session(cwd=ALICE + "/Downloads"))
         self.assertEqual((d.kind, d.shares), ("none", [(attr.UNATTRIBUTED, 1.0)]))

@@ -417,3 +417,10 @@
 "ios.quota_no_data" = "暂无额度数据";
 "ios.projects" = "项目";
 "ios.language" = "语言";
+"ios.empty.try_sample" = "预览示例数据";
+"ios.sample.banner" = "示例数据 · 在 Mac 上开启 iCloud 同步即可查看您的真实用量";
+"ios.sample.exit" = "退出";
+"ios.empty.steps.title" = "如何连接您的 Mac";
+"ios.empty.step1" = "在 Mac 上安装 Kanjo（GitHub 免费开源）";
+"ios.empty.step2" = "打开 Kanjo 设置 → 通用，开启 iCloud 同步";
+"ios.empty.step3" = "确保两台设备登录同一个 Apple ID";

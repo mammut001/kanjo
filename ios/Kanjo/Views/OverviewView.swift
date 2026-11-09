@@ -6,6 +6,7 @@ struct OverviewView: View {
     let report: UsageReport
     var deviceName: String? = nil
     var accountCode: String? = nil
+    var store: SnapshotStore? = nil
     @State private var range: TimeRange = .all
 
     private var currency: String { report.currency }
@@ -26,6 +27,9 @@ struct OverviewView: View {
         let result = filtered
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
+                if store?.isSampleMode == true {
+                    sampleBanner
+                }
                 header(result)
                 if !(report.subscriptions ?? [:]).isEmpty {
                     SubscriptionValueSection(report: report)
@@ -43,6 +47,34 @@ struct OverviewView: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private var sampleBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(Color(red: 0xD9 / 255.0, green: 0x77 / 255.0, blue: 0x57 / 255.0))
+            Text(L10n.tr("ios.sample.banner"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer(minLength: 6)
+            Button {
+                Task { await store?.exitSampleMode() }
+            } label: {
+                Text(L10n.tr("ios.sample.exit"))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
     }
 
     private func header(_ result: FilteredReport) -> some View {

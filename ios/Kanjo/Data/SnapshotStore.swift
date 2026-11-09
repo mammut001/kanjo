@@ -17,6 +17,7 @@ final class SnapshotStore {
     private(set) var state: State = .loading
     private(set) var deviceName: String?
     private(set) var accountCode: String?
+    private(set) var isSampleMode: Bool = false
     private let source: SnapshotSource
 
     init(source: SnapshotSource? = nil) {
@@ -31,7 +32,31 @@ final class SnapshotStore {
         return CloudKitSnapshotSource()
     }
 
+    func loadSample() async {
+        isSampleMode = true
+        state = .loading
+        do {
+            let sampleSource = BundledSampleSnapshotSource()
+            if let report = try await sampleSource.load() {
+                deviceName = "Sample Mac"
+                accountCode = nil
+                state = .loaded(report)
+                SyncLog.sync.info("sample snapshot loaded")
+            } else {
+                state = .failed("Sample data not found")
+            }
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    func exitSampleMode() async {
+        isSampleMode = false
+        await load()
+    }
+
     func load() async {
+        isSampleMode = false
         SyncLog.sync.info("load started: source \(String(describing: type(of: self.source)), privacy: .public)")
         await load(preserveState: false)
     }
@@ -41,6 +66,13 @@ final class SnapshotStore {
     }
 
     private func load(preserveState: Bool) async {
+        if isSampleMode {
+            if preserveState {
+                await loadSample()
+                return
+            }
+            isSampleMode = false
+        }
         if !preserveState {
             state = .loading
         }

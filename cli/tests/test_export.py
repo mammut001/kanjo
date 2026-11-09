@@ -12,7 +12,7 @@ from unittest import mock
 from kanjo import cli
 import sqlite3
 from kanjo.sources import base, antigravity, codex
-from kanjo.cache import RepoCache, SessionCache, _dump_session, _load_session
+from kanjo.cache import REPO_CACHE_VERSION, RepoCache, SessionCache, _dump_session, _load_session
 from kanjo.sources.base import Message, Session, open_sqlite_ro, extract_paths
 from kanjo.config import Config
 from kanjo.export import _apportion_by_weight, build_export, check_invariants, dedupe
@@ -274,7 +274,7 @@ class CacheExportComparisonTest(unittest.TestCase):
         doc_cold = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold)
 
         # Verify repo cache file was saved
-        repo_cache_path = os.path.join(self.cache_dir, "repo-cache-v1.json")
+        repo_cache_path = os.path.join(self.cache_dir, "repo-cache-v%d.json" % REPO_CACHE_VERSION)
         self.assertTrue(os.path.exists(repo_cache_path))
         with open(repo_cache_path, "r", encoding="utf-8") as h:
             cached_data = json.load(h)
