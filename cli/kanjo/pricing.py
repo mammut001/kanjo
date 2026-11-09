@@ -115,7 +115,6 @@ AGENT_DEFAULT = {
     "kimicode": "moonshotai/kimi-k3",
     "musecode": "meta/muse-spark-1.2",
     "deepseek_harness": "deepseek/deepseek-v4-pro",
-    "omp": "stepfun/step-5-preview",
     "mimocode": "xiaomi/mimo-v2.5-pro",
 }
 GLOBAL_DEFAULT = "anthropic/claude-fable-5.1"
