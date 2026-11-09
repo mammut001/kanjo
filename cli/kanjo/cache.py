@@ -10,8 +10,11 @@ the 80-character session title.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
+import stat
 import tempfile
 import time
 from typing import Callable, Dict, List, Optional, Set, Tuple
@@ -23,6 +26,7 @@ REPO_CACHE_VERSION = 2
 NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
                "thinking", "cwd", "branch", "key")
+_FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
 
 def _cache_dir() -> str:
@@ -35,17 +39,20 @@ def _cache_dir() -> str:
 
 def _signature(path: str) -> Optional[list]:
     stat_path = path.split("::", 1)[0] if "::" in path else path
-    sig = []
-    for p in (stat_path, stat_path + "-wal"):
+    try:
+        st = os.stat(stat_path)
+    except OSError:
+        return None
+    main_sig = [st.st_size, st.st_mtime_ns]
+    if stat_path.endswith((".db", ".sqlite", ".sqlite3")):
         try:
-            st = os.stat(p)
+            st_wal = os.stat(stat_path + "-wal")
+            wal_sig = [st_wal.st_size, st_wal.st_mtime_ns]
         except OSError:
-            if p == stat_path:
-                return None
-            sig.append(None)
-            continue
-        sig.append([st.st_size, st.st_mtime_ns])
-    return sig
+            wal_sig = None
+    else:
+        wal_sig = None
+    return [main_sig, wal_sig]
 
 
 def _dump_session(s: Session) -> dict:
@@ -99,10 +106,13 @@ def _load_session(d: dict) -> Session:
         cwd_counts=d.get("cwd_counts") or {},
         remote_hints=d.get("remote_hints") or {},
     )
-    s.messages = [
-        Message(*row) if len(row) == 11 else Message(**dict(zip(_MSG_FIELDS, row)))
-        for row in msgs
-    ]
+    try:
+        s.messages = [Message(*row) for row in msgs]
+    except TypeError:
+        s.messages = [
+            Message(*row) if len(row) == 11 else Message(**dict(zip(_MSG_FIELDS, row)))
+            for row in msgs
+        ]
     return s
 
 
@@ -122,6 +132,7 @@ class RepoCache:
         self.entries: Dict[str, dict] = {}
         self.dirty = False
         self._stat_sig_cache: Dict[str, Optional[list]] = {}
+        self._stat_isdir_cache: Dict[str, bool] = {}
         try:
             with open(self.path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -143,9 +154,24 @@ class RepoCache:
                     break
                 cur = parent
                 cand = self.entries.get(cur)
-                if cand is not None and cand.get("repo") is not None:
-                    entry = cand
-                    break
+                if cand is not None:
+                    if cand.get("repo") is not None:
+                        entry = cand
+                        break
+                    else:
+                        if cur == os.path.dirname(path):
+                            ts = cand.get("ts")
+                            if ts is not None and isinstance(ts, (int, float)):
+                                current_time = time.time() if now is None else now
+                                if current_time - ts < NEGATIVE_TTL:
+                                    if _FILE_LIKE.search(os.path.basename(path)):
+                                        self.entries[path] = cand
+                                        return True, None
+                                    stat_path = (fs_root + path) if fs_root else path
+                                    if not os.path.lexists(os.path.join(stat_path, ".git")):
+                                        self.entries[path] = cand
+                                        return True, None
+                        break
 
         if entry is None:
             return False, None
@@ -167,18 +193,26 @@ class RepoCache:
         stat_path = (fs_root + dotgit) if fs_root else dotgit
         if stat_path in self._stat_sig_cache:
             current_sig = self._stat_sig_cache[stat_path]
+            is_dir = self._stat_isdir_cache.get(stat_path, False)
         else:
             try:
                 st = os.stat(stat_path)
+                is_dir = stat.S_ISDIR(st.st_mode)
                 current_sig = [st.st_mtime_ns, st.st_ino]
             except OSError:
                 current_sig = None
+                is_dir = False
             self._stat_sig_cache[stat_path] = current_sig
+            self._stat_isdir_cache[stat_path] = is_dir
 
-        if current_sig is not None and current_sig == sig:
-            if cur != path:
-                self.entries[path] = entry
-            return True, entry.get("repo")
+        if current_sig is not None:
+            if current_sig == sig or (is_dir and current_sig[1] == sig[1]):
+                if current_sig != sig:
+                    entry["sig"] = current_sig
+                    self.dirty = True
+                if cur != path:
+                    self.entries[path] = entry
+                return True, entry.get("repo")
 
         # Invalidate: .git was moved, deleted, or changed
         return False, None
@@ -222,12 +256,202 @@ class RepoCache:
                     pass
 
 
+WORKTREE_CACHE_VERSION = 1
+
+
+class WorktreeCache:
+    """Persistent cache for infer_deleted_worktrees mappings."""
+
+    def __init__(self, directory: Optional[str] = None):
+        self.dir = directory or _cache_dir()
+        self.path = os.path.join(self.dir, "worktree-cache-v%d.json" % WORKTREE_CACHE_VERSION)
+        self.entries: Dict[str, dict] = {}
+        self.bundle_entries: Dict[str, dict] = {}
+        self.dirty = False
+        try:
+            with open(self.path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict) and data.get("version") == WORKTREE_CACHE_VERSION:
+                self.entries = data.get("worktrees") or {}
+                self.bundle_entries = data.get("bundles") or {}
+        except (OSError, ValueError):
+            self.entries = {}
+            self.bundle_entries = {}
+
+    def get_worktree(self, d: str, session_sigs: Dict[str, str],
+                     known_projects: Dict[str, List[str]], exists_fn: Callable[[str], bool]) -> Optional[str]:
+        entry = self.entries.get(d)
+        if entry is None:
+            return None
+        if exists_fn(d):
+            return None
+        cached_sigs = entry.get("session_sigs", {})
+        for s_id, expected_sig in cached_sigs.items():
+            if session_sigs.get(s_id) != expected_sig:
+                return None
+        best_pid = entry.get("best_pid")
+        if best_pid is None:
+            return ""  # Empty string represents cached negative entry
+        if best_pid not in known_projects:
+            return None
+        return best_pid
+
+    def put_worktree(self, d: str, best_pid: Optional[str], session_sigs: Dict[str, str]) -> None:
+        self.entries[d] = {
+            "best_pid": best_pid,
+            "session_sigs": dict(session_sigs),
+        }
+        self.dirty = True
+
+    def get_bundle(self, bproj_id: str, session_sigs: Dict[str, str],
+                   known_projects: Dict[str, List[str]]) -> Optional[Tuple[str, List[str]]]:
+        entry = self.bundle_entries.get(bproj_id)
+        if entry is None:
+            return None
+        best_pid = entry.get("best_pid")
+        if not best_pid or best_pid not in known_projects:
+            return None
+        cached_sigs = entry.get("session_sigs", {})
+        for s_id, expected_sig in cached_sigs.items():
+            if session_sigs.get(s_id) != expected_sig:
+                return None
+        return best_pid, entry.get("paths", [])
+
+    def put_bundle(self, bproj_id: str, best_pid: str, paths: List[str], session_sigs: Dict[str, str]) -> None:
+        self.bundle_entries[bproj_id] = {
+            "best_pid": best_pid,
+            "paths": list(paths),
+            "session_sigs": dict(session_sigs),
+        }
+        self.dirty = True
+
+    def save(self) -> None:
+        if not self.dirty:
+            return
+        tmp = None
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(prefix=".worktree-cache-", dir=self.dir)
+            data = json.dumps({
+                "version": WORKTREE_CACHE_VERSION,
+                "worktrees": self.entries,
+                "bundles": self.bundle_entries,
+            }, ensure_ascii=False, separators=(",", ":"))
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+            del data
+            os.replace(tmp, self.path)
+            self.dirty = False
+        except OSError:
+            pass
+        finally:
+            if tmp is not None and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+
+
+ATTRIBUTION_CACHE_VERSION = 2
+
+
+def _session_attribution_sig(session: Session) -> str:
+    h = hashlib.sha1()
+    h.update((session.cwd or "").encode("utf-8"))
+    h.update(str(session.started).encode("utf-8"))
+    h.update(str(session.ended).encode("utf-8"))
+    for cwd, count in sorted((session.cwd_counts or {}).items()):
+        h.update(f"{cwd}:{count};".encode("utf-8"))
+    for call in session.tool_paths:
+        for p in call:
+            h.update(p.encode("utf-8"))
+            h.update(b";")
+    return h.hexdigest()
+
+
+class AttributionCache:
+    """Persistent cache for attribution decisions of unchanged sessions."""
+
+    def __init__(self, directory: Optional[str] = None):
+        self.dir = directory or _cache_dir()
+        self.path = os.path.join(self.dir, "attribution-cache-v%d.json" % ATTRIBUTION_CACHE_VERSION)
+        self.entries: Dict[str, dict] = {}
+        self.config_sig: str = ""
+        self.dirty = False
+        try:
+            with open(self.path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict) and data.get("version") == ATTRIBUTION_CACHE_VERSION:
+                self.config_sig = data.get("config_sig") or ""
+                self.entries = data.get("entries") or {}
+        except (OSError, ValueError):
+            self.entries = {}
+            self.config_sig = ""
+
+    def get(self, session: Session, worktree_sig: str, config_sig: str) -> Optional[dict]:
+        if config_sig != self.config_sig:
+            return None
+        key = "%s\0%s" % (session.agent, session.id)
+        entry = self.entries.get(key)
+        if entry is None:
+            return None
+        if entry.get("worktree_sig") != worktree_sig:
+            return None
+        expected_sig = _session_attribution_sig(session)
+        if entry.get("sig") != expected_sig:
+            return None
+        dec_data = entry.get("decision")
+        if not dec_data or not isinstance(dec_data, dict):
+            return None
+        return dec_data
+
+    def put(self, session: Session, dec_data: dict, worktree_sig: str, config_sig: str) -> None:
+        if self.config_sig != config_sig:
+            self.entries.clear()
+            self.config_sig = config_sig
+        key = "%s\0%s" % (session.agent, session.id)
+        self.entries[key] = {
+            "sig": _session_attribution_sig(session),
+            "worktree_sig": worktree_sig,
+            "decision": dec_data,
+        }
+        self.dirty = True
+
+    def save(self) -> None:
+        if not self.dirty:
+            return
+        tmp = None
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(prefix=".attribution-cache-", dir=self.dir)
+            data = json.dumps({
+                "version": ATTRIBUTION_CACHE_VERSION,
+                "config_sig": self.config_sig,
+                "entries": self.entries,
+            }, ensure_ascii=False, separators=(",", ":"))
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+            del data
+            os.replace(tmp, self.path)
+            self.dirty = False
+        except OSError:
+            pass
+        finally:
+            if tmp is not None and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+
+
 class SessionCache:
     def __init__(self, directory: Optional[str] = None):
         self.dir = directory or _cache_dir()
         self.path = os.path.join(self.dir, "parse-cache-v%d.json" % CACHE_VERSION)
         self.journal_path = os.path.join(self.dir, "parse-cache-v%d.journal.jsonl" % CACHE_VERSION)
         self.repo_cache = RepoCache(self.dir)
+        self.worktree_cache = WorktreeCache(self.dir)
+        self.attr_cache = AttributionCache(self.dir)
         self.entries: Dict[str, dict] = {}
         self.used = set()
         self.modified_keys: Set[str] = set()
@@ -316,6 +540,8 @@ class SessionCache:
             del self.entries[key]
         if not (self.dirty or stale):
             self.repo_cache.save()
+            self.worktree_cache.save()
+            self.attr_cache.save()
             return
 
         # Proportional save: append to journal if under threshold and parse-cache exists
@@ -330,6 +556,8 @@ class SessionCache:
                     self.dirty = False
                     self.dirty_keys.clear()
                     self.repo_cache.save()
+                    self.worktree_cache.save()
+                    self.attr_cache.save()
                     return
             except OSError:
                 pass
@@ -360,3 +588,5 @@ class SessionCache:
                 except OSError:
                     pass
         self.repo_cache.save()
+        self.worktree_cache.save()
+        self.attr_cache.save()

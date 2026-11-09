@@ -58,15 +58,18 @@ def roots() -> List[str]:
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
     by_name: Dict[str, Tuple[str, float]] = {}
     for root in dirs if dirs is not None else roots():
-        if os.path.isdir(root):
-            for path in sorted(glob.glob(os.path.join(root, "*.db"))):
-                name = os.path.basename(path)
-                try:
-                    mtime = os.path.getmtime(path)
-                except OSError:
-                    mtime = 0.0
-                if name not in by_name or mtime > by_name[name][1]:
-                    by_name[name] = (path, mtime)
+        try:
+            with os.scandir(root) as it:
+                for entry in it:
+                    if entry.name.endswith(".db"):
+                        try:
+                            mtime = entry.stat().st_mtime
+                        except OSError:
+                            mtime = 0.0
+                        if entry.name not in by_name or mtime > by_name[entry.name][1]:
+                            by_name[entry.name] = (entry.path, mtime)
+        except OSError:
+            pass
     return [(path, None) for path, _ in sorted(by_name.values(), key=lambda t: t[0])]
 
 
