@@ -1,0 +1,3 @@
+{"type": "session", "id": "omp-sess-1", "cwd": "/Users/alice/Projects/omp-proj", "timestamp": "2026-11-09T08:00:00Z"}
+{"type": "message", "timestamp": "2026-11-09T08:00:02Z", "message": {"role": "user", "content": "Execute omp build"}}
+{"type": "message", "timestamp": "2026-11-09T08:00:05Z", "message": {"role": "assistant", "model": "stepfun/step-5-preview", "usage": {"input": 1000, "output": 300, "cacheRead": 200, "cacheWrite": 40, "reasoningTokens": 50}}}

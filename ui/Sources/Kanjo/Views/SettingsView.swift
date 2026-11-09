@@ -393,6 +393,7 @@ struct SettingsView: View {
         let knownOrder = [
             "claude", "codex", "antigravity", "grok", "copilot", "minimax", "qwen", "commandcode", "opencode", "pi",
             "workbuddy", "workbuddy_ai", "grok_bot", "qoderwork", "qodercli", "qodercli_cn", "zcode", "kimicode", "musecode",
+            "codebuddy", "qoder_ide", "hermes", "openclaw", "devin", "mimocode", "prime_agent", "omp", "deepseek_harness",
         ]
         for a in knownOrder where !seen.contains(a) {
             agentList.append(a)

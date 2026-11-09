@@ -36,6 +36,15 @@ public enum AgentColors {
     public static let zcode = AgentColorPair(light: 0x3C5A31, dark: 0x5A774F)
     public static let kimicode = AgentColorPair(light: 0x985C26, dark: 0xB97B47)
     public static let musecode = AgentColorPair(light: 0xC77C80, dark: 0xE89DA0)
+    public static let codebuddy = AgentColorPair(light: 0x1E88E5, dark: 0x42A5F5)
+    public static let qoder_ide = AgentColorPair(light: 0x5C6BC0, dark: 0x7986CB)
+    public static let hermes = AgentColorPair(light: 0xD97706, dark: 0xF59E0B)
+    public static let openclaw = AgentColorPair(light: 0xE11D48, dark: 0xFB7185)
+    public static let devin = AgentColorPair(light: 0x0D9488, dark: 0x14B8A6)
+    public static let mimocode = AgentColorPair(light: 0xEA580C, dark: 0xFB923C)
+    public static let prime_agent = AgentColorPair(light: 0x9333EA, dark: 0xA855F7)
+    public static let omp = AgentColorPair(light: 0x059669, dark: 0x10B981)
+    public static let deepseek_harness = AgentColorPair(light: 0x2563EB, dark: 0x60A5FA)
 
     public static let all: [String: AgentColorPair] = [
         "claude": claude,
@@ -57,6 +66,15 @@ public enum AgentColors {
         "zcode": zcode,
         "kimicode": kimicode,
         "musecode": musecode,
+        "codebuddy": codebuddy,
+        "qoder_ide": qoder_ide,
+        "hermes": hermes,
+        "openclaw": openclaw,
+        "devin": devin,
+        "mimocode": mimocode,
+        "prime_agent": prime_agent,
+        "omp": omp,
+        "deepseek_harness": deepseek_harness,
     ]
 
     public static func pair(for agent: String) -> AgentColorPair {
@@ -83,6 +101,15 @@ public enum AgentColors {
         "zcode": "ZCode",
         "kimicode": "Kimi Code",
         "musecode": "Muse Code",
+        "codebuddy": "CodeBuddy",
+        "qoder_ide": "Qoder IDE",
+        "hermes": "Hermes",
+        "openclaw": "OpenClaw",
+        "devin": "Devin",
+        "mimocode": "MiMo Code",
+        "prime_agent": "Prime Agent",
+        "omp": "OMP",
+        "deepseek_harness": "DeepSeek Harness",
     ]
 
     public static func label(for agent: String) -> String {

@@ -1,0 +1,2 @@
+{"type":"user","cwd":"/Users/alice/Projects/demo","message":{"content":"build demo app","aiTitle":"Build Demo App"},"timestamp":1794000000000}
+{"type":"assistant","model":"GLM-5.2","usage":{"input":1000,"output":500,"cache_read":200,"cache_write":100,"thinking":50},"tool_calls":[{"name":"write_file","arguments":{"path":"/Users/alice/Projects/demo/main.py"}}],"timestamp":1794000010000,"messageId":"msg-1"}

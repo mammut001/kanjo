@@ -23,9 +23,11 @@ from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
 from .providers import provider_for, PROVIDER_LABELS
 from .sources import (
-    antigravity, claude, codex, commandcode, copilot, grok, grok_bot,
-    kimicode, minimax, musecode, opencode, pi, qodercli, qodercli_cn,
-    qoderwork, qwen, workbuddy, workbuddy_ai, zcode,
+    antigravity, claude, codebuddy, codex, commandcode, copilot,
+    deepseek_harness, devin, grok, grok_bot, hermes, kimicode,
+    mimocode, minimax, musecode, omp, openclaw, opencode, pi,
+    prime_agent, qoder_ide, qodercli, qodercli_cn, qoderwork, qwen,
+    workbuddy, workbuddy_ai, zcode,
 )
 from . import __version__
 from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
@@ -52,6 +54,15 @@ SOURCES = {
     "zcode": zcode,
     "kimicode": kimicode,
     "musecode": musecode,
+    "codebuddy": codebuddy,
+    "qoder_ide": qoder_ide,
+    "hermes": hermes,
+    "openclaw": openclaw,
+    "devin": devin,
+    "mimocode": mimocode,
+    "prime_agent": prime_agent,
+    "omp": omp,
+    "deepseek_harness": deepseek_harness,
 }
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "thinking")
 

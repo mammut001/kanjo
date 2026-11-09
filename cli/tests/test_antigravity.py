@@ -26,6 +26,8 @@ class AntigravitySourceTest(unittest.TestCase):
             expected = [
                 os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
                 os.path.expanduser("~/.gemini/antigravity/conversations"),
+                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
+                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
             ]
             self.assertEqual(r, expected)
 
@@ -108,6 +110,8 @@ class AntigravitySourceTest(unittest.TestCase):
             expected = [
                 os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
                 os.path.expanduser("~/.gemini/antigravity/conversations"),
+                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
+                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
             ]
             self.assertEqual(agy_dirs, expected)
 
