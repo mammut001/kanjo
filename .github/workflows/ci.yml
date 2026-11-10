@@ -61,9 +61,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: CLI unit tests
+      # Only the reporter path is supported on Windows; the rest of the suite
+      # assumes POSIX paths, file modes and the system tz database.
+      - name: CLI unit tests (reporter path)
         working-directory: cli
-        run: python -m unittest -v
+        run: python -m unittest -v tests.test_windows_support tests.test_family_report tests.test_antigravity
       - name: Build kanjo-cli.zip
         shell: pwsh
         run: |
