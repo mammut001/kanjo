@@ -26,6 +26,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import sqlite3
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote
@@ -196,8 +197,12 @@ def _uri_path(uri: Optional[str]) -> Optional[str]:
     if not uri:
         return None
     if uri.startswith("file://"):
-        return unquote(uri[len("file://"):]) or None
-    return uri if uri.startswith("/") else None
+        u = unquote(uri[len("file://"):])
+        if re.match(r"^/[A-Za-z]:", u):
+            u = u[1:]
+        return u or None
+    is_path = uri.startswith("/") or bool(re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", uri))
+    return uri if is_path else None
 
 
 def gen_record(record: bytes, fallback_ts=None):

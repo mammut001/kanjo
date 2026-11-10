@@ -38,6 +38,10 @@ def data_dir() -> str:
     explicit = os.environ.get("KANJO_DATA_DIR")
     if explicit:
         return os.path.expanduser(explicit)
+    from . import winsupport
+    if winsupport.is_windows():
+        local = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+        return os.path.join(local, "kanjo", "data")
     return os.path.join(os.path.expanduser("~"), ".local", "share", "kanjo")
 
 

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from . import __version__
+from . import __version__, winsupport
 from .config import Config, ConfigError, load as load_config
 from .export import (
     build_family_report,
@@ -35,8 +35,11 @@ def _cache(args):
 
 
 def cmd_report_family(args) -> int:
-    # 1. Token must come strictly from environment variable
+    # 1. Token must come strictly from environment variable or Windows Credential Manager
     token = os.environ.get("KANJO_FAMILY_TOKEN")
+    if not token or not token.strip():
+        if winsupport.is_windows():
+            token = winsupport.cred_read("KanjoFamilyReport")
     if not token or not token.strip():
         output = {"status": "error", "message": "KANJO_FAMILY_TOKEN environment variable is not set"}
         print(json.dumps(output))

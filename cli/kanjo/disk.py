@@ -110,9 +110,10 @@ def default_roots() -> dict:
     (so the default layout is unchanged). ``KANJO_SCRATCH_DIR``, ``KANJO_GROK_DIR``
     and ``KANJO_CLAUDE_APP_CACHE`` exist so tests never touch the real machine.
     """
+    uid = os.getuid() if hasattr(os, "getuid") else 0
     return {
         "claude_projects": env_dirs("KANJO_CLAUDE_DIR", ["~/.claude/projects"]),
-        "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%d" % os.getuid())),
+        "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%s" % uid)),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
             "~/.gemini/antigravity-cli/conversations",
@@ -164,6 +165,12 @@ def default_roots() -> dict:
 HEAVY_DIRS = {"node_modules", ".build", "DerivedData", ".venv", "target", "Pods"}
 
 
+def _stat_bytes(st) -> int:
+    if hasattr(st, "st_blocks"):
+        return int(st.st_blocks) * 512
+    return int(getattr(st, "st_size", 0))
+
+
 def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float], Optional[float], int]:
     """Measure a heavy build/dependency directory with du -sk and fast file count.
     Returns (bytes, files, oldest, newest, errors).
@@ -186,7 +193,7 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
         file_count = 1
         return (total_bytes, file_count, oldest, newest, errors)
 
-    total_bytes = int(dir_st.st_blocks) * 512
+    total_bytes = _stat_bytes(dir_st)
     stack = [dir_path]
     while stack:
         cur = stack.pop()
@@ -203,10 +210,10 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
                     errors += 1
                     continue
                 if stat.S_ISDIR(st.st_mode):
-                    total_bytes += int(st.st_blocks) * 512
+                    total_bytes += _stat_bytes(st)
                     stack.append(ent.path)
                 else:
-                    total_bytes += int(st.st_blocks) * 512
+                    total_bytes += _stat_bytes(st)
                     file_count += 1
                 ts = st.st_mtime
                 if oldest is None or ts < oldest:
@@ -286,7 +293,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
 
     try:
         root_st = os.lstat(path) if _root_stat is None else _root_stat
-        total += root_st.st_blocks * 512
+        total += _stat_bytes(root_st)
         ts = root_st.st_mtime
         oldest = ts
         newest = ts
@@ -324,7 +331,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
                     elif ent.name in HEAVY_DIRS:
                         heavy_dirs.append((ent.path, st))
                     else:
-                        total += st.st_blocks * 512
+                        total += _stat_bytes(st)
                         ts = st.st_mtime
                         if oldest is None or ts < oldest:
                             oldest = ts
@@ -332,7 +339,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
                             newest = ts
                         stack.append(ent.path)
                     continue
-                total += st.st_blocks * 512
+                total += _stat_bytes(st)
                 files += 1
                 ts = st.st_mtime
                 if oldest is None or ts < oldest:
@@ -1088,7 +1095,7 @@ def _files_older_than(root: str, now: float, days: int) -> List[Tuple[str, int, 
             except OSError:
                 continue
             if now - st.st_mtime >= limit:
-                found.append((path, int(st.st_blocks) * 512, os.path.relpath(path, root)))
+                found.append((path, _stat_bytes(st), os.path.relpath(path, root)))
     return found
 
 

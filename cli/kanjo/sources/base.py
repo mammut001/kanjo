@@ -486,12 +486,13 @@ def _finish(path: str, home: str) -> Optional[str]:
     if "\n" in p or "\r" in p:
         return None
     if p.startswith("~"):
-        if not (p == "~" or p.startswith("~/")):
+        if not (p == "~" or p.startswith("~/") or p.startswith("~\\")):
             return None
         p = home + p[1:]
-    if not p.startswith("/") or len(p) < 2 or p.startswith("//"):
+    is_win = bool(re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", p))
+    if not (p.startswith("/") or is_win):
         return None
-    if p[1] not in _VALID_SECOND_CHAR:
+    if p.startswith("/") and (len(p) < 2 or p.startswith("//") or p[1] not in _VALID_SECOND_CHAR):
         return None
     return os.path.normpath(p)
 
@@ -529,12 +530,18 @@ def absolutize(path, cwd: Optional[str], home: Optional[str] = None) -> Optional
     if p.startswith("file://"):
         from urllib.parse import unquote
         p = unquote(p[len("file://"):])
-    if p.startswith("~/") or p == "~":
+        if re.match(r"^/[A-Za-z]:", p):
+            p = p[1:]
+    if p.startswith("~/") or p == "~" or p.startswith("~\\"):
         p = (home or os.path.expanduser("~")) + p[1:]
-    if not p.startswith("/"):
+    is_abs = p.startswith("/") or bool(re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", p))
+    if not is_abs:
         if not cwd or re.match(r"^[a-z][a-z0-9+.\-]*:", p, re.I):
             return None
-        p = os.path.join(cwd, p)
+        if "\\" in cwd and "/" not in cwd:
+            p = cwd.rstrip("\\") + "\\" + p.replace("/", "\\")
+        else:
+            p = os.path.join(cwd, p)
     return os.path.normpath(p)
 
 

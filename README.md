@@ -149,7 +149,8 @@ Kanjo can report aggregate token usage and quota windows to your family usage se
 |---|---|
 | Mac with Apple silicon (M1 or later) | Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest) and install it as above. |
 | Mac with Intel | The same DMG: it is a universal build. |
-| Windows / Linux | Not supported yet. There is no app, and the CLI has not been tested there. |
+| Windows (no admin rights needed) | Run in PowerShell:<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f'`<br>*(Check company IT policy before running on work computers; to uninstall, run the script with `-Uninstall`)* |
+| Linux | Not supported yet. There is no app, and the CLI has not been tested there. |
 
 1. Ask the family manager for your personal report token. Each member gets their own; the manager can revoke it at any time.
 2. Open Kanjo → Settings → **Family usage**, turn it on, keep the server address (`https://usage.paytonpei.top` for our family), and paste the token. It is stored in the macOS Keychain.
@@ -364,7 +365,8 @@ Kanjo 可以把用量汇总上报到家庭服务器（`family-server`），方�
 |---|---|
 | Apple 芯片的 Mac（M1 及以后） | 从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，按上面的方式安装。 |
 | Intel 芯片的 Mac | 下载同一个 DMG，是通用版。 |
-| Windows / Linux | 暂不支持：没有应用，CLI 也没有在这些系统上测试过。 |
+| Windows（无需管理员权限） | 在 PowerShell 中运行：<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f'`<br>*(在公司电脑上运行前请确认符合公司 IT 规定；如需卸载，运行脚本并加上 `-Uninstall`)* |
+| Linux | 暂不支持：没有应用，CLI 也没有在这些系统上测试过。 |
 
 1. 向家庭管理员要你自己的上报令牌。每人一个，管理员可以随时作废。
 2. 打开 Kanjo → 设置 → **家庭用量**，打开开关，服务器地址保持默认（我们家是 `https://usage.paytonpei.top`），粘贴令牌。令牌存在 macOS 钥匙串里。

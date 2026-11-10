@@ -10,7 +10,7 @@ import sys
 import uuid
 from typing import List, Optional
 
-from . import __version__, disk_cache
+from . import __version__, disk_cache, winsupport
 from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
@@ -335,6 +335,9 @@ def cmd_paths(args) -> int:
 
 
 def cmd_disk(args) -> int:
+    if winsupport.is_windows():
+        print("kanjo: disk command is not supported on Windows", file=sys.stderr)
+        return 2
     if getattr(args, "disk_cmd", None) == "clean":
         try:
             days = parse_older_than(args.older_than) if args.older_than else None
@@ -349,6 +352,40 @@ def cmd_disk(args) -> int:
         sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
     else:
         print(_format_disk(doc))
+    return 0
+
+
+def cmd_family_token(args) -> int:
+    if not winsupport.is_windows():
+        print("On macOS, the family token is managed in the Kanjo App Settings (stored in macOS Keychain).")
+        return 0
+    action = getattr(args, "token_action", None) or getattr(args, "action", None)
+    if action == "set":
+        import getpass
+        if sys.stdin.isatty():
+            token = getpass.getpass("Token: ").strip()
+        else:
+            token = sys.stdin.readline().strip()
+        if not token:
+            print("kanjo: empty token", file=sys.stderr)
+            return 1
+        if winsupport.cred_write("KanjoFamilyReport", token):
+            print("token set")
+            return 0
+        else:
+            print("kanjo: failed to save token to Windows Credential Manager", file=sys.stderr)
+            return 1
+    elif action == "status":
+        secret = winsupport.cred_read("KanjoFamilyReport")
+        if secret:
+            print("set")
+        else:
+            print("not set")
+        return 0
+    elif action == "clear":
+        winsupport.cred_delete("KanjoFamilyReport")
+        print("token cleared")
+        return 0
     return 0
 
 
@@ -448,6 +485,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--member-label", metavar="NAME", help="display name for member (optional)")
     common(p, threshold=False)
     p.set_defaults(func=cmd_report_family)
+
+    p = sub.add_parser("family-token", help="manage family report token (Windows Credential Manager)")
+    p.add_argument("token_action", choices=("set", "clear", "status"), metavar="ACTION",
+                   help="set, clear or check status of family report token")
+    p.set_defaults(func=cmd_family_token)
     return parser
 
 

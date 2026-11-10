@@ -31,6 +31,31 @@ _TEMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folde
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
 _CLEAN_CACHE: Dict[str, Optional[str]] = {}
+_WINDOWS_ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _is_win_path(p: str) -> bool:
+    """Windows absolute path (C:\\..., C:/..., \\\\server\\...). Backslash is a
+    separator only in these; in POSIX paths it is an ordinary character (and
+    often junk from shell text such as a literal "\\n"), so it must not split."""
+    return bool(_WINDOWS_ABS_PATH.match(p or ""))
+
+
+def _is_subpath(p: str, prefix: str) -> bool:
+    if not _is_win_path(prefix):
+        clean_prefix = prefix.rstrip("/")
+        return p == clean_prefix or p.startswith(clean_prefix + "/")
+    clean_prefix = prefix.rstrip("/\\")
+    if p == clean_prefix:
+        return True
+    return p.startswith(clean_prefix + "/") or p.startswith(clean_prefix + "\\")
+
+
+def _path_basename(path: str) -> str:
+    if not _is_win_path(path):
+        return os.path.basename(path.rstrip("/"))
+    p = path.rstrip("/\\")
+    return p.split("/")[-1].split("\\")[-1]
 
 
 def clear_clean_cache() -> None:
@@ -57,8 +82,11 @@ def normalize_remote(url: str) -> Optional[str]:
     if not u:
         return None
     if u.startswith("file://"):
-        return os.path.normpath(unquote(u[len("file://"):]))
-    if u.startswith("/") or u.startswith("~") or u.startswith("."):
+        p = unquote(u[len("file://"):])
+        if re.match(r"^/[A-Za-z]:", p):
+            p = p[1:]
+        return os.path.normpath(p)
+    if u.startswith("/") or u.startswith("~") or u.startswith(".") or bool(_WINDOWS_ABS_PATH.match(u)):
         return os.path.normpath(os.path.expanduser(u))
     m = re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*://(.*)$", u)
     if m:
@@ -238,7 +266,7 @@ class Resolver:
     @staticmethod
     def _alias_key(value: str) -> str:
         value = (value or "").strip()
-        if value.startswith("/") or value.startswith("~"):
+        if value.startswith("/") or value.startswith("~") or bool(_WINDOWS_ABS_PATH.match(value)):
             return os.path.normpath(os.path.expanduser(value))
         return normalize_remote(value) or value.lower()
 
@@ -247,7 +275,7 @@ class Resolver:
             return self._alias_of[pid]
         for p in paths:
             for key, canonical in self._alias_of.items():
-                if key.startswith("/") and (p == key or p.startswith(key.rstrip("/") + "/")):
+                if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and (p == key or _is_subpath(p, key)):
                     return canonical
         return pid
 
@@ -447,9 +475,9 @@ class Resolver:
         """The user aliased this repo's own path (not merely a parent of it)."""
         own = (info.root, info.main_root)
         for key in self._alias_of:
-            if key.startswith("/") and any(p == key or p.startswith(key.rstrip("/") + "/") for p in own):
+            if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and any(p == key or _is_subpath(p, key) for p in own):
                 outer_paths = (info.outer.root, info.outer.main_root) if info.outer else ()
-                if not any(o == key or o.startswith(key.rstrip("/") + "/") for o in outer_paths):
+                if not any(o == key or _is_subpath(o, key) for o in outer_paths):
                     return True
         return False
 
@@ -458,8 +486,8 @@ class Resolver:
         project = self.projects.get(canonical)
         if project is None:
             if canonical != pid:
-                is_path = canonical.startswith("/")
-                name = os.path.basename(canonical) if is_path else (canonical.rstrip("/").split("/")[-1])
+                is_path = canonical.startswith("/") or bool(_WINDOWS_ABS_PATH.match(canonical))
+                name = _path_basename(canonical) if is_path else (canonical.rstrip("/").split("/")[-1])
                 remote = None if is_path else canonical
             project = Project(id=canonical, name=name, remote=remote, path_missing_hint=missing,
                               fs_root=self.fs_root)
@@ -527,13 +555,18 @@ class Resolver:
         p = path.strip()
         if p.startswith("file://"):
             p = unquote(p[len("file://"):])
+            if re.match(r"^/[A-Za-z]:", p):
+                p = p[1:]
         if p.startswith("~"):
             p = os.path.expanduser(p)
-        if not p.startswith("/"):
+        is_abs = p.startswith("/") or bool(_WINDOWS_ABS_PATH.match(p))
+        if not is_abs:
             _CLEAN_CACHE[path] = None
             return None
         p = p.rstrip(".,:;")
-        if (len(p) > 1 and not p.endswith("/") and "//" not in p
+        if _is_win_path(p):
+            res = os.path.normpath(p) if p else None
+        elif (len(p) > 1 and not p.endswith("/") and "//" not in p
                 and "/./" not in p and "/../" not in p and not p.endswith("/.") and not p.endswith("/..")):
             res = p
         else:
@@ -650,16 +683,17 @@ class Resolver:
                     break
         # 4. deleted project directory (cwd only): the path itself is the identity
         if allow_missing_fallback and self._missing_ok(p) and not self._exists_cached(p):
-            return self._get_project(p, os.path.basename(p) or p, None, [p], missing=True)
+            return self._get_project(p, _path_basename(p) or p, None, [p], missing=True)
         return None
 
     def _missing_ok(self, p: str) -> bool:
-        if p == self.home or not p.startswith(self.home + "/"):
+        if p == self.home or not _is_subpath(p, self.home):
             return False
         if any((p + "/").startswith(t) for t in _TEMP_PREFIXES):
             return False
         rel = os.path.relpath(p, self.home)
-        if rel.split("/")[0].startswith("."):
+        first_comp = (rel.replace("\\", "/") if _is_win_path(p) else rel).split("/")[0]
+        if first_comp.startswith("."):
             return False  # agent state dirs (~/.claude, ~/.codex, ~/.gemini ...)
         return True
 
@@ -670,9 +704,13 @@ class Resolver:
             return None
         if path in table:
             return path, table[path]
+        win = _is_win_path(path)
         idx = len(path)
         while True:
-            idx = path.rfind("/", 0, idx)
+            if win:
+                idx = max(path.rfind("/", 0, idx), path.rfind("\\", 0, idx))
+            else:
+                idx = path.rfind("/", 0, idx)
             if idx == -1:
                 break
             cand = path[:idx]
@@ -681,7 +719,7 @@ class Resolver:
                 return cand_slash, table[cand_slash]
             if cand and cand in table:
                 return cand, table[cand]
-        if path.startswith("/") and "" in table:
+        if (path.startswith("/") or bool(_WINDOWS_ABS_PATH.match(path))) and "" in table:
             return "", table[""]
         return None
 
@@ -792,7 +830,7 @@ class Resolver:
         for bproj in list(self.projects.values()):
             if (bproj.remote and
                     isinstance(bproj.remote, str) and
-                    bproj.remote.startswith("/") and
+                    (bproj.remote.startswith("/") or bool(_WINDOWS_ABS_PATH.match(bproj.remote))) and
                     bproj.remote.endswith(".bundle") and
                     self._alias_key(bproj.id) not in self._alias_of and
                     bproj.id not in self._alias_of):
@@ -1053,8 +1091,8 @@ class Resolver:
         pid = self.canonical_id(pid)
         if pid in self.projects:
             return self.projects[pid]
-        is_path = pid.startswith("/")
-        name = os.path.basename(pid.rstrip("/")) if is_path else pid.rstrip("/").split("/")[-1]
+        is_path = pid.startswith("/") or bool(_WINDOWS_ABS_PATH.match(pid))
+        name = _path_basename(pid) if is_path else pid.rstrip("/").split("/")[-1]
         return self._get_project(pid, name or pid, None if is_path else pid,
                                  [pid] if is_path else [])
 
