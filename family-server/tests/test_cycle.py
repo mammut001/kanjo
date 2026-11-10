@@ -276,6 +276,30 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertIn("CSRF", body)
 
+        # Opaque "Origin: null" from a cross-site context -> still 403
+        status, body, _ = self._request(
+            "POST",
+            "/settings",
+            data={"cycle_anchor_day": "9"},
+            session_id=self.admin_session,
+            headers={"Origin": "null", "Sec-Fetch-Site": "cross-site"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("CSRF", body)
+
+    def test_settings_form_post_with_null_origin_same_origin(self):
+        # Browsers send "Origin: null" on same-origin form POSTs under a
+        # no-referrer policy; Sec-Fetch-Site proves it is same-origin.
+        status, body, _ = self._request(
+            "POST",
+            "/settings",
+            data={"cycle_anchor_day": "9", "timezone": "America/Toronto"},
+            session_id=self.admin_session,
+            headers={"Origin": "null", "Sec-Fetch-Site": "same-origin"},
+        )
+        self.assertNotEqual(status, 403, body)
+        self.assertLess(status, 400, body)
+
     def test_settings_validation_errors(self):
         headers = {"Origin": "https://usage.paytonpei.top", "Accept": "application/json", "Content-Type": "application/json"}
 

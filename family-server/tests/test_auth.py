@@ -563,7 +563,7 @@ class TestFirebaseAuth(unittest.TestCase):
         self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
 
         # 4. Referrer-Policy
-        self.assertEqual(headers.get("Referrer-Policy"), "no-referrer")
+        self.assertEqual(headers.get("Referrer-Policy"), "same-origin")
 
         # 5. Cross-Origin-Opener-Policy
         self.assertEqual(headers.get("Cross-Origin-Opener-Policy"), "same-origin-allow-popups")
