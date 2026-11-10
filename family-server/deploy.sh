@@ -98,18 +98,6 @@ ENV_ARGS=()
 if [ -f "${ENV_FILE}" ]; then
   ENV_ARGS+=("--env-file" "${ENV_FILE}")
 fi
-if [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
-  ENV_ARGS+=("-e" "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}")
-fi
-if [ -n "${FIREBASE_WEB_CONFIG_JSON:-}" ]; then
-  ENV_ARGS+=("-e" "FIREBASE_WEB_CONFIG_JSON=${FIREBASE_WEB_CONFIG_JSON}")
-fi
-if [ -n "${FAMILY_ADMIN_EMAILS:-}" ]; then
-  ENV_ARGS+=("-e" "FAMILY_ADMIN_EMAILS=${FAMILY_ADMIN_EMAILS}")
-fi
-if [ -n "${FAMILY_PUBLIC_ORIGIN:-}" ]; then
-  ENV_ARGS+=("-e" "FAMILY_PUBLIC_ORIGIN=${FAMILY_PUBLIC_ORIGIN}")
-fi
 
 echo "Starting container family-app..."
 docker rm -f family-app 2>/dev/null || true

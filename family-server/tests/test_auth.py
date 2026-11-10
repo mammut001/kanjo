@@ -547,7 +547,7 @@ class TestFirebaseAuth(unittest.TestCase):
         # 1. Content-Security-Policy
         csp = headers.get("Content-Security-Policy", "")
         self.assertIn("default-src 'self'", csp)
-        self.assertIn("script-src 'self' https://www.gstatic.com", csp)
+        self.assertIn("script-src 'self' https://apis.google.com https://www.gstatic.com", csp)
         self.assertIn("connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com", csp)
         self.assertIn("frame-src https://kanjo-family-usage.firebaseapp.com", csp)
         self.assertIn("img-src 'self' data: https://lh3.googleusercontent.com", csp)
