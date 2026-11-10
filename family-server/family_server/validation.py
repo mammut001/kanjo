@@ -162,4 +162,20 @@ def validate_report_payload(data: Any) -> Optional[str]:
     if "member_label" in data and data["member_label"] is not None and not isinstance(data["member_label"], str):
         return "member_label must be a string or null"
 
+    # scope validation
+    if "scope" in data and data["scope"] is not None:
+        if not isinstance(data["scope"], dict):
+            return "scope must be an object"
+        scope = data["scope"]
+        if "agents" in scope:
+            agents = scope["agents"]
+            if not isinstance(agents, list):
+                return "scope.agents must be a list"
+            for a in agents:
+                if not isinstance(a, str) or len(a) > 64:
+                    return "scope.agents must contain short strings"
+        if "since" in scope and scope["since"] is not None:
+            if not isinstance(scope["since"], str) or len(scope["since"]) > 64:
+                return "scope.since must be a string or null"
+
     return None

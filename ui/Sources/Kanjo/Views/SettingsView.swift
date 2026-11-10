@@ -39,6 +39,25 @@ struct SettingsView: View {
 
     private let intervals = [0, 15, 30, 60]
 
+    private static let scopeDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone.current
+        return df
+    }()
+
+    private var currentFamilyScopeText: String {
+        let familyCfg = store.report?.config.family
+        let currentSince = familyCfg?.since
+        let currentAgents = familyCfg?.agents ?? ["antigravity"]
+        let isAll = currentAgents == ["all"] || currentAgents.contains("all")
+        let agentsStr = isAll ? L10n.tr("settings.family.scope.agents_all") : L10n.tr("settings.family.scope.agents_antigravity")
+        if let since = currentSince, !since.isEmpty {
+            return "\(agentsStr) · \(L10n.tr("settings.family.scope.since_date", since))"
+        }
+        return agentsStr
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
         OptionalScrollView {
@@ -287,6 +306,66 @@ struct SettingsView: View {
                             TextField(L10n.tr("settings.family.member_label_placeholder"), text: $familyReportMemberLabel)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 11))
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.tr("settings.family.scope.label", currentFamilyScopeText))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+
+                            Picker(
+                                L10n.tr("settings.family.scope.agents_choice"),
+                                selection: Binding(
+                                    get: {
+                                        let agents = store.report?.config.family?.agents ?? ["antigravity"]
+                                        return (agents == ["all"] || agents.contains("all")) ? "all" : "antigravity"
+                                    },
+                                    set: { choice in
+                                        Task {
+                                            if choice == "all" {
+                                                try? await store.setFamilyAgents("all")
+                                            } else {
+                                                try? await store.setFamilyAgents(nil)
+                                            }
+                                        }
+                                    }
+                                )
+                            ) {
+                                Text(L10n.tr("settings.family.scope.agents_antigravity")).tag("antigravity")
+                                Text(L10n.tr("settings.family.scope.agents_all")).tag("all")
+                            }
+                            .font(.system(size: 11))
+                            .disabled(!store.canEditSubscriptions)
+
+                            HStack {
+                                DatePicker(
+                                    L10n.tr("settings.family.scope.start_date"),
+                                    selection: Binding(
+                                        get: {
+                                            if let s = store.report?.config.family?.since,
+                                               let d = Self.scopeDateFormatter.date(from: String(s.prefix(10))) {
+                                                return d
+                                            }
+                                            return Date()
+                                        },
+                                        set: { newDate in
+                                            let dateStr = Self.scopeDateFormatter.string(from: newDate)
+                                            Task { try? await store.setFamilySince(dateStr) }
+                                        }
+                                    ),
+                                    displayedComponents: [.date]
+                                )
+                                .font(.system(size: 11))
+                                .disabled(!store.canEditSubscriptions)
+
+                                if store.report?.config.family?.since != nil {
+                                    Button(L10n.tr("settings.family.scope.clear_date")) {
+                                        Task { try? await store.setFamilySince(nil) }
+                                    }
+                                    .font(.system(size: 11))
+                                    .disabled(!store.canEditSubscriptions)
+                                }
+                            }
                         }
 
                         HStack {

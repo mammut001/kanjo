@@ -191,6 +191,15 @@
 "settings.family.status.in_progress" = "Reporting…";
 "settings.family.status.no_network" = "Reporting paused: network disabled";
 "settings.family.status.missing_token" = "Token not configured";
+"settings.family.scope.label" = "Scope: %@";
+"settings.family.scope.since_date" = "Since %@";
+"settings.family.scope.all_time" = "All time";
+"settings.family.scope.agents_antigravity" = "Antigravity only";
+"settings.family.scope.agents_all" = "All agents";
+"settings.family.scope.start_date" = "Start date";
+"settings.family.scope.agents_choice" = "Agents";
+"settings.family.scope.clear_date" = "Clear start date";
+"settings.family.scope.set_date" = "Set start date";
 "settings.family.note" = "Only reports high-level token summaries and quota windows to your family server. Excludes project names, paths, titles, and account emails. Cost is estimated from public API prices.";
 "sync.account_code" = "iCloud account %@";
 "gzip.error.invalid_header" = "The snapshot is not a gzip file.";

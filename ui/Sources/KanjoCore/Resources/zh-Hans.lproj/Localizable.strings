@@ -191,6 +191,15 @@
 "settings.family.status.in_progress" = "正在上报…";
 "settings.family.status.no_network" = "上报已暂停：网络已禁用";
 "settings.family.status.missing_token" = "未配置令牌";
+"settings.family.scope.label" = "统计范围：%@";
+"settings.family.scope.since_date" = "自 %@ 起";
+"settings.family.scope.all_time" = "全部时间";
+"settings.family.scope.agents_antigravity" = "仅 Antigravity";
+"settings.family.scope.agents_all" = "全部 agent";
+"settings.family.scope.start_date" = "统计起始日期";
+"settings.family.scope.agents_choice" = "统计 Agent";
+"settings.family.scope.clear_date" = "清除起始日期";
+"settings.family.scope.set_date" = "设置起始日期";
 "settings.family.note" = "仅向家庭服务器上报高层 token 汇总与额度窗口，绝不上报项目名、路径、会话标题或账号邮箱。金额为公开 API 等价估算成本。";
 "sync.account_code" = "iCloud 账户 %@";
 "gzip.error.invalid_header" = "快照不是 gzip 文件。";

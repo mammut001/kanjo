@@ -174,6 +174,55 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("badge-stale", html)
         self.assertIn("未更新", html)
 
+    def test_dashboard_shows_scope_at_top_and_on_card(self):
+        payload = copy.deepcopy(self.fixture_data)
+        payload["scope"] = {"agents": ["antigravity"], "since": "2026-11-09"}
+
+        with db.get_connection(self.db_path) as conn:
+            _, m_id = db.add_member(conn, "Alice")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            db.insert_report(
+                conn,
+                m_id,
+                payload["generated_at"],
+                json.dumps(payload),
+                received_at=now_iso,
+            )
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        expected_scope = "统计范围：Antigravity · 自 2026-11-09 起"
+        self.assertIn(expected_scope, html)
+        # Should be in top scope notice and in member card scope
+        self.assertIn('class="scope-notice"', html)
+        self.assertIn('class="member-scope"', html)
+
+    def test_dashboard_escapes_html_in_scope(self):
+        xss_scope = {
+            "agents": ["<script>alert('scope-agent')</script>"],
+            "since": "<img src=x onerror=alert(3)>",
+        }
+        malicious_payload = copy.deepcopy(self.fixture_data)
+        malicious_payload["scope"] = xss_scope
+
+        with db.get_connection(self.db_path) as conn:
+            _, m_id = db.add_member(conn, "Eve")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            db.insert_report(
+                conn,
+                m_id,
+                malicious_payload["generated_at"],
+                json.dumps(malicious_payload),
+                received_at=now_iso,
+            )
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        self.assertNotIn("<script>alert('scope-agent')</script>", html)
+        self.assertNotIn("<img src=x onerror=alert(3)>", html)
+        self.assertIn("&lt;script&gt;alert(&#x27;scope-agent&#x27;)&lt;/script&gt;", html)
+        self.assertIn("&lt;img src=x onerror=alert(3)&gt;", html)
+
 
 if __name__ == "__main__":
     unittest.main()

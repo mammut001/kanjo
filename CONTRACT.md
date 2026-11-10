@@ -429,6 +429,10 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
   "timezone": "America/Toronto",
   "generated_by": "kanjo 0.4.0",
   "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "scope": {
+    "agents": ["antigravity"],         // 纳入统计的 agent 列表；若设为 "all" 则为 ["all"]
+    "since": "2026-11-09"              // 统计起始时间（ISO 日期或日期时间，时区按 timezone）；未设置时为 null
+  },
   "plans": {
     "antigravity": "Google AI Ultra",
     "claude": "Claude Pro"
@@ -455,7 +459,9 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 
 - `Period` 结构与公开汇总（第 12 节）完全一致。
 - `days` 包含最近 31 天内有数据的天，`period` 为 `YYYY-MM-DD`，`first_day` 和 `last_day` 均为对应日期。
-- `plans` 映射 agent 到其生效订阅计划的 `plan_label`。
+- `scope`: 汇总统计范围。`agents` 列出纳入统计的 agent（未配置时默认 `["antigravity"]`；值为 `"all"` 时代表全部 agent）；`since` 为统计起始时间（ISO 字符串，未配置时为 `null` 代表无起始下界）。
+- **消息级过滤**：仅纳入 `agent` 属于 `scope.agents` 且消息时间戳 `timestamp >= scope.since` 的消息。在消息级别过滤后再聚合，使 `summary`（all_time/months/weeks/days、by_provider、by_agent、models）均反映过滤后的范围。
+- `plans` 与 `quota_windows` 仅保留包含在统计范围中的 agent。
 
 ### 不变量
 

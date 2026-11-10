@@ -44,6 +44,22 @@ public enum ConfigCommand {
         return ["config", "set", key, val.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
 
+    public static func familySinceArguments(since: String?) -> [String] {
+        let key = "family.since"
+        guard let s = since, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ["config", "unset", key]
+        }
+        return ["config", "set", key, s.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
+    public static func familyAgentsArguments(agents: String?) -> [String] {
+        let key = "family.agents"
+        guard let a = agents, !a.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ["config", "unset", key]
+        }
+        return ["config", "set", key, a.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
     /// 和 DiskCommand 一样只替换最后一个 export，保留 PATH 等 shell 前缀。
     public static func command(from cliCommand: String, arguments: [String]) throws -> String {
         let trimmed = cliCommand.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,6 +185,16 @@ public struct ConfigDataSource {
 
     public func setWeeklyReset(agent: String, reset: String?) async throws {
         let args = try ConfigCommand.quotaResetArguments(agent: agent, weeklyReset: reset)
+        try await execute(args: args)
+    }
+
+    public func setFamilySince(_ since: String?) async throws {
+        let args = ConfigCommand.familySinceArguments(since: since)
+        try await execute(args: args)
+    }
+
+    public func setFamilyAgents(_ agents: String?) async throws {
+        let args = ConfigCommand.familyAgentsArguments(agents: agents)
         try await execute(args: args)
     }
 }

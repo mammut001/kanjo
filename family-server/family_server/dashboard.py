@@ -30,6 +30,72 @@ PALETTE = [
 
 COST_NOTE = "按公开 API 价格折算，不是实际支出"
 
+AGENT_LABELS = {
+    "antigravity": "Antigravity",
+    "claude": "Claude",
+    "codex": "Codex",
+    "grok": "Grok",
+    "qwen": "Qwen",
+    "commandcode": "CommandCode",
+    "minimax": "MiniMax",
+    "opencode": "OpenCode",
+    "copilot": "Copilot",
+    "pi": "Pi",
+    "workbuddy": "WorkBuddy",
+    "workbuddy_ai": "WorkBuddy AI",
+    "qwenwork": "QwenWork",
+    "grok_bot": "Grok Bot",
+    "qoderwork": "QoderWork",
+    "qodercli": "QoderCLI",
+    "qodercli_cn": "QoderCLI CN",
+    "zcode": "ZCode",
+    "kimicode": "KimiCode",
+    "musecode": "MuseCode",
+    "codebuddy": "CodeBuddy",
+    "qoder_ide": "Qoder IDE",
+    "hermes": "Hermes",
+    "openclaw": "OpenClaw",
+    "devin": "Devin",
+    "mimocode": "MimoCode",
+    "prime_agent": "Prime Agent",
+    "omp": "OMP",
+    "deepseek_harness": "DeepSeek Harness",
+}
+
+
+def format_scope(scope: Optional[dict]) -> Optional[str]:
+    """Format scope dict into a display string, e.g. '统计范围：Antigravity · 自 2026-11-09 起'."""
+    if not isinstance(scope, dict):
+        return None
+    agents = scope.get("agents")
+    since = scope.get("since")
+
+    parts = []
+    if agents is not None:
+        if isinstance(agents, list):
+            if not agents or "all" in agents:
+                parts.append("全部 agent")
+            else:
+                agent_names = []
+                for a in agents:
+                    a_str = str(a)
+                    label = AGENT_LABELS.get(a_str, a_str)
+                    agent_names.append(label)
+                parts.append(", ".join(agent_names))
+        elif isinstance(agents, str):
+            if agents == "all":
+                parts.append("全部 agent")
+            else:
+                parts.append(AGENT_LABELS.get(agents, agents))
+
+    if since:
+        parts.append(f"自 {since} 起")
+
+    if not parts:
+        return None
+
+    return f"统计范围：{' · '.join(parts)}"
+
 
 def load_firebase_config() -> dict:
     """Load Firebase web configuration from environment or local JSON file."""
@@ -204,6 +270,8 @@ def generate_dashboard_html(
             "daily_tokens": {},
             "antigravity_quota": None,
             "weekly_antigravity_tokens": 0,
+            "scope": None,
+            "scope_str": None,
         }
 
         if rep:
@@ -220,6 +288,8 @@ def generate_dashboard_html(
                 payload = {}
 
             member_info["label"] = payload.get("member_label")
+            member_info["scope"] = payload.get("scope")
+            member_info["scope_str"] = format_scope(payload.get("scope"))
 
             # Quota windows
             qw = payload.get("quota_windows", {})
@@ -313,6 +383,13 @@ def generate_dashboard_html(
             max_day_tokens = day_sum
 
     svg_chart_html = render_svg_chart(dates_30, members_processed, max_day_tokens)
+
+    unique_scopes = []
+    for m in members_processed:
+        s = m.get("scope_str")
+        if s and s not in unique_scopes:
+            unique_scopes.append(s)
+    top_scope_str = " · ".join(unique_scopes) if unique_scopes else None
 
     # HTML building
     doc = [
@@ -448,10 +525,14 @@ def generate_dashboard_html(
         "        <div>",
         "          <h1>家庭用量汇总</h1>",
         f'          <div class="cost-notice">注：{html.escape(COST_NOTE)}</div>',
+    ]
+    if top_scope_str:
+        doc.append(f'          <div class="scope-notice" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">{html.escape(top_scope_str)}</div>')
+    doc.extend([
         "        </div>",
         '        <div class="header-right">',
         f'          <span class="meta-time">刷新时间：{html.escape(format_dt(now))} UTC</span>',
-    ]
+    ])
 
     if user_email:
         doc.append(f'          <span class="user-email">{html.escape(user_email)}</span>')
@@ -571,6 +652,8 @@ def generate_dashboard_html(
             doc.append(f'                <span class="member-title">{name}</span>')
             doc.append('              </div>')
             doc.append(f'              <div class="member-label">上次上报：{html.escape(rec_str)}{lbl}</div>')
+            if m.get("scope_str"):
+                doc.append(f'              <div class="member-scope" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem;">{html.escape(m["scope_str"])}</div>')
             doc.append('            </div>')
             doc.append(f'            {badge_html}')
             doc.append('          </div>')

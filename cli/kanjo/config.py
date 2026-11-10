@@ -65,6 +65,9 @@ class Config:
     # agent -> explicitly configured subscription fields
     subscriptions: Dict[str, dict] = field(default_factory=dict)
     subscription_origins: Dict[str, dict] = field(default_factory=dict)
+    family_since: Optional[str] = None
+    family_agents: Optional[Any] = None
+    family_origins: Dict[str, str] = field(default_factory=dict)
     source: Optional[str] = None
 
     def match_override(self, path: Optional[str]):
@@ -235,6 +238,14 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         cfg.subscription_origins = {
             agent: {key: "toml" for key in spec} for agent, spec in cfg.subscriptions.items()
         }
+    if flat.get("family"):
+        fam = _family(flat["family"])
+        if "since" in fam:
+            cfg.family_since = fam["since"]
+            cfg.family_origins["since"] = "toml"
+        if "agents" in fam:
+            cfg.family_agents = fam["agents"]
+            cfg.family_origins["agents"] = "toml"
     return cfg
 
 
@@ -330,6 +341,59 @@ def _subscriptions(raw) -> Dict[str, dict]:
     return out
 
 
+def _validate_family_since(val) -> str:
+    from datetime import date, datetime
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    if not isinstance(val, str) or not val.strip():
+        raise ConfigError("family.since must be an ISO date or datetime string")
+    clean = val.strip()
+    clean_iso = clean
+    if clean_iso.endswith(("Z", "z")):
+        clean_iso = clean_iso[:-1] + "+00:00"
+    try:
+        datetime.fromisoformat(clean_iso)
+    except Exception:
+        raise ConfigError("cannot parse family.since %r (use ISO date or datetime, e.g. 2026-11-09)" % val)
+    return clean
+
+
+def _validate_family_agents(val):
+    if isinstance(val, str):
+        trimmed = val.strip()
+        if trimmed.lower() == "all":
+            return "all"
+        parts = [p.strip() for p in trimmed.split(",") if p.strip()]
+        if not parts:
+            raise ConfigError("family.agents must not be empty")
+        for p in parts:
+            if p not in AGENT_LABELS:
+                raise ConfigError("unknown agent in family.agents: %r" % p)
+        return parts
+    if isinstance(val, (list, tuple)):
+        if len(val) == 1 and str(val[0]).strip().lower() == "all":
+            return "all"
+        parts = [str(p).strip() for p in val if str(p).strip()]
+        if not parts:
+            raise ConfigError("family.agents must not be empty")
+        for p in parts:
+            if p not in AGENT_LABELS:
+                raise ConfigError("unknown agent in family.agents: %r" % p)
+        return parts
+    raise ConfigError("family.agents must be 'all' or a list of agent keys")
+
+
+def _family(raw) -> dict:
+    if not isinstance(raw, dict):
+        raise ConfigError("[family] must be a table")
+    out = {}
+    if "since" in raw:
+        out["since"] = _validate_family_since(raw["since"])
+    if "agents" in raw:
+        out["agents"] = _validate_family_agents(raw["agents"])
+    return out
+
+
 def default_paths() -> List[str]:
     base = os.path.expanduser(os.environ.get("KANJO_CONFIG_DIR") or DEFAULT_DIR)
     return [os.path.join(base, "attribution.toml"), os.path.join(base, "attribution.json")]
@@ -395,7 +459,28 @@ def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config
         for key in spec:
             if key in cfg.quota_windows[agent]:
                 origins[key] = "overrides"
+
+    raw_fam = data.get("family", {})
+    if not isinstance(raw_fam, dict):
+        raise ConfigError("overrides family must be an object")
+    if "since" in raw_fam:
+        cfg.family_since = _validate_family_since(raw_fam["since"])
+        cfg.family_origins["since"] = "overrides"
+    if "agents" in raw_fam:
+        cfg.family_agents = _validate_family_agents(raw_fam["agents"])
+        cfg.family_origins["agents"] = "overrides"
+
     return cfg
+
+
+def family_value(cfg: Config, key: str):
+    """Effective field and its origin for family."""
+    if key == "since":
+        return cfg.family_since, cfg.family_origins.get("since", "default")
+    if key == "agents":
+        val = cfg.family_agents if cfg.family_agents is not None else ["antigravity"]
+        return val, cfg.family_origins.get("agents", "default")
+    return None, "default"
 
 
 def quota_value(cfg: Config, agent: str, key: str, directory: Optional[str] = None):

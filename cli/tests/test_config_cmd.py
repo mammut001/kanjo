@@ -381,6 +381,50 @@ class ConfigCommandTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("does not accept --json", err)
 
+    def test_family_scope_set_get_unset_and_validation(self):
+        # Default get
+        self.assert_line(("get", "family.since"), "family.since = unset (default)")
+        self.assert_line(("get", "family.agents"), 'family.agents = ["antigravity"] (default)')
+
+        # Set and get family.since
+        self.assert_line(("set", "family.since", "2026-11-09"), 'family.since = "2026-11-09" (overrides)')
+        self.assert_line(("get", "family.since"), 'family.since = "2026-11-09" (overrides)')
+        self.assertEqual(self.read_overrides()["family"]["since"], "2026-11-09")
+        self.assert_line(("unset", "family.since"), "family.since = unset (default)")
+        self.assertNotIn("since", self.read_overrides().get("family", {}))
+
+        # Set and get family.agents
+        self.assert_line(("set", "family.agents", "antigravity,codex"),
+                         'family.agents = ["antigravity", "codex"] (overrides)')
+        self.assert_line(("get", "family.agents"),
+                         'family.agents = ["antigravity", "codex"] (overrides)')
+        self.assertEqual(self.read_overrides()["family"]["agents"], ["antigravity", "codex"])
+        self.assert_line(("set", "family.agents", "all"), 'family.agents = "all" (overrides)')
+        self.assert_line(("get", "family.agents"), 'family.agents = "all" (overrides)')
+        self.assert_line(("unset", "family.agents"), 'family.agents = ["antigravity"] (default)')
+
+        # TOML Precedence
+        self.write_toml('[family]\nsince = "2026-11-01"\nagents = ["claude"]\n')
+        self.assert_line(("get", "family.since"), 'family.since = "2026-11-01" (toml)')
+        self.assert_line(("get", "family.agents"), 'family.agents = ["claude"] (toml)')
+        self.assert_line(("set", "family.since", "2026-11-09"), 'family.since = "2026-11-09" (overrides)')
+        self.assert_line(("get", "family.since"), 'family.since = "2026-11-09" (overrides)')
+        self.assert_line(("unset", "family.since"), 'family.since = "2026-11-01" (toml)')
+
+        # Validation errors
+        for bad_args in (
+            ("set", "family.since", "not-a-date"),
+            ("set", "family.since", "2026-99-99"),
+            ("set", "family.agents", "unknown_agent"),
+            ("set", "family.agents", "antigravity, fake_agent"),
+            ("set", "family.bad_field", "value"),
+            ("get", "family.bad_field"),
+            ("unset", "family.bad_field"),
+        ):
+            code, _, err = self.run_cli("config", *bad_args)
+            self.assertEqual(code, 2, "Expected code 2 for %r" % (bad_args,))
+            self.assertTrue(len(err) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

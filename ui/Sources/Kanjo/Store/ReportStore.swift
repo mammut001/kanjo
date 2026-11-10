@@ -250,6 +250,28 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
+    func setFamilySince(_ since: String?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.setFamilySince(since) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
+    func setFamilyAgents(_ agents: String?) async throws {
+        guard canEditSubscriptions else {
+            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+        }
+        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
+                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
+        do { try await source.setFamilyAgents(agents) }
+        catch { await checkPython(); throw error }
+        refresh()
+    }
+
     func refresh(qualityOfService: QualityOfService = .userInitiated) {
         scheduledTask?.cancel()
         scheduledTask = nil

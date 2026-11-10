@@ -147,6 +147,21 @@ Kanjo can report aggregate token usage and quota windows to your family usage se
 - **Privacy-safe**: Shares only high-level token counts (all-time, monthly, weekly, daily), subscription plan labels, and quota window reset times. Never includes project names, paths, conversation titles, or account emails.
 - **Secure**: Authentication token is stored in the macOS Keychain and never passed via command-line arguments.
 - **Automated**: Automatically scheduled after refreshes when enabled, or triggerable on demand in Settings.
+- **Configurable scope**: Restrict family reports to specific agents (default: `antigravity`) or since a start date:
+  ```bash
+  # Count only from a specific date (local midnight or ISO datetime)
+  kanjo config set family.since 2026-11-09
+
+  # Count only specific agents (default: antigravity, or "all" for every agent)
+  kanjo config set family.agents "antigravity,codex"
+  kanjo config set family.agents all
+
+  # Inspect or reset scope
+  kanjo config get family.since
+  kanjo config unset family.since
+  kanjo config get family.agents
+  kanjo config unset family.agents
+  ```
 - **CLI usage**:
   ```bash
   # Generate report payload JSON
