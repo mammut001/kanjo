@@ -6,6 +6,25 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-09
+
+### Added
+
+- **Family usage.** Opt-in reporting to a self-hosted family server (`family-server/`): per-member tokens, Keychain-stored token, reports after refreshes (at most every 15 minutes). The server shows a Google-sign-in dashboard (allowlisted emails only) with the Google AI Ultra quota pool (Gemini and Claude/GPT windows), per-member usage per manager-set billing cycle, and who used the pool. Reports default to Antigravity only and never contain project names, paths, titles or emails.
+- **Publish usage to a website.** `kanjo export --public-summary` and `kanjo publish-usage`, plus a scheduled "Publish to website" setting.
+- **29 agent sources (up from 9).** Pi, QwenWork and the Tokei-parity sources (WorkBuddy, Grok Bot, Qoder, ZCode, Kimi Code, Muse, CodeBuddy, Hermes, OpenClaw, Devin, MiMo Code, Prime Agent, OMP, DeepSeek Harness, …).
+- **Subscription accounts.** The subscription hover card shows the detected account email (never sent to iPhone or any server).
+- **Pricing.** StepFun Step 5 Preview and Gemini 4 Argon; model variants are merged in summaries.
+
+### Changed
+
+- **Quiet background refresh.** Refreshes follow log changes (FSEvents) instead of a 5-minute timer; the disk report no longer runs after every refresh; incremental export takes about 1.4 s of CPU. Background CPU over 5 minutes dropped from about 55 s to about 3 s.
+- **Releases are notarized.** One universal build for Apple silicon and Intel Macs.
+
+### Fixed
+
+- The "Parse failed" row is hidden when nothing failed.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added

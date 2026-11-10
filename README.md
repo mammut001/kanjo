@@ -109,7 +109,7 @@ The full rules are in [ATTRIBUTION.md](ATTRIBUTION.md). The code implements them
 
 ### App
 
-Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest), open the DMG, drag `Kanjo.app` to Applications, then open the app. Releases are signed with a Developer ID; notarization is coming, so macOS may still block downloaded builds until then. The CLI is included: no separate CLI installation is needed. Python 3.9+ via Apple’s Xcode Command Line Tools is required; the app offers to open Apple’s installer when the tools are missing. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
+Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest), open the DMG, drag `Kanjo.app` to Applications, then open the app. One universal build runs on both Apple silicon and Intel Macs (macOS 13 or later). Releases from v0.5.0 on are signed with a Developer ID and notarized by Apple, so they open without a Gatekeeper warning. Windows and Linux have no app yet. The CLI is included: no separate CLI installation is needed. Python 3.9+ via Apple’s Xcode Command Line Tools is required; the app offers to open Apple’s installer when the tools are missing. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
 
 ### CLI only / use in a terminal
 
@@ -141,7 +141,30 @@ Kanjo can periodically summarize your AI token usage and publish it to a website
 
 ### Family usage reporting (optional)
 
-Kanjo can report aggregate token usage and quota windows to your family usage server (`family-server`):
+Kanjo can report aggregate token usage and quota windows to your family usage server (`family-server`), so the manager of a shared plan (for example Google AI Ultra) sees who used how much of the pool.
+
+**Joining as a family member**
+
+| Your computer | What to do |
+|---|---|
+| Mac with Apple silicon (M1 or later) | Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest) and install it as above. |
+| Mac with Intel | The same DMG: it is a universal build. |
+| Windows / Linux | Not supported yet. There is no app, and the CLI has not been tested there. |
+
+1. Ask the family manager for your personal report token. Each member gets their own; the manager can revoke it at any time.
+2. Open Kanjo → Settings → **Family usage**, turn it on, keep the server address (`https://usage.paytonpei.top` for our family), and paste the token. It is stored in the macOS Keychain.
+3. That's it. Kanjo reports after its normal refreshes, at most every 15 minutes; **Report now** sends one immediately.
+
+What is sent: daily, weekly and monthly token totals, API-equivalent cost, model names, and Antigravity's quota percentages and reset times. By default only Antigravity usage is included. What is never sent: project names, file paths, git remotes, conversation titles or content, account emails.
+
+The manager signs in to the dashboard with Google (only allowlisted emails), sets the billing-cycle start day under **Settings**, and creates or revokes member tokens on the server:
+
+```bash
+docker exec family-app python -m family_server member add "<name>"     # prints the token once
+docker exec family-app python -m family_server member revoke "<name>"
+```
+
+**Details**
 
 - **Disabled by default**: Completely opt-in.
 - **Privacy-safe**: Shares only high-level token counts (all-time, monthly, weekly, daily), subscription plan labels, and quota window reset times. Never includes project names, paths, conversation titles, or account emails.
@@ -322,13 +345,38 @@ Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigr
 
 ### 安装
 
-从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，打开 DMG，把 `Kanjo.app` 拖进「应用程序」，再打开应用。发布包使用 Developer ID 签名；公证即将加入，在此之前 macOS 仍可能拦截下载的应用。CLI 已内置，无需另外安装。需要 Xcode Command Line Tools 提供的 Python 3.9+；缺少工具时，应用可打开 Apple 安装对话框。首次运行可能请求访问仓库文件夹。
+从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，打开 DMG，把 `Kanjo.app` 拖进「应用程序」，再打开应用。同一个安装包同时支持 Apple 芯片和 Intel 芯片的 Mac（macOS 13 及以上）。从 v0.5.0 起，发布包使用 Developer ID 签名并经过 Apple 公证，打开时不会被系统拦截。Windows 和 Linux 暂无应用。CLI 已内置，无需另外安装。需要 Xcode Command Line Tools 提供的 Python 3.9+；缺少工具时，应用可打开 Apple 安装对话框。首次运行可能请求访问仓库文件夹。
 
 仅需 CLI／在终端中使用：
 
 ```bash
 git clone https://github.com/mammut001/kanjo.git
 cd kanjo && ./install.sh
+```
+
+### 家庭用量（可选）
+
+Kanjo 可以把用量汇总上报到家庭服务器（`family-server`），方便共用套餐（例如 Google AI Ultra）的管理员看到额度池被谁用了多少。
+
+**家庭成员怎么接入**
+
+| 你的电脑 | 怎么做 |
+|---|---|
+| Apple 芯片的 Mac（M1 及以后） | 从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，按上面的方式安装。 |
+| Intel 芯片的 Mac | 下载同一个 DMG，是通用版。 |
+| Windows / Linux | 暂不支持：没有应用，CLI 也没有在这些系统上测试过。 |
+
+1. 向家庭管理员要你自己的上报令牌。每人一个，管理员可以随时作废。
+2. 打开 Kanjo → 设置 → **家庭用量**，打开开关，服务器地址保持默认（我们家是 `https://usage.paytonpei.top`），粘贴令牌。令牌存在 macOS 钥匙串里。
+3. 完成。Kanjo 在每次刷新数据后自动上报，最多每 15 分钟一次；点 **立即上报** 可以马上发一次。
+
+会上报什么：按天、周、月汇总的 token 数和 API 等价金额、模型名称，以及 Antigravity 的额度百分比和重置时间。默认只统计 Antigravity。不会上报：项目名、文件路径、git 地址、对话标题和内容、账号邮箱。
+
+管理员用 Google 账号登录面板（只放行白名单里的邮箱），在面板的 **设置** 里填计费周期开始日，并在服务器上生成或作废成员令牌：
+
+```bash
+docker exec family-app python -m family_server member add "<名字>"     # 令牌只打印这一次
+docker exec family-app python -m family_server member revoke "<名字>"
 ```
 
 ### 构建公证发布包
