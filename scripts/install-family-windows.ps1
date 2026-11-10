@@ -82,7 +82,7 @@ if ($Uninstall) {
             Remove-Item -Recurse -Force -Path $InstallDir -ErrorAction Stop
             Write-Host "  [✓] 安装目录已删除 (Folder removed: $InstallDir)"
         } catch {
-            Write-Warning "无法完全删除目录 $InstallDir: $_"
+            Write-Warning "无法完全删除目录 ${InstallDir}: $_"
         }
     }
 

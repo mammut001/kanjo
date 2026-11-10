@@ -79,6 +79,7 @@ jobs:
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport
+          if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $Launcher = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli\kanjo_family_report.pyw"
           Push-Location $env:TEMP
           python $Launcher --version
@@ -190,6 +191,7 @@ jobs:
 
           # 1. Register task with a second installer run (without -NoSchedule)
           powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -SkipReport
+          if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $task = Get-ScheduledTask -TaskName "Kanjo 家庭上报"
           if (-not $task) {
               throw "Scheduled task was not created!"
@@ -198,6 +200,7 @@ jobs:
 
           # 2. Run uninstall
           powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -Uninstall
+          if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $removedTask = Get-ScheduledTask -TaskName "Kanjo 家庭上报" -ErrorAction SilentlyContinue
           if ($removedTask) {
               throw "Scheduled task still exists after uninstall!"
