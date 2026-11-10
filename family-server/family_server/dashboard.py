@@ -207,6 +207,64 @@ def format_dt(dt: Optional[datetime]) -> str:
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
+def _as_float(value) -> Optional[float]:
+    """Number from a client-supplied value; None for anything else (incl. bool)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def pool_tokens_for_day(day: dict, fallback_total: int) -> int:
+    """Tokens that count against the Google AI Ultra pool for one daily Period."""
+    by_agent = day.get("by_agent")
+    if isinstance(by_agent, list):
+        ag = [a for a in by_agent if isinstance(a, dict) and a.get("agent") == "antigravity"]
+        if ag:
+            return int(sum(_as_float(a.get("tokens_total")) or 0 for a in ag))
+    by_provider = day.get("by_provider")
+    if isinstance(by_provider, list):
+        gp = [p for p in by_provider if isinstance(p, dict) and p.get("provider") == "google"]
+        if gp:
+            return int(sum(_as_float((p.get("tokens") or {}).get("total")) or 0 for p in gp))
+    return int(fallback_total or 0)
+
+
+# Antigravity reports Gemini limits in the standard weekly / 5-hour fields and the
+# Claude/GPT ("3p") group as extra windows.
+_EXTRA_WINDOW_LABELS = {
+    "3p-weekly": "Claude / GPT 模型 · 本周",
+    "3p-5h": "Claude / GPT 模型 · 5 小时",
+}
+
+
+def pool_windows_from_quota(qw: dict) -> List[dict]:
+    """Rows {label, used_percent, resets_at} for every quota window Antigravity reported."""
+    rows: List[dict] = []
+    weekly = _as_float(qw.get("weekly_used_percent"))
+    if weekly is not None:
+        rows.append({"label": "Gemini 模型 · 本周", "used_percent": weekly,
+                     "resets_at": qw.get("weekly_resets_at")})
+    five = _as_float(qw.get("five_hour_used_percent"))
+    if five is not None:
+        rows.append({"label": "Gemini 模型 · 5 小时", "used_percent": five,
+                     "resets_at": qw.get("five_hour_resets_at")})
+    extra = qw.get("extra_windows")
+    if isinstance(extra, list):
+        for w in extra:
+            if not isinstance(w, dict):
+                continue
+            pct = _as_float(w.get("used_percent"))
+            if pct is None:
+                continue
+            wid = w.get("id") if isinstance(w.get("id"), str) else ""
+            label = _EXTRA_WINDOW_LABELS.get(wid)
+            if label is None:
+                raw = w.get("label") if isinstance(w.get("label"), str) else wid
+                label = (raw or "其他额度")[:60]
+            rows.append({"label": label, "used_percent": pct, "resets_at": w.get("resets_at")})
+    return rows
+
+
 def render_svg_chart(dates: List[str], member_data: List[dict], max_tokens: int) -> str:
     """Render a handwritten, responsive SVG stacked bar chart."""
     width = 900
@@ -352,6 +410,7 @@ def generate_dashboard_html(
             "prev_cycle_cost": 0.0,
             "top_models": [],
             "daily_tokens": {},
+            "daily_pool_tokens": {},
             "antigravity_quota": None,
             "cycle_pool_tokens": 0,
             "scope": None,
@@ -379,10 +438,10 @@ def generate_dashboard_html(
             qw = payload.get("quota_windows", {})
             plans = payload.get("plans", {})
             ag_qw = qw.get("antigravity")
-            if ag_qw:
-                pct = ag_qw.get("weekly_used_percent", 0.0)
+            if isinstance(ag_qw, dict):
+                pct = _as_float(ag_qw.get("weekly_used_percent")) or 0.0
                 resets_at = ag_qw.get("weekly_resets_at")
-                plan_name = plans.get("antigravity", "Google AI Ultra")
+                plan_name = plans.get("antigravity", "Google AI Ultra") if isinstance(plans, dict) else "Google AI Ultra"
                 member_info["antigravity_quota"] = {
                     "weekly_used_percent": pct,
                     "weekly_resets_at": resets_at,
@@ -393,6 +452,9 @@ def generate_dashboard_html(
                     "member_label": member_info["label"],
                     "color": color,
                     "quota": member_info["antigravity_quota"],
+                    "windows": pool_windows_from_quota(ag_qw),
+                    "weekly_resets_at": resets_at,
+                    "received_at": rec_dt,
                 })
 
             summary = payload.get("summary", {})
@@ -414,6 +476,8 @@ def generate_dashboard_html(
                 cost_val = d.get("cost_usd", 0.0)
 
                 member_info["daily_tokens"][p_str] = tok_cnt
+                pool_tok = pool_tokens_for_day(d, tok_cnt)
+                member_info["daily_pool_tokens"][p_str] = pool_tok
 
                 # Current cycle: [current_start_str, next_start_str)
                 if current_start_str <= p_str < next_start_str:
@@ -421,22 +485,7 @@ def generate_dashboard_html(
                     member_info["cycle_cost"] += cost_val
 
                     # Antigravity / pool tokens for ranking
-                    by_agent = d.get("by_agent")
-                    by_provider = d.get("by_provider")
-                    if by_agent and any(isinstance(a, dict) and a.get("agent") == "antigravity" for a in by_agent):
-                        member_info["cycle_pool_tokens"] += sum(
-                            a.get("tokens_total", 0)
-                            for a in by_agent
-                            if isinstance(a, dict) and a.get("agent") == "antigravity"
-                        )
-                    elif by_provider and any(isinstance(p, dict) and p.get("provider") == "google" for p in by_provider):
-                        member_info["cycle_pool_tokens"] += sum(
-                            p.get("tokens", {}).get("total", 0)
-                            for p in by_provider
-                            if isinstance(p, dict) and p.get("provider") == "google"
-                        )
-                    else:
-                        member_info["cycle_pool_tokens"] += tok_cnt
+                    member_info["cycle_pool_tokens"] += pool_tok
 
                     # Model breakdown in current cycle
                     for tm in d.get("top_models", []):
@@ -465,6 +514,35 @@ def generate_dashboard_html(
                 member_info["top_models"] = all_time.get("top_models", [])[:5]
 
         members_processed.append(member_info)
+
+    # Pool status: the most recent member report decides (all members of a shared
+    # pool see the same numbers; the freshest one is the most accurate).
+    pool_latest = None
+    for q in quota_pool_entries:
+        if q.get("received_at") is None:
+            continue
+        if pool_latest is None or q["received_at"] > pool_latest["received_at"]:
+            pool_latest = q
+    if pool_latest is None and quota_pool_entries:
+        pool_latest = quota_pool_entries[0]
+
+    # This quota week = [weekly reset - 7 days, weekly reset), counted per local day.
+    pool_week_start = None
+    pool_week_users = []
+    pool_week_total = 0
+    if pool_latest is not None:
+        week_reset = parse_iso(pool_latest.get("weekly_resets_at"))
+        if week_reset is not None:
+            if week_reset.tzinfo is None:
+                week_reset = week_reset.replace(tzinfo=timezone.utc)
+            pool_week_start = (week_reset - timedelta(days=7)).astimezone(tz)
+            week_start_str = pool_week_start.date().isoformat()
+            for m in members_processed:
+                t = sum(v for k, v in m["daily_pool_tokens"].items() if k >= week_start_str)
+                pool_week_total += t
+                pool_week_users.append({"name": m["name"], "label": m["label"], "color": m["color"], "tokens": t})
+            pool_week_users = [u for u in pool_week_users if u["tokens"] > 0]
+            pool_week_users.sort(key=lambda u: u["tokens"], reverse=True)
 
     # Compute quota pool share within the cycle
     total_cycle_pool_tokens = sum(m["cycle_pool_tokens"] for m in members_processed)
@@ -624,6 +702,11 @@ def generate_dashboard_html(
         .quota-plan { font-size: 0.75rem; color: var(--text-muted); background: var(--badge-bg); padding: 0.15rem 0.4rem; border-radius: 4px; }
         .progress-bar { width: 100%; height: 8px; background: var(--badge-bg); border-radius: 4px; overflow: hidden; margin-bottom: 0.5rem; }
         .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+        .pool-source { font-size: 0.8rem; color: var(--text-secondary); margin: -0.25rem 0 0.75rem 0; }
+        .pool-windows { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 0.5rem; }
+        .pool-window { padding: 0.75rem; border: 1px solid var(--card-border); border-radius: 8px; }
+        .pool-subtitle { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.5rem 0; }
+        .pool-note { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; }
         .quota-footer { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); }
 
         /* Members Grid */
@@ -710,10 +793,66 @@ def generate_dashboard_html(
 
     # 1. Quota Pool Card
     doc.append('    <section class="card">')
-    doc.append('      <h2 class="section-title">Google AI Ultra 额度池</h2>')
+    doc.append('      <h2 class="section-title">Google AI Ultra 额度池（全家共用）</h2>')
     if not quota_pool_entries:
         doc.append('      <div class="empty-state">暂无成员上报 Google AI Ultra 额度数据</div>')
     else:
+        src_name = html.escape(pool_latest["member_name"])
+        src_time = format_dt(pool_latest["received_at"]) if pool_latest.get("received_at") else "—"
+        doc.append(f'      <div class="pool-source">数据来自 {src_name} 的最新上报 · {html.escape(src_time)}</div>')
+        doc.append('      <div class="pool-windows">')
+        for w in pool_latest["windows"]:
+            pct = max(0.0, min(100.0, w["used_percent"]))
+            bar_color = "var(--red)" if pct >= 95.0 else ("var(--amber)" if pct >= 80.0 else "var(--green)")
+            reset_dt = parse_iso(w.get("resets_at"))
+            if reset_dt is not None and reset_dt.tzinfo is None:
+                reset_dt = reset_dt.replace(tzinfo=timezone.utc)
+            if reset_dt is None:
+                reset_str = "重置时间未知"
+            elif reset_dt <= now:
+                reset_str = "已到重置时间，等待新的上报"
+            else:
+                reset_str = "重置：" + format_dt(reset_dt)
+            doc.append('        <div class="pool-window">')
+            doc.append('          <div class="quota-header">')
+            doc.append(f'            <span class="quota-user">{html.escape(w["label"])}</span>')
+            doc.append(f'            <span class="quota-plan">已用 <strong>{pct:.1f}%</strong> · 剩余 {100.0 - pct:.1f}%</span>')
+            doc.append('          </div>')
+            doc.append('          <div class="progress-bar">')
+            doc.append(f'            <div class="progress-fill" style="width: {pct:.1f}%; background: {bar_color};"></div>')
+            doc.append('          </div>')
+            doc.append(f'          <div class="quota-footer"><span>{html.escape(reset_str)}</span></div>')
+            doc.append('        </div>')
+        doc.append('      </div>')
+
+        if pool_week_start is not None:
+            start_str = pool_week_start.strftime("%m/%d %H:%M")
+            doc.append(f'      <h3 class="pool-subtitle">本额度周（{html.escape(start_str)} 起）各成员用量</h3>')
+            if not pool_week_users:
+                doc.append('      <div class="empty-state">本额度周暂无用量记录</div>')
+            else:
+                doc.append('      <div class="share-list">')
+                for u in pool_week_users:
+                    share = (u["tokens"] / pool_week_total * 100.0) if pool_week_total > 0 else 0.0
+                    name = html.escape(u["name"])
+                    lbl = f" ({html.escape(u['label'])})" if u["label"] else ""
+                    doc.append('        <div class="share-row">')
+                    doc.append('          <div class="share-info">')
+                    doc.append(f'            <span><strong>{name}</strong>{lbl}</span>')
+                    doc.append(f'            <span>{format_tokens(u["tokens"])} tokens ({share:.1f}%)</span>')
+                    doc.append('          </div>')
+                    doc.append('          <div class="share-bar-bg">')
+                    doc.append(f'            <div class="share-bar-fill" style="width: {min(100.0, share):.1f}%; background: {u["color"]};"></div>')
+                    doc.append('          </div>')
+                    doc.append('        </div>')
+                doc.append('      </div>')
+                doc.append('      <div class="pool-note">按天统计，额度周起始当天的用量整天计入。</div>')
+
+    # Per-member view only when members disagree (pool may not actually be shared).
+    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries]
+    show_per_member = len(weekly_vals) > 1 and (max(weekly_vals) - min(weekly_vals)) > 2.0
+    if show_per_member:
+        doc.append('      <h3 class="pool-subtitle">各成员上报的周额度（数值不一致，额度可能并非共用）</h3>')
         doc.append('      <div class="quota-grid">')
         for q in quota_pool_entries:
             name = html.escape(q["member_name"])
