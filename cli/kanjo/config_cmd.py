@@ -4,7 +4,10 @@ import json
 import os
 import tempfile
 
-from .config import ConfigError, _subscriptions, config_paths, load, quota_value, read_overrides, subscription_value
+from .config import (
+    ConfigError, _subscriptions, _validate_family_agents, _validate_family_since,
+    config_paths, family_value, load, quota_value, read_overrides, subscription_value,
+)
 from .quota import parse_weekly_reset
 from .sources.base import AGENT_LABELS
 from .subscriptions import known_plans_payload, subscriptions
@@ -22,10 +25,19 @@ def _key(text):
             return section, agent, field
         if section == "quota_windows" and agent in AGENTS and field in QUOTA_FIELDS:
             return section, agent, field
-    raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd> or quota_windows.<agent>.weekly_reset")
+    elif len(parts) == 2:
+        section, field = parts[0], parts[1]
+        if section == "family" and field in ("since", "agents"):
+            return section, None, field
+    raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd>, quota_windows.<agent>.weekly_reset, or family.<since|agents>")
 
 
 def _value(section, agent, key, text):
+    if section == "family":
+        if key == "since":
+            return _validate_family_since(text)
+        if key == "agents":
+            return _validate_family_agents(text)
     if section == "quota_windows":
         if key == "weekly_reset":
             try:
@@ -111,15 +123,23 @@ def cmd_config(args):
         raw = data.setdefault(section, {})
         if not isinstance(raw, dict):
             raise ConfigError("overrides %s must be an object" % section)
-        spec = raw.setdefault(agent, {})
-        if not isinstance(spec, dict):
-            raise ConfigError("overrides %s.%s must be an object" % (section, agent))
-        if args.config_cmd == "set":
-            spec[key] = value
+        if section == "family":
+            if args.config_cmd == "set":
+                raw[key] = value
+            else:
+                raw.pop(key, None)
+                if not raw:
+                    data.pop(section, None)
         else:
-            spec.pop(key, None)
-            if not spec:
-                raw.pop(agent)
+            spec = raw.setdefault(agent, {})
+            if not isinstance(spec, dict):
+                raise ConfigError("overrides %s.%s must be an object" % (section, agent))
+            if args.config_cmd == "set":
+                spec[key] = value
+            else:
+                spec.pop(key, None)
+                if not spec:
+                    raw.pop(agent, None)
         cfg = load(args.config, overrides=data)
         _write(path, data)
 
@@ -129,8 +149,14 @@ def cmd_config(args):
             print("%s = unset (rolling 30 days)" % args.key)
         else:
             print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
-    else:
+    elif section == "quota_windows":
         value, origin = quota_value(cfg, agent, key)
+        if value is None:
+            print("%s = unset (%s)" % (args.key, origin))
+        else:
+            print("%s = %s (%s)" % (args.key, json.dumps(value, ensure_ascii=False), origin))
+    elif section == "family":
+        value, origin = family_value(cfg, key)
         if value is None:
             print("%s = unset (%s)" % (args.key, origin))
         else:

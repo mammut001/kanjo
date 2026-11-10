@@ -46,6 +46,11 @@ def init_db(db_path: str) -> None:
                 value TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS sessions (
                 id_hash TEXT PRIMARY KEY,
                 email TEXT NOT NULL,
@@ -346,3 +351,34 @@ def prune_sessions(conn: sqlite3.Connection, now: Optional[datetime] = None) -> 
     cur.execute("DELETE FROM sessions WHERE expires_at < ?", (now.isoformat(),))
     conn.commit()
     return cur.rowcount
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
+    """Retrieve setting value by key."""
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cur.fetchone()
+    if row and row["value"] is not None:
+        return row["value"]
+    return default
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: Optional[str]) -> None:
+    """Set or remove setting key in database."""
+    cur = conn.cursor()
+    if value is None:
+        cur.execute("DELETE FROM settings WHERE key = ?", (key,))
+    else:
+        cur.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+    conn.commit()
+
+
+def get_all_settings(conn: sqlite3.Connection) -> Dict[str, str]:
+    """Fetch all settings as a key-value dictionary."""
+    cur = conn.cursor()
+    cur.execute("SELECT key, value FROM settings")
+    return {row["key"]: row["value"] for row in cur.fetchall()}

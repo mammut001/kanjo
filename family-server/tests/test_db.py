@@ -115,6 +115,34 @@ class TestDatabaseAndPrune(unittest.TestCase):
             res3 = db.maybe_prune_hourly(conn, now=now + timedelta(minutes=61))
             self.assertIsNotNone(res3)
 
+    def test_settings_crud(self):
+        with db.get_connection(self.db_path) as conn:
+            self.assertIsNone(db.get_setting(conn, "cycle_anchor_day"))
+            self.assertEqual(db.get_setting(conn, "cycle_anchor_day", "default_val"), "default_val")
+
+            # Set setting
+            db.set_setting(conn, "cycle_anchor_day", "9")
+            db.set_setting(conn, "timezone", "America/Toronto")
+            db.set_setting(conn, "tracking_start", "2026-11-09")
+
+            self.assertEqual(db.get_setting(conn, "cycle_anchor_day"), "9")
+            self.assertEqual(db.get_setting(conn, "timezone"), "America/Toronto")
+            self.assertEqual(db.get_setting(conn, "tracking_start"), "2026-11-09")
+
+            all_s = db.get_all_settings(conn)
+            self.assertEqual(all_s["cycle_anchor_day"], "9")
+            self.assertEqual(all_s["timezone"], "America/Toronto")
+            self.assertEqual(all_s["tracking_start"], "2026-11-09")
+
+            # Update setting
+            db.set_setting(conn, "cycle_anchor_day", "15")
+            self.assertEqual(db.get_setting(conn, "cycle_anchor_day"), "15")
+
+            # Delete setting with None
+            db.set_setting(conn, "tracking_start", None)
+            self.assertIsNone(db.get_setting(conn, "tracking_start"))
+            self.assertNotIn("tracking_start", db.get_all_settings(conn))
+
 
 if __name__ == "__main__":
     unittest.main()

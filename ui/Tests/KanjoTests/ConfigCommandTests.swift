@@ -73,4 +73,22 @@ final class ConfigCommandTests: KanjoTestCase {
         XCTAssertEqual(try ConfigCommand.plansCommand(from: prefix + "export"),
                        prefix + "config plans --json")
     }
+
+    func testFamilyScopeArguments() {
+        XCTAssertEqual(ConfigCommand.familySinceArguments(since: "2026-11-09"),
+                       ["config", "set", "family.since", "2026-11-09"])
+        XCTAssertEqual(ConfigCommand.familySinceArguments(since: nil),
+                       ["config", "unset", "family.since"])
+        XCTAssertEqual(ConfigCommand.familySinceArguments(since: "  "),
+                       ["config", "unset", "family.since"])
+
+        XCTAssertEqual(ConfigCommand.familyAgentsArguments(agents: "all"),
+                       ["config", "set", "family.agents", "all"])
+        XCTAssertEqual(ConfigCommand.familyAgentsArguments(agents: "antigravity"),
+                       ["config", "set", "family.agents", "antigravity"])
+        XCTAssertEqual(ConfigCommand.familyAgentsArguments(agents: nil),
+                       ["config", "unset", "family.agents"])
+        XCTAssertEqual(ConfigCommand.familyAgentsArguments(agents: "   "),
+                       ["config", "unset", "family.agents"])
+    }
 }

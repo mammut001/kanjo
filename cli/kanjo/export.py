@@ -940,6 +940,13 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         "config": {
             "dominant_threshold": config.dominant_threshold,
             "no_network": getattr(config, "no_network", False),
+            "family": {
+                "since": config.family_since,
+                "agents": (
+                    ["all"] if config.family_agents == "all" or config.family_agents == ["all"]
+                    else (list(config.family_agents) if config.family_agents is not None else ["antigravity"])
+                ),
+            },
         },
         "quota_windows": quota.quota_windows(config.quota_windows, tokei_dir, now.timestamp(),
                                              timezone_name=tz_name,
@@ -1105,6 +1112,8 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
 
     items.append(("__cfg_threshold__", str(cfg.dominant_threshold), 0))
     items.append(("__cfg_aliases__", str(sorted(cfg.aliases.items())), 0))
+    items.append(("__cfg_family_since__", str(cfg.family_since), 0))
+    items.append(("__cfg_family_agents__", str(cfg.family_agents), 0))
     items.sort(key=lambda x: str(x[0]))
     h = hashlib.sha256()
     for row in items:
@@ -1321,7 +1330,9 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
                                     prices: Optional[PriceBook] = None, home: Optional[str] = None,
                                     scan_result: Optional[ScanResult] = None,
                                     cache=None, repo_cache=None, fs_root: Optional[str] = None,
-                                    include_days: bool = False):
+                                    include_days: bool = False,
+                                    filter_agents: Optional[Set[str]] = None,
+                                    since_ts: Optional[float] = None):
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
@@ -1393,6 +1404,10 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
 
         for m in unit.messages:
             agent = unit.top.agent
+            if filter_agents is not None and agent not in filter_agents:
+                continue
+            if since_ts is not None and m.ts < since_ts:
+                continue
             cost, _ = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
                                   m.cache_write, m.cache_write_1h)
             provider = provider_for(m.model, agent)
@@ -1434,8 +1449,8 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     day_periods = []
     if include_days:
         day_periods = [days[k].to_json() for k in sorted(days.keys())]
-        if len(day_periods) > 31:
-            day_periods = day_periods[-31:]
+        if len(day_periods) > 62:
+            day_periods = day_periods[-62:]
 
     return all_time_period, month_periods, week_periods, day_periods, tz_name
 
@@ -1471,9 +1486,38 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
                         cache=None, repo_cache=None, fs_root: Optional[str] = None,
                         member_label: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
     config = config or Config()
+    if config.family_agents is None:
+        included_agents = {"antigravity"}
+        scope_agents = ["antigravity"]
+    elif config.family_agents == "all" or config.family_agents == ["all"]:
+        included_agents = set(SOURCES.keys())
+        scope_agents = ["all"]
+    else:
+        included_agents = set(config.family_agents)
+        scope_agents = list(config.family_agents)
+
+    tz_name = local_timezone_name()
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = datetime.now().astimezone().tzinfo or timezone.utc
+
+    since_ts = None
+    if config.family_since:
+        clean = config.family_since.strip()
+        clean_iso = clean
+        if clean_iso.endswith(("Z", "z")):
+            clean_iso = clean_iso[:-1] + "+00:00"
+        dt = datetime.fromisoformat(clean_iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tz)
+        since_ts = dt.timestamp()
+
     all_time_period, month_periods, week_periods, day_periods, tz_name = _aggregate_public_summary_data(
         config=config, dirs=dirs, prices=prices, home=home, scan_result=scan_result,
-        cache=cache, repo_cache=repo_cache, fs_root=fs_root, include_days=True
+        cache=cache, repo_cache=repo_cache, fs_root=fs_root, include_days=True,
+        filter_agents=included_agents, since_ts=since_ts,
     )
     now = now or datetime.now(timezone.utc)
     if cache is not None:
@@ -1485,6 +1529,8 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
     # Sanitize quota_windows: privacy backstop forbids key 'title' (rename 'title' in extra_windows to 'label')
     qw_clean = {}
     for agent, entry in qw.items():
+        if agent not in included_agents:
+            continue
         if not isinstance(entry, dict):
             continue
         cleaned_entry = dict(entry)
@@ -1504,6 +1550,7 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         agent: subs[agent]["plan_label"]
         for agent in sorted(subs)
         if isinstance(subs[agent], dict) and subs[agent].get("plan_label") is not None
+        and agent in included_agents
     }
 
     return {
@@ -1514,6 +1561,10 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         "timezone": tz_name,
         "generated_by": "kanjo " + __version__,
         "cost_note": COST_NOTE,
+        "scope": {
+            "agents": scope_agents,
+            "since": config.family_since if config.family_since else None,
+        },
         "plans": plans,
         "quota_windows": qw_clean,
         "summary": {
@@ -1706,14 +1757,22 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
 
     if len(summary.get("weeks", [])) > 26:
         problems.append("weeks count %d > 26" % len(summary["weeks"]))
-    if len(summary.get("days", [])) > 31:
-        problems.append("days count %d > 31" % len(summary["days"]))
+    if len(summary.get("days", [])) > 62:
+        problems.append("days count %d > 62" % len(summary["days"]))
+
+    if "scope" in doc:
+        scope = doc["scope"]
+        if not isinstance(scope, dict):
+            problems.append("scope must be an object")
+        elif "agents" not in scope or not isinstance(scope["agents"], list):
+            problems.append("scope.agents must be a list")
 
     return problems
 
 
 def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
-                            now: Optional[float] = None, member_label: Optional[str] = None) -> Optional[dict]:
+                            now: Optional[float] = None, member_label: Optional[str] = None,
+                            scope: Optional[dict] = None) -> Optional[dict]:
     cdir = directory or _cache_dir()
     path = os.path.join(cdir, "family-report-last.json")
     try:
@@ -1723,6 +1782,8 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
             return None
         if payload.get("fingerprint") != fingerprint:
             return None
+        if scope is not None and payload.get("scope") != scope:
+            return None
         scanned_at = payload.get("scanned_at")
         if not isinstance(scanned_at, (int, float)):
             return None
@@ -1731,6 +1792,8 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
             return None
         doc = payload.get("doc")
         if isinstance(doc, dict):
+            if scope is not None and doc.get("scope") != scope:
+                return None
             doc["member_label"] = member_label if member_label else None
             return doc
     except (OSError, ValueError):
@@ -1739,15 +1802,17 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
 
 
 def save_fast_family_report(fingerprint: str, doc: dict, directory: Optional[str] = None,
-                            now: Optional[float] = None, member_label: Optional[str] = None) -> None:
+                            now: Optional[float] = None, member_label: Optional[str] = None,
+                            scope: Optional[dict] = None) -> None:
     cdir = directory or _cache_dir()
     path = os.path.join(cdir, "family-report-last.json")
     current = time.time() if now is None else now
     tmp = None
+    saved_scope = scope if scope is not None else doc.get("scope")
     try:
         os.makedirs(cdir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".family-report-last-", dir=cdir)
-        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
+        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc, "scope": saved_scope}
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(data)

@@ -81,8 +81,8 @@ class FamilyReportExportTest(unittest.TestCase):
             self.assertIn(key, summary)
             self.assertIsInstance(summary[key], (dict if key == "all_time" else list))
 
-        # Check days count <= 31
-        self.assertLessEqual(len(summary["days"]), 31)
+        # Check days count <= 62
+        self.assertLessEqual(len(summary["days"]), 62)
         for d in summary["days"]:
             self.assertIn("period", d)
             self.assertRegex(d["period"], r"^\d{4}-\d{2}-\d{2}$")
@@ -157,6 +157,28 @@ class FamilyReportExportTest(unittest.TestCase):
             raw_bytes = json.dumps(doc, ensure_ascii=False).encode("utf-8")
             self.assertIsNone(check_privacy_backstop(raw_bytes))
             self.assertIsNone(validate_report_payload(doc))
+
+    def test_family_report_days_max_62(self):
+        from datetime import datetime, timezone
+        from kanjo.sources.base import Message, Session
+        # Create messages across 80 days
+        base_ts = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        messages = []
+        for i in range(80):
+            ts = base_ts + i * 86400
+            messages.append(Message(ts=ts, model="gemini-3.8-pro", input=100, output=100))
+        sess = Session(id="sess-1", agent="antigravity", file="/fake", messages=messages)
+        scan_res = export.ScanResult(sessions=[sess], failed_files=[], stats={})
+
+        doc = export.build_family_report(scan_result=scan_res)
+        days = doc["summary"]["days"]
+        self.assertEqual(len(days), 62)
+        # Verify it kept the latest 62 days
+        expected_last_day = datetime.fromtimestamp(base_ts + 79 * 86400, timezone.utc).strftime("%Y-%m-%d")
+        expected_first_day = datetime.fromtimestamp(base_ts + (80 - 62) * 86400, timezone.utc).strftime("%Y-%m-%d")
+        self.assertEqual(days[-1]["period"], expected_last_day)
+        self.assertEqual(days[0]["period"], expected_first_day)
+        self.assertEqual(export.check_family_report_invariants(doc), [])
 
 
 class MockFamilyServerHandler(BaseHTTPRequestHandler):
@@ -306,6 +328,169 @@ class ReportFamilyCommandTest(unittest.TestCase):
         self.assertEqual(res["status"], "error")
         self.assertEqual(res["http_status"], 401)
         self.assertEqual(res["message"], "Unauthorized")
+
+
+class TestFamilyReportScope(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-family-scope-test-")
+        self.data_dir = os.path.join(self.tmp, "data")
+        self.cache_dir = os.path.join(self.tmp, "cache")
+        self.config_dir = os.path.join(self.tmp, "config")
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
+
+        self.env = {
+            "KANJO_DATA_DIR": self.data_dir,
+            "KANJO_CACHE_DIR": self.cache_dir,
+            "KANJO_CONFIG_DIR": self.config_dir,
+            "KANJO_CLAUDE_DIR": FIXTURE_DIRS["claude"][0],
+            "KANJO_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
+            "KANJO_CODEX_DIR": FIXTURE_DIRS["codex"][0],
+            "KANJO_GROK_DIR": self.tmp,
+            "KANJO_QWEN_DIR": self.tmp,
+            "KANJO_COMMANDCODE_DIR": self.tmp,
+            "KANJO_MINIMAX_DIR": self.tmp,
+            "KANJO_OPENCODE_DIR": self.tmp,
+            "KANJO_COPILOT_DIR": self.tmp,
+            "KANJO_PI_DIR": self.tmp,
+        }
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run_cli(self, *args, extra_env=None):
+        out = io.StringIO()
+        err = io.StringIO()
+        env = dict(self.env)
+        if extra_env:
+            env.update(extra_env)
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            code = cli.main(list(args))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_default_scope_and_plans_quota_filtering(self):
+        # Configure subscriptions for both antigravity and claude
+        self._run_cli("config", "set", "subscriptions.antigravity.plan", "google_ai_ultra")
+        self._run_cli("config", "set", "subscriptions.claude.plan", "pro")
+
+        code, out, err = self._run_cli("export", "--family-report", "--no-cache")
+        self.assertEqual(code, 0, err)
+        doc = json.loads(out)
+        # Default scope: antigravity only, since is null
+        self.assertEqual(doc.get("scope"), {"agents": ["antigravity"], "since": None})
+        # plans must ONLY contain antigravity (claude is filtered out)
+        self.assertEqual(doc.get("plans", {}), {"antigravity": "Google AI Ultra"})
+        # quota_windows must not contain claude
+        self.assertNotIn("claude", doc.get("quota_windows", {}))
+        # All messages aggregated under by_agent must only be antigravity
+        by_agent = doc["summary"]["all_time"]["by_agent"]
+        agents = [a["agent"] for a in by_agent]
+        self.assertEqual(agents, ["antigravity"])
+
+    def test_scope_all_agents_includes_other_agents(self):
+        # Configure subscriptions for both antigravity and claude
+        self._run_cli("config", "set", "subscriptions.antigravity.plan", "google_ai_ultra")
+        self._run_cli("config", "set", "subscriptions.claude.plan", "pro")
+        # Configure family.agents = all
+        code, _, err = self._run_cli("config", "set", "family.agents", "all")
+        self.assertEqual(code, 0, err)
+
+        code, out, err = self._run_cli("export", "--family-report", "--no-cache")
+        self.assertEqual(code, 0, err)
+        doc = json.loads(out)
+        self.assertEqual(doc.get("scope"), {"agents": ["all"], "since": None})
+
+        # When scope is all, both antigravity and claude plans appear
+        self.assertIn("antigravity", doc.get("plans", {}))
+        self.assertIn("claude", doc.get("plans", {}))
+
+        by_agent = doc["summary"]["all_time"]["by_agent"]
+        agents = [a["agent"] for a in by_agent]
+        self.assertIn("antigravity", agents)
+        self.assertIn("claude", agents)
+
+    def test_filtering_by_since_boundary_condition(self):
+        from kanjo.sources.base import Message, Session, local_timezone_name
+        from kanjo.config import Config
+        from datetime import datetime, timezone
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo(local_timezone_name())
+        except Exception:
+            tz = timezone.utc
+
+        # Let since date be 2026-11-09 (midnight in local timezone)
+        dt = datetime(2026, 11, 9, 0, 0, 0, tzinfo=tz)
+        since_ts = dt.timestamp()
+
+        # Session with 3 messages:
+        # 1. exactly one second before since_ts -> excluded
+        # 2. exactly at since_ts -> included
+        # 3. one second after since_ts -> included
+        s = Session(
+            id="session-boundary",
+            agent="antigravity",
+            file="/dummy/path",
+            started=since_ts - 1.0,
+            ended=since_ts + 1.0,
+            messages=[
+                Message(ts=since_ts - 1.0, model="gemini-2.5-flash", input=100, output=50),
+                Message(ts=since_ts, model="gemini-2.5-flash", input=200, output=100),
+                Message(ts=since_ts + 1.0, model="gemini-2.5-flash", input=300, output=150),
+            ],
+        )
+        scan_res = export.ScanResult(sessions=[s], failed_files=[], stats={})
+
+        cfg = Config(family_since="2026-11-09", family_agents=["antigravity"])
+        doc = export.build_family_report(config=cfg, scan_result=scan_res)
+
+        self.assertEqual(doc["scope"], {"agents": ["antigravity"], "since": "2026-11-09"})
+        # Only messages 2 and 3 should be included:
+        # input = 200 + 300 = 500
+        # output = 100 + 150 = 250
+        # total = 750
+        tokens = doc["summary"]["all_time"]["tokens"]
+        self.assertEqual(tokens["input"], 500)
+        self.assertEqual(tokens["output"], 250)
+        self.assertEqual(tokens["total"], 750)
+
+    def test_fast_cache_invalidated_when_scope_changes(self):
+        # 1. Run export with default scope (antigravity, since=None)
+        code, out1, err = self._run_cli("export", "--family-report")
+        self.assertEqual(code, 0, err)
+        doc1 = json.loads(out1)
+        self.assertEqual(doc1["scope"], {"agents": ["antigravity"], "since": None})
+
+        # Verify fast cache file was created
+        cache_file = os.path.join(self.cache_dir, "family-report-last.json")
+        self.assertTrue(os.path.exists(cache_file))
+
+        # 2. Change scope to since = 2026-11-09
+        code, _, err = self._run_cli("config", "set", "family.since", "2026-11-09")
+        self.assertEqual(code, 0, err)
+
+        # 3. Export again without --no-cache (cache is used)
+        code, out2, err = self._run_cli("export", "--family-report")
+        self.assertEqual(code, 0, err)
+        doc2 = json.loads(out2)
+        # Must reflect the new scope, NOT stale cached doc1!
+        self.assertEqual(doc2["scope"], {"agents": ["antigravity"], "since": "2026-11-09"})
+
+        # 4. Change scope to agents = all
+        code, _, err = self._run_cli("config", "set", "family.agents", "all")
+        self.assertEqual(code, 0, err)
+
+        code, out3, err = self._run_cli("export", "--family-report")
+        self.assertEqual(code, 0, err)
+        doc3 = json.loads(out3)
+        self.assertEqual(doc3["scope"], {"agents": ["all"], "since": "2026-11-09"})
+
+        # 5. Direct load_fast_family_report with wrong scope returns None
+        fp = export.source_fingerprint(config=cli._config(type("Args", (), {"config": None})()))
+        wrong_scope = {"agents": ["antigravity"], "since": "1999-01-01"}
+        cached = export.load_fast_family_report(fp, directory=self.cache_dir, scope=wrong_scope)
+        self.assertIsNone(cached)
 
 
 if __name__ == "__main__":

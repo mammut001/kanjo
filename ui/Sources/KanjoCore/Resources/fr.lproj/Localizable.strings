@@ -191,6 +191,17 @@
 "settings.family.status.in_progress" = "Rapport en cours…";
 "settings.family.status.no_network" = "Rapport en pause : réseau désactivé";
 "settings.family.status.missing_token" = "Jeton non configuré";
+"settings.family.scope.label" = "Périmètre : %@";
+"settings.family.scope.since_date" = "Depuis le %@";
+"settings.family.scope.all_time" = "Tout le temps";
+"settings.family.scope.agents_antigravity" = "Antigravity uniquement";
+"settings.family.scope.agents_all" = "Tous les agents";
+"settings.family.scope.start_date" = "Date de début";
+"settings.family.scope.agents_choice" = "Agents";
+"settings.family.scope.clear_date" = "Effacer la date de début";
+"settings.family.scope.set_date" = "Définir la date de début";
+"settings.family.scope.advanced" = "Avancé";
+"settings.family.scope.advanced_note" = "Généralement non requis ; le cycle est défini par l'administrateur sur le tableau de bord.";
 "settings.family.note" = "Rapporte uniquement les résumés globaux de jetons et les fenêtres de quota au serveur familial. N'inclut aucun nom de projet, chemin, titre ou email de compte. Coûts estimés d'après les tarifs API publics.";
 "sync.account_code" = "Compte iCloud %@";
 "gzip.error.invalid_header" = "L'instantané n'est pas un fichier gzip.";

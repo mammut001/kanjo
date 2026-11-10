@@ -76,15 +76,28 @@ public struct UsageReport: Codable, Equatable {
 public struct ReportConfig: Codable, Equatable {
     public var dominantThreshold: Double
     public var noNetwork: Bool?
+    public var family: FamilyConfig?
 
     enum CodingKeys: String, CodingKey {
         case dominantThreshold = "dominant_threshold"
         case noNetwork = "no_network"
+        case family
     }
 
-    public init(dominantThreshold: Double, noNetwork: Bool? = nil) {
+    public init(dominantThreshold: Double, noNetwork: Bool? = nil, family: FamilyConfig? = nil) {
         self.dominantThreshold = dominantThreshold
         self.noNetwork = noNetwork
+        self.family = family
+    }
+}
+
+public struct FamilyConfig: Codable, Equatable {
+    public var since: String?
+    public var agents: [String]?
+
+    public init(since: String? = nil, agents: [String]? = nil) {
+        self.since = since
+        self.agents = agents
     }
 }
 

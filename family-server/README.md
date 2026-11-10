@@ -20,7 +20,7 @@ Self-hosted report receiver and public dashboard behind Firebase Authentication 
   - Comprehensive hardening: strict CSP, HSTS, X-Content-Type-Options, Referrer-Policy, COOP, CSRF checks on all POSTs, client IP rate limiting (10/min), and 64 KB payload limit.
 - **Storage**:
   - SQLite database stored at `/opt/family-usage/data/family.db` (inside container: `/data/family.db`).
-  - Members, SHA-256 hashed bearer tokens, 7-day server sessions, and daily historical reports (90-day retention).
+  - Members, SHA-256 hashed bearer tokens, 7-day server sessions, daily historical reports (90-day retention), and server settings (`settings(key, value)` table).
 
 ---
 
@@ -44,6 +44,9 @@ FAMILY_ADMIN_EMAILS=admin@example.com,user@example.com
 
 # Public Origin for CSRF enforcement
 FAMILY_PUBLIC_ORIGIN=https://usage.paytonpei.top
+
+# Server timezone for billing cycle calculations (default: America/Toronto)
+FAMILY_TIMEZONE=America/Toronto
 
 # Optional: Set to 1 to publish port 8787 on Tailscale IP
 PUBLISH_TAILSCALE=0
@@ -141,6 +144,28 @@ Reports older than 90 days and intermediate reports on the same day are automati
 ```bash
 docker exec family-app python -m family_server prune
 ```
+
+---
+
+## Billing Cycle & Admin Settings
+
+The family manager sets the billing cycle anchor day and optional tracking start date via the admin web interface.
+
+### Settings (`/settings`)
+
+- **Routes**:
+  - `GET /settings`: Admin-only page (requires valid session in `FAMILY_ADMIN_EMAILS`). Displays settings form with properly escaped values.
+  - `POST /settings`: Saves settings, validates inputs, and redirects to `/settings?saved=1`. Changes are logged without PII.
+- **Configurable Settings (Stored in `settings` SQLite table)**:
+  - `cycle_anchor_day`: Renewal day (1–31) of the Google AI Ultra family plan.
+    - If a month does not have that day (e.g. day 31 in February or April), the cycle automatically starts on the last day of the month (e.g. Feb 28/29, Apr 30).
+    - If unset, the dashboard prompts the admin with a banner and defaults to calendar month (anchor = 1).
+  - `tracking_start`: Optional start date (`YYYY-MM-DD`). Usage before this date is ignored everywhere on the dashboard (cycle metrics, previous cycle, pool rankings, and chart).
+  - `timezone`: IANA timezone name (e.g. `America/Toronto`). Defaults to `FAMILY_TIMEZONE` env variable, or `America/Toronto`. Validated using standard library `zoneinfo`.
+- **Dashboard Display**:
+  - Current cycle interval `[start, next_start)` shown as `本周期 MM/DD – MM/DD · 剩余 X 天`.
+  - Per-member cards show: current cycle tokens / cost, previous cycle tokens / % change, and days remaining until cycle reset.
+  - "本周期谁用掉了额度池" ranks member usage within the current cycle.
 
 ---
 

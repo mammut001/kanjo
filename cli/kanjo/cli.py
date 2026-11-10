@@ -60,15 +60,22 @@ def cmd_export(args) -> int:
     use_cache = not getattr(args, "no_cache", False)
 
     if getattr(args, "family_report", False):
+        expected_scope = {
+            "agents": (
+                ["all"] if cfg.family_agents == "all" or cfg.family_agents == ["all"]
+                else (list(cfg.family_agents) if cfg.family_agents is not None else ["antigravity"])
+            ),
+            "since": cfg.family_since or None,
+        }
         if use_cache:
             fp = source_fingerprint(config=cfg)
-            doc = load_fast_family_report(fp, member_label=args.member_label)
+            doc = load_fast_family_report(fp, member_label=args.member_label, scope=expected_scope)
         if doc is None:
             doc = build_family_report(config=cfg, cache=_cache(args), member_label=args.member_label)
             if use_cache:
                 if fp is None:
                     fp = source_fingerprint(config=cfg)
-                save_fast_family_report(fp, doc, member_label=args.member_label)
+                save_fast_family_report(fp, doc, member_label=args.member_label, scope=expected_scope)
     elif getattr(args, "public_summary", False):
         if use_cache:
             fp = source_fingerprint(config=cfg)
