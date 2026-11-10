@@ -1261,7 +1261,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         self.send_header("Strict-Transport-Security", "max-age=31536000")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
+        # same-origin (not no-referrer): with no-referrer, browsers send
+        # "Origin: null" on same-origin form POSTs, which breaks the CSRF check.
+        self.send_header("Referrer-Policy", "same-origin")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
         if is_authenticated:
             self.send_header("Cache-Control", "no-store")
@@ -1293,10 +1295,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         
         Requires either:
         - Origin matching FAMILY_PUBLIC_ORIGIN
-        - Sec-Fetch-Site: same-origin (when Origin is omitted by browser/client)
+        - Sec-Fetch-Site: same-origin (when Origin is omitted, or is the opaque
+          "null" that browsers send under a no-referrer policy)
         """
         origin = self.headers.get("Origin")
-        if origin:
+        if origin and origin != "null":
             return origin.rstrip("/") == self.public_origin.rstrip("/")
         sec_fetch_site = self.headers.get("Sec-Fetch-Site")
         return sec_fetch_site == "same-origin"
