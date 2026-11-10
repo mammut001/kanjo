@@ -121,9 +121,10 @@ if (-not $SelectedPython) {
             $tokens = $cand.Split()
             $cmdName = $tokens[0]
             $cmdArgs = if ($tokens.Length -gt 1) { $tokens[1..($tokens.Length-1)] } else { @() }
-            $res = & $cmdName $cmdArgs -c "import sys; print(sys.version_info >= (3, 9))" 2>$null
-            if ($res -match "True") {
-                $SelectedPython = (Get-Command $cmdName -ErrorAction SilentlyContinue).Source
+            $res = & $cmdName $cmdArgs -c "import sys; print(sys.executable if sys.version_info >= (3, 9) else '')" 2>$null
+            $exe = "$res".Trim()
+            if ($exe -and (Test-Path $exe)) {
+                $SelectedPython = $exe
                 break
             }
         } catch {}
@@ -217,6 +218,13 @@ if ($CliZip) {
     Expand-Archive -Path $cliZipPath -DestinationPath $CliDir -Force
     Remove-Item -Force $cliZipPath -ErrorAction SilentlyContinue
 }
+$Launcher = Join-Path $CliDir "kanjo_family_report.pyw"
+Set-Content -Path $Launcher -Encoding ASCII -Value @'
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from kanjo.cli import main
+sys.exit(main())
+'@
 Write-Host "  [✓] Kanjo CLI 部署至: $CliDir"
 
 # -----------------------------------------------------------------------------
@@ -285,7 +293,7 @@ if (-not $NoSchedule) {
     # 1. Try Register-ScheduledTask (built-in Windows PowerShell)
     if (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue) {
         try {
-            $taskAction = New-ScheduledTaskAction -Execute $PythonwExe -Argument "-m kanjo report-family --url `"$Server`" --member-label `"$MemberLabel`"" -WorkingDirectory $CliDir
+            $taskAction = New-ScheduledTaskAction -Execute $PythonwExe -Argument "`"$Launcher`" report-family --url `"$Server`" --member-label `"$MemberLabel`"" -WorkingDirectory $CliDir
             $taskTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 30)
             $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable:$false -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
             Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Force | Out-Null
@@ -299,7 +307,7 @@ if (-not $NoSchedule) {
     # 2. Fallback to schtasks.exe
     if (-not $scheduledOk) {
         try {
-            $tr = "`"$PythonwExe`" -m kanjo report-family --url `"$Server`" --member-label `"$MemberLabel`""
+            $tr = "`"$PythonwExe`" `"$Launcher`" report-family --url `"$Server`" --member-label `"$MemberLabel`""
             $schOut = & schtasks.exe /create /tn "$TaskName" /tr "$tr" /sc minute /mo 30 /f 2>&1
             if ($LASTEXITCODE -eq 0) {
                 $scheduledOk = $true

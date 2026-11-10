@@ -77,6 +77,11 @@ jobs:
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport
+          $Launcher = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli\kanjo_family_report.pyw"
+          Push-Location $env:TEMP
+          python $Launcher --version
+          if ($LASTEXITCODE -ne 0) { throw "launcher failed" }
+          Pop-Location
       - name: Token management via Credential Manager
         shell: pwsh
         run: |

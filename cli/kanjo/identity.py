@@ -34,7 +34,17 @@ _CLEAN_CACHE: Dict[str, Optional[str]] = {}
 _WINDOWS_ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
 
 
+def _is_win_path(p: str) -> bool:
+    """Windows absolute path (C:\\..., C:/..., \\\\server\\...). Backslash is a
+    separator only in these; in POSIX paths it is an ordinary character (and
+    often junk from shell text such as a literal "\\n"), so it must not split."""
+    return bool(_WINDOWS_ABS_PATH.match(p or ""))
+
+
 def _is_subpath(p: str, prefix: str) -> bool:
+    if not _is_win_path(prefix):
+        clean_prefix = prefix.rstrip("/")
+        return p == clean_prefix or p.startswith(clean_prefix + "/")
     clean_prefix = prefix.rstrip("/\\")
     if p == clean_prefix:
         return True
@@ -42,6 +52,8 @@ def _is_subpath(p: str, prefix: str) -> bool:
 
 
 def _path_basename(path: str) -> str:
+    if not _is_win_path(path):
+        return os.path.basename(path.rstrip("/"))
     p = path.rstrip("/\\")
     return p.split("/")[-1].split("\\")[-1]
 
@@ -552,7 +564,7 @@ class Resolver:
             _CLEAN_CACHE[path] = None
             return None
         p = p.rstrip(".,:;")
-        if "\\" in p:
+        if _is_win_path(p):
             res = os.path.normpath(p) if p else None
         elif (len(p) > 1 and not p.endswith("/") and "//" not in p
                 and "/./" not in p and "/../" not in p and not p.endswith("/.") and not p.endswith("/..")):
@@ -677,10 +689,10 @@ class Resolver:
     def _missing_ok(self, p: str) -> bool:
         if p == self.home or not _is_subpath(p, self.home):
             return False
-        if any((p + "/").startswith(t) or (p + "\\").startswith(t) for t in _TEMP_PREFIXES):
+        if any((p + "/").startswith(t) for t in _TEMP_PREFIXES):
             return False
         rel = os.path.relpath(p, self.home)
-        first_comp = rel.replace("\\", "/").split("/")[0]
+        first_comp = (rel.replace("\\", "/") if _is_win_path(p) else rel).split("/")[0]
         if first_comp.startswith("."):
             return False  # agent state dirs (~/.claude, ~/.codex, ~/.gemini ...)
         return True
@@ -692,9 +704,13 @@ class Resolver:
             return None
         if path in table:
             return path, table[path]
+        win = _is_win_path(path)
         idx = len(path)
         while True:
-            idx = max(path.rfind("/", 0, idx), path.rfind("\\", 0, idx))
+            if win:
+                idx = max(path.rfind("/", 0, idx), path.rfind("\\", 0, idx))
+            else:
+                idx = path.rfind("/", 0, idx)
             if idx == -1:
                 break
             cand = path[:idx]

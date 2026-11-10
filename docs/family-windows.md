@@ -16,7 +16,7 @@
 一行命令，在 PowerShell（普通用户）里运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 | iex"
+powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f'
 ```
 
 `-ExecutionPolicy Bypass` 只对这一个进程生效，不改系统设置，也不需要管理员。
