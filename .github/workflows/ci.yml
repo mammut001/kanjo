@@ -48,3 +48,159 @@ jobs:
         run: find .build -name '*.lproj' -path '*Kanjo_KanjoCore*' | head
       - name: Test
         run: swift test
+
+  windows:
+    name: Windows (Python ${{ matrix.python }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: CLI unit tests
+        working-directory: cli
+        run: python -m unittest -v
+      - name: Build kanjo-cli.zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path staging/kanjo -Force | Out-Null
+          Copy-Item -Recurse -Path cli/kanjo/* -Destination staging/kanjo
+          Get-ChildItem -Path staging/kanjo -Recurse -Include "__pycache__","*.pyc" | Remove-Item -Recurse -Force
+          Copy-Item -Path cli/pricing.json,cli/pricing_overrides.json -Destination staging/
+          Compress-Archive -Path staging/* -DestinationPath kanjo-cli.zip -Force
+          Remove-Item -Recurse -Force staging
+      - name: Run installer (isolated, no schedule)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport
+      - name: Token management via Credential Manager
+        shell: pwsh
+        run: |
+          $CliDir = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli"
+          $env:PYTHONPATH = $CliDir
+          "ci-windows-secret-token" | python -m kanjo family-token set
+          $status = python -m kanjo family-token status
+          Write-Host "Token status: $status"
+          if ($status.Trim() -ne "set") {
+              throw "Expected status 'set', got '$status'"
+          }
+      - name: Validate export --family-report with family-server
+        shell: pwsh
+        run: |
+          $CliDir = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli"
+          $env:PYTHONPATH = "$CliDir;family-server"
+          python -c @"
+          import json, os, subprocess, tempfile, sys
+          from family_server.validation import validate_report_payload, check_privacy_backstop
+
+          tmp = tempfile.mkdtemp()
+          env = dict(os.environ)
+          env['KANJO_NO_NETWORK'] = '1'
+          env['KANJO_DATA_DIR'] = os.path.join(tmp, 'data')
+          env['KANJO_CACHE_DIR'] = os.path.join(tmp, 'cache')
+          env['KANJO_CLAUDE_DIR'] = os.path.abspath('cli/tests/fixtures/claude')
+          env['KANJO_ANTIGRAVITY_DIR'] = os.path.abspath('cli/tests/fixtures/antigravity')
+          env['KANJO_CODEX_DIR'] = os.path.abspath('cli/tests/fixtures/codex')
+
+          res = subprocess.run([sys.executable, '-m', 'kanjo', 'export', '--family-report', '--no-cache'],
+                               capture_output=True, env=env, check=True)
+          raw = res.stdout
+          doc = json.loads(raw)
+
+          val_err = validate_report_payload(doc)
+          if val_err:
+              print(f'Validation error: {val_err}', file=sys.stderr)
+              sys.exit(1)
+
+          priv_err = check_privacy_backstop(raw)
+          if priv_err:
+              print(f'Privacy violation: {priv_err}', file=sys.stderr)
+              sys.exit(1)
+
+          print('Family report validation and privacy backstop passed!')
+          "@
+      - name: Report family to local server (read token from Credential Manager)
+        shell: pwsh
+        run: |
+          $CliDir = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli"
+          $env:PYTHONPATH = $CliDir
+          python -c @"
+          import http.server, threading, subprocess, sys, os, tempfile
+
+          received = {}
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def do_POST(self):
+                  received['auth'] = self.headers.get('Authorization')
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'application/json')
+                  self.end_headers()
+                  self.wfile.write(b'{\"status\":\"ok\",\"received_at\":1700000000}')
+              def log_message(self, format, *args):
+                  pass
+
+          server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+          port = server.server_address[1]
+          t = threading.Thread(target=server.handle_request)
+          t.start()
+
+          tmp = tempfile.mkdtemp()
+          env = dict(os.environ)
+          env.pop('KANJO_FAMILY_TOKEN', None)
+          env['KANJO_NO_NETWORK'] = '1'
+          env['KANJO_DATA_DIR'] = os.path.join(tmp, 'data')
+          env['KANJO_CACHE_DIR'] = os.path.join(tmp, 'cache')
+          env['KANJO_CLAUDE_DIR'] = os.path.abspath('cli/tests/fixtures/claude')
+          env['KANJO_ANTIGRAVITY_DIR'] = os.path.abspath('cli/tests/fixtures/antigravity')
+          env['KANJO_CODEX_DIR'] = os.path.abspath('cli/tests/fixtures/codex')
+
+          res = subprocess.run([sys.executable, '-m', 'kanjo', 'report-family', '--url', f'http://127.0.0.1:{port}', '--no-cache'],
+                               env=env, capture_output=True)
+          t.join()
+          server.server_close()
+
+          print('report-family stdout:', res.stdout.decode('utf-8', errors='replace'))
+          print('report-family stderr:', res.stderr.decode('utf-8', errors='replace'))
+          if res.returncode != 0:
+              sys.exit(res.returncode)
+
+          expected_auth = 'Bearer ci-windows-secret-token'
+          actual_auth = received.get('auth')
+          if actual_auth != expected_auth:
+              print(f'Expected auth {expected_auth}, got {actual_auth}', file=sys.stderr)
+              sys.exit(1)
+          print('Local server received expected Bearer token from Windows Credential Manager!')
+          "@
+      - name: Scheduled task register, unregister and family-token clear
+        shell: pwsh
+        run: |
+          $CliDir = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli"
+          $env:PYTHONPATH = $CliDir
+
+          # 1. Register task with a second installer run (without -NoSchedule)
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -SkipReport
+          $task = Get-ScheduledTask -TaskName "Kanjo 家庭上报"
+          if (-not $task) {
+              throw "Scheduled task was not created!"
+          }
+          Write-Host "Task found: $($task.TaskName)"
+
+          # 2. Run uninstall
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -Uninstall
+          $removedTask = Get-ScheduledTask -TaskName "Kanjo 家庭上报" -ErrorAction SilentlyContinue
+          if ($removedTask) {
+              throw "Scheduled task still exists after uninstall!"
+          }
+          Write-Host "Scheduled task successfully removed."
+
+          # 3. Clear family token
+          python -m kanjo family-token clear
+          $clearedStatus = python -m kanjo family-token status
+          if ($clearedStatus.Trim() -ne "not set") {
+              throw "Expected 'not set', got '$clearedStatus'"
+          }
+          Write-Host "Family token successfully cleared."

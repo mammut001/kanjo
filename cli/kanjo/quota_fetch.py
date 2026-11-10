@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from . import winsupport
 from .quota_claude_cache import scan_claude_desktop_cache
 
 CACHE_VERSION = 1
@@ -150,14 +151,20 @@ def _find_antigravity_processes() -> List[dict]:
                 pass
         return [{"pid": 0, "csrf_token": env_token, "port": port}]
 
-    # 2. Inspect running processes via /bin/ps
-    try:
-        out = subprocess.run(
-            ["/bin/ps", "-ax", "-o", "pid=,command="],
-            capture_output=True, text=True, timeout=3, check=False
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
+    # 2. Inspect running processes via PowerShell (Windows) or /bin/ps (Unix)
+    if winsupport.is_windows():
+        out = winsupport.powershell(
+            "Get-CimInstance Win32_Process | Where-Object CommandLine | "
+            "ForEach-Object { '{0} {1}' -f $_.ProcessId, $_.CommandLine }"
+        )
+    else:
+        try:
+            out = subprocess.run(
+                ["/bin/ps", "-ax", "-o", "pid=,command="],
+                capture_output=True, text=True, timeout=3, check=False
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
 
     procs = []
     for line in out.splitlines():
@@ -184,20 +191,43 @@ def _find_antigravity_processes() -> List[dict]:
 def _antigravity_ports(pid: int, known_port: Optional[int]) -> List[int]:
     ports = [known_port] if known_port else []
     if pid > 0:
-        for lsof in ("/usr/sbin/lsof", "/usr/bin/lsof"):
-            if os.path.isfile(lsof) and os.access(lsof, os.X_OK):
+        if winsupport.is_windows():
+            # 1. Try Get-NetTCPConnection
+            ps_cmd = (
+                f"Get-NetTCPConnection -State Listen -OwningProcess {int(pid)} "
+                "-ErrorAction SilentlyContinue | ForEach-Object { $_.LocalPort }"
+            )
+            out = winsupport.powershell(ps_cmd, timeout=5)
+            found = [int(v) for v in re.findall(r"^\s*(\d+)\s*$", out, re.M)]
+            # 2. Fallback to netstat -ano
+            if not found:
                 try:
                     res = subprocess.run(
-                        [lsof, "-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", str(pid)],
-                        capture_output=True, text=True, timeout=2, check=False
+                        ["netstat", "-ano"],
+                        capture_output=True, text=True, timeout=5, check=False
                     )
-                    found = [int(v) for v in re.findall(r":(\d+)\s+\(LISTEN\)", res.stdout)]
-                    for p in found:
-                        if p not in ports:
-                            ports.append(p)
-                except Exception:
+                    pattern = rf"^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+{int(pid)}\s*$"
+                    found = [int(m.group(1)) for m in re.finditer(pattern, res.stdout, re.M | re.I)]
+                except (OSError, subprocess.SubprocessError):
                     pass
-                break
+            for p in found:
+                if p not in ports:
+                    ports.append(p)
+        else:
+            for lsof in ("/usr/sbin/lsof", "/usr/bin/lsof"):
+                if os.path.isfile(lsof) and os.access(lsof, os.X_OK):
+                    try:
+                        res = subprocess.run(
+                            [lsof, "-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", str(pid)],
+                            capture_output=True, text=True, timeout=2, check=False
+                        )
+                        found = [int(v) for v in re.findall(r":(\d+)\s+\(LISTEN\)", res.stdout)]
+                        for p in found:
+                            if p not in ports:
+                                ports.append(p)
+                    except Exception:
+                        pass
+                    break
     return ports
 
 
