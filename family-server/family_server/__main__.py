@@ -64,6 +64,21 @@ def main(argv=None):
         default=os.environ.get("FAMILY_DASHBOARD_HOST", "0.0.0.0"),
         help="Host for dashboard listener (default: 0.0.0.0, env: FAMILY_DASHBOARD_HOST)",
     )
+    serve_parser.add_argument(
+        "--firebase-project-id",
+        default=os.environ.get("FIREBASE_PROJECT_ID"),
+        help="Firebase Project ID (env: FIREBASE_PROJECT_ID)",
+    )
+    serve_parser.add_argument(
+        "--admin-emails",
+        default=os.environ.get("FAMILY_ADMIN_EMAILS"),
+        help="Comma-separated list of authorized admin emails (env: FAMILY_ADMIN_EMAILS)",
+    )
+    serve_parser.add_argument(
+        "--public-origin",
+        default=os.environ.get("FAMILY_PUBLIC_ORIGIN", "https://usage.paytonpei.top"),
+        help="Allowed public Origin for CSRF checks (default: https://usage.paytonpei.top, env: FAMILY_PUBLIC_ORIGIN)",
+    )
 
     # member
     member_parser = subparsers.add_parser("member", help="Manage family members and tokens", parents=[parent_parser])
@@ -87,12 +102,19 @@ def main(argv=None):
     db.init_db(db_path)
 
     if args.subcommand == "serve":
+        admin_emails = None
+        if args.admin_emails:
+            admin_emails = {e.strip().lower() for e in args.admin_emails.split(",") if e.strip()}
+
         api_srv, dash_srv, a_port, d_port = start_servers(
             db_path=db_path,
             api_host=args.api_host,
             api_port=args.api_port,
             dashboard_host=args.dashboard_host,
             dashboard_port=args.dashboard_port,
+            project_id=args.firebase_project_id,
+            admin_emails=admin_emails,
+            public_origin=args.public_origin,
         )
         print(f"Kanjo family server started.")
         print(f"  API listener:       http://{args.api_host}:{a_port}")

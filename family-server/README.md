@@ -1,21 +1,51 @@
 # Kanjo Family Usage Server
 
-Self-hosted report receiver and private Tailnet dashboard for Google AI Ultra / AI family usage tracking.
+Self-hosted report receiver and public dashboard behind Firebase Authentication (Google Sign-In) for Google AI Ultra / AI family usage tracking.
 
 ## Architecture
 
-- **Public report endpoint (`usage.paytonpei.top`)**:
+- **Public unified ingress (`usage.paytonpei.top`)**:
   - Accessible via Cloudflare Tunnel (`family-cloudflared`).
-  - Forwards `POST /api/report` and `GET /healthz` to `http://family-app:8788`.
-  - All other paths return 404 from Cloudflare.
-  - Port 8788 is NOT published to the host network.
-- **Private dashboard (`100.115.238.6:8787`)**:
-  - Published strictly on the VPS Tailscale IP (`100.115.238.6:8787`).
-  - Not exposed to the public Internet.
-  - Server-rendered HTML with inline CSS and hand-written SVG charts (works offline on the tailnet).
+  - Routes:
+    - `POST /api/report` and `GET /healthz` → `http://family-app:8788` (report intake API)
+    - All other paths for hostname `usage.paytonpei.top` → `http://family-app:8787` (public dashboard behind Firebase Google Sign-In)
+    - Unmatched requests return HTTP 404.
+  - Neither port (8788 or 8787) is published on public network interfaces.
+  - Port 8787 can optionally be published on Tailscale IP via `PUBLISH_TAILSCALE=1`.
+- **Authentication & Security**:
+  - Dashboard routes protected by Firebase Authentication with Google Sign-In.
+  - Pure-Python RSASSA-PKCS1-v1_5 SHA-256 ID token verification against Google JWKs.
+  - Access restricted to allowlisted emails in `FAMILY_ADMIN_EMAILS`.
+  - Secure server-side sessions stored in SQLite with `__Host-family_session` cookie (`Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=604800`).
+  - Comprehensive hardening: strict CSP, HSTS, X-Content-Type-Options, Referrer-Policy, COOP, CSRF checks on all POSTs, client IP rate limiting (10/min), and 64 KB payload limit.
 - **Storage**:
   - SQLite database stored at `/opt/family-usage/data/family.db` (inside container: `/data/family.db`).
-  - Members, SHA-256 hashed bearer tokens, and daily historical reports (90-day retention).
+  - Members, SHA-256 hashed bearer tokens, 7-day server sessions, and daily historical reports (90-day retention).
+
+---
+
+## Configuration (`/opt/family-usage/family.env`)
+
+Server configuration is read by `deploy.sh` from `/opt/family-usage/family.env`.
+
+> **IMPORTANT**: Never commit real admin emails or credentials to git. Use placeholders in documentation.
+
+Example `/opt/family-usage/family.env`:
+
+```bash
+# Firebase Project Configuration (public web config)
+FIREBASE_PROJECT_ID="kanjo-family-usage"
+FIREBASE_WEB_CONFIG_JSON='{"apiKey":"AIzaSyAL-1-DBm7YC3_16Ojsop9wh6IHh6zRaUk","authDomain":"kanjo-family-usage.firebaseapp.com","projectId":"kanjo-family-usage","appId":"1:819878046514:web:5014afdf6dd8bcafdb852b","messagingSenderId":"819878046514"}'
+
+# Allowed Admin Emails (comma-separated, case-insensitive)
+FAMILY_ADMIN_EMAILS="admin@example.com,user@example.com"
+
+# Public Origin for CSRF enforcement
+FAMILY_PUBLIC_ORIGIN="https://usage.paytonpei.top"
+
+# Optional: Set to 1 to publish port 8787 on Tailscale IP
+PUBLISH_TAILSCALE=0
+```
 
 ---
 
@@ -25,24 +55,24 @@ Self-hosted report receiver and private Tailnet dashboard for Google AI Ultra / 
 
 - Docker running on Ubuntu 26.04 (no docker-compose needed).
 - Cloudflare Tunnel credentials JSON placed in `/opt/family-usage/cloudflared/<TUNNEL_ID>.json`.
-- Tailscale running on the host with IP `100.115.238.6`.
+- Environment configuration file placed in `/opt/family-usage/family.env`.
 
 ### 2. Run Deployment Script
 
 ```bash
 cd /opt/family-usage
 export TUNNEL_ID="0bfee670-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # or auto-detected from cloudflared/*.json
-export TAILSCALE_IP="100.115.238.6"                     # optional, default is 100.115.238.6
 
 ./deploy.sh
 ```
 
 The script is fully idempotent. It:
-1. Renders `cloudflared/config.yml` from `cloudflared/config.yml.template`.
-2. Creates Docker network `family-net` if missing.
-3. Builds the `family-usage-app` image (`python:3.14-slim`, runs as non-root user).
-4. Restarts `family-app` mounting `/opt/family-usage/data:/data` and publishing only `100.115.238.6:8787:8787`.
-5. Restarts `family-cloudflared` container connected to `family-net`.
+1. Sources `/opt/family-usage/family.env` if present.
+2. Renders `cloudflared/config.yml` from `cloudflared/config.yml.template`.
+3. Creates Docker network `family-net` if missing.
+4. Builds the `family-usage-app` image (`python:3.14-slim`, non-root user).
+5. Starts `family-app` connected to `family-net` with environment variables.
+6. Starts `family-cloudflared` container connected to `family-net`.
 
 ### 3. Verify Deployment
 
@@ -51,13 +81,12 @@ The script is fully idempotent. It:
 curl -i https://usage.paytonpei.top/healthz
 # Expected: HTTP/2 200 {"status":"ok"}
 
-# Verify public ingress blocks unauthorized paths
+# Unauthenticated access to dashboard redirects to /login
 curl -i https://usage.paytonpei.top/
-# Expected: HTTP 404
+# Expected: HTTP/2 302 Found, Location: /login
 
-# Private dashboard via Tailscale
-curl -i http://100.115.238.6:8787/
-# Expected: HTTP 200 with HTML dashboard
+# Open in browser: https://usage.paytonpei.top/
+# Sign in with authorized Google account -> dashboard renders with metrics
 ```
 
 ---

@@ -8,4 +8,6 @@ ingress:
   - hostname: usage.paytonpei.top
     path: ^/healthz$
     service: http://family-app:8788
+  - hostname: usage.paytonpei.top
+    service: http://family-app:8787
   - service: http_status:404

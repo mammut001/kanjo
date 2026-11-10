@@ -206,6 +206,46 @@ class TestAPIEndpoint(unittest.TestCase):
         self.assertNotIn(self.token_alice, logs)
         self.assertNotIn("user@domain.com", logs)
 
+    def test_privacy_backstop_model_with_at_accepted_and_email_rejected(self):
+        """Model ids with '@' (e.g. claude-x@20240620) must be accepted, while email addresses are rejected."""
+        # 1. Model id with @ like claude-3-5-sonnet@20240620 is accepted
+        ok_data = copy.deepcopy(self.fixture_data)
+        ok_data["member_label"] = "Model test claude-3-5-sonnet@20240620"
+        ok_data["summary"]["all_time"]["top_models"].append({
+            "model": "claude-x@20240620",
+            "tokens_total": 500,
+            "cost_usd": 0.05,
+        })
+        status, body, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(ok_data).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_alice}"},
+        )
+        self.assertEqual(status, 200, f"Valid model id with @ should be accepted, got: {body.decode('utf-8')}")
+
+        # 2. Email in string value is rejected
+        email_data = copy.deepcopy(self.fixture_data)
+        email_data["member_label"] = "Please contact me at admin@corp.example.com"
+        status, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(email_data).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_bob}"},
+        )
+        self.assertEqual(status, 400, "Email in string value must be rejected")
+
+        # 3. Email in dict key is rejected
+        email_key_data = copy.deepcopy(self.fixture_data)
+        email_key_data["summary"]["alice@company.org"] = "leaked"
+        status, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(email_key_data).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_bob}"},
+        )
+        self.assertEqual(status, 400, "Email in dict key must be rejected")
+
     def test_200_valid_report_and_storage(self):
         valid_bytes = json.dumps(self.fixture_data).encode("utf-8")
         status, body, _ = self._api_request(

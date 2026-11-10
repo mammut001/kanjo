@@ -3,8 +3,9 @@
 from http.server import ThreadingHTTPServer
 import logging
 import threading
-from typing import Tuple
+from typing import Optional, Set, Tuple
 
+from . import auth
 from .api import make_api_handler
 from .dashboard import make_dashboard_handler
 from .db import init_db
@@ -19,16 +20,30 @@ def start_servers(
     api_port: int = 8788,
     dashboard_host: str = "0.0.0.0",
     dashboard_port: int = 8787,
-    rate_limiter: RateLimiter = None,
+    rate_limiter: Optional[RateLimiter] = None,
+    session_rate_limiter: Optional[RateLimiter] = None,
+    firebase_config: Optional[dict] = None,
+    project_id: Optional[str] = None,
+    admin_emails: Optional[Set[str]] = None,
+    public_origin: Optional[str] = None,
+    jwk_manager: Optional[auth.JWKManager] = None,
 ) -> Tuple[ThreadingHTTPServer, ThreadingHTTPServer, int, int]:
     """Initialize DB and start both API and Dashboard servers in background threads."""
     init_db(db_path)
 
     if rate_limiter is None:
-        rate_limiter = RateLimiter(window_seconds=60.0)
+        rate_limiter = RateLimiter(window_seconds=60.0, max_requests=1)
 
     api_handler_cls = make_api_handler(db_path, rate_limiter)
-    dashboard_handler_cls = make_dashboard_handler(db_path)
+    dashboard_handler_cls = make_dashboard_handler(
+        db_path=db_path,
+        firebase_config=firebase_config,
+        project_id=project_id,
+        admin_emails=admin_emails,
+        public_origin=public_origin,
+        session_rate_limiter=session_rate_limiter,
+        jwk_manager=jwk_manager,
+    )
 
     api_server = ThreadingHTTPServer((api_host, api_port), api_handler_cls)
     dash_server = ThreadingHTTPServer((dashboard_host, dashboard_port), dashboard_handler_cls)

@@ -45,6 +45,15 @@ def init_db(db_path: str) -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                id_hash TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
             """
         )
         conn.commit()
@@ -253,6 +262,7 @@ def maybe_prune_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None)
 
     if should_prune:
         deleted = prune_reports(conn, now)
+        prune_sessions(conn, now)
         cur.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_prune_time', ?)",
             (now.isoformat(),),
@@ -261,3 +271,78 @@ def maybe_prune_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None)
         return deleted
 
     return None
+
+
+def create_session(conn: sqlite3.Connection, email: str, expires_days: int = 7) -> str:
+    """Create a new server-side session for an authenticated email.
+    
+    Generates a cryptographically random 32-byte session ID,
+    stores sha256(session_id) in SQLite sessions table,
+    and returns the raw session ID.
+    """
+    raw_session_id = secrets.token_urlsafe(32)
+    id_hash = hashlib.sha256(raw_session_id.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc)
+    created_at = now.isoformat()
+    expires_at = (now + timedelta(days=expires_days)).isoformat()
+
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO sessions (id_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        (id_hash, email.lower().strip(), created_at, expires_at),
+    )
+    conn.commit()
+    return raw_session_id
+
+
+def get_session(conn: sqlite3.Connection, raw_session_id: str, now: Optional[datetime] = None) -> Optional[Dict]:
+    """Retrieve session record if valid and not expired."""
+    if not raw_session_id:
+        return None
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    id_hash = hashlib.sha256(raw_session_id.encode("utf-8")).hexdigest()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id_hash, email, created_at, expires_at FROM sessions WHERE id_hash = ?",
+        (id_hash,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    # Check expiration
+    expires_str = row["expires_at"]
+    if expires_str.endswith("Z"):
+        expires_str = expires_str[:-1] + "+00:00"
+    try:
+        expires_dt = datetime.fromisoformat(expires_str)
+        if now > expires_dt:
+            delete_session(conn, raw_session_id)
+            return None
+    except Exception:
+        return None
+
+    return dict(row)
+
+
+def delete_session(conn: sqlite3.Connection, raw_session_id: str) -> bool:
+    """Delete a session by raw session ID."""
+    if not raw_session_id:
+        return False
+    id_hash = hashlib.sha256(raw_session_id.encode("utf-8")).hexdigest()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sessions WHERE id_hash = ?", (id_hash,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def prune_sessions(conn: sqlite3.Connection, now: Optional[datetime] = None) -> int:
+    """Delete all expired sessions."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sessions WHERE expires_at < ?", (now.isoformat(),))
+    conn.commit()
+    return cur.rowcount

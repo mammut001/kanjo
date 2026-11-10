@@ -2,26 +2,40 @@
 
 from datetime import datetime
 import json
+import re
 from typing import Any, Optional, Set
 
-FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/", "@")
+FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/")
 FORBIDDEN_KEYS = frozenset({"sessions_detail", "account", "paths", "title", "sessions"})
+EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
-def _contains_forbidden_keys(obj: Any, forbidden: Set[str]) -> Optional[str]:
-    """Recursively search for any forbidden dictionary keys."""
+def _check_privacy_violations(obj: Any) -> Optional[str]:
+    """Recursively search for forbidden keys, email patterns in keys/values, or forbidden substrings."""
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if str(k) in forbidden:
-                return str(k)
-            found = _contains_forbidden_keys(v, forbidden)
+            k_str = str(k)
+            if k_str in FORBIDDEN_KEYS:
+                return f"Privacy violation: payload contains forbidden key '{k_str}'"
+            if EMAIL_REGEX.search(k_str):
+                return f"Privacy violation: payload contains email pattern in key '{k_str}'"
+            for pattern in FORBIDDEN_SUBSTRINGS:
+                if pattern in k_str:
+                    return f"Privacy violation: key contains forbidden pattern '{pattern}'"
+            found = _check_privacy_violations(v)
             if found:
                 return found
     elif isinstance(obj, list):
         for item in obj:
-            found = _contains_forbidden_keys(item, forbidden)
+            found = _check_privacy_violations(item)
             if found:
                 return found
+    elif isinstance(obj, str):
+        if EMAIL_REGEX.search(obj):
+            return "Privacy violation: payload contains email pattern in value"
+        for pattern in FORBIDDEN_SUBSTRINGS:
+            if pattern in obj:
+                return f"Privacy violation: value contains forbidden pattern '{pattern}'"
     return None
 
 
@@ -29,7 +43,8 @@ def check_privacy_backstop(raw_body_bytes: bytes) -> Optional[str]:
     """Check for privacy leaks in raw body. Returns error message if forbidden, None if clean.
     
     Checks:
-    - Raw substring presence of "/Users/", "/home/", "@"
+    - Raw substring presence of "/Users/", "/home/"
+    - Email regex pattern ([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}) anywhere in string values or keys
     - Keys named: sessions_detail, account, paths, title, sessions
     """
     try:
@@ -41,12 +56,12 @@ def check_privacy_backstop(raw_body_bytes: bytes) -> Optional[str]:
         if pattern in body_text:
             return f"Privacy violation: raw payload contains forbidden pattern '{pattern}'"
 
-    # Also parse JSON to inspect dict keys recursively
+    # Parse JSON to inspect dict keys and string values recursively
     try:
         data = json.loads(body_text)
-        found_key = _contains_forbidden_keys(data, FORBIDDEN_KEYS)
-        if found_key:
-            return f"Privacy violation: payload contains forbidden key '{found_key}'"
+        found_violation = _check_privacy_violations(data)
+        if found_violation:
+            return found_violation
     except Exception:
         # If it's not valid JSON, payload validation will reject it shortly
         pass

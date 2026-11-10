@@ -25,21 +25,30 @@ class TestDashboard(unittest.TestCase):
         self.db_path = os.path.join(self.tmp_dir.name, "dash_test.db")
         db.init_db(self.db_path)
 
+        with db.get_connection(self.db_path) as conn:
+            self.session_id = db.create_session(conn, "admin@paytonpei.top")
+
         self.api_server, self.dash_server, self.api_port, self.dash_port = start_servers(
             db_path=self.db_path,
             api_host="127.0.0.1",
             api_port=0,
             dashboard_host="127.0.0.1",
             dashboard_port=0,
+            admin_emails={"admin@paytonpei.top"},
         )
 
     def tearDown(self):
         stop_servers(self.api_server, self.dash_server)
         self.tmp_dir.cleanup()
 
-    def _dash_request(self, path: str):
+    def _dash_request(self, path: str, headers: dict = None, auth: bool = True):
         url = f"http://127.0.0.1:{self.dash_port}{path}"
-        req = urllib.request.Request(url, method="GET")
+        req_headers = {}
+        if auth and hasattr(self, "session_id"):
+            req_headers["Cookie"] = f"__Host-family_session={self.session_id}"
+        if headers:
+            req_headers.update(headers)
+        req = urllib.request.Request(url, headers=req_headers, method="GET")
         try:
             with urllib.request.urlopen(req) as resp:
                 return resp.status, resp.read().decode("utf-8")

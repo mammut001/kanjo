@@ -20,7 +20,24 @@ if [ ! -d "${DEPLOY_DIR}" ]; then
   CLOUDFLARED_DIR="${BASE_DIR}/cloudflared"
 fi
 
+# Load environment configuration from family.env if present
+ENV_FILE="${DEPLOY_DIR}/family.env"
+if [ ! -f "${ENV_FILE}" ] && [ -f "${BASE_DIR}/family.env" ]; then
+  ENV_FILE="${BASE_DIR}/family.env"
+fi
+
+if [ -f "${ENV_FILE}" ]; then
+  echo "✓ Sourcing configuration from ${ENV_FILE}"
+  set -a
+  # shellcheck source=/dev/null
+  . "${ENV_FILE}"
+  set +a
+else
+  echo "Note: ${ENV_FILE} not found; proceeding with environment defaults"
+fi
+
 TAILSCALE_IP="${TAILSCALE_IP:-100.115.238.6}"
+PUBLISH_TAILSCALE="${PUBLISH_TAILSCALE:-0}"
 
 # Determine TUNNEL_ID from env or credentials file
 if [ -z "${TUNNEL_ID:-}" ]; then
@@ -35,9 +52,10 @@ if [ -z "${TUNNEL_ID:-}" ]; then
 fi
 
 echo "=== Deploying Kanjo Family Usage Server ==="
-echo "Working directory:  ${BASE_DIR}"
-echo "Tailscale IP:       ${TAILSCALE_IP}"
-echo "Tunnel ID:          ${TUNNEL_ID}"
+echo "Working directory:    ${BASE_DIR}"
+echo "Tailscale IP:         ${TAILSCALE_IP}"
+echo "Publish Tailscale:    ${PUBLISH_TAILSCALE}"
+echo "Tunnel ID:            ${TUNNEL_ID}"
 
 # 1. Render cloudflared/config.yml from template
 if [ -f "cloudflared/config.yml.template" ]; then
@@ -65,8 +83,34 @@ docker build -t family-usage-app .
 echo "✓ Built image family-usage-app"
 
 # 5. Run/replace family-app container
+# Neither port is published on a public interface.
 # Port 8788 is NOT published to host (accessible only by cloudflared over family-net)
-# Port 8787 is published ONLY to the Tailscale IP
+# Port 8787 is published to Tailscale IP ONLY if PUBLISH_TAILSCALE=1
+PORT_PUBLISH_ARGS=()
+if [ "${PUBLISH_TAILSCALE}" = "1" ]; then
+  PORT_PUBLISH_ARGS+=("-p" "${TAILSCALE_IP}:8787:8787")
+  echo "Publishing dashboard port on Tailscale IP ${TAILSCALE_IP}:8787 (opt-in)"
+else
+  echo "Dashboard port 8787 is not published to host (accessible via cloudflared on family-net)"
+fi
+
+ENV_ARGS=()
+if [ -f "${ENV_FILE}" ]; then
+  ENV_ARGS+=("--env-file" "${ENV_FILE}")
+fi
+if [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
+  ENV_ARGS+=("-e" "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}")
+fi
+if [ -n "${FIREBASE_WEB_CONFIG_JSON:-}" ]; then
+  ENV_ARGS+=("-e" "FIREBASE_WEB_CONFIG_JSON=${FIREBASE_WEB_CONFIG_JSON}")
+fi
+if [ -n "${FAMILY_ADMIN_EMAILS:-}" ]; then
+  ENV_ARGS+=("-e" "FAMILY_ADMIN_EMAILS=${FAMILY_ADMIN_EMAILS}")
+fi
+if [ -n "${FAMILY_PUBLIC_ORIGIN:-}" ]; then
+  ENV_ARGS+=("-e" "FAMILY_PUBLIC_ORIGIN=${FAMILY_PUBLIC_ORIGIN}")
+fi
+
 echo "Starting container family-app..."
 docker rm -f family-app 2>/dev/null || true
 docker run -d \
@@ -74,7 +118,8 @@ docker run -d \
   --network family-net \
   --restart unless-stopped \
   -v "${DATA_DIR}:/data" \
-  -p "${TAILSCALE_IP}:8787:8787" \
+  "${PORT_PUBLISH_ARGS[@]}" \
+  "${ENV_ARGS[@]}" \
   family-usage-app
 echo "✓ Container family-app is running"
 
