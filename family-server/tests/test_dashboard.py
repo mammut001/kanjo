@@ -107,6 +107,11 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("Claude / GPT 模型 · 5 小时", html)
         # Members disagree by more than 2 points -> per-member list shown.
         self.assertIn("数值不一致", html)
+        # Reset times are shown in the dashboard timezone (default America/Toronto), not UTC.
+        from zoneinfo import ZoneInfo
+        reset_dt = datetime.strptime(reset, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        local = reset_dt.astimezone(ZoneInfo("America/Toronto")).strftime("%Y-%m-%d %H:%M")
+        self.assertIn("重置：" + local, html)
 
     def test_dashboard_renders_with_fixture_report(self):
         # Add members and reports
