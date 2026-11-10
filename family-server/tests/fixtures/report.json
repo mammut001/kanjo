@@ -1,0 +1,3167 @@
+{
+  "schema_version": 1,
+  "kind": "kanjo-family-report",
+  "member_label": "Synthetic Alice (MacBook)",
+  "generated_at": "2026-11-09T18:00:00Z",
+  "timezone": "America/Toronto",
+  "generated_by": "kanjo 0.4.0",
+  "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "plans": {
+    "antigravity": "Google AI Ultra",
+    "claude": "Claude Pro"
+  },
+  "quota_windows": {
+    "antigravity": {
+      "weekly_resets_at": "2026-11-14T12:00:00Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 42.5,
+      "five_hour_resets_at": "2026-11-09T22:00:00Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 15.0,
+      "source": "live"
+    },
+    "claude": {
+      "weekly_resets_at": "2026-11-12T14:00:00Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 68.0,
+      "source": "live"
+    }
+  },
+  "summary": {
+    "all_time": {
+      "period": "all",
+      "first_day": "2026-10-10",
+      "last_day": "2026-11-09",
+      "tokens": {
+        "input": 1466849,
+        "output": 628650,
+        "cache_read": 209550,
+        "cache_write": 104775,
+        "total": 2409824
+      },
+      "cost_usd": 39.64,
+      "by_provider": [
+        {
+          "provider": "google",
+          "label": "Google",
+          "tokens": {
+            "input": 894250,
+            "output": 383250,
+            "cache_read": 0,
+            "cache_write": 0,
+            "total": 1277500
+          },
+          "cost_usd": 19.16,
+          "models": [
+            {
+              "model": "gemini-3.8-pro",
+              "tokens_total": 1022000,
+              "cost_usd": 15.33
+            },
+            {
+              "model": "gemini-3.8-flash",
+              "tokens_total": 255500,
+              "cost_usd": 3.83
+            }
+          ]
+        },
+        {
+          "provider": "anthropic",
+          "label": "Anthropic",
+          "tokens": {
+            "input": 572600,
+            "output": 245400,
+            "cache_read": 0,
+            "cache_write": 0,
+            "total": 818000
+          },
+          "cost_usd": 20.45,
+          "models": [
+            {
+              "model": "claude-opus-5.5",
+              "tokens_total": 818000,
+              "cost_usd": 20.45
+            }
+          ]
+        }
+      ],
+      "by_agent": [
+        {
+          "agent": "antigravity",
+          "label": "Antigravity",
+          "tokens_total": 1277500,
+          "cost_usd": 19.16
+        },
+        {
+          "agent": "claude",
+          "label": "Claude Code",
+          "tokens_total": 818000,
+          "cost_usd": 20.45
+        }
+      ],
+      "top_models": [
+        {
+          "model": "gemini-3.8-pro",
+          "provider": "google",
+          "tokens_total": 1022000,
+          "cost_usd": 15.33
+        },
+        {
+          "model": "claude-opus-5.5",
+          "provider": "anthropic",
+          "tokens_total": 818000,
+          "cost_usd": 20.45
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "provider": "google",
+          "tokens_total": 255500,
+          "cost_usd": 3.83
+        }
+      ]
+    },
+    "months": [
+      {
+        "period": "2026-11",
+        "first_day": "2026-11-01",
+        "last_day": "2026-11-09",
+        "tokens": {
+          "input": 442260,
+          "output": 189540,
+          "cache_read": 63180,
+          "cache_write": 31590,
+          "total": 726570
+        },
+        "cost_usd": 11.84,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 277200,
+              "output": 118800,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 396000
+            },
+            "cost_usd": 5.94,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 316800,
+                "cost_usd": 4.75
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 79200,
+                "cost_usd": 1.19
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 165060,
+              "output": 70740,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 235800
+            },
+            "cost_usd": 5.9,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 235800,
+                "cost_usd": 5.9
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 396000,
+            "cost_usd": 5.94
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 235800,
+            "cost_usd": 5.9
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 316800,
+            "cost_usd": 4.75
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 235800,
+            "cost_usd": 5.9
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 79200,
+            "cost_usd": 1.19
+          }
+        ]
+      }
+    ],
+    "weeks": [
+      {
+        "period": "2026-W45",
+        "start": "2026-11-02",
+        "first_day": "2026-11-02",
+        "last_day": "2026-11-09",
+        "tokens": {
+          "input": 393680,
+          "output": 168720,
+          "cache_read": 56240,
+          "cache_write": 28120,
+          "total": 646760
+        },
+        "cost_usd": 10.49,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 250599,
+              "output": 107400,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 358000
+            },
+            "cost_usd": 5.37,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 286400,
+                "cost_usd": 4.3
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 71600,
+                "cost_usd": 1.07
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 143080,
+              "output": 61320,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 204400
+            },
+            "cost_usd": 5.11,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 204400,
+                "cost_usd": 5.11
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 358000,
+            "cost_usd": 5.37
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 204400,
+            "cost_usd": 5.11
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 286400,
+            "cost_usd": 4.3
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 204400,
+            "cost_usd": 5.11
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 71600,
+            "cost_usd": 1.07
+          }
+        ]
+      }
+    ],
+    "days": [
+      {
+        "period": "2026-10-10",
+        "first_day": "2026-10-10",
+        "last_day": "2026-10-10",
+        "tokens": {
+          "input": 35000,
+          "output": 15000,
+          "cache_read": 5000,
+          "cache_write": 2500,
+          "total": 57500
+        },
+        "cost_usd": 0.95,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 21000,
+              "output": 9000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 30000
+            },
+            "cost_usd": 0.45,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 24000,
+                "cost_usd": 0.36
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6000,
+                "cost_usd": 0.09
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 14000,
+              "output": 6000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 20000
+            },
+            "cost_usd": 0.5,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 20000,
+                "cost_usd": 0.5
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 30000,
+            "cost_usd": 0.45
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 20000,
+            "cost_usd": 0.5
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 24000,
+            "cost_usd": 0.36
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 20000,
+            "cost_usd": 0.5
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6000,
+            "cost_usd": 0.09
+          }
+        ]
+      },
+      {
+        "period": "2026-10-11",
+        "first_day": "2026-10-11",
+        "last_day": "2026-10-11",
+        "tokens": {
+          "input": 36890,
+          "output": 15810,
+          "cache_read": 5270,
+          "cache_write": 2635,
+          "total": 60605
+        },
+        "cost_usd": 1.0,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 22050,
+              "output": 9450,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 31500
+            },
+            "cost_usd": 0.47,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 25200,
+                "cost_usd": 0.38
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6300,
+                "cost_usd": 0.09
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 14839,
+              "output": 6360,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 21200
+            },
+            "cost_usd": 0.53,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 21200,
+                "cost_usd": 0.53
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 31500,
+            "cost_usd": 0.47
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 21200,
+            "cost_usd": 0.53
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 25200,
+            "cost_usd": 0.38
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 21200,
+            "cost_usd": 0.53
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6300,
+            "cost_usd": 0.09
+          }
+        ]
+      },
+      {
+        "period": "2026-10-12",
+        "first_day": "2026-10-12",
+        "last_day": "2026-10-12",
+        "tokens": {
+          "input": 38780,
+          "output": 16620,
+          "cache_read": 5540,
+          "cache_write": 2770,
+          "total": 63710
+        },
+        "cost_usd": 1.06,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 23100,
+              "output": 9900,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 33000
+            },
+            "cost_usd": 0.49,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 26400,
+                "cost_usd": 0.4
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6600,
+                "cost_usd": 0.1
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 15679,
+              "output": 6720,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 22400
+            },
+            "cost_usd": 0.56,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 22400,
+                "cost_usd": 0.56
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 33000,
+            "cost_usd": 0.49
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 22400,
+            "cost_usd": 0.56
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 26400,
+            "cost_usd": 0.4
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 22400,
+            "cost_usd": 0.56
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6600,
+            "cost_usd": 0.1
+          }
+        ]
+      },
+      {
+        "period": "2026-10-13",
+        "first_day": "2026-10-13",
+        "last_day": "2026-10-13",
+        "tokens": {
+          "input": 40670,
+          "output": 17430,
+          "cache_read": 5810,
+          "cache_write": 2905,
+          "total": 66815
+        },
+        "cost_usd": 1.11,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 24150,
+              "output": 10350,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 34500
+            },
+            "cost_usd": 0.52,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 27600,
+                "cost_usd": 0.41
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6900,
+                "cost_usd": 0.1
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 16520,
+              "output": 7080,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 23600
+            },
+            "cost_usd": 0.59,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 23600,
+                "cost_usd": 0.59
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 34500,
+            "cost_usd": 0.52
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 23600,
+            "cost_usd": 0.59
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 27600,
+            "cost_usd": 0.41
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 23600,
+            "cost_usd": 0.59
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6900,
+            "cost_usd": 0.1
+          }
+        ]
+      },
+      {
+        "period": "2026-10-14",
+        "first_day": "2026-10-14",
+        "last_day": "2026-10-14",
+        "tokens": {
+          "input": 42560,
+          "output": 18240,
+          "cache_read": 6080,
+          "cache_write": 3040,
+          "total": 69920
+        },
+        "cost_usd": 1.16,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 25200,
+              "output": 10800,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 36000
+            },
+            "cost_usd": 0.54,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 28800,
+                "cost_usd": 0.43
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7200,
+                "cost_usd": 0.11
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 17360,
+              "output": 7440,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 24800
+            },
+            "cost_usd": 0.62,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 24800,
+                "cost_usd": 0.62
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 36000,
+            "cost_usd": 0.54
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 24800,
+            "cost_usd": 0.62
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 28800,
+            "cost_usd": 0.43
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 24800,
+            "cost_usd": 0.62
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7200,
+            "cost_usd": 0.11
+          }
+        ]
+      },
+      {
+        "period": "2026-10-15",
+        "first_day": "2026-10-15",
+        "last_day": "2026-10-15",
+        "tokens": {
+          "input": 44450,
+          "output": 19050,
+          "cache_read": 6350,
+          "cache_write": 3175,
+          "total": 73025
+        },
+        "cost_usd": 1.21,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 26250,
+              "output": 11250,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 37500
+            },
+            "cost_usd": 0.56,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 30000,
+                "cost_usd": 0.45
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7500,
+                "cost_usd": 0.11
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 18200,
+              "output": 7800,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 26000
+            },
+            "cost_usd": 0.65,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 26000,
+                "cost_usd": 0.65
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 37500,
+            "cost_usd": 0.56
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 26000,
+            "cost_usd": 0.65
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 30000,
+            "cost_usd": 0.45
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 26000,
+            "cost_usd": 0.65
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7500,
+            "cost_usd": 0.11
+          }
+        ]
+      },
+      {
+        "period": "2026-10-16",
+        "first_day": "2026-10-16",
+        "last_day": "2026-10-16",
+        "tokens": {
+          "input": 46340,
+          "output": 19860,
+          "cache_read": 6620,
+          "cache_write": 3310,
+          "total": 76130
+        },
+        "cost_usd": 1.27,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 27300,
+              "output": 11700,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 39000
+            },
+            "cost_usd": 0.58,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 31200,
+                "cost_usd": 0.47
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7800,
+                "cost_usd": 0.12
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 19040,
+              "output": 8160,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 27200
+            },
+            "cost_usd": 0.68,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 27200,
+                "cost_usd": 0.68
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 39000,
+            "cost_usd": 0.58
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 27200,
+            "cost_usd": 0.68
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 31200,
+            "cost_usd": 0.47
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 27200,
+            "cost_usd": 0.68
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7800,
+            "cost_usd": 0.12
+          }
+        ]
+      },
+      {
+        "period": "2026-10-17",
+        "first_day": "2026-10-17",
+        "last_day": "2026-10-17",
+        "tokens": {
+          "input": 48230,
+          "output": 20670,
+          "cache_read": 6890,
+          "cache_write": 3445,
+          "total": 79235
+        },
+        "cost_usd": 1.32,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 28350,
+              "output": 12150,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 40500
+            },
+            "cost_usd": 0.61,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 32400,
+                "cost_usd": 0.49
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8100,
+                "cost_usd": 0.12
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 19880,
+              "output": 8520,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 28400
+            },
+            "cost_usd": 0.71,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 28400,
+                "cost_usd": 0.71
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 40500,
+            "cost_usd": 0.61
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 28400,
+            "cost_usd": 0.71
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 32400,
+            "cost_usd": 0.49
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 28400,
+            "cost_usd": 0.71
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8100,
+            "cost_usd": 0.12
+          }
+        ]
+      },
+      {
+        "period": "2026-10-18",
+        "first_day": "2026-10-18",
+        "last_day": "2026-10-18",
+        "tokens": {
+          "input": 50120,
+          "output": 21480,
+          "cache_read": 7160,
+          "cache_write": 3580,
+          "total": 82340
+        },
+        "cost_usd": 1.37,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 29399,
+              "output": 12600,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 42000
+            },
+            "cost_usd": 0.63,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 33600,
+                "cost_usd": 0.5
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8400,
+                "cost_usd": 0.13
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 20720,
+              "output": 8880,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 29600
+            },
+            "cost_usd": 0.74,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 29600,
+                "cost_usd": 0.74
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 42000,
+            "cost_usd": 0.63
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 29600,
+            "cost_usd": 0.74
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 33600,
+            "cost_usd": 0.5
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 29600,
+            "cost_usd": 0.74
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8400,
+            "cost_usd": 0.13
+          }
+        ]
+      },
+      {
+        "period": "2026-10-19",
+        "first_day": "2026-10-19",
+        "last_day": "2026-10-19",
+        "tokens": {
+          "input": 52010,
+          "output": 22290,
+          "cache_read": 7430,
+          "cache_write": 3715,
+          "total": 85445
+        },
+        "cost_usd": 1.42,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 30449,
+              "output": 13050,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 43500
+            },
+            "cost_usd": 0.65,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 34800,
+                "cost_usd": 0.52
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8700,
+                "cost_usd": 0.13
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 21560,
+              "output": 9240,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 30800
+            },
+            "cost_usd": 0.77,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 30800,
+                "cost_usd": 0.77
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 43500,
+            "cost_usd": 0.65
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 30800,
+            "cost_usd": 0.77
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 34800,
+            "cost_usd": 0.52
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 30800,
+            "cost_usd": 0.77
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8700,
+            "cost_usd": 0.13
+          }
+        ]
+      },
+      {
+        "period": "2026-10-20",
+        "first_day": "2026-10-20",
+        "last_day": "2026-10-20",
+        "tokens": {
+          "input": 53900,
+          "output": 23100,
+          "cache_read": 7700,
+          "cache_write": 3850,
+          "total": 88550
+        },
+        "cost_usd": 1.48,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 31499,
+              "output": 13500,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 45000
+            },
+            "cost_usd": 0.68,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 36000,
+                "cost_usd": 0.54
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9000,
+                "cost_usd": 0.14
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 22400,
+              "output": 9600,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 32000
+            },
+            "cost_usd": 0.8,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 32000,
+                "cost_usd": 0.8
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 45000,
+            "cost_usd": 0.68
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 32000,
+            "cost_usd": 0.8
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 36000,
+            "cost_usd": 0.54
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 32000,
+            "cost_usd": 0.8
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9000,
+            "cost_usd": 0.14
+          }
+        ]
+      },
+      {
+        "period": "2026-10-21",
+        "first_day": "2026-10-21",
+        "last_day": "2026-10-21",
+        "tokens": {
+          "input": 55790,
+          "output": 23910,
+          "cache_read": 7970,
+          "cache_write": 3985,
+          "total": 91655
+        },
+        "cost_usd": 1.53,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 32549,
+              "output": 13950,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 46500
+            },
+            "cost_usd": 0.7,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 37200,
+                "cost_usd": 0.56
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9300,
+                "cost_usd": 0.14
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 23240,
+              "output": 9960,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 33200
+            },
+            "cost_usd": 0.83,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 33200,
+                "cost_usd": 0.83
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 46500,
+            "cost_usd": 0.7
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 33200,
+            "cost_usd": 0.83
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 37200,
+            "cost_usd": 0.56
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 33200,
+            "cost_usd": 0.83
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9300,
+            "cost_usd": 0.14
+          }
+        ]
+      },
+      {
+        "period": "2026-10-22",
+        "first_day": "2026-10-22",
+        "last_day": "2026-10-22",
+        "tokens": {
+          "input": 57679,
+          "output": 24720,
+          "cache_read": 8240,
+          "cache_write": 4120,
+          "total": 94759
+        },
+        "cost_usd": 1.58,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 33600,
+              "output": 14400,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 48000
+            },
+            "cost_usd": 0.72,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 38400,
+                "cost_usd": 0.58
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9600,
+                "cost_usd": 0.14
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 24080,
+              "output": 10320,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 34400
+            },
+            "cost_usd": 0.86,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 34400,
+                "cost_usd": 0.86
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 48000,
+            "cost_usd": 0.72
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 34400,
+            "cost_usd": 0.86
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 38400,
+            "cost_usd": 0.58
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 34400,
+            "cost_usd": 0.86
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9600,
+            "cost_usd": 0.14
+          }
+        ]
+      },
+      {
+        "period": "2026-10-23",
+        "first_day": "2026-10-23",
+        "last_day": "2026-10-23",
+        "tokens": {
+          "input": 49070,
+          "output": 21030,
+          "cache_read": 7010,
+          "cache_write": 3505,
+          "total": 80615
+        },
+        "cost_usd": 1.26,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 34650,
+              "output": 14850,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 49500
+            },
+            "cost_usd": 0.74,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 39600,
+                "cost_usd": 0.59
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9900,
+                "cost_usd": 0.15
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 14419,
+              "output": 6180,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 20600
+            },
+            "cost_usd": 0.52,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 20600,
+                "cost_usd": 0.52
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 49500,
+            "cost_usd": 0.74
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 20600,
+            "cost_usd": 0.52
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 39600,
+            "cost_usd": 0.59
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 20600,
+            "cost_usd": 0.52
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9900,
+            "cost_usd": 0.15
+          }
+        ]
+      },
+      {
+        "period": "2026-10-24",
+        "first_day": "2026-10-24",
+        "last_day": "2026-10-24",
+        "tokens": {
+          "input": 50960,
+          "output": 21840,
+          "cache_read": 7280,
+          "cache_write": 3640,
+          "total": 83720
+        },
+        "cost_usd": 1.31,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 35700,
+              "output": 15300,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 51000
+            },
+            "cost_usd": 0.77,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 40800,
+                "cost_usd": 0.61
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 10200,
+                "cost_usd": 0.15
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 15259,
+              "output": 6540,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 21800
+            },
+            "cost_usd": 0.55,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 21800,
+                "cost_usd": 0.55
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 51000,
+            "cost_usd": 0.77
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 21800,
+            "cost_usd": 0.55
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 40800,
+            "cost_usd": 0.61
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 21800,
+            "cost_usd": 0.55
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 10200,
+            "cost_usd": 0.15
+          }
+        ]
+      },
+      {
+        "period": "2026-10-25",
+        "first_day": "2026-10-25",
+        "last_day": "2026-10-25",
+        "tokens": {
+          "input": 52850,
+          "output": 22650,
+          "cache_read": 7550,
+          "cache_write": 3775,
+          "total": 86825
+        },
+        "cost_usd": 1.36,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 36750,
+              "output": 15750,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 52500
+            },
+            "cost_usd": 0.79,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 42000,
+                "cost_usd": 0.63
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 10500,
+                "cost_usd": 0.16
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 16099,
+              "output": 6900,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 23000
+            },
+            "cost_usd": 0.58,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 23000,
+                "cost_usd": 0.58
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 52500,
+            "cost_usd": 0.79
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 23000,
+            "cost_usd": 0.58
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 42000,
+            "cost_usd": 0.63
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 23000,
+            "cost_usd": 0.58
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 10500,
+            "cost_usd": 0.16
+          }
+        ]
+      },
+      {
+        "period": "2026-10-26",
+        "first_day": "2026-10-26",
+        "last_day": "2026-10-26",
+        "tokens": {
+          "input": 54740,
+          "output": 23460,
+          "cache_read": 7820,
+          "cache_write": 3910,
+          "total": 89930
+        },
+        "cost_usd": 1.42,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 37800,
+              "output": 16200,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 54000
+            },
+            "cost_usd": 0.81,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 43200,
+                "cost_usd": 0.65
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 10800,
+                "cost_usd": 0.16
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 16940,
+              "output": 7260,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 24200
+            },
+            "cost_usd": 0.6,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 24200,
+                "cost_usd": 0.6
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 54000,
+            "cost_usd": 0.81
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 24200,
+            "cost_usd": 0.6
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 43200,
+            "cost_usd": 0.65
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 24200,
+            "cost_usd": 0.6
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 10800,
+            "cost_usd": 0.16
+          }
+        ]
+      },
+      {
+        "period": "2026-10-27",
+        "first_day": "2026-10-27",
+        "last_day": "2026-10-27",
+        "tokens": {
+          "input": 39130,
+          "output": 16770,
+          "cache_read": 5590,
+          "cache_write": 2795,
+          "total": 64285
+        },
+        "cost_usd": 1.09,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 21350,
+              "output": 9150,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 30500
+            },
+            "cost_usd": 0.46,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 24400,
+                "cost_usd": 0.37
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6100,
+                "cost_usd": 0.09
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 17780,
+              "output": 7620,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 25400
+            },
+            "cost_usd": 0.64,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 25400,
+                "cost_usd": 0.64
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 30500,
+            "cost_usd": 0.46
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 25400,
+            "cost_usd": 0.64
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 24400,
+            "cost_usd": 0.37
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 25400,
+            "cost_usd": 0.64
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6100,
+            "cost_usd": 0.09
+          }
+        ]
+      },
+      {
+        "period": "2026-10-28",
+        "first_day": "2026-10-28",
+        "last_day": "2026-10-28",
+        "tokens": {
+          "input": 41020,
+          "output": 17580,
+          "cache_read": 5860,
+          "cache_write": 2930,
+          "total": 67390
+        },
+        "cost_usd": 1.15,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 22400,
+              "output": 9600,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 32000
+            },
+            "cost_usd": 0.48,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 25600,
+                "cost_usd": 0.38
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6400,
+                "cost_usd": 0.1
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 18620,
+              "output": 7980,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 26600
+            },
+            "cost_usd": 0.67,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 26600,
+                "cost_usd": 0.67
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 32000,
+            "cost_usd": 0.48
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 26600,
+            "cost_usd": 0.67
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 25600,
+            "cost_usd": 0.38
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 26600,
+            "cost_usd": 0.67
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6400,
+            "cost_usd": 0.1
+          }
+        ]
+      },
+      {
+        "period": "2026-10-29",
+        "first_day": "2026-10-29",
+        "last_day": "2026-10-29",
+        "tokens": {
+          "input": 42910,
+          "output": 18390,
+          "cache_read": 6130,
+          "cache_write": 3065,
+          "total": 70495
+        },
+        "cost_usd": 1.2,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 23450,
+              "output": 10050,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 33500
+            },
+            "cost_usd": 0.5,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 26800,
+                "cost_usd": 0.4
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 6700,
+                "cost_usd": 0.1
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 19460,
+              "output": 8340,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 27800
+            },
+            "cost_usd": 0.7,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 27800,
+                "cost_usd": 0.7
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 33500,
+            "cost_usd": 0.5
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 27800,
+            "cost_usd": 0.7
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 26800,
+            "cost_usd": 0.4
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 27800,
+            "cost_usd": 0.7
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 6700,
+            "cost_usd": 0.1
+          }
+        ]
+      },
+      {
+        "period": "2026-10-30",
+        "first_day": "2026-10-30",
+        "last_day": "2026-10-30",
+        "tokens": {
+          "input": 44800,
+          "output": 19200,
+          "cache_read": 6400,
+          "cache_write": 3200,
+          "total": 73600
+        },
+        "cost_usd": 1.25,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 24500,
+              "output": 10500,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 35000
+            },
+            "cost_usd": 0.53,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 28000,
+                "cost_usd": 0.42
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7000,
+                "cost_usd": 0.1
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 20300,
+              "output": 8700,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 29000
+            },
+            "cost_usd": 0.73,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 29000,
+                "cost_usd": 0.73
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 35000,
+            "cost_usd": 0.53
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 29000,
+            "cost_usd": 0.73
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 28000,
+            "cost_usd": 0.42
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 29000,
+            "cost_usd": 0.73
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7000,
+            "cost_usd": 0.1
+          }
+        ]
+      },
+      {
+        "period": "2026-10-31",
+        "first_day": "2026-10-31",
+        "last_day": "2026-10-31",
+        "tokens": {
+          "input": 46690,
+          "output": 20010,
+          "cache_read": 6670,
+          "cache_write": 3335,
+          "total": 76705
+        },
+        "cost_usd": 1.3,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 25550,
+              "output": 10950,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 36500
+            },
+            "cost_usd": 0.55,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 29200,
+                "cost_usd": 0.44
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7300,
+                "cost_usd": 0.11
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 21140,
+              "output": 9060,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 30200
+            },
+            "cost_usd": 0.76,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 30200,
+                "cost_usd": 0.76
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 36500,
+            "cost_usd": 0.55
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 30200,
+            "cost_usd": 0.76
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 29200,
+            "cost_usd": 0.44
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 30200,
+            "cost_usd": 0.76
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7300,
+            "cost_usd": 0.11
+          }
+        ]
+      },
+      {
+        "period": "2026-11-01",
+        "first_day": "2026-11-01",
+        "last_day": "2026-11-01",
+        "tokens": {
+          "input": 48580,
+          "output": 20820,
+          "cache_read": 6940,
+          "cache_write": 3470,
+          "total": 79810
+        },
+        "cost_usd": 1.35,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 26600,
+              "output": 11400,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 38000
+            },
+            "cost_usd": 0.57,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 30400,
+                "cost_usd": 0.46
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7600,
+                "cost_usd": 0.11
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 21980,
+              "output": 9420,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 31400
+            },
+            "cost_usd": 0.79,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 31400,
+                "cost_usd": 0.79
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 38000,
+            "cost_usd": 0.57
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 31400,
+            "cost_usd": 0.79
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 30400,
+            "cost_usd": 0.46
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 31400,
+            "cost_usd": 0.79
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7600,
+            "cost_usd": 0.11
+          }
+        ]
+      },
+      {
+        "period": "2026-11-02",
+        "first_day": "2026-11-02",
+        "last_day": "2026-11-02",
+        "tokens": {
+          "input": 50470,
+          "output": 21630,
+          "cache_read": 7210,
+          "cache_write": 3605,
+          "total": 82915
+        },
+        "cost_usd": 1.41,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 27650,
+              "output": 11850,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 39500
+            },
+            "cost_usd": 0.59,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 31600,
+                "cost_usd": 0.47
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 7900,
+                "cost_usd": 0.12
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 22820,
+              "output": 9780,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 32600
+            },
+            "cost_usd": 0.82,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 32600,
+                "cost_usd": 0.82
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 39500,
+            "cost_usd": 0.59
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 32600,
+            "cost_usd": 0.82
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 31600,
+            "cost_usd": 0.47
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 32600,
+            "cost_usd": 0.82
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 7900,
+            "cost_usd": 0.12
+          }
+        ]
+      },
+      {
+        "period": "2026-11-03",
+        "first_day": "2026-11-03",
+        "last_day": "2026-11-03",
+        "tokens": {
+          "input": 52360,
+          "output": 22440,
+          "cache_read": 7480,
+          "cache_write": 3740,
+          "total": 86020
+        },
+        "cost_usd": 1.46,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 28699,
+              "output": 12300,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 41000
+            },
+            "cost_usd": 0.61,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 32800,
+                "cost_usd": 0.49
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8200,
+                "cost_usd": 0.12
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 23660,
+              "output": 10140,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 33800
+            },
+            "cost_usd": 0.85,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 33800,
+                "cost_usd": 0.85
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 41000,
+            "cost_usd": 0.61
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 33800,
+            "cost_usd": 0.85
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 32800,
+            "cost_usd": 0.49
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 33800,
+            "cost_usd": 0.85
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8200,
+            "cost_usd": 0.12
+          }
+        ]
+      },
+      {
+        "period": "2026-11-04",
+        "first_day": "2026-11-04",
+        "last_day": "2026-11-04",
+        "tokens": {
+          "input": 43750,
+          "output": 18750,
+          "cache_read": 6250,
+          "cache_write": 3125,
+          "total": 71875
+        },
+        "cost_usd": 1.14,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 29749,
+              "output": 12750,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 42500
+            },
+            "cost_usd": 0.64,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 34000,
+                "cost_usd": 0.51
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8500,
+                "cost_usd": 0.13
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 14000,
+              "output": 6000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 20000
+            },
+            "cost_usd": 0.5,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 20000,
+                "cost_usd": 0.5
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 42500,
+            "cost_usd": 0.64
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 20000,
+            "cost_usd": 0.5
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 34000,
+            "cost_usd": 0.51
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 20000,
+            "cost_usd": 0.5
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8500,
+            "cost_usd": 0.13
+          }
+        ]
+      },
+      {
+        "period": "2026-11-05",
+        "first_day": "2026-11-05",
+        "last_day": "2026-11-05",
+        "tokens": {
+          "input": 45640,
+          "output": 19560,
+          "cache_read": 6520,
+          "cache_write": 3260,
+          "total": 74980
+        },
+        "cost_usd": 1.19,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 30799,
+              "output": 13200,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 44000
+            },
+            "cost_usd": 0.66,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 35200,
+                "cost_usd": 0.53
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 8800,
+                "cost_usd": 0.13
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 14839,
+              "output": 6360,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 21200
+            },
+            "cost_usd": 0.53,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 21200,
+                "cost_usd": 0.53
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 44000,
+            "cost_usd": 0.66
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 21200,
+            "cost_usd": 0.53
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 35200,
+            "cost_usd": 0.53
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 21200,
+            "cost_usd": 0.53
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 8800,
+            "cost_usd": 0.13
+          }
+        ]
+      },
+      {
+        "period": "2026-11-06",
+        "first_day": "2026-11-06",
+        "last_day": "2026-11-06",
+        "tokens": {
+          "input": 47530,
+          "output": 20370,
+          "cache_read": 6790,
+          "cache_write": 3395,
+          "total": 78085
+        },
+        "cost_usd": 1.24,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 31849,
+              "output": 13650,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 45500
+            },
+            "cost_usd": 0.68,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 36400,
+                "cost_usd": 0.55
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9100,
+                "cost_usd": 0.14
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 15679,
+              "output": 6720,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 22400
+            },
+            "cost_usd": 0.56,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 22400,
+                "cost_usd": 0.56
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 45500,
+            "cost_usd": 0.68
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 22400,
+            "cost_usd": 0.56
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 36400,
+            "cost_usd": 0.55
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 22400,
+            "cost_usd": 0.56
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9100,
+            "cost_usd": 0.14
+          }
+        ]
+      },
+      {
+        "period": "2026-11-07",
+        "first_day": "2026-11-07",
+        "last_day": "2026-11-07",
+        "tokens": {
+          "input": 49420,
+          "output": 21180,
+          "cache_read": 7060,
+          "cache_write": 3530,
+          "total": 81190
+        },
+        "cost_usd": 1.3,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 32900,
+              "output": 14100,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 47000
+            },
+            "cost_usd": 0.71,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 37600,
+                "cost_usd": 0.56
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9400,
+                "cost_usd": 0.14
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 16520,
+              "output": 7080,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 23600
+            },
+            "cost_usd": 0.59,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 23600,
+                "cost_usd": 0.59
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 47000,
+            "cost_usd": 0.71
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 23600,
+            "cost_usd": 0.59
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 37600,
+            "cost_usd": 0.56
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 23600,
+            "cost_usd": 0.59
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9400,
+            "cost_usd": 0.14
+          }
+        ]
+      },
+      {
+        "period": "2026-11-08",
+        "first_day": "2026-11-08",
+        "last_day": "2026-11-08",
+        "tokens": {
+          "input": 51310,
+          "output": 21990,
+          "cache_read": 7330,
+          "cache_write": 3665,
+          "total": 84295
+        },
+        "cost_usd": 1.35,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 33950,
+              "output": 14550,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 48500
+            },
+            "cost_usd": 0.73,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 38800,
+                "cost_usd": 0.58
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 9700,
+                "cost_usd": 0.15
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 17360,
+              "output": 7440,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 24800
+            },
+            "cost_usd": 0.62,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 24800,
+                "cost_usd": 0.62
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 48500,
+            "cost_usd": 0.73
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 24800,
+            "cost_usd": 0.62
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 38800,
+            "cost_usd": 0.58
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 24800,
+            "cost_usd": 0.62
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 9700,
+            "cost_usd": 0.15
+          }
+        ]
+      },
+      {
+        "period": "2026-11-09",
+        "first_day": "2026-11-09",
+        "last_day": "2026-11-09",
+        "tokens": {
+          "input": 53200,
+          "output": 22800,
+          "cache_read": 7600,
+          "cache_write": 3800,
+          "total": 87400
+        },
+        "cost_usd": 1.4,
+        "by_provider": [
+          {
+            "provider": "google",
+            "label": "Google",
+            "tokens": {
+              "input": 35000,
+              "output": 15000,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 50000
+            },
+            "cost_usd": 0.75,
+            "models": [
+              {
+                "model": "gemini-3.8-pro",
+                "tokens_total": 40000,
+                "cost_usd": 0.6
+              },
+              {
+                "model": "gemini-3.8-flash",
+                "tokens_total": 10000,
+                "cost_usd": 0.15
+              }
+            ]
+          },
+          {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "tokens": {
+              "input": 18200,
+              "output": 7800,
+              "cache_read": 0,
+              "cache_write": 0,
+              "total": 26000
+            },
+            "cost_usd": 0.65,
+            "models": [
+              {
+                "model": "claude-opus-5.5",
+                "tokens_total": 26000,
+                "cost_usd": 0.65
+              }
+            ]
+          }
+        ],
+        "by_agent": [
+          {
+            "agent": "antigravity",
+            "label": "Antigravity",
+            "tokens_total": 50000,
+            "cost_usd": 0.75
+          },
+          {
+            "agent": "claude",
+            "label": "Claude Code",
+            "tokens_total": 26000,
+            "cost_usd": 0.65
+          }
+        ],
+        "top_models": [
+          {
+            "model": "gemini-3.8-pro",
+            "provider": "google",
+            "tokens_total": 40000,
+            "cost_usd": 0.6
+          },
+          {
+            "model": "claude-opus-5.5",
+            "provider": "anthropic",
+            "tokens_total": 26000,
+            "cost_usd": 0.65
+          },
+          {
+            "model": "gemini-3.8-flash",
+            "provider": "google",
+            "tokens_total": 10000,
+            "cost_usd": 0.15
+          }
+        ]
+      }
+    ]
+  }
+}
