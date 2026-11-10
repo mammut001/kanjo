@@ -70,6 +70,44 @@ class TestDashboard(unittest.TestCase):
         status, _ = self._dash_request("/unknown-path")
         self.assertEqual(status, 404)
 
+    def test_pool_card_uses_freshest_report_and_lists_all_windows(self):
+        from datetime import timedelta
+        reset = (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        def report(weekly, label):
+            data = json.loads(json.dumps(self.fixture_data))
+            data["member_label"] = label
+            data["quota_windows"] = {"antigravity": {
+                "weekly_resets_at": reset, "weekly_window_hours": 168, "weekly_used_percent": weekly,
+                "five_hour_resets_at": reset, "five_hour_window_hours": 5, "five_hour_used_percent": 3.0,
+                "extra_windows": [
+                    {"id": "3p-weekly", "label": "Weekly Limit Remaining", "used_percent": 50.4, "resets_at": reset},
+                    {"id": "3p-5h", "label": "Five Hour Limit Remaining", "used_percent": 2.0, "resets_at": reset},
+                ],
+            }}
+            return json.dumps(data)
+
+        now = datetime.now(timezone.utc)
+        with db.get_connection(self.db_path) as conn:
+            _, a = db.add_member(conn, "Alice")
+            _, b = db.add_member(conn, "Bob")
+            db.insert_report(conn, a, self.fixture_data["generated_at"], report(10.0, "a"),
+                             received_at=(now - timedelta(hours=2)).isoformat())
+            db.insert_report(conn, b, self.fixture_data["generated_at"], report(30.0, "b"),
+                             received_at=now.isoformat())
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        # Freshest report (Bob) decides the pool numbers.
+        self.assertIn("数据来自 Bob 的最新上报", html)
+        self.assertIn("已用 <strong>30.0%</strong>", html)
+        self.assertIn("Gemini 模型 · 5 小时", html)
+        self.assertIn("Claude / GPT 模型 · 本周", html)
+        self.assertIn("已用 <strong>50.4%</strong>", html)
+        self.assertIn("Claude / GPT 模型 · 5 小时", html)
+        # Members disagree by more than 2 points -> per-member list shown.
+        self.assertIn("数值不一致", html)
+
     def test_dashboard_renders_with_fixture_report(self):
         # Add members and reports
         with db.get_connection(self.db_path) as conn:
@@ -87,9 +125,11 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(status, 200)
 
         # 1. Quota pool section
-        self.assertIn("Google AI Ultra 额度池", html)
+        self.assertIn("Google AI Ultra 额度池（全家共用）", html)
         self.assertIn("42.5%", html)
-        self.assertIn("周额度已用", html)
+        self.assertIn("Gemini 模型 · 本周", html)
+        self.assertIn("数据来自 Alice 的最新上报", html)
+        self.assertIn("本额度周", html)
 
         # 2. Who used the quota pool
         self.assertIn("本周期谁用掉了额度池", html)
