@@ -1449,8 +1449,8 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     day_periods = []
     if include_days:
         day_periods = [days[k].to_json() for k in sorted(days.keys())]
-        if len(day_periods) > 31:
-            day_periods = day_periods[-31:]
+        if len(day_periods) > 62:
+            day_periods = day_periods[-62:]
 
     return all_time_period, month_periods, week_periods, day_periods, tz_name
 
@@ -1757,8 +1757,8 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
 
     if len(summary.get("weeks", [])) > 26:
         problems.append("weeks count %d > 26" % len(summary["weeks"]))
-    if len(summary.get("days", [])) > 31:
-        problems.append("days count %d > 31" % len(summary["days"]))
+    if len(summary.get("days", [])) > 62:
+        problems.append("days count %d > 62" % len(summary["days"]))
 
     if "scope" in doc:
         scope = doc["scope"]

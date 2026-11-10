@@ -337,35 +337,42 @@ struct SettingsView: View {
                             .font(.system(size: 11))
                             .disabled(!store.canEditSubscriptions)
 
-                            HStack {
-                                DatePicker(
-                                    L10n.tr("settings.family.scope.start_date"),
-                                    selection: Binding(
-                                        get: {
-                                            if let s = store.report?.config.family?.since,
-                                               let d = Self.scopeDateFormatter.date(from: String(s.prefix(10))) {
-                                                return d
-                                            }
-                                            return Date()
-                                        },
-                                        set: { newDate in
-                                            let dateStr = Self.scopeDateFormatter.string(from: newDate)
-                                            Task { try? await store.setFamilySince(dateStr) }
-                                        }
-                                    ),
-                                    displayedComponents: [.date]
-                                )
-                                .font(.system(size: 11))
-                                .disabled(!store.canEditSubscriptions)
+                            DisclosureGroup(L10n.tr("settings.family.scope.advanced")) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        DatePicker(
+                                            L10n.tr("settings.family.scope.start_date"),
+                                            selection: Binding(
+                                                get: {
+                                                    if let s = store.report?.config.family?.since,
+                                                       let d = Self.scopeDateFormatter.date(from: String(s.prefix(10))) {
+                                                        return d
+                                                    }
+                                                    return Date()
+                                                },
+                                                set: { newDate in
+                                                    let dateStr = Self.scopeDateFormatter.string(from: newDate)
+                                                    Task { try? await store.setFamilySince(dateStr) }
+                                                }
+                                            ),
+                                            displayedComponents: [.date]
+                                        )
+                                        .font(.system(size: 11))
+                                        .disabled(!store.canEditSubscriptions)
 
-                                if store.report?.config.family?.since != nil {
-                                    Button(L10n.tr("settings.family.scope.clear_date")) {
-                                        Task { try? await store.setFamilySince(nil) }
+                                        if store.report?.config.family?.since != nil {
+                                            Button(L10n.tr("settings.family.scope.clear_date")) {
+                                                Task { try? await store.setFamilySince(nil) }
+                                            }
+                                            .font(.system(size: 11))
+                                            .disabled(!store.canEditSubscriptions)
+                                        }
                                     }
-                                    .font(.system(size: 11))
-                                    .disabled(!store.canEditSubscriptions)
+                                    note(L10n.tr("settings.family.scope.advanced_note"))
                                 }
+                                .padding(.top, 4)
                             }
+                            .font(.system(size: 11))
                         }
 
                         HStack {

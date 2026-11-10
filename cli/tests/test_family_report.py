@@ -81,8 +81,8 @@ class FamilyReportExportTest(unittest.TestCase):
             self.assertIn(key, summary)
             self.assertIsInstance(summary[key], (dict if key == "all_time" else list))
 
-        # Check days count <= 31
-        self.assertLessEqual(len(summary["days"]), 31)
+        # Check days count <= 62
+        self.assertLessEqual(len(summary["days"]), 62)
         for d in summary["days"]:
             self.assertIn("period", d)
             self.assertRegex(d["period"], r"^\d{4}-\d{2}-\d{2}$")
@@ -157,6 +157,28 @@ class FamilyReportExportTest(unittest.TestCase):
             raw_bytes = json.dumps(doc, ensure_ascii=False).encode("utf-8")
             self.assertIsNone(check_privacy_backstop(raw_bytes))
             self.assertIsNone(validate_report_payload(doc))
+
+    def test_family_report_days_max_62(self):
+        from datetime import datetime, timezone
+        from kanjo.sources.base import Message, Session
+        # Create messages across 80 days
+        base_ts = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        messages = []
+        for i in range(80):
+            ts = base_ts + i * 86400
+            messages.append(Message(ts=ts, model="gemini-3.8-pro", input=100, output=100))
+        sess = Session(id="sess-1", agent="antigravity", file="/fake", messages=messages)
+        scan_res = export.ScanResult(sessions=[sess], failed_files=[], stats={})
+
+        doc = export.build_family_report(scan_result=scan_res)
+        days = doc["summary"]["days"]
+        self.assertEqual(len(days), 62)
+        # Verify it kept the latest 62 days
+        expected_last_day = datetime.fromtimestamp(base_ts + 79 * 86400, timezone.utc).strftime("%Y-%m-%d")
+        expected_first_day = datetime.fromtimestamp(base_ts + (80 - 62) * 86400, timezone.utc).strftime("%Y-%m-%d")
+        self.assertEqual(days[-1]["period"], expected_last_day)
+        self.assertEqual(days[0]["period"], expected_first_day)
+        self.assertEqual(export.check_family_report_invariants(doc), [])
 
 
 class MockFamilyServerHandler(BaseHTTPRequestHandler):

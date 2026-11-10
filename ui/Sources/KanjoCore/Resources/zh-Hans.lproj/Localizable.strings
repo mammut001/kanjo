@@ -200,6 +200,8 @@
 "settings.family.scope.agents_choice" = "统计 Agent";
 "settings.family.scope.clear_date" = "清除起始日期";
 "settings.family.scope.set_date" = "设置起始日期";
+"settings.family.scope.advanced" = "高级";
+"settings.family.scope.advanced_note" = "通常不需要设置；周期由家庭管理员在面板上设定";
 "settings.family.note" = "仅向家庭服务器上报高层 token 汇总与额度窗口，绝不上报项目名、路径、会话标题或账号邮箱。金额为公开 API 等价估算成本。";
 "sync.account_code" = "iCloud 账户 %@";
 "gzip.error.invalid_header" = "快照不是 gzip 文件。";

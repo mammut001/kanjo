@@ -33,9 +33,10 @@
 - **发**：
   - `member_label`：成员在 Kanjo 里自己填的显示名（可空，服务器以令牌对应的名字为准）
   - `generated_at`、`timezone`、`generated_by`
-  - `summary`：现有公开汇总的结构（`all_time` / `months` / `weeks`），外加 `days`（最近 31 天，结构同 Period，`period` 为 `YYYY-MM-DD`）
+  - `summary`：现有公开汇总的结构（`all_time` / `months` / `weeks`），外加 `days`（最近 62 天，结构同 Period，`period` 为 `YYYY-MM-DD`，便于服务端计算当前与上一计费周期）
   - `quota_windows`：Kanjo 现有的额度窗口原样上报（Antigravity 周窗口 / 5 小时窗口 / extra_windows 等，各 agent 都带）
   - `plans`：各 agent 的订阅档位标签（如 "Google AI Ultra"），**不带 account 字段**
+  - `scope`：上报统计范围（默认仅包含 Antigravity，自定起始日可选）
 - Kanjo CLI 新命令输出这份文档：`kanjo export --family-report`（与 `--mobile`、`--public-summary` 互斥）。CONTRACT.md 新增一节写结构。
 
 ## 3. 服务器（第一批）
@@ -55,12 +56,19 @@
   - `members(id, name, token_sha256, created_at, revoked_at)`
   - `reports(member_id, received_at, generated_at, payload_json)`：每个成员保留最新一份 + 每天最后一份（历史 90 天，自动清理更早的）
   - `sessions(id_hash, email, created_at, expires_at)`：服务端 7 天会话存储，只存 session id 的 SHA-256 哈希
+  - `settings(key, value)`：服务端管理设置（键值存储）：
+    - `cycle_anchor_day`：计费周期起始日（1–31；较短月份遇无该日自动使用当月最后一天）
+    - `tracking_start`：可选 YYYY-MM-DD，早于该日期的历史用量在看板各处完全忽略
+    - `timezone`：IANA 时区名称（默认读取环境变量 `FAMILY_TIMEZONE`，兜底 `America/Toronto`；使用 `zoneinfo` 校验）
 - **令牌与认证**：
   - 上报令牌管理：`docker exec family-app python -m family_server member add <名字>`（生成令牌，只打印这一次）、`member list`、`member revoke <名字>`。只存 SHA-256，不存明文。
   - 面板认证流程：
     - `GET /login`：加载 Firebase JS SDK v11.0.0 模块化构建，通过 GoogleAuthProvider 弹窗登录，获取 `idToken`，POST 到 `/auth/session`，并在客户端立即登出 Firebase（服务端 session 为单一真理来源）。中文显示错误信息。
     - `POST /auth/session`：纯 Python 服务端验证 RSASSA-PKCS1-v1_5 SHA-256 签名（`pow(sig, e, n)` + EMSA-PKCS1-v1_5 编码恒定时间比较），从 Google JWKs 端点缓存公钥（遵循 Cache-Control max-age，未知 kid 触发一次重拉）；校验 claims（iss、aud、exp、iat、auth_time、sub、email_verified、google.com 认证源、邮箱在 `FAMILY_ADMIN_EMAILS` 白名单中）。验证成功签发 32 字节会话，设置 `__Host-family_session` 安全 Cookie（7 天过期，Path=/; Secure; HttpOnly; SameSite=Strict）。
     - `POST /auth/logout`：注销会话并清除 Cookie。
+  - 管理设置页与计费周期：
+    - `GET /settings`：管理员专用设置页面（要求白名单会话），支持配置 `cycle_anchor_day`（1–31）、`tracking_start`（可选起始日）、`timezone`。中文界面，表单输入经过转义。看板顶部标题栏提供「设置」跳转入口。
+    - `POST /settings`：仅限管理员提交，执行 CSRF Origin 校验、请求体上限检查与服务端字段校验。成功保存至 SQLite `settings` 表后 303 重定向至 `/settings?saved=1`，并在服务器日志中记录变更（严格无 PII，不记录邮箱与 IP）。
 - **防护加固**：
   - SQL 参数化：全库无拼接。
   - HTML 转义：所有动态插值均经 `html.escape()`，无内联事件监听器，登录页脚本抽取为外部独立静态文件 `/static/login.js`。
@@ -75,10 +83,11 @@
   - 限流：每个令牌每分钟最多 1 次，超了 429。
   - 成功 → 200 `{"status":"ok","received_at":...}`。
 - **面板** `GET /`：中文界面，服务端渲染一页 HTML，不引前端框架。
-  1. 顶部：Google AI Ultra 额度池——各成员最近一次上报的 Antigravity 周窗口已用百分比和重置时间。如果是共享池，大家报上来的数字应该接近；不一致时并列显示，不猜。
-  2. 每个成员一张卡：今天 / 近 7 天 / 本月的 token 和折算金额，按模型列前 5，最近一次上报时间（超过 24 小时标「未更新」）。
-  3. 本周「谁用掉了额度池」：按 Antigravity（Google 模型）本周 token 排名，显示占比。
+  1. 顶部：计费周期状态徽章（如 `本周期 11/09 – 12/08 · 剩余 29 天`）；若尚未设置计费周期起始日，展示提示 Banner 引导管理员配置并回退至自然月。Google AI Ultra 额度池——各成员最近一次上报的 Antigravity 周窗口已用百分比和重置时间。如果是共享池，大家报上来的数字应该接近；不一致时并列显示，不猜。
+  2. 每个成员一张卡：本周期 token/折算金额、上周期 token/环比变化（%）、距离下次重置的剩余天数，按模型列前 5（统计周期内聚合），最近一次上报时间（超过 24 小时标「未更新」），展示成员上报的 scope 统计范围。
+  3. 本周期「谁用掉了额度池」：按 Antigravity（Google 模型）本周期 token 排名，显示额度池消耗占比。
   4. 近 30 天按人分色的每日柱状图（SVG 手写）。
+  - 所有聚合均已按 `tracking_start` 严格过滤（早于该日期的数据全部排除）。
   - 金额旁注明「按公开 API 价格折算，不是实际支出」。
 - **测试**：`family-server/tests/`，标准库 unittest：令牌哈希、401/400/429/200、隐私兜底、历史清理、面板渲染、纯 Python RSA JWT 验签矩阵、会话管理、CSRF 与安全头。
 - **验收**：
@@ -96,6 +105,7 @@
   - 服务器地址（默认 `https://usage.paytonpei.top`）
   - 令牌：存 **macOS 钥匙串**，不存 UserDefaults；界面上只显示「已设置 / 未设置」和「更换」
   - 显示名（可选）
+  - 统计范围（默认仅包含 Antigravity，可选全部 agent；自定起始日期选择器放入「高级」折叠面板中，并附说明「通常不需要设置；周期由家庭管理员在面板上设定」）
   - 状态行：上次上报时间或错误信息；「立即上报」按钮
   - 一句说明：会上报哪些数字、不会上报项目名和路径
 - **调度**：每次刷新完成后，开关打开且距上次成功超过 15 分钟才上报；后台 QoS；同一时间只跑一个；失败后至少等 30 分钟再自动重试；`no_network` 时不上报。逻辑写成 KanjoCore 纯函数 + 测试（参照 PublishSchedule）。

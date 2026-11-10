@@ -1,6 +1,7 @@
 """Public dashboard for Kanjo family usage behind Firebase Authentication."""
 
-from datetime import datetime, timedelta, timezone
+import calendar
+from datetime import date, datetime, timedelta, timezone
 import html
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -9,7 +10,9 @@ import logging
 import math
 import mimetypes
 import os
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
+import urllib.parse
+from zoneinfo import ZoneInfo
 
 from . import auth
 from . import db
@@ -95,6 +98,58 @@ def format_scope(scope: Optional[dict]) -> Optional[str]:
         return None
 
     return f"统计范围：{' · '.join(parts)}"
+
+
+def _shift_month(year: int, month: int, delta: int) -> Tuple[int, int]:
+    """Shift (year, month) by delta months."""
+    index = year * 12 + (month - 1) + delta
+    return index // 12, index % 12 + 1
+
+
+def _anchor_date_for_month(year: int, month: int, anchor: int) -> date:
+    """Return anchor day clamped to the maximum days in the given month."""
+    max_days = calendar.monthrange(year, month)[1]
+    day = min(int(anchor), max_days)
+    return date(year, month, day)
+
+
+def compute_cycle_boundaries(
+    anchor: Optional[int],
+    ref_dt_or_date: Union[date, datetime],
+    tz: Optional[ZoneInfo] = None,
+) -> Tuple[date, date, date]:
+    """Calculate (prev_start, current_start, next_start) as date objects.
+
+    If anchor is None, falls back to calendar month (anchor=1).
+    Clamping: anchor 31 in Feb is 28 (or 29 in leap year), 30 in April, etc.
+    Current cycle interval is [current_start, next_start).
+    Previous cycle interval is [prev_start, current_start).
+    """
+    if isinstance(ref_dt_or_date, datetime):
+        if tz is not None and ref_dt_or_date.tzinfo is not None:
+            local_date = ref_dt_or_date.astimezone(tz).date()
+        else:
+            local_date = ref_dt_or_date.date()
+    else:
+        local_date = ref_dt_or_date
+
+    eff_anchor = int(anchor) if anchor is not None else 1
+    y, m = local_date.year, local_date.month
+
+    cand_start = _anchor_date_for_month(y, m, eff_anchor)
+    if cand_start <= local_date:
+        current_start = cand_start
+    else:
+        prev_y, prev_m = _shift_month(y, m, -1)
+        current_start = _anchor_date_for_month(prev_y, prev_m, eff_anchor)
+
+    next_y, next_m = _shift_month(current_start.year, current_start.month, 1)
+    next_start = _anchor_date_for_month(next_y, next_m, eff_anchor)
+
+    prev_y, prev_m = _shift_month(current_start.year, current_start.month, -1)
+    prev_start = _anchor_date_for_month(prev_y, prev_m, eff_anchor)
+
+    return prev_start, current_start, next_start
 
 
 def load_firebase_config() -> dict:
@@ -232,20 +287,51 @@ def generate_dashboard_html(
     user_email: Optional[str] = None,
 ) -> str:
     """Render the full single-page dashboard HTML."""
+    with db.get_connection(db_path) as conn:
+        records = db.get_all_latest_reports(conn)
+        server_settings = db.get_all_settings(conn)
+
+    tz_name = server_settings.get("timezone") or os.environ.get("FAMILY_TIMEZONE", "America/Toronto")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("America/Toronto")
+        tz_name = "America/Toronto"
+
     if now is None:
         now = datetime.now(timezone.utc)
 
-    with db.get_connection(db_path) as conn:
-        records = db.get_all_latest_reports(conn)
+    local_now = now.astimezone(tz)
+    local_today = local_now.date()
+    today_str = local_today.isoformat()
 
-    today_str = now.strftime("%Y-%m-%d")
-    current_month_str = now.strftime("%Y-%m")
-    dates_30 = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(29, -1, -1)]
+    cycle_anchor_day_raw = server_settings.get("cycle_anchor_day")
+    cycle_anchor_day = None
+    has_cycle_setting = False
+    if cycle_anchor_day_raw is not None and cycle_anchor_day_raw.strip():
+        try:
+            val = int(cycle_anchor_day_raw.strip())
+            if 1 <= val <= 31:
+                cycle_anchor_day = val
+                has_cycle_setting = True
+        except ValueError:
+            pass
+
+    tracking_start_str = (server_settings.get("tracking_start") or "").strip() or None
+
+    prev_start, current_start, next_start = compute_cycle_boundaries(cycle_anchor_day, local_today, tz)
+    current_start_str = current_start.isoformat()
+    next_start_str = next_start.isoformat()
+    prev_start_str = prev_start.isoformat()
+    cycle_last_day = next_start - timedelta(days=1)
+    cycle_range_str = f"本周期 {current_start.strftime('%m/%d')} – {cycle_last_day.strftime('%m/%d')}"
+    days_remaining = max(0, (next_start - local_today).days)
+
+    dates_30 = [(local_today - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
 
     # Process member data
     members_processed = []
     quota_pool_entries = []
-    pool_weekly_users = []
 
     for idx, rec in enumerate(records):
         m = rec["member"]
@@ -260,16 +346,14 @@ def generate_dashboard_html(
             "label": None,
             "received_at": None,
             "is_stale": True,
-            "today_tokens": 0,
-            "today_cost": 0.0,
-            "week7_tokens": 0,
-            "week7_cost": 0.0,
-            "month_tokens": 0,
-            "month_cost": 0.0,
+            "cycle_tokens": 0,
+            "cycle_cost": 0.0,
+            "prev_cycle_tokens": 0,
+            "prev_cycle_cost": 0.0,
             "top_models": [],
             "daily_tokens": {},
             "antigravity_quota": None,
-            "weekly_antigravity_tokens": 0,
+            "cycle_pool_tokens": 0,
             "scope": None,
             "scope_str": None,
         }
@@ -311,69 +395,91 @@ def generate_dashboard_html(
                     "quota": member_info["antigravity_quota"],
                 })
 
-            # Summary metrics
             summary = payload.get("summary", {})
-
-            # 1. Daily breakdown for 30-day chart and today
             days = summary.get("days", [])
+            cycle_models = {}
+
             for d in days:
+                if not isinstance(d, dict):
+                    continue
                 p_str = d.get("period")
+                if not p_str or not isinstance(p_str, str):
+                    continue
+
+                # Tracking start filtering: usage before tracking_start is ignored everywhere on the dashboard
+                if tracking_start_str and p_str < tracking_start_str:
+                    continue
+
                 tok_cnt = d.get("tokens", {}).get("total", 0)
                 cost_val = d.get("cost_usd", 0.0)
-                if p_str:
-                    member_info["daily_tokens"][p_str] = tok_cnt
-                if p_str == today_str:
-                    member_info["today_tokens"] = tok_cnt
-                    member_info["today_cost"] = cost_val
 
-            # 2. Last 7 days metrics
-            week_days_keys = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
-            day_map = {d.get("period"): d for d in days if isinstance(d, dict)}
-            for wd in week_days_keys:
-                if wd in day_map:
-                    member_info["week7_tokens"] += day_map[wd].get("tokens", {}).get("total", 0)
-                    member_info["week7_cost"] += day_map[wd].get("cost_usd", 0.0)
+                member_info["daily_tokens"][p_str] = tok_cnt
 
-            # 3. Current month metrics
-            months = summary.get("months", [])
-            for mo in months:
-                if mo.get("period") == current_month_str:
-                    member_info["month_tokens"] = mo.get("tokens", {}).get("total", 0)
-                    member_info["month_cost"] = mo.get("cost_usd", 0.0)
-                    break
+                # Current cycle: [current_start_str, next_start_str)
+                if current_start_str <= p_str < next_start_str:
+                    member_info["cycle_tokens"] += tok_cnt
+                    member_info["cycle_cost"] += cost_val
 
-            # 4. Top models from all_time
-            all_time = summary.get("all_time", {})
-            top_m = all_time.get("top_models", [])
-            member_info["top_models"] = top_m[:5]
+                    # Antigravity / pool tokens for ranking
+                    by_agent = d.get("by_agent")
+                    by_provider = d.get("by_provider")
+                    if by_agent and any(isinstance(a, dict) and a.get("agent") == "antigravity" for a in by_agent):
+                        member_info["cycle_pool_tokens"] += sum(
+                            a.get("tokens_total", 0)
+                            for a in by_agent
+                            if isinstance(a, dict) and a.get("agent") == "antigravity"
+                        )
+                    elif by_provider and any(isinstance(p, dict) and p.get("provider") == "google" for p in by_provider):
+                        member_info["cycle_pool_tokens"] += sum(
+                            p.get("tokens", {}).get("total", 0)
+                            for p in by_provider
+                            if isinstance(p, dict) and p.get("provider") == "google"
+                        )
+                    else:
+                        member_info["cycle_pool_tokens"] += tok_cnt
 
-            # 5. Antigravity weekly tokens
-            weeks = summary.get("weeks", [])
-            if weeks:
-                curr_week = weeks[0]
-                week_models = curr_week.get("models", {})
-                ag_tokens = 0
-                for mod_name, mod_info in week_models.items():
-                    low_name = mod_name.lower()
-                    if "gemini" in low_name or "antigravity" in low_name or "argon" in low_name:
-                        ag_tokens += mod_info.get("tokens_total", 0)
-                member_info["weekly_antigravity_tokens"] = ag_tokens
+                    # Model breakdown in current cycle
+                    for tm in d.get("top_models", []):
+                        if isinstance(tm, dict):
+                            mod_name = tm.get("model")
+                            if mod_name:
+                                if mod_name not in cycle_models:
+                                    cycle_models[mod_name] = {"tokens_total": 0, "cost_usd": 0.0}
+                                cycle_models[mod_name]["tokens_total"] += tm.get("tokens_total", 0)
+                                cycle_models[mod_name]["cost_usd"] += tm.get("cost_usd", 0.0)
+
+                # Previous cycle: [prev_start_str, current_start_str)
+                elif prev_start_str <= p_str < current_start_str:
+                    member_info["prev_cycle_tokens"] += tok_cnt
+                    member_info["prev_cycle_cost"] += cost_val
+
+            sorted_models = [
+                {"model": mod, "tokens_total": data["tokens_total"], "cost_usd": round(data["cost_usd"], 2)}
+                for mod, data in cycle_models.items()
+            ]
+            sorted_models.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
+            if sorted_models:
+                member_info["top_models"] = sorted_models[:5]
+            else:
+                all_time = summary.get("all_time", {})
+                member_info["top_models"] = all_time.get("top_models", [])[:5]
 
         members_processed.append(member_info)
 
-    # Compute quota pool share
-    total_weekly_pool_tokens = sum(m["weekly_antigravity_tokens"] for m in members_processed)
+    # Compute quota pool share within the cycle
+    total_cycle_pool_tokens = sum(m["cycle_pool_tokens"] for m in members_processed)
+    pool_cycle_users = []
     for m in members_processed:
-        t = m["weekly_antigravity_tokens"]
-        pct = (t / total_weekly_pool_tokens * 100.0) if total_weekly_pool_tokens > 0 else 0.0
-        pool_weekly_users.append({
+        t = m["cycle_pool_tokens"]
+        pct = (t / total_cycle_pool_tokens * 100.0) if total_cycle_pool_tokens > 0 else 0.0
+        pool_cycle_users.append({
             "name": m["name"],
             "label": m["label"],
             "color": m["color"],
             "tokens": t,
             "pct": pct,
         })
-    pool_weekly_users.sort(key=lambda x: x["tokens"], reverse=True)
+    pool_cycle_users.sort(key=lambda x: x["tokens"], reverse=True)
 
     # Max tokens on any day for chart scaling
     max_day_tokens = 0
@@ -448,6 +554,51 @@ def generate_dashboard_html(
         .user-email { font-size: 0.82rem; color: var(--text-secondary); background: var(--badge-bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
         .logout-btn { background: transparent; border: 1px solid var(--card-border); color: var(--text-secondary); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.15s ease; }
         .logout-btn:hover { background: var(--badge-bg); color: var(--text-primary); }
+        .settings-btn {
+          background: transparent;
+          border: 1px solid var(--card-border);
+          color: var(--text-secondary);
+          padding: 0.25rem 0.6rem;
+          border-radius: 6px;
+          font-size: 0.8rem;
+          text-decoration: none;
+          transition: all 0.15s ease;
+          display: inline-flex;
+          align-items: center;
+        }
+        .settings-btn:hover { background: var(--badge-bg); color: var(--text-primary); }
+        .cycle-pill {
+          display: inline-block;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--accent);
+          background: var(--badge-bg);
+          padding: 0.2rem 0.6rem;
+          border-radius: 6px;
+          margin-top: 0.35rem;
+          border: 1px solid var(--card-border);
+        }
+        .settings-prompt-banner {
+          background: var(--badge-bg);
+          border-left: 4px solid var(--amber);
+          padding: 1rem 1.25rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+        .settings-prompt-link {
+          background: var(--accent);
+          color: #ffffff;
+          padding: 0.35rem 0.85rem;
+          border-radius: 6px;
+          font-size: 0.82rem;
+          font-weight: 600;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .settings-prompt-link:hover { opacity: 0.9; }
 
         .card {
           background: var(--card-bg);
@@ -524,6 +675,7 @@ def generate_dashboard_html(
         '      <div class="header-title-row">',
         "        <div>",
         "          <h1>家庭用量汇总</h1>",
+        f'          <div class="cycle-pill">{html.escape(cycle_range_str)} · 剩余 {days_remaining} 天</div>',
         f'          <div class="cost-notice">注：{html.escape(COST_NOTE)}</div>',
     ]
     if top_scope_str:
@@ -531,7 +683,8 @@ def generate_dashboard_html(
     doc.extend([
         "        </div>",
         '        <div class="header-right">',
-        f'          <span class="meta-time">刷新时间：{html.escape(format_dt(now))} UTC</span>',
+        f'          <span class="meta-time">刷新时间：{html.escape(format_dt(local_now))} ({html.escape(tz_name)})</span>',
+        '          <a href="/settings" class="settings-btn">设置</a>',
     ])
 
     if user_email:
@@ -545,6 +698,15 @@ def generate_dashboard_html(
         "      </div>",
         "    </header>",
     ])
+
+    # Admin prompt banner if no settings yet
+    if not has_cycle_setting:
+        doc.append('    <div class="card settings-prompt-banner">')
+        doc.append('      <div class="prompt-text">')
+        doc.append('        <strong>提示：</strong>尚未设置计费周期起始日，当前按自然月展示。请前往设置以匹配 Google AI Ultra 续费日。')
+        doc.append('      </div>')
+        doc.append('      <a href="/settings" class="settings-prompt-link">设置周期起始日 →</a>')
+        doc.append('    </div>')
 
     # 1. Quota Pool Card
     doc.append('    <section class="card">')
@@ -584,14 +746,14 @@ def generate_dashboard_html(
         doc.append('      </div>')
     doc.append('    </section>')
 
-    # 2. Who Used the Quota Pool This Week
+    # 2. Who Used the Quota Pool This Cycle
     doc.append('    <section class="card">')
-    doc.append('      <h2 class="section-title">本周谁用掉了额度池 (Google / Antigravity 模型)</h2>')
-    if total_weekly_pool_tokens == 0:
-        doc.append('      <div class="empty-state">本周暂无 Google 模型用量记录</div>')
+    doc.append('      <h2 class="section-title">本周期谁用掉了额度池</h2>')
+    if total_cycle_pool_tokens == 0:
+        doc.append('      <div class="empty-state">本周期暂无额度池用量记录</div>')
     else:
         doc.append('      <div class="share-list">')
-        for u in pool_weekly_users:
+        for u in pool_cycle_users:
             if u["tokens"] <= 0:
                 continue
             name = html.escape(u["name"])
@@ -627,7 +789,7 @@ def generate_dashboard_html(
 
     # 4. Member Cards
     doc.append('    <section>')
-    doc.append('      <h2 class="section-title">成员概览</h2>')
+    doc.append(f'      <h2 class="section-title">成员概览 ({html.escape(cycle_range_str)})</h2>')
     if not members_processed:
         doc.append('      <div class="card"><div class="empty-state">尚未添加任何成员</div></div>')
     else:
@@ -643,6 +805,20 @@ def generate_dashboard_html(
                 badge_html = '<span class="badge badge-stale">未更新</span>'
             else:
                 badge_html = '<span class="badge badge-active">正常</span>'
+
+            # Change percentage
+            curr_t = m["cycle_tokens"]
+            prev_t = m["prev_cycle_tokens"]
+            if prev_t > 0:
+                diff_pct = (curr_t - prev_t) / prev_t * 100.0
+                if abs(diff_pct) < 0.05:
+                    change_str = "0.0%"
+                else:
+                    change_str = f"{diff_pct:+.1f}%"
+            elif curr_t > 0:
+                change_str = "+100%"
+            else:
+                change_str = "—"
 
             doc.append('        <div class="card" style="margin-bottom: 0;">')
             doc.append('          <div class="member-card-header">')
@@ -661,19 +837,19 @@ def generate_dashboard_html(
             # Metrics
             doc.append('          <div class="metrics-grid">')
             doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">今天</div>')
-            doc.append(f'              <div class="metric-tokens">{format_tokens(m["today_tokens"])}</div>')
-            doc.append(f'              <div class="metric-cost">{format_cost(m["today_cost"])}</div>')
+            doc.append('              <div class="metric-label">本周期</div>')
+            doc.append(f'              <div class="metric-tokens">{format_tokens(m["cycle_tokens"])}</div>')
+            doc.append(f'              <div class="metric-cost">{format_cost(m["cycle_cost"])}</div>')
             doc.append('            </div>')
             doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">近 7 天</div>')
-            doc.append(f'              <div class="metric-tokens">{format_tokens(m["week7_tokens"])}</div>')
-            doc.append(f'              <div class="metric-cost">{format_cost(m["week7_cost"])}</div>')
+            doc.append('              <div class="metric-label">上周期</div>')
+            doc.append(f'              <div class="metric-tokens">{format_tokens(m["prev_cycle_tokens"])}</div>')
+            doc.append(f'              <div class="metric-cost">{html.escape(change_str)}</div>')
             doc.append('            </div>')
             doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">本月</div>')
-            doc.append(f'              <div class="metric-tokens">{format_tokens(m["month_tokens"])}</div>')
-            doc.append(f'              <div class="metric-cost">{format_cost(m["month_cost"])}</div>')
+            doc.append('              <div class="metric-label">剩余天数</div>')
+            doc.append(f'              <div class="metric-tokens">{days_remaining} 天</div>')
+            doc.append(f'              <div class="metric-cost">至 {next_start.strftime("%m/%d")} 重置</div>')
             doc.append('            </div>')
             doc.append('          </div>')
 
@@ -681,7 +857,7 @@ def generate_dashboard_html(
             if m["top_models"]:
                 doc.append('          <table class="models-table">')
                 doc.append('            <thead>')
-                doc.append('              <tr><th>模型 (前 5)</th><th class="text-right">Token</th><th class="text-right">折算金额</th></tr>')
+                doc.append('              <tr><th>本周期模型 (前 5)</th><th class="text-right">Token</th><th class="text-right">折算金额</th></tr>')
                 doc.append('            </thead>')
                 doc.append('            <tbody>')
                 for tm in m["top_models"]:
@@ -696,7 +872,7 @@ def generate_dashboard_html(
                 doc.append('            </tbody>')
                 doc.append('          </table>')
             else:
-                doc.append('          <div class="empty-state" style="padding: 1rem 0 0.5rem 0;">暂无模型用量明细</div>')
+                doc.append('          <div class="empty-state" style="padding: 1rem 0 0.5rem 0;">本周期暂无模型用量明细</div>')
 
             doc.append('        </div>')
         doc.append('      </div>')
@@ -706,6 +882,200 @@ def generate_dashboard_html(
     doc.append('</body>')
     doc.append('</html>')
 
+    return "\n".join(doc)
+
+
+def render_settings_html(
+    settings: Dict[str, str],
+    user_email: Optional[str] = None,
+    error: Optional[str] = None,
+    saved: bool = False,
+    form_data: Optional[Dict[str, str]] = None,
+) -> str:
+    """Render the admin settings page HTML."""
+    if form_data:
+        cycle_anchor_day = form_data.get("cycle_anchor_day", "")
+        tracking_start = form_data.get("tracking_start", "")
+        tz_name = form_data.get("timezone", "")
+    else:
+        cycle_anchor_day = settings.get("cycle_anchor_day", "")
+        tracking_start = settings.get("tracking_start", "")
+        tz_name = settings.get("timezone") or os.environ.get("FAMILY_TIMEZONE", "America/Toronto")
+
+    escaped_day = html.escape(str(cycle_anchor_day or ""), quote=True)
+    escaped_start = html.escape(str(tracking_start or ""), quote=True)
+    escaped_tz = html.escape(str(tz_name or ""), quote=True)
+
+    doc = [
+        "<!DOCTYPE html>",
+        '<html lang="zh-CN">',
+        "<head>",
+        '  <meta charset="utf-8">',
+        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+        "  <title>计费周期与管理设置 · Kanjo</title>",
+        "  <style>",
+        """
+        :root {
+          --bg: #f8fafc;
+          --card-bg: #ffffff;
+          --card-border: #e2e8f0;
+          --text-primary: #0f172a;
+          --text-secondary: #475569;
+          --text-muted: #94a3b8;
+          --accent: #2563eb;
+          --accent-hover: #1d4ed8;
+          --badge-bg: #f1f5f9;
+          --green: #10b981;
+          --green-bg: #dcfce7;
+          --green-text: #15803d;
+          --red: #ef4444;
+          --red-bg: #fee2e2;
+          --red-text: #b91c1c;
+          --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --badge-bg: #334155;
+            --green-bg: #14532d;
+            --green-text: #86efac;
+            --red-bg: #7f1d1d;
+            --red-text: #fca5a5;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+          }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+          background: var(--bg);
+          color: var(--text-primary);
+          line-height: 1.5;
+          padding: 2rem 1rem 3rem 1rem;
+        }
+        .container { max-width: 640px; margin: 0 auto; }
+        .back-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: var(--accent);
+          text-decoration: none;
+          font-size: 0.88rem;
+          margin-bottom: 1.25rem;
+          transition: opacity 0.15s;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 12px;
+          padding: 2rem;
+          box-shadow: var(--shadow);
+        }
+        h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.4rem; }
+        .page-desc { font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.75rem; }
+        .alert {
+          padding: 0.75rem 1rem;
+          border-radius: 8px;
+          font-size: 0.88rem;
+          margin-bottom: 1.5rem;
+        }
+        .alert-success { background: var(--green-bg); color: var(--green-text); }
+        .alert-error { background: var(--red-bg); color: var(--red-text); }
+        .form-group { margin-bottom: 1.5rem; }
+        label {
+          display: block;
+          font-size: 0.9rem;
+          font-weight: 600;
+          margin-bottom: 0.35rem;
+        }
+        .field-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+        .input-text {
+          width: 100%;
+          padding: 0.6rem 0.75rem;
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          background: var(--bg);
+          color: var(--text-primary);
+          font-size: 0.95rem;
+        }
+        .input-text:focus {
+          outline: none;
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .btn-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 2rem; }
+        .btn-submit {
+          background: var(--accent);
+          color: #fff;
+          border: none;
+          padding: 0.65rem 1.25rem;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .btn-submit:hover { background: var(--accent-hover); }
+        .btn-cancel {
+          background: transparent;
+          color: var(--text-secondary);
+          border: 1px solid var(--card-border);
+          padding: 0.65rem 1.25rem;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          text-decoration: none;
+        }
+        .btn-cancel:hover { background: var(--badge-bg); }
+        </style>
+        """,
+        "</head>",
+        "<body>",
+        '  <div class="container">',
+        '    <a href="/" class="back-link">← 返回看板</a>',
+        '    <div class="card">',
+        '      <h1>计费周期与管理设置</h1>',
+        '      <p class="page-desc">由家庭管理员设定计费周期起始日与统计范围，整个家庭看板将按该周期呈现用量。</p>',
+    ]
+
+    if saved:
+        doc.append('      <div class="alert alert-success">✓ 设置已成功保存生效</div>')
+    if error:
+        doc.append(f'      <div class="alert alert-error">{html.escape(error)}</div>')
+
+    doc.extend([
+        '      <form method="POST" action="/settings">',
+        '        <div class="form-group">',
+        '          <label for="cycle_anchor_day">计费周期起始日 (1–31)</label>',
+        f'          <input type="number" id="cycle_anchor_day" name="cycle_anchor_day" min="1" max="31" value="{escaped_day}" required class="input-text" placeholder="例如 9">',
+        '          <div class="field-desc">Google AI Ultra 订阅每月续费日（1–31）。若遇较短月份（如 2 月遇 31 日），系统将自动使用该月最后一天。</div>',
+        '        </div>',
+        '        <div class="form-group">',
+        '          <label for="tracking_start">统计起始日期 (可选)</label>',
+        f'          <input type="text" id="tracking_start" name="tracking_start" value="{escaped_start}" class="input-text" placeholder="YYYY-MM-DD，如 2026-11-09">',
+        '          <div class="field-desc">早于该日期的历史用量在看板各处均被完全忽略。留空则统计历史全部可用数据。</div>',
+        '        </div>',
+        '        <div class="form-group">',
+        '          <label for="timezone">统计时区 (IANA 时区名称)</label>',
+        f'          <input type="text" id="timezone" name="timezone" value="{escaped_tz}" required class="input-text" placeholder="America/Toronto">',
+        '          <div class="field-desc">面板计算计费周期边界所采用的时区，默认从环境变量 FAMILY_TIMEZONE 读取，或 America/Toronto。</div>',
+        '        </div>',
+        '        <div class="btn-row">',
+        '          <button type="submit" class="btn-submit">保存设置</button>',
+        '          <a href="/" class="btn-cancel">取消</a>',
+        '        </div>',
+        '      </form>',
+        '    </div>',
+        '  </div>',
+        '</body>',
+        '</html>',
+    ])
     return "\n".join(doc)
 
 
@@ -1030,6 +1400,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/settings" or self.path.startswith("/settings?"):
+            user_email = session.get("email", "").lower().strip()
+            if self.admin_emails and user_email not in self.admin_emails:
+                self._send_response_with_headers(
+                    HTTPStatus.FORBIDDEN,
+                    "text/html; charset=utf-8",
+                    b'<!DOCTYPE html><html><body><h1>403 Forbidden: Admin access required</h1></body></html>',
+                    is_authenticated=True,
+                )
+                return
+
+            with db.get_connection(self.db_path) as conn:
+                current_settings = db.get_all_settings(conn)
+
+            saved = "saved=1" in self.path
+            html_content = render_settings_html(current_settings, user_email=user_email, saved=saved)
+            self._send_response_with_headers(
+                HTTPStatus.OK,
+                "text/html; charset=utf-8",
+                html_content.encode("utf-8"),
+                is_authenticated=True,
+            )
+            return
+
         # 404 for unknown authenticated paths
         not_found = b'<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>'
         self._send_response_with_headers(
@@ -1190,7 +1584,180 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
 
-        # 4. Any other POST is 404
+        # 4. Settings update (/settings)
+        if self.path == "/settings":
+            session = self._get_current_session()
+            accept = self.headers.get("Accept", "")
+            content_type = self.headers.get("Content-Type", "")
+            is_json_req = "application/json" in accept or "application/json" in content_type
+
+            if not session:
+                if is_json_req:
+                    self._send_response_with_headers(
+                        HTTPStatus.UNAUTHORIZED,
+                        "application/json; charset=utf-8",
+                        b'{"error":"Unauthorized"}',
+                    )
+                else:
+                    self._send_response_with_headers(
+                        HTTPStatus.FOUND,
+                        "text/html; charset=utf-8",
+                        b'<!DOCTYPE html><html><body>Redirecting to <a href="/login">/login</a>...</body></html>',
+                        headers={"Location": "/login"},
+                    )
+                return
+
+            user_email = session.get("email", "").lower().strip()
+            if self.admin_emails and user_email not in self.admin_emails:
+                if is_json_req:
+                    self._send_response_with_headers(
+                        HTTPStatus.FORBIDDEN,
+                        "application/json; charset=utf-8",
+                        b'{"error":"Forbidden: Admin access required"}',
+                    )
+                else:
+                    self._send_response_with_headers(
+                        HTTPStatus.FORBIDDEN,
+                        "text/html; charset=utf-8",
+                        b'<!DOCTYPE html><html><body><h1>403 Forbidden: Admin access required</h1></body></html>',
+                    )
+                return
+
+            MAX_SETTINGS_BYTES = 64 * 1024
+            cl_header = self.headers.get("Content-Length")
+            try:
+                cl = int(cl_header) if cl_header else 0
+            except ValueError:
+                cl = 0
+            if cl > MAX_SETTINGS_BYTES:
+                self._send_response_with_headers(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    "application/json; charset=utf-8" if is_json_req else "text/plain; charset=utf-8",
+                    b'{"error":"Payload too large"}' if is_json_req else b"Payload too large",
+                )
+                return
+
+            body_bytes = self.rfile.read(cl) if cl > 0 else b""
+            body_str = body_bytes.decode("utf-8", errors="replace")
+
+            day_raw = ""
+            start_raw = ""
+            tz_raw = ""
+
+            if "application/json" in content_type:
+                try:
+                    payload = json.loads(body_str) if body_str else {}
+                    day_raw = str(payload.get("cycle_anchor_day", "")).strip()
+                    start_raw = str(payload.get("tracking_start", "") or "").strip()
+                    tz_raw = str(payload.get("timezone", "") or "").strip()
+                except Exception:
+                    self._send_response_with_headers(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        b'{"error":"Invalid JSON"}',
+                    )
+                    return
+            else:
+                qs = urllib.parse.parse_qs(body_str)
+                day_raw = qs.get("cycle_anchor_day", [""])[0].strip()
+                start_raw = qs.get("tracking_start", [""])[0].strip()
+                tz_raw = qs.get("timezone", [""])[0].strip()
+
+            form_data = {
+                "cycle_anchor_day": day_raw,
+                "tracking_start": start_raw,
+                "timezone": tz_raw,
+            }
+
+            # Validation
+            val_err = None
+            day_val = None
+            try:
+                day_val = int(day_raw)
+                if not (1 <= day_val <= 31):
+                    val_err = "计费周期起始日必须在 1 至 31 之间"
+            except (ValueError, TypeError):
+                val_err = "计费周期起始日必须为 1 至 31 之间的整数"
+
+            start_val = None
+            if not val_err and start_raw:
+                try:
+                    parsed_dt = datetime.strptime(start_raw, "%Y-%m-%d")
+                    if parsed_dt.strftime("%Y-%m-%d") != start_raw:
+                        val_err = "统计起始日期格式无效，必须为 YYYY-MM-DD"
+                    else:
+                        start_val = start_raw
+                except ValueError:
+                    val_err = "统计起始日期格式无效，必须为 YYYY-MM-DD"
+
+            tz_val = tz_raw or os.environ.get("FAMILY_TIMEZONE") or "America/Toronto"
+            if not val_err:
+                try:
+                    ZoneInfo(tz_val)
+                except Exception:
+                    val_err = "时区名称无效，必须为有效的 IANA 时区（如 America/Toronto）"
+
+            if val_err:
+                if is_json_req:
+                    self._send_response_with_headers(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        json.dumps({"error": val_err}, ensure_ascii=False).encode("utf-8"),
+                    )
+                else:
+                    with db.get_connection(self.db_path) as conn:
+                        current_settings = db.get_all_settings(conn)
+                    html_content = render_settings_html(
+                        current_settings,
+                        user_email=user_email,
+                        error=val_err,
+                        form_data=form_data,
+                    )
+                    self._send_response_with_headers(
+                        HTTPStatus.BAD_REQUEST,
+                        "text/html; charset=utf-8",
+                        html_content.encode("utf-8"),
+                        is_authenticated=True,
+                    )
+                return
+
+            # Save settings
+            with db.get_connection(self.db_path) as conn:
+                db.set_setting(conn, "cycle_anchor_day", str(day_val))
+                db.set_setting(conn, "tracking_start", start_val)
+                db.set_setting(conn, "timezone", tz_val)
+
+            # Log changes without PII
+            logger.info(
+                "Settings updated: cycle_anchor_day=%d, tracking_start=%s, timezone=%s",
+                day_val,
+                start_val or "(none)",
+                tz_val,
+            )
+
+            if is_json_req:
+                resp_payload = {
+                    "status": "ok",
+                    "cycle_anchor_day": day_val,
+                    "tracking_start": start_val,
+                    "timezone": tz_val,
+                }
+                self._send_response_with_headers(
+                    HTTPStatus.OK,
+                    "application/json; charset=utf-8",
+                    json.dumps(resp_payload, ensure_ascii=False).encode("utf-8"),
+                )
+            else:
+                self._send_response_with_headers(
+                    HTTPStatus.SEE_OTHER,
+                    "text/html; charset=utf-8",
+                    b'<!DOCTYPE html><html><body>Redirecting to /settings?saved=1...</body></html>',
+                    headers={"Location": "/settings?saved=1"},
+                    is_authenticated=True,
+                )
+            return
+
+        # 5. Any other POST is 404
         self._send_response_with_headers(
             HTTPStatus.NOT_FOUND,
             "application/json; charset=utf-8",

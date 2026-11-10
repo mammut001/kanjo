@@ -92,7 +92,7 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("周额度已用", html)
 
         # 2. Who used the quota pool
-        self.assertIn("本周谁用掉了额度池", html)
+        self.assertIn("本周期谁用掉了额度池", html)
         self.assertIn("Alice", html)
 
         # 3. 30-day SVG bar chart
@@ -101,9 +101,9 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("<rect", html)
 
         # 4. Member card
-        self.assertIn("今天", html)
-        self.assertIn("近 7 天", html)
-        self.assertIn("本月", html)
+        self.assertIn("本周期", html)
+        self.assertIn("上周期", html)
+        self.assertIn("剩余天数", html)
         self.assertIn("gemini-3.8-pro", html)
         self.assertIn("claude-opus-5.5", html)
 
@@ -119,6 +119,9 @@ class TestDashboard(unittest.TestCase):
         malicious_payload = copy.deepcopy(self.fixture_data)
         malicious_payload["member_label"] = xss_label
         malicious_payload["summary"]["all_time"]["top_models"][0]["model"] = xss_model
+        for d in malicious_payload.get("summary", {}).get("days", []):
+            for tm in d.get("top_models", []):
+                tm["model"] = xss_model
 
         with db.get_connection(self.db_path) as conn:
             _, m_id = db.add_member(conn, xss_name)

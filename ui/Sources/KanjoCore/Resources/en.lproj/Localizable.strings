@@ -200,6 +200,8 @@
 "settings.family.scope.agents_choice" = "Agents";
 "settings.family.scope.clear_date" = "Clear start date";
 "settings.family.scope.set_date" = "Set start date";
+"settings.family.scope.advanced" = "Advanced";
+"settings.family.scope.advanced_note" = "Usually not needed; cycle is set by the family manager on the dashboard.";
 "settings.family.note" = "Only reports high-level token summaries and quota windows to your family server. Excludes project names, paths, titles, and account emails. Cost is estimated from public API prices.";
 "sync.account_code" = "iCloud account %@";
 "gzip.error.invalid_header" = "The snapshot is not a gzip file.";
