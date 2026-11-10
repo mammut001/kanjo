@@ -200,10 +200,17 @@ def format_cost(cost: float) -> str:
     return f"${cost:,.2f}"
 
 
-def format_dt(dt: Optional[datetime]) -> str:
-    """Format datetime for display in YYYY-MM-DD HH:MM format."""
+def format_dt(dt: Optional[datetime], tz: Optional[ZoneInfo] = None) -> str:
+    """Format datetime as YYYY-MM-DD HH:MM, converted to ``tz`` when given.
+
+    Naive datetimes are treated as UTC (that is how the server stores them).
+    """
     if not dt:
         return "—"
+    if tz is not None:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone(tz)
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
@@ -798,7 +805,7 @@ def generate_dashboard_html(
         doc.append('      <div class="empty-state">暂无成员上报 Google AI Ultra 额度数据</div>')
     else:
         src_name = html.escape(pool_latest["member_name"])
-        src_time = format_dt(pool_latest["received_at"]) if pool_latest.get("received_at") else "—"
+        src_time = format_dt(pool_latest["received_at"], tz) if pool_latest.get("received_at") else "—"
         doc.append(f'      <div class="pool-source">数据来自 {src_name} 的最新上报 · {html.escape(src_time)}</div>')
         doc.append('      <div class="pool-windows">')
         for w in pool_latest["windows"]:
@@ -812,7 +819,7 @@ def generate_dashboard_html(
             elif reset_dt <= now:
                 reset_str = "已到重置时间，等待新的上报"
             else:
-                reset_str = "重置：" + format_dt(reset_dt)
+                reset_str = "重置：" + format_dt(reset_dt, tz)
             doc.append('        <div class="pool-window">')
             doc.append('          <div class="quota-header">')
             doc.append(f'            <span class="quota-user">{html.escape(w["label"])}</span>')
@@ -860,7 +867,7 @@ def generate_dashboard_html(
             plan = html.escape(q["quota"]["plan"])
             pct = q["quota"]["weekly_used_percent"]
             reset_dt = parse_iso(q["quota"]["weekly_resets_at"])
-            reset_str = format_dt(reset_dt) if reset_dt else "—"
+            reset_str = format_dt(reset_dt, tz) if reset_dt else "—"
 
             if pct >= 95.0:
                 bar_color = "var(--red)"
@@ -936,7 +943,7 @@ def generate_dashboard_html(
         for m in members_processed:
             name = html.escape(m["name"])
             lbl = f" · {html.escape(m['label'])}" if m["label"] else ""
-            rec_str = format_dt(m["received_at"]) if m["received_at"] else "从未上报"
+            rec_str = format_dt(m["received_at"], tz) if m["received_at"] else "从未上报"
 
             if not m["has_report"]:
                 badge_html = '<span class="badge badge-stale">未上报</span>'
