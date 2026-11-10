@@ -7,7 +7,8 @@ param(
     [switch]$SkipReport,
     [string]$PythonExe = "",
     [string]$CliZip = "",
-    [switch]$NoSchedule
+    [switch]$NoSchedule,
+    [switch]$NoPrompt
 )
 
 # Set strict mode and error preferences
@@ -37,6 +38,7 @@ $InstallDir = Join-Path $env:LOCALAPPDATA "KanjoFamily"
 $CliDir = Join-Path $InstallDir "cli"
 $PythonDir = Join-Path $InstallDir "python"
 $TaskName = "Kanjo 家庭上报"
+$Interactive = [Environment]::UserInteractive -and -not $NoPrompt
 
 # -----------------------------------------------------------------------------
 # Uninstall Mode
@@ -245,7 +247,7 @@ $hasExistingToken = ($tokenStatus -match "set") -and (-not ($tokenStatus -match 
 $needPrompt = $true
 if ($hasExistingToken) {
     Write-Host "  凭据管理器中已有家庭令牌 (Family token already exists in Windows Credential Manager)."
-    if ([Environment]::UserInteractive -and -not $SkipReport) {
+    if ($Interactive -and -not $SkipReport) {
         $answer = Read-Host "  是否更换令牌？/ Replace token? [y/N]"
         if ($answer -notmatch '^[yY]') {
             $needPrompt = $false
@@ -256,7 +258,7 @@ if ($hasExistingToken) {
 }
 
 if ($needPrompt) {
-    if ([Environment]::UserInteractive) {
+    if ($Interactive) {
         $secToken = Read-Host -Prompt "  请输入家庭上报令牌 (Paste Family Report Token)" -AsSecureString
         if ($secToken) {
             $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secToken)
@@ -280,7 +282,7 @@ if ($needPrompt) {
 Write-Host "`n[4/5] 配置计划任务 / Configuring scheduled task..." -ForegroundColor Cyan
 
 $MemberLabel = $env:COMPUTERNAME
-if ([Environment]::UserInteractive -and -not $SkipReport) {
+if ($Interactive -and -not $SkipReport) {
     $labelInput = Read-Host "  成员显示名 (Member label) [默认: $env:COMPUTERNAME]"
     if (-not [string]::IsNullOrWhiteSpace($labelInput)) {
         $MemberLabel = $labelInput.Trim()

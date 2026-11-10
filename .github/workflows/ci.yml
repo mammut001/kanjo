@@ -78,7 +78,7 @@ jobs:
       - name: Run installer (isolated, no schedule)
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport -NoPrompt
           if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $Launcher = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli\kanjo_family_report.pyw"
           Push-Location $env:TEMP
@@ -190,7 +190,7 @@ jobs:
           $env:PYTHONPATH = $CliDir
 
           # 1. Register task with a second installer run (without -NoSchedule)
-          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -SkipReport
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -SkipReport -NoPrompt
           if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $task = Get-ScheduledTask -TaskName "Kanjo 家庭上报"
           if (-not $task) {
