@@ -207,10 +207,10 @@ jobs:
           }
           Write-Host "Scheduled task successfully removed."
 
-          # 3. Clear family token
-          python -m kanjo family-token clear
+          # 3. Uninstall must also have cleared the token (install dir is gone, use the repo CLI)
+          $env:PYTHONPATH = (Resolve-Path cli).Path
           $clearedStatus = python -m kanjo family-token status
           if ($clearedStatus.Trim() -ne "not set") {
               throw "Expected 'not set', got '$clearedStatus'"
           }
-          Write-Host "Family token successfully cleared."
+          Write-Host "Family token cleared by uninstall."
