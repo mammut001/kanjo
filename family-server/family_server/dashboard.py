@@ -797,7 +797,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' https://www.gstatic.com; "
+            "script-src 'self' https://apis.google.com https://www.gstatic.com; "
             "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; "
             "frame-src https://kanjo-family-usage.firebaseapp.com; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "

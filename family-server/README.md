@@ -26,22 +26,24 @@ Self-hosted report receiver and public dashboard behind Firebase Authentication 
 
 ## Configuration (`/opt/family-usage/family.env`)
 
-Server configuration is read by `deploy.sh` from `/opt/family-usage/family.env`.
+Server configuration is read by `deploy.sh` from `/opt/family-usage/family.env`. The file is passed directly to Docker via `--env-file`.
 
-> **IMPORTANT**: Never commit real admin emails or credentials to git. Use placeholders in documentation.
+> [!IMPORTANT]
+> - Never commit real admin emails or credentials to git. Use placeholders in documentation.
+> - **Values in `family.env` are literal (no shell quoting)**: Docker reads `--env-file` literally without shell quote stripping. Do not wrap values in quotes (e.g. write `FIREBASE_PROJECT_ID=kanjo-family-usage` and `FIREBASE_WEB_CONFIG_JSON={"apiKey":...}` rather than `'{"apiKey":...}'`).
 
 Example `/opt/family-usage/family.env`:
 
 ```bash
-# Firebase Project Configuration (public web config)
-FIREBASE_PROJECT_ID="kanjo-family-usage"
-FIREBASE_WEB_CONFIG_JSON='{"apiKey":"AIzaSyAL-1-DBm7YC3_16Ojsop9wh6IHh6zRaUk","authDomain":"kanjo-family-usage.firebaseapp.com","projectId":"kanjo-family-usage","appId":"1:819878046514:web:5014afdf6dd8bcafdb852b","messagingSenderId":"819878046514"}'
+# Firebase Project Configuration (public web config - literal values, no shell quotes)
+FIREBASE_PROJECT_ID=kanjo-family-usage
+FIREBASE_WEB_CONFIG_JSON={"apiKey":"AIzaSyAL-1-DBm7YC3_16Ojsop9wh6IHh6zRaUk","authDomain":"kanjo-family-usage.firebaseapp.com","projectId":"kanjo-family-usage","appId":"1:819878046514:web:5014afdf6dd8bcafdb852b","messagingSenderId":"819878046514"}
 
 # Allowed Admin Emails (comma-separated, case-insensitive)
-FAMILY_ADMIN_EMAILS="admin@example.com,user@example.com"
+FAMILY_ADMIN_EMAILS=admin@example.com,user@example.com
 
 # Public Origin for CSRF enforcement
-FAMILY_PUBLIC_ORIGIN="https://usage.paytonpei.top"
+FAMILY_PUBLIC_ORIGIN=https://usage.paytonpei.top
 
 # Optional: Set to 1 to publish port 8787 on Tailscale IP
 PUBLISH_TAILSCALE=0
@@ -67,7 +69,7 @@ export TUNNEL_ID="0bfee670-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # or auto-detected from
 ```
 
 The script is fully idempotent. It:
-1. Sources `/opt/family-usage/family.env` if present.
+1. Sources `/opt/family-usage/family.env` if present (for TUNNEL_ID / TAILSCALE_IP / PUBLISH_TAILSCALE) and passes it to Docker via `--env-file`.
 2. Renders `cloudflared/config.yml` from `cloudflared/config.yml.template`.
 3. Creates Docker network `family-net` if missing.
 4. Builds the `family-usage-app` image (`python:3.14-slim`, non-root user).

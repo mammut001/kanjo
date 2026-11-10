@@ -40,7 +40,7 @@ def _check_privacy_violations(obj: Any) -> Optional[str]:
 
 
 def check_privacy_backstop(raw_body_bytes: bytes) -> Optional[str]:
-    """Check for privacy leaks in raw body. Returns error message if forbidden, None if clean.
+    r"""Check for privacy leaks in raw body. Returns error message if forbidden, None if clean.
     
     Checks:
     - Raw substring presence of "/Users/", "/home/"
