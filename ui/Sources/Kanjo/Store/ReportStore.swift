@@ -275,6 +275,7 @@ final class ReportStore: ObservableObject {
                 error = nil
                 CloudSyncStore.shared.reportDidRefresh(r)
                 PublishStore.shared.reportDidRefresh(r)
+                FamilyReportStore.shared.reportDidRefresh(r)
             } catch {
                 guard gen == generation else { return }
                 if source is CLIDataSource { await checkPython() }

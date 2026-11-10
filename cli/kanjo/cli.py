@@ -15,13 +15,15 @@ from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import (
-    COST_NOTE, SOURCES, build_export, build_public_summary, check_invariants,
-    check_public_summary_invariants, mobile_document, scan,
-    load_fast_export, save_fast_export, load_fast_public_summary,
-    save_fast_public_summary, source_fingerprint
+    COST_NOTE, SOURCES, build_export, build_public_summary, build_family_report,
+    check_invariants, check_public_summary_invariants, check_family_report_invariants,
+    mobile_document, scan, load_fast_export, save_fast_export,
+    load_fast_public_summary, save_fast_public_summary,
+    load_fast_family_report, save_fast_family_report, source_fingerprint
 )
 from .ledger import Ledger
 from .publish import cmd_publish_usage
+from .report_family import cmd_report_family
 from .sources.base import AGENT_LABELS
 from .subscriptions import subscriptions as load_subscriptions
 
@@ -49,12 +51,25 @@ def cmd_export(args) -> int:
     if getattr(args, "public_summary", False) and args.mobile:
         print("kanjo: --public-summary cannot be combined with --mobile", file=sys.stderr)
         return 2
+    if getattr(args, "family_report", False) and (args.mobile or getattr(args, "public_summary", False)):
+        print("kanjo: --family-report cannot be combined with --mobile or --public-summary", file=sys.stderr)
+        return 2
     cfg = _config(args)
     doc = None
     fp = None
     use_cache = not getattr(args, "no_cache", False)
 
-    if getattr(args, "public_summary", False):
+    if getattr(args, "family_report", False):
+        if use_cache:
+            fp = source_fingerprint(config=cfg)
+            doc = load_fast_family_report(fp, member_label=args.member_label)
+        if doc is None:
+            doc = build_family_report(config=cfg, cache=_cache(args), member_label=args.member_label)
+            if use_cache:
+                if fp is None:
+                    fp = source_fingerprint(config=cfg)
+                save_fast_family_report(fp, doc, member_label=args.member_label)
+    elif getattr(args, "public_summary", False):
         if use_cache:
             fp = source_fingerprint(config=cfg)
             doc = load_fast_public_summary(fp)
@@ -95,7 +110,12 @@ def cmd_export(args) -> int:
             except OSError:
                 pass
             raise
-        if getattr(args, "public_summary", False):
+        if getattr(args, "family_report", False):
+            s = doc["summary"]
+            print("wrote %s (%d months, %d weeks, %d days, total $%.2f)" % (
+                args.output, len(s["months"]), len(s["weeks"]), len(s["days"]), s["all_time"]["cost_usd"]),
+                file=sys.stderr)
+        elif getattr(args, "public_summary", False):
             print("wrote %s (%d months, %d weeks, total $%.2f)" % (
                 args.output, len(doc["months"]), len(doc["weeks"]), doc["all_time"]["cost_usd"]),
                 file=sys.stderr)
@@ -107,7 +127,9 @@ def cmd_export(args) -> int:
         sys.stdout.buffer.flush()
     else:
         sys.stdout.write(data.decode("utf-8"))
-    if getattr(args, "public_summary", False):
+    if getattr(args, "family_report", False):
+        problems = check_family_report_invariants(doc)
+    elif getattr(args, "public_summary", False):
         problems = check_public_summary_invariants(doc)
     else:
         problems = check_invariants(doc)
@@ -353,6 +375,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="trim the document to the phone snapshot (CONTRACT.md section 11)")
     p.add_argument("--public-summary", action="store_true",
                    help="export public usage summary document (CONTRACT.md section 12)")
+    p.add_argument("--family-report", action="store_true",
+                   help="export family usage report document (CONTRACT.md section 13)")
+    p.add_argument("--member-label", metavar="NAME",
+                   help="display name for member in family report (optional)")
     p.add_argument("--hide-project-names", action="store_true",
                    help="with --mobile, replace project names and ids with opaque values")
     p.add_argument("--gzip", action="store_true", help="write gzip-compressed JSON to stdout")
@@ -409,6 +435,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="do not write, commit or push")
     common(p, threshold=False)
     p.set_defaults(func=cmd_publish_usage)
+
+    p = sub.add_parser("report-family", help="report usage summary to family server")
+    p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.paytonpei.top)")
+    p.add_argument("--member-label", metavar="NAME", help="display name for member (optional)")
+    common(p, threshold=False)
+    p.set_defaults(func=cmd_report_family)
     return parser
 
 

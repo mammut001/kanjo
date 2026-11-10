@@ -139,6 +139,23 @@ Kanjo can periodically summarize your AI token usage and publish it to a website
   kanjo publish-usage --repo /path/to/website-repo [--file src/data/token-usage.json] [--branch main]
   ```
 
+### Family usage reporting (optional)
+
+Kanjo can report aggregate token usage and quota windows to your family usage server (`family-server`):
+
+- **Disabled by default**: Completely opt-in.
+- **Privacy-safe**: Shares only high-level token counts (all-time, monthly, weekly, daily), subscription plan labels, and quota window reset times. Never includes project names, paths, conversation titles, or account emails.
+- **Secure**: Authentication token is stored in the macOS Keychain and never passed via command-line arguments.
+- **Automated**: Automatically scheduled after refreshes when enabled, or triggerable on demand in Settings.
+- **CLI usage**:
+  ```bash
+  # Generate report payload JSON
+  kanjo export --family-report [--member-label "Alice (MacBook)"]
+
+  # Send report to family server (token passed via environment only)
+  KANJO_FAMILY_TOKEN="<token>" kanjo report-family --url https://usage.paytonpei.top [--member-label "Alice (MacBook)"]
+  ```
+
 ### From source
 
 ```bash
