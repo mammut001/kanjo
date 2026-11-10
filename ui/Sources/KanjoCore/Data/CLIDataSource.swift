@@ -82,7 +82,13 @@ public struct CLIDataSource: UsageDataSource {
         return out
     }
 
-    public static func run(command: String, cwd: URL?, timeout: TimeInterval, qualityOfService: QualityOfService = .background) throws -> (Int32, Data, Data, Bool) {
+    public static func run(
+        command: String,
+        cwd: URL?,
+        timeout: TimeInterval,
+        qualityOfService: QualityOfService = .background,
+        extraEnvironment: [String: String] = [:]
+    ) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
         p.qualityOfService = qualityOfService
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -90,6 +96,9 @@ public struct CLIDataSource: UsageDataSource {
         // 内置 Python 包属于签名资源，运行时不能写入 __pycache__。
         var environment = ProcessInfo.processInfo.environment
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        for (k, v) in extraEnvironment {
+            environment[k] = v
+        }
         p.environment = environment
         if let cwd {
             var isDir: ObjCBool = false

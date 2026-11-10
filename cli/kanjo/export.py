@@ -1317,10 +1317,11 @@ class PublicPeriodAgg:
         return res
 
 
-def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
-                         prices: Optional[PriceBook] = None, home: Optional[str] = None,
-                         now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
-                         cache=None, repo_cache=None, fs_root: Optional[str] = None) -> dict:
+def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
+                                    prices: Optional[PriceBook] = None, home: Optional[str] = None,
+                                    scan_result: Optional[ScanResult] = None,
+                                    cache=None, repo_cache=None, fs_root: Optional[str] = None,
+                                    include_days: bool = False):
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
@@ -1349,6 +1350,7 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
     all_time = PublicPeriodAgg("all")
     months: Dict[str, PublicPeriodAgg] = {}
     weeks: Dict[str, PublicPeriodAgg] = {}
+    days: Dict[str, PublicPeriodAgg] = {}
 
     worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
     config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
@@ -1412,6 +1414,11 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
                 weeks[week_key] = PublicPeriodAgg(week_key, start=week_start)
             weeks[week_key].add_message(m, agent, provider, cost, day, model_name=pub_model)
 
+            if include_days:
+                if day not in days:
+                    days[day] = PublicPeriodAgg(day)
+                days[day].add_message(m, agent, provider, cost, day, model_name=pub_model)
+
     month_periods = [months[k].to_json() for k in sorted(months.keys())]
 
     if month_periods:
@@ -1424,6 +1431,23 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
     if len(week_periods) > 26:
         week_periods = week_periods[-26:]
 
+    day_periods = []
+    if include_days:
+        day_periods = [days[k].to_json() for k in sorted(days.keys())]
+        if len(day_periods) > 31:
+            day_periods = day_periods[-31:]
+
+    return all_time_period, month_periods, week_periods, day_periods, tz_name
+
+
+def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
+                         prices: Optional[PriceBook] = None, home: Optional[str] = None,
+                         now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
+                         cache=None, repo_cache=None, fs_root: Optional[str] = None) -> dict:
+    all_time_period, month_periods, week_periods, _, tz_name = _aggregate_public_summary_data(
+        config=config, dirs=dirs, prices=prices, home=home, scan_result=scan_result,
+        cache=cache, repo_cache=repo_cache, fs_root=fs_root, include_days=False
+    )
     now = now or datetime.now(timezone.utc)
     if cache is not None:
         cache.save()
@@ -1438,6 +1462,66 @@ def build_public_summary(config: Optional[Config] = None, dirs: Optional[Dict[st
         "all_time": all_time_period,
         "months": month_periods,
         "weeks": week_periods,
+    }
+
+
+def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
+                        prices: Optional[PriceBook] = None, home: Optional[str] = None,
+                        now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
+                        cache=None, repo_cache=None, fs_root: Optional[str] = None,
+                        member_label: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
+    config = config or Config()
+    all_time_period, month_periods, week_periods, day_periods, tz_name = _aggregate_public_summary_data(
+        config=config, dirs=dirs, prices=prices, home=home, scan_result=scan_result,
+        cache=cache, repo_cache=repo_cache, fs_root=fs_root, include_days=True
+    )
+    now = now or datetime.now(timezone.utc)
+    if cache is not None:
+        cache.save()
+
+    qw = quota.quota_windows(config.quota_windows, tokei_dir, now.timestamp(),
+                             timezone_name=tz_name,
+                             no_network=getattr(config, "no_network", False))
+    # Sanitize quota_windows: privacy backstop forbids key 'title' (rename 'title' in extra_windows to 'label')
+    qw_clean = {}
+    for agent, entry in qw.items():
+        if not isinstance(entry, dict):
+            continue
+        cleaned_entry = dict(entry)
+        if "extra_windows" in cleaned_entry and isinstance(cleaned_entry["extra_windows"], list):
+            cleaned_ew = []
+            for ew in cleaned_entry["extra_windows"]:
+                if isinstance(ew, dict):
+                    cleaned_ew.append({("label" if k == "title" else k): v for k, v in ew.items()})
+                else:
+                    cleaned_ew.append(ew)
+            cleaned_entry["extra_windows"] = cleaned_ew
+        qw_clean[agent] = cleaned_entry
+
+    subs = load_subscriptions(config.subscriptions, directory=tokei_dir, now=now,
+                              timezone_name=tz_name)
+    plans = {
+        agent: subs[agent]["plan_label"]
+        for agent in sorted(subs)
+        if isinstance(subs[agent], dict) and subs[agent].get("plan_label") is not None
+    }
+
+    return {
+        "schema_version": 1,
+        "kind": "kanjo-family-report",
+        "member_label": member_label if member_label else None,
+        "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timezone": tz_name,
+        "generated_by": "kanjo " + __version__,
+        "cost_note": COST_NOTE,
+        "plans": plans,
+        "quota_windows": qw_clean,
+        "summary": {
+            "all_time": all_time_period,
+            "months": month_periods,
+            "weeks": week_periods,
+            "days": day_periods,
+        },
     }
 
 
@@ -1535,6 +1619,134 @@ def save_fast_public_summary(fingerprint: str, doc: dict, directory: Optional[st
     try:
         os.makedirs(cdir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".public-summary-last-", dir=cdir)
+        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        del data
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[str]:
+    """Check invariants for kanjo-family-report."""
+    problems = []
+    if doc.get("kind") != "kanjo-family-report":
+        problems.append("kind must be 'kanjo-family-report', got '%s'" % doc.get("kind"))
+    if doc.get("schema_version") != 1:
+        problems.append("schema_version must be 1, got %s" % doc.get("schema_version"))
+    summary = doc.get("summary")
+    if not isinstance(summary, dict):
+        problems.append("summary must be an object")
+        return problems
+
+    periods = []
+    if "all_time" in summary and isinstance(summary["all_time"], dict):
+        periods.append(summary["all_time"])
+    for k in ("months", "weeks", "days"):
+        if k in summary and isinstance(summary[k], list):
+            periods.extend(p for p in summary[k] if isinstance(p, dict))
+
+    for p in periods:
+        pk = p.get("period", "unknown")
+        p_tokens = p.get("tokens", {})
+        for k in ("input", "output", "cache_read", "cache_write", "total"):
+            prov_sum = sum(prov.get("tokens", {}).get(k, 0) for prov in p.get("by_provider", []))
+            if prov_sum != p_tokens.get(k, 0):
+                problems.append("%s: by_provider tokens.%s %d != tokens.%s %d"
+                                % (pk, k, prov_sum, k, p_tokens.get(k, 0)))
+
+        agent_tokens_sum = sum(a.get("tokens_total", 0) for a in p.get("by_agent", []))
+        if agent_tokens_sum != p_tokens.get("total", 0):
+            problems.append("%s: by_agent tokens_total %d != tokens.total %d"
+                            % (pk, agent_tokens_sum, p_tokens.get("total", 0)))
+
+        prov_cost = sum(prov.get("cost_usd", 0.0) for prov in p.get("by_provider", []))
+        if abs(prov_cost - p.get("cost_usd", 0.0)) > tolerance + 1e-6:
+            problems.append("%s: by_provider cost_usd %.2f != cost_usd %.2f"
+                            % (pk, prov_cost, p.get("cost_usd", 0.0)))
+
+        agent_cost = sum(a.get("cost_usd", 0.0) for a in p.get("by_agent", []))
+        if abs(agent_cost - p.get("cost_usd", 0.0)) > tolerance + 1e-6:
+            problems.append("%s: by_agent cost_usd %.2f != cost_usd %.2f"
+                            % (pk, agent_cost, p.get("cost_usd", 0.0)))
+
+        for prov in p.get("by_provider", []):
+            prov_name = prov.get("provider", "unknown")
+            models = prov.get("models")
+            if models is not None:
+                if len(models) > 5:
+                    problems.append("%s: provider %s has %d models > 5"
+                                    % (pk, prov_name, len(models)))
+                mod_tokens_sum = sum(m.get("tokens_total", 0) for m in models)
+                if mod_tokens_sum > prov.get("tokens", {}).get("total", 0):
+                    problems.append("%s: provider %s models tokens_total sum %d > tokens.total %d"
+                                    % (pk, prov_name, mod_tokens_sum, prov.get("tokens", {}).get("total", 0)))
+
+    months = summary.get("months", [])
+    all_time = summary.get("all_time", {})
+    if all_time and months:
+        for k in ("input", "output", "cache_read", "cache_write", "total"):
+            months_token_sum = sum(m.get("tokens", {}).get(k, 0) for m in months)
+            if months_token_sum != all_time.get("tokens", {}).get(k, 0):
+                problems.append("months sum tokens.%s %d != all_time tokens.%s %d"
+                                % (k, months_token_sum, k, all_time.get("tokens", {}).get(k, 0)))
+
+        months_cost_sum = sum(m.get("cost_usd", 0.0) for m in months)
+        if abs(months_cost_sum - all_time.get("cost_usd", 0.0)) > tolerance + 1e-6:
+            problems.append("months sum cost_usd %.2f != all_time cost_usd %.2f"
+                            % (months_cost_sum, all_time.get("cost_usd", 0.0)))
+
+    if len(summary.get("weeks", [])) > 26:
+        problems.append("weeks count %d > 26" % len(summary["weeks"]))
+    if len(summary.get("days", [])) > 31:
+        problems.append("days count %d > 31" % len(summary["days"]))
+
+    return problems
+
+
+def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
+                            now: Optional[float] = None, member_label: Optional[str] = None) -> Optional[dict]:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "family-report-last.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("fingerprint") != fingerprint:
+            return None
+        scanned_at = payload.get("scanned_at")
+        if not isinstance(scanned_at, (int, float)):
+            return None
+        current = time.time() if now is None else now
+        if current - scanned_at < 0 or current - scanned_at >= 1800.0:  # 30 minutes
+            return None
+        doc = payload.get("doc")
+        if isinstance(doc, dict):
+            doc["member_label"] = member_label if member_label else None
+            return doc
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def save_fast_family_report(fingerprint: str, doc: dict, directory: Optional[str] = None,
+                            now: Optional[float] = None, member_label: Optional[str] = None) -> None:
+    cdir = directory or _cache_dir()
+    path = os.path.join(cdir, "family-report-last.json")
+    current = time.time() if now is None else now
+    tmp = None
+    try:
+        os.makedirs(cdir, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".family-report-last-", dir=cdir)
         payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc}
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

@@ -408,3 +408,59 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 3. 按比例拆分的会话（`split`）在公开汇总里只按原值算一次，不能重复计入。公开汇总不看归属，只看消息本身。
 4. 每个 provider 的 `models` 中 `tokens_total` 之和不超过该 provider 的 `tokens.total`。
 
+## 13. 家庭用量汇总 (`kanjo export --family-report`)
+
+`--family-report` 输出用于上报到家庭汇总服务器（`family-server`）的汇总数据。与 `--mobile`、`--public-summary` 互斥。
+
+### 隐私兜底保证
+
+- **严格禁止**：不包含任何会话 id、会话标题、对话内容、项目名、仓库 remote、文件路径、分支名或账号邮箱。
+- **禁用字段与模式**：文档中绝对不会出现 `sessions_detail`、`account`、`paths`、`title`、`sessions` 键，也不会出现 `/Users/`、`/home/` 或邮箱格式子串。
+- **计划与额度**：`plans` 仅输出各 agent 的档位标签（如 `"Google AI Ultra"`），不包含 `account`（邮箱/姓名）与价格信息；`quota_windows` 输出额度窗口与重置时间。
+
+### 顶层结构
+
+```jsonc
+{
+  "schema_version": 1,
+  "kind": "kanjo-family-report",
+  "member_label": "Alice (MacBook)", // 命令行 `--member-label` 指定；未指定时为 null
+  "generated_at": "2026-11-09T18:00:00Z",
+  "timezone": "America/Toronto",
+  "generated_by": "kanjo 0.4.0",
+  "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
+  "plans": {
+    "antigravity": "Google AI Ultra",
+    "claude": "Claude Pro"
+  },
+  "quota_windows": {
+    "antigravity": {
+      "weekly_resets_at": "2026-11-14T12:00:00Z",
+      "weekly_window_hours": 168,
+      "weekly_used_percent": 42.5,
+      "five_hour_resets_at": "2026-11-09T22:00:00Z",
+      "five_hour_window_hours": 5,
+      "five_hour_used_percent": 15.0,
+      "source": "live"
+    }
+  },
+  "summary": {
+    "all_time": Period,
+    "months": [Period],      // Period.period = "2026-10"
+    "weeks":  [Period],      // Period.period = "2026-W45"
+    "days":   [Period]       // Period.period = "2026-11-09", 最多保留最近 31 天
+  }
+}
+```
+
+- `Period` 结构与公开汇总（第 12 节）完全一致。
+- `days` 包含最近 31 天内有数据的天，`period` 为 `YYYY-MM-DD`，`first_day` 和 `last_day` 均为对应日期。
+- `plans` 映射 agent 到其生效订阅计划的 `plan_label`。
+
+### 不变量
+
+1. `summary` 中的所有 Period 满足第 12 节的不变量规则（tokens 和 cost 的拆分一致性、provider models 上限）。
+2. `days` 数组长度不超过 31，按日期升序排列。
+3. `weeks` 数组长度不超过 26，按周升序排列。
+4. 全文严格通过 `family-server` 的 `validate_report_payload` 校验与 `check_privacy_backstop` 隐私兜底。
+

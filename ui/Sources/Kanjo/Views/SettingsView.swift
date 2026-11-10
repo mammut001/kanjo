@@ -30,6 +30,12 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.publishBranch, store: AppDefaults.store) private var publishBranch = "main"
     @StateObject private var publishStore = PublishStore.shared
     @State private var gitMissingError = false
+    @AppStorage(SettingsKeys.familyReportEnabled, store: AppDefaults.store) private var familyReportEnabled = false
+    @AppStorage(SettingsKeys.familyReportURL, store: AppDefaults.store) private var familyReportURL = "https://usage.paytonpei.top"
+    @AppStorage(SettingsKeys.familyReportMemberLabel, store: AppDefaults.store) private var familyReportMemberLabel = ""
+    @StateObject private var familyReportStore = FamilyReportStore.shared
+    @State private var showingTokenPopover = false
+    @State private var tokenInput = ""
 
     private let intervals = [0, 15, 30, 60]
 
@@ -200,6 +206,107 @@ struct SettingsView: View {
                     note(L10n.tr("settings.publish.note"))
                 }
 
+                PanelSection(L10n.tr("settings.section.family"), inset: true) {
+                    Toggle(L10n.tr("settings.family.enable"), isOn: $familyReportEnabled)
+                        .font(.system(size: 12))
+                    if familyReportEnabled {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.family.url"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            TextField("https://usage.paytonpei.top", text: $familyReportURL)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.family.token"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                Text(familyReportStore.hasToken ? L10n.tr("settings.family.token.configured") : L10n.tr("settings.family.token.not_configured"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(familyReportStore.hasToken ? .primary : .secondary)
+                                if familyReportStore.hasToken {
+                                    Button(L10n.tr("settings.family.token.change")) {
+                                        tokenInput = ""
+                                        showingTokenPopover = true
+                                    }
+                                    .font(.system(size: 11))
+                                    Button(L10n.tr("settings.family.token.clear")) {
+                                        _ = familyReportStore.clearToken()
+                                    }
+                                    .font(.system(size: 11))
+                                } else {
+                                    Button(L10n.tr("settings.family.token.set")) {
+                                        tokenInput = ""
+                                        showingTokenPopover = true
+                                    }
+                                    .font(.system(size: 11))
+                                }
+                            }
+                            .popover(isPresented: $showingTokenPopover) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(L10n.tr("settings.family.token.prompt_title"))
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text(L10n.tr("settings.family.token.prompt_message"))
+                                        .font(.system(size: 10.5))
+                                        .foregroundStyle(.secondary)
+                                    SecureField(L10n.tr("settings.family.token.placeholder"), text: $tokenInput)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(size: 11))
+                                        .frame(minWidth: 260)
+                                    HStack {
+                                        Spacer()
+                                        Button(L10n.tr("settings.family.token.cancel")) {
+                                            tokenInput = ""
+                                            showingTokenPopover = false
+                                        }
+                                        .font(.system(size: 11))
+                                        Button(L10n.tr("settings.family.token.save")) {
+                                            let trimmed = tokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            if !trimmed.isEmpty {
+                                                _ = familyReportStore.setToken(trimmed)
+                                            }
+                                            tokenInput = ""
+                                            showingTokenPopover = false
+                                        }
+                                        .font(.system(size: 11))
+                                        .keyboardShortcut(.defaultAction)
+                                        .disabled(tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    }
+                                }
+                                .padding(12)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.tr("settings.family.member_label"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            TextField(L10n.tr("settings.family.member_label_placeholder"), text: $familyReportMemberLabel)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                        }
+
+                        HStack {
+                            Text(familyReportStatusText)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(familyReportStatusColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Button(L10n.tr("settings.family.now")) {
+                                Task {
+                                    await familyReportStore.reportNow()
+                                }
+                            }
+                            .font(.system(size: 11))
+                            .disabled(!familyReportStore.hasToken || familyReportStore.isReporting)
+                        }
+                    }
+                    note(L10n.tr("settings.family.note"))
+                }
+
                 PanelSection(L10n.tr("settings.section.projects"), inset: true) {
                     let hidden = ProjectPrefs.parse(hiddenRaw).count
                     HStack {
@@ -309,6 +416,38 @@ struct SettingsView: View {
             return .orange
         }
         if publishStore.lastError != nil {
+            return .red
+        }
+        return .secondary
+    }
+
+    private var familyReportStatusText: String {
+        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
+            return L10n.tr("settings.family.status.no_network")
+        }
+        if familyReportStore.isReporting {
+            return L10n.tr("settings.family.status.in_progress")
+        }
+        if !familyReportStore.hasToken {
+            return L10n.tr("settings.family.status.missing_token")
+        }
+        if let err = familyReportStore.lastError {
+            return L10n.tr("settings.family.status.failed", err)
+        }
+        if let success = familyReportStore.lastSuccessAt {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            let relative = formatter.localizedString(for: success, relativeTo: Date())
+            return L10n.tr("settings.family.status.last_reported", relative)
+        }
+        return L10n.tr("settings.family.status.never")
+    }
+
+    private var familyReportStatusColor: Color {
+        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
+            return .orange
+        }
+        if familyReportStore.lastError != nil {
             return .red
         }
         return .secondary
