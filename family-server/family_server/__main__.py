@@ -76,8 +76,8 @@ def main(argv=None):
     )
     serve_parser.add_argument(
         "--public-origin",
-        default=os.environ.get("FAMILY_PUBLIC_ORIGIN", "https://usage.paytonpei.top"),
-        help="Allowed public Origin for CSRF checks (default: https://usage.paytonpei.top, env: FAMILY_PUBLIC_ORIGIN)",
+        default=os.environ.get("FAMILY_PUBLIC_ORIGIN"),
+        help="Allowed public Origin for CSRF checks (env: FAMILY_PUBLIC_ORIGIN)",
     )
 
     # member
@@ -102,9 +102,20 @@ def main(argv=None):
     db.init_db(db_path)
 
     if args.subcommand == "serve":
-        admin_emails = None
-        if args.admin_emails:
-            admin_emails = {e.strip().lower() for e in args.admin_emails.split(",") if e.strip()}
+        from .validation import validate_serve_env
+        errors, firebase_config = validate_serve_env(
+            public_origin=args.public_origin,
+            firebase_config_raw=os.environ.get("FIREBASE_WEB_CONFIG_JSON"),
+            admin_emails=args.admin_emails,
+        )
+        if errors:
+            print("Error: Server startup configuration is invalid:", file=sys.stderr)
+            for err in errors:
+                print(f"  - {err}", file=sys.stderr)
+            sys.exit(1)
+
+        admin_emails = {e.strip().lower() for e in args.admin_emails.split(",") if e.strip()}
+        project_id = args.firebase_project_id or os.environ.get("FIREBASE_PROJECT_ID") or firebase_config.get("projectId")
 
         api_srv, dash_srv, a_port, d_port = start_servers(
             db_path=db_path,
@@ -112,7 +123,8 @@ def main(argv=None):
             api_port=args.api_port,
             dashboard_host=args.dashboard_host,
             dashboard_port=args.dashboard_port,
-            project_id=args.firebase_project_id,
+            firebase_config=firebase_config,
+            project_id=project_id,
             admin_emails=admin_emails,
             public_origin=args.public_origin,
         )

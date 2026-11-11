@@ -178,17 +178,24 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         db.init_db(self.db_path)
 
         with db.get_connection(self.db_path) as conn:
-            self.admin_session = db.create_session(conn, "admin@paytonpei.top")
-            self.member_session = db.create_session(conn, "member@paytonpei.top")
+            self.admin_session = db.create_session(conn, "admin@example.com")
+            self.member_session = db.create_session(conn, "member@example.com")
 
+        self.firebase_config = {
+            "apiKey": "fake",
+            "authDomain": "example-family.firebaseapp.com",
+            "projectId": "example-family",
+        }
         self.api_server, self.dash_server, self.api_port, self.dash_port = start_servers(
             db_path=self.db_path,
             api_host="127.0.0.1",
             api_port=0,
             dashboard_host="127.0.0.1",
             dashboard_port=0,
-            admin_emails={"admin@paytonpei.top"},
-            public_origin="https://usage.paytonpei.top",
+            firebase_config=self.firebase_config,
+            project_id="example-family",
+            admin_emails={"admin@example.com"},
+            public_origin="https://usage.example.com",
         )
 
     def tearDown(self):
@@ -242,7 +249,7 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         self.assertIn("Admin access required", body)
 
         # POST /settings as regular member -> 403
-        headers = {"Origin": "https://usage.paytonpei.top"}
+        headers = {"Origin": "https://usage.example.com"}
         status, body, _ = self._request(
             "POST",
             "/settings",
@@ -301,7 +308,7 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         self.assertLess(status, 400, body)
 
     def test_settings_validation_errors(self):
-        headers = {"Origin": "https://usage.paytonpei.top", "Accept": "application/json", "Content-Type": "application/json"}
+        headers = {"Origin": "https://usage.example.com", "Accept": "application/json", "Content-Type": "application/json"}
 
         # Bad anchor day: 0
         status, body, _ = self._request(
@@ -363,7 +370,7 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         logger = logging.getLogger("family_server.dashboard")
         with self.assertLogs(logger, level="INFO") as log_capture:
             headers = {
-                "Origin": "https://usage.paytonpei.top",
+                "Origin": "https://usage.example.com",
                 "Content-Type": "application/x-www-form-urlencoded",
             }
             status, _, resp_headers = self._request(
@@ -392,7 +399,7 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
             settings_log = [entry for entry in log_capture.output if "Settings updated:" in entry]
             self.assertTrue(len(settings_log) >= 1)
             for log_line in settings_log:
-                self.assertNotIn("admin@paytonpei.top", log_line)
+                self.assertNotIn("admin@example.com", log_line)
                 self.assertNotIn(self.admin_session, log_line)
                 self.assertIn("cycle_anchor_day=9", log_line)
                 self.assertIn("tracking_start=2026-11-09", log_line)
@@ -426,7 +433,7 @@ class TestDashboardCycleRendering(unittest.TestCase):
             db.insert_report(conn, m_id, now_iso, json.dumps(self.fixture_data), received_at=now_iso)
 
         fixed_now = datetime(2026, 11, 9, 18, 0, 0, tzinfo=timezone.utc)
-        html = generate_dashboard_html(self.db_path, now=fixed_now, user_email="admin@paytonpei.top")
+        html = generate_dashboard_html(self.db_path, now=fixed_now, user_email="admin@example.com")
 
         # Prompts admin to set the cycle
         self.assertIn("尚未设置计费周期起始日，当前按自然月展示", html)
@@ -443,7 +450,7 @@ class TestDashboardCycleRendering(unittest.TestCase):
             db.set_setting(conn, "timezone", "America/Toronto")
 
         fixed_now = datetime(2026, 11, 9, 18, 0, 0, tzinfo=timezone.utc)
-        html = generate_dashboard_html(self.db_path, now=fixed_now, user_email="admin@paytonpei.top")
+        html = generate_dashboard_html(self.db_path, now=fixed_now, user_email="admin@example.com")
 
         # Prompt banner is gone
         self.assertNotIn("尚未设置计费周期起始日", html)

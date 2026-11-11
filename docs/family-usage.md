@@ -5,22 +5,22 @@
 
 ## 0. 已经做好的
 
-- Cloudflare Tunnel `family-usage`（id `0bfee670-…`），凭证在 VPS `/opt/family-usage/cloudflared/`。
-- DNS：`usage.paytonpei.top` → 这条隧道。隧道尚未启动。
-- VPS（vps-greencloud）：Ubuntu 26.04，Docker 在跑，**没有 docker compose**，Tailscale IP `100.115.238.6`，对外只开 22。
+- Cloudflare Tunnel `family-usage`（id `<tunnel-id>`），凭证在 VPS `/opt/family-usage/cloudflared/`。
+- DNS：`usage.example.com` → 这条隧道。隧道尚未启动。
+- VPS（vps-greencloud）：Ubuntu 26.04，Docker 在跑，**没有 docker compose**，Tailscale IP `<tailscale-ip>`，对外只开 22。
 
 ## 1. 总体结构
 
 ```
-成员的 Mac（Kanjo） ──HTTPS POST──▶ usage.paytonpei.top/api/report ──Cloudflare Tunnel──▶ VPS: app 容器 :8788（只接上报）
-你（任意网络浏览器） ──HTTPS GET───▶ usage.paytonpei.top/ ──────────Cloudflare Tunnel──▶ VPS: app 容器 :8787（登录 & 面板）
+成员的 Mac（Kanjo） ──HTTPS POST──▶ usage.example.com/api/report ──Cloudflare Tunnel──▶ VPS: app 容器 :8788（只接上报）
+你（任意网络浏览器） ──HTTPS GET───▶ usage.example.com/ ──────────Cloudflare Tunnel──▶ VPS: app 容器 :8787（登录 & 面板）
 ```
 
-- **全站走统一公网域名**：`https://usage.paytonpei.top/`。无需配置 Tailscale 即可从任意网络访问面板。
+- **全站走统一公网域名**：`https://usage.example.com/`。无需配置 Tailscale 即可从任意网络访问面板。
 - **内部监听均不开放公网端口**：
   - Cloudflare Tunnel ingress：
     - `^/api/report$` 和 `^/healthz$` → `http://family-app:8788`（上报接口）
-    - 域名 `usage.paytonpei.top` 下其余所有请求 → `http://family-app:8787`（面板与认证）
+    - 域名 `usage.example.com` 下其余所有请求 → `http://family-app:8787`（面板与认证）
     - 其他兜底 `http_status:404`
 - **面板由 Firebase Google Sign-In 认证保护**：服务端校验 Firebase ID Token，只有在授权白名单（`FAMILY_ADMIN_EMAILS`）内的邮箱才能换取 Session Cookie。
 - 家人什么都不用装，只在 Kanjo 里填地址和令牌。
@@ -49,7 +49,7 @@
 - **cloudflared**：独立容器，同一 docker network，`config.yml` 的 ingress：
   - `path: ^/api/report$` → `http://family-app:8788`
   - `path: ^/healthz$` → `http://family-app:8788`
-  - `hostname: usage.paytonpei.top` → `http://family-app:8787`
+  - `hostname: usage.example.com` → `http://family-app:8787`
   - 兜底 `http_status:404`
 - **部署脚本** `family-server/deploy.sh`：只用 `docker network create` / `docker build` / `docker run --restart unless-stopped`，不装 compose。幂等（重复运行会替换容器、保留数据卷）。从 `/opt/family-usage/family.env` 读取环境变量。
 - **存储**：SQLite 文件在宿主 `/opt/family-usage/data/family.db`。
@@ -92,7 +92,7 @@
 - **测试**：`family-server/tests/`，标准库 unittest：令牌哈希、401/400/429/200、隐私兜底、历史清理、面板渲染、纯 Python RSA JWT 验签矩阵、会话管理、CSRF 与安全头。
 - **验收**：
   - 本机 `cd family-server && python3 -m unittest -v` 全部通过。
-  - 部署后：`curl https://usage.paytonpei.top/healthz` = 200；`/` 未登录跳转 `/login`；使用白名单 Google 账号登录后正常查看面板。
+  - 部署后：`curl https://usage.example.com/healthz` = 200；`/` 未登录跳转 `/login`；使用白名单 Google 账号登录后正常查看面板。
   - 上报接口通过临时令牌 POST fixture 报文，面板更新；作废后拒绝。
 
 ## 4. Kanjo 端（第二批）
@@ -102,7 +102,7 @@
   - `kanjo report-family --url URL`：生成报文并 POST。令牌从环境变量 `KANJO_FAMILY_TOKEN` 读，**不走命令行参数**（避免出现在进程列表里）。输出一行 JSON 状态（`sent` / `error` + message）。只用标准库 `urllib`，超时 30 秒，失败不重试（由 App 调度）。
 - **App 设置**：在「发布到网站」那节后面加「家庭用量」：
   - 开关（默认关）
-  - 服务器地址（默认 `https://usage.paytonpei.top`）
+  - 服务器地址（默认空）
   - 令牌：存 **macOS 钥匙串**，不存 UserDefaults；界面上只显示「已设置 / 未设置」和「更换」
   - 显示名（可选）
   - 统计范围（默认仅包含 Antigravity，可选全部 agent；自定起始日期选择器放入「高级」折叠面板中，并附说明「通常不需要设置；周期由家庭管理员在面板上设定」）

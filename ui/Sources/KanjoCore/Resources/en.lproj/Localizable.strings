@@ -170,6 +170,12 @@
 "settings.publish.note" = "Periodically commits and pushes high-level token counts to your website repository. Excludes project names, paths, and session ids. Cost is estimated from public API prices.";
 "settings.section.family" = "Family usage";
 "settings.family.enable" = "Report usage summary to family server";
+"settings.family.off_note" = "Report usage summary to a server you or a family member host, for shared plans (such as Google AI Ultra). Off by default.";
+"settings.family.mode" = "Mode";
+"settings.family.mode.join" = "Join a family";
+"settings.family.mode.manager" = "I'm the manager";
+"settings.family.manager.desc" = "Requires a VPS with Docker, a domain on Cloudflare, and a Firebase project. Once deployed, you can switch back to \"Join a family\" to report this Mac's usage as well.";
+"settings.family.manager.view_guide" = "View deployment guide";
 "settings.family.url" = "Server URL";
 "settings.family.token" = "Report token";
 "settings.family.token.configured" = "Configured";
@@ -191,6 +197,7 @@
 "settings.family.status.in_progress" = "Reporting…";
 "settings.family.status.no_network" = "Reporting paused: network disabled";
 "settings.family.status.missing_token" = "Token not configured";
+"settings.family.status.no_server" = "No server address";
 "settings.family.scope.label" = "Scope: %@";
 "settings.family.scope.since_date" = "Since %@";
 "settings.family.scope.all_time" = "All time";

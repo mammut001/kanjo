@@ -42,8 +42,7 @@ final class FamilyReportStore: ObservableObject {
     }
 
     var serverURL: String {
-        let val = defaults.string(forKey: SettingsKeys.familyReportURL) ?? ""
-        return val.isEmpty ? "https://usage.paytonpei.top" : val
+        defaults.string(forKey: SettingsKeys.familyReportURL) ?? ""
     }
 
     var memberLabel: String {
@@ -114,7 +113,7 @@ final class FamilyReportStore: ObservableObject {
         let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard FamilyReportSchedule.isValidURL(currentURL) else {
-            recordFailure(at: Date(), message: "Invalid server URL")
+            Self.logger.info("family report skipped: invalid or empty server URL")
             return
         }
 

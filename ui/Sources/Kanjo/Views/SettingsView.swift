@@ -31,7 +31,8 @@ struct SettingsView: View {
     @StateObject private var publishStore = PublishStore.shared
     @State private var gitMissingError = false
     @AppStorage(SettingsKeys.familyReportEnabled, store: AppDefaults.store) private var familyReportEnabled = false
-    @AppStorage(SettingsKeys.familyReportURL, store: AppDefaults.store) private var familyReportURL = "https://usage.paytonpei.top"
+    @AppStorage(SettingsKeys.familyReportMode, store: AppDefaults.store) private var familyReportMode = "join"
+    @AppStorage(SettingsKeys.familyReportURL, store: AppDefaults.store) private var familyReportURL = ""
     @AppStorage(SettingsKeys.familyReportMemberLabel, store: AppDefaults.store) private var familyReportMemberLabel = ""
     @StateObject private var familyReportStore = FamilyReportStore.shared
     @State private var showingTokenPopover = false
@@ -229,168 +230,192 @@ struct SettingsView: View {
                     Toggle(L10n.tr("settings.family.enable"), isOn: $familyReportEnabled)
                         .font(.system(size: 12))
                     if familyReportEnabled {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L10n.tr("settings.family.url"))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            TextField("https://usage.paytonpei.top", text: $familyReportURL)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
+                        Picker("", selection: $familyReportMode) {
+                            Text(L10n.tr("settings.family.mode.join")).tag("join")
+                            Text(L10n.tr("settings.family.mode.manager")).tag("manager")
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L10n.tr("settings.family.token"))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 8) {
-                                Text(familyReportStore.hasToken ? L10n.tr("settings.family.token.configured") : L10n.tr("settings.family.token.not_configured"))
+                        if familyReportMode == "manager" {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(L10n.tr("settings.family.manager.desc"))
                                     .font(.system(size: 11))
-                                    .foregroundStyle(familyReportStore.hasToken ? .primary : .secondary)
-                                if familyReportStore.hasToken {
-                                    Button(L10n.tr("settings.family.token.change")) {
-                                        tokenInput = ""
-                                        showingTokenPopover = true
-                                    }
-                                    .font(.system(size: 11))
-                                    Button(L10n.tr("settings.family.token.clear")) {
-                                        _ = familyReportStore.clearToken()
-                                    }
-                                    .font(.system(size: 11))
-                                } else {
-                                    Button(L10n.tr("settings.family.token.set")) {
-                                        tokenInput = ""
-                                        showingTokenPopover = true
-                                    }
-                                    .font(.system(size: 11))
-                                }
-                            }
-                            .popover(isPresented: $showingTokenPopover) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(L10n.tr("settings.family.token.prompt_title"))
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Text(L10n.tr("settings.family.token.prompt_message"))
-                                        .font(.system(size: 10.5))
-                                        .foregroundStyle(.secondary)
-                                    SecureField(L10n.tr("settings.family.token.placeholder"), text: $tokenInput)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 11))
-                                        .frame(minWidth: 260)
-                                    HStack {
-                                        Spacer()
-                                        Button(L10n.tr("settings.family.token.cancel")) {
-                                            tokenInput = ""
-                                            showingTokenPopover = false
-                                        }
-                                        .font(.system(size: 11))
-                                        Button(L10n.tr("settings.family.token.save")) {
-                                            let trimmed = tokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            if !trimmed.isEmpty {
-                                                _ = familyReportStore.setToken(trimmed)
-                                            }
-                                            tokenInput = ""
-                                            showingTokenPopover = false
-                                        }
-                                        .font(.system(size: 11))
-                                        .keyboardShortcut(.defaultAction)
-                                        .disabled(tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    .foregroundStyle(.secondary)
+                                Button(L10n.tr("settings.family.manager.view_guide")) {
+                                    if let url = URL(string: "https://github.com/mammut001/kanjo/blob/main/family-server/DEPLOY.md") {
+                                        NSWorkspace.shared.open(url)
                                     }
                                 }
-                                .padding(12)
+                                .font(.system(size: 11))
                             }
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L10n.tr("settings.family.member_label"))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            TextField(L10n.tr("settings.family.member_label_placeholder"), text: $familyReportMemberLabel)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.tr("settings.family.scope.label", currentFamilyScopeText))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-
-                            Picker(
-                                L10n.tr("settings.family.scope.agents_choice"),
-                                selection: Binding(
-                                    get: {
-                                        let agents = store.report?.config.family?.agents ?? ["antigravity"]
-                                        return (agents == ["all"] || agents.contains("all")) ? "all" : "antigravity"
-                                    },
-                                    set: { choice in
-                                        Task {
-                                            if choice == "all" {
-                                                try? await store.setFamilyAgents("all")
-                                            } else {
-                                                try? await store.setFamilyAgents(nil)
-                                            }
-                                        }
-                                    }
-                                )
-                            ) {
-                                Text(L10n.tr("settings.family.scope.agents_antigravity")).tag("antigravity")
-                                Text(L10n.tr("settings.family.scope.agents_all")).tag("all")
+                            .padding(.vertical, 4)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.tr("settings.family.url"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                TextField("https://usage.example.com", text: $familyReportURL)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 11))
                             }
-                            .font(.system(size: 11))
-                            .disabled(!store.canEditSubscriptions)
 
-                            DisclosureGroup(L10n.tr("settings.family.scope.advanced")) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        DatePicker(
-                                            L10n.tr("settings.family.scope.start_date"),
-                                            selection: Binding(
-                                                get: {
-                                                    if let s = store.report?.config.family?.since,
-                                                       let d = Self.scopeDateFormatter.date(from: String(s.prefix(10))) {
-                                                        return d
-                                                    }
-                                                    return Date()
-                                                },
-                                                set: { newDate in
-                                                    let dateStr = Self.scopeDateFormatter.string(from: newDate)
-                                                    Task { try? await store.setFamilySince(dateStr) }
-                                                }
-                                            ),
-                                            displayedComponents: [.date]
-                                        )
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.tr("settings.family.token"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 8) {
+                                    Text(familyReportStore.hasToken ? L10n.tr("settings.family.token.configured") : L10n.tr("settings.family.token.not_configured"))
                                         .font(.system(size: 11))
-                                        .disabled(!store.canEditSubscriptions)
-
-                                        if store.report?.config.family?.since != nil {
-                                            Button(L10n.tr("settings.family.scope.clear_date")) {
-                                                Task { try? await store.setFamilySince(nil) }
+                                        .foregroundStyle(familyReportStore.hasToken ? .primary : .secondary)
+                                    if familyReportStore.hasToken {
+                                        Button(L10n.tr("settings.family.token.change")) {
+                                            tokenInput = ""
+                                            showingTokenPopover = true
+                                        }
+                                        .font(.system(size: 11))
+                                        Button(L10n.tr("settings.family.token.clear")) {
+                                            _ = familyReportStore.clearToken()
+                                        }
+                                        .font(.system(size: 11))
+                                    } else {
+                                        Button(L10n.tr("settings.family.token.set")) {
+                                            tokenInput = ""
+                                            showingTokenPopover = true
+                                        }
+                                        .font(.system(size: 11))
+                                    }
+                                }
+                                .popover(isPresented: $showingTokenPopover) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(L10n.tr("settings.family.token.prompt_title"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text(L10n.tr("settings.family.token.prompt_message"))
+                                            .font(.system(size: 10.5))
+                                            .foregroundStyle(.secondary)
+                                        SecureField(L10n.tr("settings.family.token.placeholder"), text: $tokenInput)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(size: 11))
+                                            .frame(minWidth: 260)
+                                        HStack {
+                                            Spacer()
+                                            Button(L10n.tr("settings.family.token.cancel")) {
+                                                tokenInput = ""
+                                                showingTokenPopover = false
                                             }
                                             .font(.system(size: 11))
-                                            .disabled(!store.canEditSubscriptions)
+                                            Button(L10n.tr("settings.family.token.save")) {
+                                                let trimmed = tokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                if !trimmed.isEmpty {
+                                                    _ = familyReportStore.setToken(trimmed)
+                                                }
+                                                tokenInput = ""
+                                                showingTokenPopover = false
+                                            }
+                                            .font(.system(size: 11))
+                                            .keyboardShortcut(.defaultAction)
+                                            .disabled(tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                         }
                                     }
-                                    note(L10n.tr("settings.family.scope.advanced_note"))
+                                    .padding(12)
                                 }
-                                .padding(.top, 4)
                             }
-                            .font(.system(size: 11))
-                        }
 
-                        HStack {
-                            Text(familyReportStatusText)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(familyReportStatusColor)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer()
-                            Button(L10n.tr("settings.family.now")) {
-                                Task {
-                                    await familyReportStore.reportNow()
-                                }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.tr("settings.family.member_label"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                TextField(L10n.tr("settings.family.member_label_placeholder"), text: $familyReportMemberLabel)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 11))
                             }
-                            .font(.system(size: 11))
-                            .disabled(!familyReportStore.hasToken || familyReportStore.isReporting)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(L10n.tr("settings.family.scope.label", currentFamilyScopeText))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+
+                                Picker(
+                                    L10n.tr("settings.family.scope.agents_choice"),
+                                    selection: Binding(
+                                        get: {
+                                            let agents = store.report?.config.family?.agents ?? ["antigravity"]
+                                            return (agents == ["all"] || agents.contains("all")) ? "all" : "antigravity"
+                                        },
+                                        set: { choice in
+                                            Task {
+                                                if choice == "all" {
+                                                    try? await store.setFamilyAgents("all")
+                                                } else {
+                                                    try? await store.setFamilyAgents(nil)
+                                                }
+                                            }
+                                        }
+                                    )
+                                ) {
+                                    Text(L10n.tr("settings.family.scope.agents_antigravity")).tag("antigravity")
+                                    Text(L10n.tr("settings.family.scope.agents_all")).tag("all")
+                                }
+                                .font(.system(size: 11))
+                                .disabled(!store.canEditSubscriptions)
+
+                                DisclosureGroup(L10n.tr("settings.family.scope.advanced")) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            DatePicker(
+                                                L10n.tr("settings.family.scope.start_date"),
+                                                selection: Binding(
+                                                    get: {
+                                                        if let s = store.report?.config.family?.since,
+                                                           let d = Self.scopeDateFormatter.date(from: String(s.prefix(10))) {
+                                                            return d
+                                                        }
+                                                        return Date()
+                                                    },
+                                                    set: { newDate in
+                                                        let dateStr = Self.scopeDateFormatter.string(from: newDate)
+                                                        Task { try? await store.setFamilySince(dateStr) }
+                                                    }
+                                                ),
+                                                displayedComponents: [.date]
+                                            )
+                                            .font(.system(size: 11))
+                                            .disabled(!store.canEditSubscriptions)
+
+                                            if store.report?.config.family?.since != nil {
+                                                Button(L10n.tr("settings.family.scope.clear_date")) {
+                                                    Task { try? await store.setFamilySince(nil) }
+                                                }
+                                                .font(.system(size: 11))
+                                                .disabled(!store.canEditSubscriptions)
+                                            }
+                                        }
+                                        note(L10n.tr("settings.family.scope.advanced_note"))
+                                    }
+                                    .padding(.top, 4)
+                                }
+                                .font(.system(size: 11))
+                            }
+
+                            HStack {
+                                Text(familyReportStatusText)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(familyReportStatusColor)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                                Button(L10n.tr("settings.family.now")) {
+                                    Task {
+                                        await familyReportStore.reportNow()
+                                    }
+                                }
+                                .font(.system(size: 11))
+                                .disabled(!familyReportStore.hasToken || familyReportStore.isReporting || !FamilyReportSchedule.isValidURL(familyReportURL.trimmingCharacters(in: .whitespacesAndNewlines)))
+                            }
                         }
+                        note(L10n.tr("settings.family.note"))
+                    } else {
+                        note(L10n.tr("settings.family.off_note"))
                     }
-                    note(L10n.tr("settings.family.note"))
                 }
 
                 PanelSection(L10n.tr("settings.section.projects"), inset: true) {
@@ -508,35 +533,33 @@ struct SettingsView: View {
     }
 
     private var familyReportStatusText: String {
-        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
-            return L10n.tr("settings.family.status.no_network")
-        }
-        if familyReportStore.isReporting {
-            return L10n.tr("settings.family.status.in_progress")
-        }
-        if !familyReportStore.hasToken {
-            return L10n.tr("settings.family.status.missing_token")
-        }
-        if let err = familyReportStore.lastError {
-            return L10n.tr("settings.family.status.failed", err)
-        }
-        if let success = familyReportStore.lastSuccessAt {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .full
-            let relative = formatter.localizedString(for: success, relativeTo: Date())
-            return L10n.tr("settings.family.status.last_reported", relative)
-        }
-        return L10n.tr("settings.family.status.never")
+        FamilyReportStatus.text(
+            url: familyReportURL,
+            hasToken: familyReportStore.hasToken,
+            isReporting: familyReportStore.isReporting,
+            lastError: familyReportStore.lastError,
+            lastSuccessAt: familyReportStore.lastSuccessAt,
+            noNetwork: ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true
+        )
     }
 
     private var familyReportStatusColor: Color {
-        if ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true {
+        let state = FamilyReportStatus.state(
+            url: familyReportURL,
+            hasToken: familyReportStore.hasToken,
+            isReporting: familyReportStore.isReporting,
+            lastError: familyReportStore.lastError,
+            lastSuccessAt: familyReportStore.lastSuccessAt,
+            noNetwork: ProcessInfo.processInfo.environment["KANJO_NO_NETWORK"] == "1" || store.report?.config.noNetwork == true
+        )
+        switch state {
+        case .noNetwork:
             return .orange
-        }
-        if familyReportStore.lastError != nil {
+        case .failed:
             return .red
+        default:
+            return .secondary
         }
-        return .secondary
     }
 
     private func chooseRepoDirectory() {

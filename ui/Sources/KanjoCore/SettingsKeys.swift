@@ -29,11 +29,13 @@ public enum SettingsKeys {
     public static let publishLastSuccessAt = "publishLastSuccessAt"
     public static let publishLastResult = "publishLastResult"
     public static let familyReportEnabled = "familyReportEnabled"
+    public static let familyReportMode = "familyReportMode" // "join" | "manager"
     public static let familyReportURL = "familyReportURL"
     public static let familyReportMemberLabel = "familyReportMemberLabel"
     public static let familyReportLastAttemptAt = "familyReportLastAttemptAt"
     public static let familyReportLastSuccessAt = "familyReportLastSuccessAt"
     public static let familyReportLastResult = "familyReportLastResult"
+    public static let familyReportMigrationDone = "familyReportMigrationDone"
 }
 
 public enum PublishFrequency: String, CaseIterable, Identifiable {

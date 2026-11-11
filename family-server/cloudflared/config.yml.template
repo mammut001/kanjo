@@ -2,12 +2,12 @@ tunnel: TUNNEL_ID
 credentials-file: /home/nonroot/.cloudflared/TUNNEL_ID.json
 
 ingress:
-  - hostname: usage.paytonpei.top
+  - hostname: YOUR_DOMAIN
     path: ^/api/report$
     service: http://family-app:8788
-  - hostname: usage.paytonpei.top
+  - hostname: YOUR_DOMAIN
     path: ^/healthz$
     service: http://family-app:8788
-  - hostname: usage.paytonpei.top
+  - hostname: YOUR_DOMAIN
     service: http://family-app:8787
   - service: http_status:404

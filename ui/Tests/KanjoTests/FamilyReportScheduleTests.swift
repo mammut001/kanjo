@@ -2,7 +2,7 @@ import XCTest
 @testable import KanjoCore
 
 final class FamilyReportScheduleTests: XCTestCase {
-    let dummyURL = "https://usage.paytonpei.top"
+    let dummyURL = "https://usage.example.com"
 
     func testDisabledState() {
         let should = FamilyReportSchedule.shouldReport(
@@ -28,7 +28,7 @@ final class FamilyReportScheduleTests: XCTestCase {
 
     func testURLValidation() {
         // Valid HTTPS URLs
-        XCTAssertTrue(FamilyReportSchedule.isValidURL("https://usage.paytonpei.top"))
+        XCTAssertTrue(FamilyReportSchedule.isValidURL("https://usage.example.com"))
         XCTAssertTrue(FamilyReportSchedule.isValidURL("https://example.com/api"))
 
         // Valid local HTTP test URLs
@@ -38,7 +38,7 @@ final class FamilyReportScheduleTests: XCTestCase {
         // Invalid URLs
         XCTAssertFalse(FamilyReportSchedule.isValidURL(""))
         XCTAssertFalse(FamilyReportSchedule.isValidURL("   "))
-        XCTAssertFalse(FamilyReportSchedule.isValidURL("http://usage.paytonpei.top"))
+        XCTAssertFalse(FamilyReportSchedule.isValidURL("http://usage.example.com"))
         XCTAssertFalse(FamilyReportSchedule.isValidURL("ftp://127.0.0.1"))
         XCTAssertFalse(FamilyReportSchedule.isValidURL("not-a-url"))
 
@@ -169,22 +169,22 @@ final class FamilyReportScheduleTests: XCTestCase {
     func testCommandConstruction() {
         let cmdWithLabel = FamilyReportCommand.command(
             from: "python3 -m kanjo export",
-            url: "https://usage.paytonpei.top",
+            url: "https://usage.example.com",
             memberLabel: "Alice (MacBook)"
         )
         XCTAssertEqual(
             cmdWithLabel,
-            "python3 -m kanjo report-family --url https://usage.paytonpei.top --member-label 'Alice (MacBook)'"
+            "python3 -m kanjo report-family --url https://usage.example.com --member-label 'Alice (MacBook)'"
         )
 
         let cmdWithoutLabel = FamilyReportCommand.command(
             from: "python3 -m kanjo export",
-            url: "https://usage.paytonpei.top",
+            url: "https://usage.example.com",
             memberLabel: nil
         )
         XCTAssertEqual(
             cmdWithoutLabel,
-            "python3 -m kanjo report-family --url https://usage.paytonpei.top"
+            "python3 -m kanjo report-family --url https://usage.example.com"
         )
 
         // Ensure token is never anywhere in the command

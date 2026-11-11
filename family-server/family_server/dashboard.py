@@ -153,21 +153,13 @@ def compute_cycle_boundaries(
 
 
 def load_firebase_config() -> dict:
-    """Load Firebase web configuration from environment or local JSON file."""
+    """Load Firebase web configuration from FIREBASE_WEB_CONFIG_JSON environment variable."""
     env_json = os.environ.get("FIREBASE_WEB_CONFIG_JSON")
     if env_json:
         try:
             return json.loads(env_json)
         except Exception as e:
             logger.warning("Failed to parse FIREBASE_WEB_CONFIG_JSON: %s", e)
-
-    cfg_file = os.path.join(os.path.dirname(__file__), "firebase_config.json")
-    if os.path.exists(cfg_file):
-        try:
-            with open(cfg_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning("Failed to load firebase_config.json: %s", e)
     return {}
 
 
@@ -1372,9 +1364,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     db_path: str = ""
     firebase_config: dict = {}
-    project_id: str = "kanjo-family-usage"
+    project_id: str = ""
     admin_emails: Set[str] = set()
-    public_origin: str = "https://usage.paytonpei.top"
+    public_origin: str = ""
+    csp_header: str = ""
     session_rate_limiter: Optional[RateLimiter] = None
     jwk_manager: Optional[auth.JWKManager] = None
 
@@ -1395,15 +1388,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; "
-            "script-src 'self' https://apis.google.com https://www.gstatic.com; "
-            "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; "
-            "frame-src https://kanjo-family-usage.firebaseapp.com; "
-            "img-src 'self' data: https://lh3.googleusercontent.com; "
-            "style-src 'self' 'unsafe-inline'; "
-            "base-uri 'none'; "
-            "form-action 'self'; "
-            "frame-ancestors 'none'",
+            self.csp_header or (
+                "default-src 'self'; "
+                "script-src 'self' https://apis.google.com https://www.gstatic.com; "
+                "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; "
+                "frame-src 'none'; "
+                "img-src 'self' data: https://lh3.googleusercontent.com; "
+                "style-src 'self' 'unsafe-inline'; "
+                "base-uri 'none'; "
+                "form-action 'self'; "
+                "frame-ancestors 'none'"
+            ),
         )
         self.send_header("Strict-Transport-Security", "max-age=31536000")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -1928,20 +1923,41 @@ def make_dashboard_handler(
         firebase_config = load_firebase_config()
 
     if project_id is None:
-        project_id = os.environ.get("FIREBASE_PROJECT_ID") or firebase_config.get("projectId", "kanjo-family-usage")
+        project_id = os.environ.get("FIREBASE_PROJECT_ID") or (firebase_config.get("projectId") if firebase_config else "") or ""
 
     if admin_emails is None:
         raw_emails = os.environ.get("FAMILY_ADMIN_EMAILS", "")
         admin_emails = {e.strip().lower() for e in raw_emails.split(",") if e.strip()}
 
     if public_origin is None:
-        public_origin = os.environ.get("FAMILY_PUBLIC_ORIGIN", "https://usage.paytonpei.top")
+        public_origin = os.environ.get("FAMILY_PUBLIC_ORIGIN", "")
 
     if session_rate_limiter is None:
         session_rate_limiter = RateLimiter(window_seconds=60.0, max_requests=10)
 
     if jwk_manager is None:
         jwk_manager = auth.get_default_jwk_manager()
+
+    auth_domain = (firebase_config.get("authDomain") or "") if firebase_config else ""
+    if auth_domain:
+        from .validation import validate_auth_domain
+        if not validate_auth_domain(auth_domain):
+            raise ValueError(f"Invalid authDomain in firebase_config: {auth_domain!r}")
+        frame_src = f"https://{auth_domain}"
+    else:
+        frame_src = "'none'"
+
+    csp_header = (
+        "default-src 'self'; "
+        "script-src 'self' https://apis.google.com https://www.gstatic.com; "
+        "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; "
+        f"frame-src {frame_src}; "
+        "img-src 'self' data: https://lh3.googleusercontent.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
 
     class BoundDashboardHandler(DashboardHandler):
         pass
@@ -1951,6 +1967,7 @@ def make_dashboard_handler(
     BoundDashboardHandler.project_id = project_id
     BoundDashboardHandler.admin_emails = admin_emails
     BoundDashboardHandler.public_origin = public_origin
+    BoundDashboardHandler.csp_header = csp_header
     BoundDashboardHandler.session_rate_limiter = session_rate_limiter
     BoundDashboardHandler.jwk_manager = jwk_manager
     return BoundDashboardHandler

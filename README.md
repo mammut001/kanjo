@@ -141,33 +141,39 @@ Kanjo can periodically summarize your AI token usage and publish it to a website
 
 ### Family usage reporting (optional)
 
-Kanjo can report aggregate token usage and quota windows to your family usage server (`family-server`), so the manager of a shared plan (for example Google AI Ultra) sees who used how much of the pool.
+Family usage reporting is an **optional, self-hosted feature (disabled by default)** that requires a server deployed by you or a family member. It allows members of a shared AI plan (such as Google AI Ultra) to pool aggregate usage numbers and quota windows onto a private dashboard so the plan manager can see how much of the pool was used and by whom.
 
-**Joining as a family member**
+#### Joining a family
+
+If someone in your family has already deployed a server, ask them for the **server address** (e.g. `https://usage.example.com`) and your **personal report token**. Each member gets their own token; the manager can revoke it at any time.
 
 | Your computer | What to do |
 |---|---|
 | Mac with Apple silicon (M1 or later) | Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest) and install it as above. |
 | Mac with Intel | The same DMG: it is a universal build. |
-| Windows (no admin rights needed) | Run in PowerShell:<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f'`<br>*(Check company IT policy before running on work computers; to uninstall, run the script with `-Uninstall`)* |
+| Windows (no admin rights needed) | Run in PowerShell:<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f -Server https://<your-family-server>'`<br>*(Check company IT policy before running on work computers; to uninstall, run the script with `-Uninstall`)* |
 | Linux | Not supported yet. There is no app, and the CLI has not been tested there. |
 
-1. Ask the family manager for your personal report token. Each member gets their own; the manager can revoke it at any time.
-2. Open Kanjo → Settings → **Family usage**, turn it on, keep the server address (`https://usage.paytonpei.top` for our family), and paste the token. It is stored in the macOS Keychain.
-3. That's it. Kanjo reports after its normal refreshes, at most every 15 minutes; **Report now** sends one immediately.
+1. On Mac: Open Kanjo → Settings → **Family usage**, turn it on, choose **Join a family**, enter the server URL, and paste the token. It is stored securely in the macOS Keychain.
+2. That's it. Kanjo reports after its normal refreshes, at most every 15 minutes; **Report now** sends one immediately.
 
-What is sent: daily, weekly and monthly token totals, API-equivalent cost, model names, and Antigravity's quota percentages and reset times. By default only Antigravity usage is included. What is never sent: project names, file paths, git remotes, conversation titles or content, account emails.
+What is sent: daily, weekly and monthly token totals, API-equivalent cost, model names, and Antigravity quota percentages and reset times. By default only Antigravity usage is included. What is never sent: project names, file paths, git remotes, conversation titles or content, account emails.
 
-The manager signs in to the dashboard with Google (only allowlisted emails), sets the billing-cycle start day under **Settings**, and creates or revokes member tokens on the server:
+#### Hosting a family server
 
-```bash
-docker exec family-app python -m family_server member add "<name>"     # prints the token once
-docker exec family-app python -m family_server member revoke "<name>"
-```
+If you manage a shared plan and want to host your own server:
+
+1. Follow the **[family-server Deployment Guide](family-server/DEPLOY.md)**. You will need a Linux VPS with Docker, a domain on Cloudflare, and a Firebase project with Google sign-in enabled.
+2. The manager signs in to the dashboard with Google (restricted to allowlisted admin emails), sets the billing-cycle renewal anchor under **Settings**, and creates or revokes member tokens on the server:
+   ```bash
+   docker exec family-app python -m family_server member add "<name>"     # prints the token once
+   docker exec family-app python -m family_server member revoke "<name>"
+   ```
+3. Managers who also want to report their own Mac's usage can switch to "Join a family" in Kanjo settings and enter their own token.
 
 **Details**
 
-- **Disabled by default**: Completely opt-in.
+- **Disabled by default**: Completely opt-in. No built-in default server address.
 - **Privacy-safe**: Shares only high-level token counts (all-time, monthly, weekly, daily), subscription plan labels, and quota window reset times. Never includes project names, paths, conversation titles, or account emails.
 - **Secure**: Authentication token is stored in the macOS Keychain and never passed via command-line arguments.
 - **Automated**: Automatically scheduled after refreshes when enabled, or triggerable on demand in Settings.
@@ -192,7 +198,7 @@ docker exec family-app python -m family_server member revoke "<name>"
   kanjo export --family-report [--member-label "Alice (MacBook)"]
 
   # Send report to family server (token passed via environment only)
-  KANJO_FAMILY_TOKEN="<token>" kanjo report-family --url https://usage.paytonpei.top [--member-label "Alice (MacBook)"]
+  KANJO_FAMILY_TOKEN="<token>" kanjo report-family --url https://usage.example.com [--member-label "Alice (MacBook)"]
   ```
 
 ### From source
@@ -357,29 +363,35 @@ cd kanjo && ./install.sh
 
 ### 家庭用量（可选）
 
-Kanjo 可以把用量汇总上报到家庭服务器（`family-server`），方便共用套餐（例如 Google AI Ultra）的管理员看到额度池被谁用了多少。
+家庭用量上报是**可选功能，默认完全关闭**，需要你自己（或家人）部署家庭服务器。它让共享 AI 套餐（例如 Google AI Ultra）的成员把汇总用量和额度窗口报到私有面板，方便管理员掌握额度池消耗情况。
 
-**家庭成员怎么接入**
+#### 加入家庭
+
+如果家人已经搭好了服务器，向管理员要**服务器地址**（例如 `https://usage.example.com`）和你的**个人专属令牌**。每人一个，管理员可以随时作废。
 
 | 你的电脑 | 怎么做 |
 |---|---|
 | Apple 芯片的 Mac（M1 及以后） | 从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，按上面的方式安装。 |
 | Intel 芯片的 Mac | 下载同一个 DMG，是通用版。 |
-| Windows（无需管理员权限） | 在 PowerShell 中运行：<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f'`<br>*(在公司电脑上运行前请确认符合公司 IT 规定；如需卸载，运行脚本并加上 `-Uninstall`)* |
+| Windows（无需管理员权限） | 在 PowerShell 中运行：<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f -Server https://<你的家庭服务器地址>'`<br>*(在公司电脑上运行前请确认符合公司 IT 规定；如需卸载，运行脚本并加上 `-Uninstall`)* |
 | Linux | 暂不支持：没有应用，CLI 也没有在这些系统上测试过。 |
 
-1. 向家庭管理员要你自己的上报令牌。每人一个，管理员可以随时作废。
-2. 打开 Kanjo → 设置 → **家庭用量**，打开开关，服务器地址保持默认（我们家是 `https://usage.paytonpei.top`），粘贴令牌。令牌存在 macOS 钥匙串里。
-3. 完成。Kanjo 在每次刷新数据后自动上报，最多每 15 分钟一次；点 **立即上报** 可以马上发一次。
+1. Mac 端：打开 Kanjo → 设置 → **家庭用量**，打开开关，选择 **加入家庭**，填入服务器地址并粘贴令牌（安全存储在 macOS 钥匙串中）。
+2. 完成。Kanjo 在每次刷新数据后自动上报，最多每 15 分钟一次；点 **立即上报** 可以马上发一次。
 
 会上报什么：按天、周、月汇总的 token 数和 API 等价金额、模型名称，以及 Antigravity 的额度百分比和重置时间。默认只统计 Antigravity。不会上报：项目名、文件路径、git 地址、对话标题和内容、账号邮箱。
 
-管理员用 Google 账号登录面板（只放行白名单里的邮箱），在面板的 **设置** 里填计费周期开始日，并在服务器上生成或作废成员令牌：
+#### 自己部署家庭服务器
 
-```bash
-docker exec family-app python -m family_server member add "<名字>"     # 令牌只打印这一次
-docker exec family-app python -m family_server member revoke "<名字>"
-```
+如果你是共享套餐的管理员并希望自己部署服务器：
+
+1. 按照 **[family-server 部署教程](family-server/DEPLOY.md)** 操作。需要一台装有 Docker 的 Linux VPS、一个托管在 Cloudflare 上的域名以及一个启用 Google 登录的 Firebase 项目。
+2. 管理员用 Google 账号登录面板（只放行白名单里的邮箱），在面板的 **设置** 里填计费周期开始日，并在服务器上生成或作废成员令牌：
+   ```bash
+   docker exec family-app python -m family_server member add "<名字>"     # 令牌只打印这一次
+   docker exec family-app python -m family_server member revoke "<名字>"
+   ```
+3. 管理员自己的 Mac 如果也想上报用量，直接在 Kanjo 设置中切到「加入家庭」填入自己的令牌即可。
 
 ### 构建公证发布包
 

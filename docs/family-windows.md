@@ -1,7 +1,7 @@
 # 家庭用量 · Windows 上报（规则草案）
 
 > 场景：家庭成员只有一台 Windows 电脑（可能是公司电脑），装不了也没有 Kanjo App。
-> 目标：不需要管理员权限，把这台电脑上的 Antigravity 用量和额度按时报到 `usage.paytonpei.top`。
+> 目标：不需要管理员权限，把这台电脑上的 Antigravity 用量和额度按时报到 `https://usage.example.com`（或自建服务器）。
 > 先确认规则再写码。
 
 ## 0. 前提和边界
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP k
 2. **Python**：本机有 `python` 3.9+ 就直接用；没有就下载 python.org 官方的 *embeddable* 压缩包（免安装，校验 SHA-256），解压到 `KanjoFamily\python\`。
 3. **Kanjo CLI**：下载 Release 里的 `kanjo-cli.zip`（同一版本），解压到 `KanjoFamily\cli\`。
 4. **令牌**：用 `Read-Host -AsSecureString` 让用户粘贴，写进 **Windows 凭据管理器**（通用凭据，目标名 `KanjoFamilyReport`），不出现在命令行参数里，也不写明文文件。
-5. **服务器地址**：默认 `https://usage.paytonpei.top`，可用参数改。
+5. **服务器地址**：必须提供（交互询问或 `-Server` 参数）。
 6. **定时任务**：当前用户的计划任务「Kanjo 家庭上报」，每 30 分钟用 `pythonw.exe -m kanjo report-family --url …` 运行一次（不弹黑窗）；电脑睡眠错过的次数不补跑。
 7. 装完立即上报一次，把结果（成功 / 错误原因）打印出来。
 

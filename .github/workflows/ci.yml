@@ -75,10 +75,18 @@ jobs:
           Copy-Item -Path cli/pricing.json,cli/pricing_overrides.json -Destination staging/
           Compress-Archive -Path staging/* -DestinationPath kanjo-cli.zip -Force
           Remove-Item -Recurse -Force staging
-      - name: Run installer (isolated, no schedule)
+      - name: Assert installer without -Server exits non-zero
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport -NoPrompt
+          if ($LASTEXITCODE -eq 0) {
+              throw "Expected installer without -Server in -NoPrompt mode to fail, but it exited with 0"
+          }
+          Write-Host "Installer correctly exited with non-zero code ($LASTEXITCODE) when -Server was omitted."
+      - name: Run installer (isolated, no schedule)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -Server https://usage.example.com -CliZip kanjo-cli.zip -PythonExe python -NoSchedule -SkipReport -NoPrompt
           if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $Launcher = Join-Path $env:LOCALAPPDATA "KanjoFamily\cli\kanjo_family_report.pyw"
           Push-Location $env:TEMP
@@ -190,7 +198,7 @@ jobs:
           $env:PYTHONPATH = $CliDir
 
           # 1. Register task with a second installer run (without -NoSchedule)
-          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -CliZip kanjo-cli.zip -PythonExe python -SkipReport -NoPrompt
+          powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-family-windows.ps1 -Server https://usage.example.com -CliZip kanjo-cli.zip -PythonExe python -SkipReport -NoPrompt
           if ($LASTEXITCODE -ne 0) { throw "installer exited with $LASTEXITCODE" }
           $task = Get-ScheduledTask -TaskName "Kanjo 家庭上报"
           if (-not $task) {

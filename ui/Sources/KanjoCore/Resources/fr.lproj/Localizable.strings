@@ -170,6 +170,12 @@
 "settings.publish.note" = "Valide et pousse périodiquement le résumé des tokens vers votre dépôt de site. N'inclut aucun nom de projet, chemin ou identifiant de session. Les coûts sont estimés d'après les tarifs API publics.";
 "settings.section.family" = "Usage familial";
 "settings.family.enable" = "Rapporter le résumé d'utilisation au serveur familial";
+"settings.family.off_note" = "Rapporter le résumé d'utilisation à un serveur que vous ou un membre de votre famille hébergez, pour les forfaits partagés (comme Google AI Ultra). Désactivé par défaut.";
+"settings.family.mode" = "Mode";
+"settings.family.mode.join" = "Rejoindre une famille";
+"settings.family.mode.manager" = "Je suis l'administrateur";
+"settings.family.manager.desc" = "Nécessite un VPS avec Docker, un domaine sur Cloudflare et un projet Firebase. Une fois déployé, vous pouvez revenir sur « Rejoindre une famille » pour rapporter également l'utilisation de ce Mac.";
+"settings.family.manager.view_guide" = "Consulter le guide de déploiement";
 "settings.family.url" = "URL du serveur";
 "settings.family.token" = "Jeton de rapport";
 "settings.family.token.configured" = "Configuré";
@@ -191,6 +197,7 @@
 "settings.family.status.in_progress" = "Rapport en cours…";
 "settings.family.status.no_network" = "Rapport en pause : réseau désactivé";
 "settings.family.status.missing_token" = "Jeton non configuré";
+"settings.family.status.no_server" = "Aucune adresse de serveur";
 "settings.family.scope.label" = "Périmètre : %@";
 "settings.family.scope.since_date" = "Depuis le %@";
 "settings.family.scope.all_time" = "Tout le temps";

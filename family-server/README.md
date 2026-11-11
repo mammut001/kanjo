@@ -2,13 +2,16 @@
 
 Self-hosted report receiver and public dashboard behind Firebase Authentication (Google Sign-In) for Google AI Ultra / AI family usage tracking.
 
+> [!TIP]
+> For a comprehensive, step-by-step first-time deployment guide, see **[DEPLOY.md](DEPLOY.md)** (available in English and 简体中文).
+
 ## Architecture
 
-- **Public unified ingress (`usage.paytonpei.top`)**:
+- **Public unified ingress (`https://usage.example.com`)**:
   - Accessible via Cloudflare Tunnel (`family-cloudflared`).
   - Routes:
     - `POST /api/report` and `GET /healthz` → `http://family-app:8788` (report intake API)
-    - All other paths for hostname `usage.paytonpei.top` → `http://family-app:8787` (public dashboard behind Firebase Google Sign-In)
+    - All other paths for hostname `usage.example.com` → `http://family-app:8787` (public dashboard behind Firebase Google Sign-In)
     - Unmatched requests return HTTP 404.
   - Neither port (8788 or 8787) is published on public network interfaces.
   - Port 8787 can optionally be published on Tailscale IP via `PUBLISH_TAILSCALE=1`.
@@ -30,20 +33,20 @@ Server configuration is read by `deploy.sh` from `/opt/family-usage/family.env`.
 
 > [!IMPORTANT]
 > - Never commit real admin emails or credentials to git. Use placeholders in documentation.
-> - **Values in `family.env` are literal (no shell quoting)**: Docker reads `--env-file` literally without shell quote stripping. Do not wrap values in quotes (e.g. write `FIREBASE_PROJECT_ID=kanjo-family-usage` and `FIREBASE_WEB_CONFIG_JSON={"apiKey":...}` rather than `'{"apiKey":...}'`).
+> - **Values in `family.env` are literal (no shell quoting)**: Docker reads `--env-file` literally without shell quote stripping. Do not wrap values in quotes (e.g. write `FIREBASE_PROJECT_ID=your-family-usage` and `FIREBASE_WEB_CONFIG_JSON={"apiKey":...}` rather than `'{"apiKey":...}'`).
 
 Example `/opt/family-usage/family.env`:
 
 ```bash
 # Firebase Project Configuration (public web config - literal values, no shell quotes)
-FIREBASE_PROJECT_ID=kanjo-family-usage
-FIREBASE_WEB_CONFIG_JSON={"apiKey":"AIzaSyAL-1-DBm7YC3_16Ojsop9wh6IHh6zRaUk","authDomain":"kanjo-family-usage.firebaseapp.com","projectId":"kanjo-family-usage","appId":"1:819878046514:web:5014afdf6dd8bcafdb852b","messagingSenderId":"819878046514"}
+FIREBASE_PROJECT_ID=your-family-usage
+FIREBASE_WEB_CONFIG_JSON={"apiKey":"AIzaSy...","authDomain":"your-project-id.firebaseapp.com","projectId":"your-project-id","appId":"1:...:web:...","messagingSenderId":"..."}
 
 # Allowed Admin Emails (comma-separated, case-insensitive)
 FAMILY_ADMIN_EMAILS=admin@example.com,user@example.com
 
 # Public Origin for CSRF enforcement
-FAMILY_PUBLIC_ORIGIN=https://usage.paytonpei.top
+FAMILY_PUBLIC_ORIGIN=https://usage.example.com
 
 # Server timezone for billing cycle calculations (default: America/Toronto)
 FAMILY_TIMEZONE=America/Toronto
@@ -58,7 +61,7 @@ PUBLISH_TAILSCALE=0
 
 ### 1. Prerequisites on VPS (`/opt/family-usage`)
 
-- Docker running on Ubuntu 26.04 (no docker-compose needed).
+- Docker running on Ubuntu 22.04 / 24.04 (no docker-compose needed).
 - Cloudflare Tunnel credentials JSON placed in `/opt/family-usage/cloudflared/<TUNNEL_ID>.json`.
 - Environment configuration file placed in `/opt/family-usage/family.env`.
 
@@ -66,7 +69,7 @@ PUBLISH_TAILSCALE=0
 
 ```bash
 cd /opt/family-usage
-export TUNNEL_ID="0bfee670-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # or auto-detected from cloudflared/*.json
+export TUNNEL_ID="12345678-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # or auto-detected from cloudflared/*.json
 
 ./deploy.sh
 ```
@@ -83,14 +86,14 @@ The script is fully idempotent. It:
 
 ```bash
 # Public health check via Cloudflare Tunnel
-curl -i https://usage.paytonpei.top/healthz
+curl -i https://usage.example.com/healthz
 # Expected: HTTP/2 200 {"status":"ok"}
 
 # Unauthenticated access to dashboard redirects to /login
-curl -i https://usage.paytonpei.top/
+curl -i https://usage.example.com/
 # Expected: HTTP/2 302 Found, Location: /login
 
-# Open in browser: https://usage.paytonpei.top/
+# Open in browser: https://usage.example.com/
 # Sign in with authorized Google account -> dashboard renders with metrics
 ```
 
