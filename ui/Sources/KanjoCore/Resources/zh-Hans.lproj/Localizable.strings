@@ -170,6 +170,12 @@
 "settings.publish.note" = "定时将 token 用量汇总提交并推送到你的网站仓库。不含项目名、文件路径或会话 id。金额为公开 API 等价估算成本。";
 "settings.section.family" = "家庭用量";
 "settings.family.enable" = "上报用量汇总到家庭服务器";
+"settings.family.off_note" = "把用量汇总报给你自己或家人搭的服务器，用于共享套餐（如 Google AI Ultra）。默认关闭。";
+"settings.family.mode" = "模式";
+"settings.family.mode.join" = "加入家庭";
+"settings.family.mode.manager" = "自己当管理员";
+"settings.family.manager.desc" = "需要一台装有 Docker 的 VPS、一个托管在 Cloudflare 的域名以及一个 Firebase 项目。部署完成后，你也可以切换回「加入家庭」将本机的用量一同上报。";
+"settings.family.manager.view_guide" = "查看部署教程";
 "settings.family.url" = "服务器地址";
 "settings.family.token" = "上报令牌";
 "settings.family.token.configured" = "已设置";
@@ -191,6 +197,7 @@
 "settings.family.status.in_progress" = "正在上报…";
 "settings.family.status.no_network" = "上报已暂停：网络已禁用";
 "settings.family.status.missing_token" = "未配置令牌";
+"settings.family.status.no_server" = "未填写服务器地址";
 "settings.family.scope.label" = "统计范围：%@";
 "settings.family.scope.since_date" = "自 %@ 起";
 "settings.family.scope.all_time" = "全部时间";

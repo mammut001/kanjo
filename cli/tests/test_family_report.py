@@ -255,7 +255,7 @@ class ReportFamilyCommandTest(unittest.TestCase):
     def test_reject_insecure_or_non_local_http(self):
         # Insecure remote HTTP URL must be rejected
         code, out, _ = self._run_cli(
-            "report-family", "--url", "http://usage.paytonpei.top",
+            "report-family", "--url", "http://usage.example.com",
             extra_env={"KANJO_FAMILY_TOKEN": "test-token-123"}
         )
         self.assertEqual(code, 1)

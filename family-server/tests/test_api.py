@@ -35,12 +35,21 @@ class TestAPIEndpoint(unittest.TestCase):
         self.logger.setLevel(logging.INFO)
 
         # Start servers on ephemeral ports
+        self.firebase_config = {
+            "apiKey": "fake-key",
+            "authDomain": "example-family.firebaseapp.com",
+            "projectId": "example-family",
+        }
         self.api_server, self.dash_server, self.api_port, self.dash_port = start_servers(
             db_path=self.db_path,
             api_host="127.0.0.1",
             api_port=0,
             dashboard_host="127.0.0.1",
             dashboard_port=0,
+            firebase_config=self.firebase_config,
+            project_id="example-family",
+            admin_emails={"admin@example.com"},
+            public_origin="https://usage.example.com",
         )
 
         with db.get_connection(self.db_path) as conn:

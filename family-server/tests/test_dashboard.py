@@ -26,15 +26,23 @@ class TestDashboard(unittest.TestCase):
         db.init_db(self.db_path)
 
         with db.get_connection(self.db_path) as conn:
-            self.session_id = db.create_session(conn, "admin@paytonpei.top")
+            self.session_id = db.create_session(conn, "admin@example.com")
 
+        self.firebase_config = {
+            "apiKey": "fake-key",
+            "authDomain": "example-family.firebaseapp.com",
+            "projectId": "example-family",
+        }
         self.api_server, self.dash_server, self.api_port, self.dash_port = start_servers(
             db_path=self.db_path,
             api_host="127.0.0.1",
             api_port=0,
             dashboard_host="127.0.0.1",
             dashboard_port=0,
-            admin_emails={"admin@paytonpei.top"},
+            firebase_config=self.firebase_config,
+            project_id="example-family",
+            admin_emails={"admin@example.com"},
+            public_origin="https://usage.example.com",
         )
 
     def tearDown(self):

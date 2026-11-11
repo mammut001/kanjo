@@ -481,7 +481,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_publish_usage)
 
     p = sub.add_parser("report-family", help="report usage summary to family server")
-    p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.paytonpei.top)")
+    p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.example.com)")
     p.add_argument("--member-label", metavar="NAME", help="display name for member (optional)")
     common(p, threshold=False)
     p.set_defaults(func=cmd_report_family)

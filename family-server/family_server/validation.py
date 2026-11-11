@@ -3,7 +3,7 @@
 from datetime import datetime
 import json
 import re
-from typing import Any, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/")
 FORBIDDEN_KEYS = frozenset({"sessions_detail", "account", "paths", "title", "sessions"})
@@ -179,3 +179,73 @@ def validate_report_payload(data: Any) -> Optional[str]:
                 return "scope.since must be a string or null"
 
     return None
+
+
+_HOSTNAME_REGEX = re.compile(
+    r"^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost)$"
+)
+
+
+def validate_auth_domain(auth_domain: str) -> bool:
+    """Validate that authDomain is a bare hostname to avoid header injection."""
+    if not isinstance(auth_domain, str):
+        return False
+    clean = auth_domain.strip()
+    if not clean or len(clean) > 253:
+        return False
+    if any(c in clean for c in ("\r", "\n", ";", " ", "\t", "/", ":", "'", '"', "\\")):
+        return False
+    return bool(_HOSTNAME_REGEX.match(clean))
+
+
+def validate_serve_env(
+    public_origin: Optional[str] = None,
+    firebase_config_raw: Optional[str] = None,
+    admin_emails: Optional[str] = None,
+) -> Tuple[List[str], dict]:
+    """Validate required environment variables for serve command.
+
+    Returns (errors, parsed_firebase_config).
+    """
+    errors: List[str] = []
+    firebase_config: Dict[str, Any] = {}
+
+    # 1. FAMILY_PUBLIC_ORIGIN
+    if not public_origin or not public_origin.strip():
+        errors.append("Missing required environment variable: FAMILY_PUBLIC_ORIGIN (e.g. https://usage.example.com)")
+    else:
+        origin_clean = public_origin.strip()
+        if not (origin_clean.startswith("https://") or origin_clean.startswith("http://")):
+            errors.append(f"Invalid FAMILY_PUBLIC_ORIGIN: must start with https:// (or http:// for local development), got: {origin_clean}")
+
+    # 2. FIREBASE_WEB_CONFIG_JSON
+    if not firebase_config_raw or not firebase_config_raw.strip():
+        errors.append("Missing required environment variable: FIREBASE_WEB_CONFIG_JSON")
+    else:
+        try:
+            parsed = json.loads(firebase_config_raw.strip())
+            if not isinstance(parsed, dict):
+                errors.append("Invalid FIREBASE_WEB_CONFIG_JSON: must be a JSON object")
+            else:
+                firebase_config = parsed
+                for field in ("apiKey", "authDomain", "projectId"):
+                    val = parsed.get(field)
+                    if not val or not isinstance(val, str) or not val.strip():
+                        errors.append(f"Invalid FIREBASE_WEB_CONFIG_JSON: missing or empty required field '{field}'")
+
+                auth_dom = parsed.get("authDomain")
+                if auth_dom and isinstance(auth_dom, str) and auth_dom.strip():
+                    if not validate_auth_domain(auth_dom):
+                        errors.append(f"Invalid FIREBASE_WEB_CONFIG_JSON: 'authDomain' must be a valid bare hostname, got: {auth_dom}")
+        except Exception as e:
+            errors.append(f"Invalid FIREBASE_WEB_CONFIG_JSON: must be valid JSON ({e})")
+
+    # 3. FAMILY_ADMIN_EMAILS
+    if not admin_emails or not admin_emails.strip():
+        errors.append("Missing required environment variable: FAMILY_ADMIN_EMAILS (comma-separated list of admin emails)")
+    else:
+        emails = {e.strip().lower() for e in admin_emails.split(",") if e.strip()}
+        if not emails:
+            errors.append("Invalid FAMILY_ADMIN_EMAILS: must contain at least one valid email address")
+
+    return errors, firebase_config

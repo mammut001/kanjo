@@ -107,9 +107,14 @@ class TestFirebaseAuth(unittest.TestCase):
         # Generate 1024-bit test RSA keypair deterministically (takes < 0.5s)
         cls.n, cls.e, cls.d = generate_test_rsa_keypair(bits=1024, seed=1337)
         cls.kid = "test-firebase-kid-1"
-        cls.project_id = "kanjo-family-usage"
-        cls.public_origin = "https://usage.paytonpei.top"
-        cls.admin_emails = {"admin@paytonpei.top", "alice@example.com"}
+        cls.project_id = "example-family-usage"
+        cls.public_origin = "https://usage.example.com"
+        cls.admin_emails = {"admin@example.com", "alice@example.com"}
+        cls.firebase_config = {
+            "apiKey": "fake-api-key",
+            "authDomain": "example-family-usage.firebaseapp.com",
+            "projectId": cls.project_id,
+        }
 
         cls.mock_jwk_manager = MockJWKManager({
             cls.kid: (cls.n, cls.e),
@@ -137,6 +142,7 @@ class TestFirebaseAuth(unittest.TestCase):
             dashboard_host="127.0.0.1",
             dashboard_port=0,
             session_rate_limiter=self.session_rate_limiter,
+            firebase_config=self.firebase_config,
             project_id=self.project_id,
             admin_emails=self.admin_emails,
             public_origin=self.public_origin,
@@ -172,7 +178,7 @@ class TestFirebaseAuth(unittest.TestCase):
             "auth_time": now - 10,
             "sub": "google-user-id-999",
             "email_verified": True,
-            "email": "admin@paytonpei.top",
+            "email": "admin@example.com",
             "firebase": {"sign_in_provider": "google.com"},
         }
         if claims:
@@ -264,7 +270,7 @@ class TestFirebaseAuth(unittest.TestCase):
         with db.get_connection(self.db_path) as conn:
             session_row = db.get_session(conn, session_id)
             self.assertIsNotNone(session_row)
-            self.assertEqual(session_row["email"], "admin@paytonpei.top")
+            self.assertEqual(session_row["email"], "admin@example.com")
 
         # Verify token is NEVER logged
         logs = self.log_stream.getvalue()
@@ -351,7 +357,7 @@ class TestFirebaseAuth(unittest.TestCase):
         token = self._create_token()
         h, p, s = token.split(".")
         # Tamper payload part by re-encoding a different payload with same signature
-        tampered_p = b64url_encode(json.dumps({"sub": "attacker", "email": "admin@paytonpei.top"}).encode("utf-8"))
+        tampered_p = b64url_encode(json.dumps({"sub": "attacker", "email": "admin@example.com"}).encode("utf-8"))
         tampered_token = f"{h}.{tampered_p}.{s}"
         payload = json.dumps({"idToken": tampered_token}).encode("utf-8")
         status, _, _ = self._dash_request(
@@ -419,7 +425,7 @@ class TestFirebaseAuth(unittest.TestCase):
 
     def test_valid_session_accesses_dashboard(self):
         with db.get_connection(self.db_path) as conn:
-            sess_id = db.create_session(conn, "admin@paytonpei.top")
+            sess_id = db.create_session(conn, "admin@example.com")
 
         status, body, headers = self._dash_request(
             "GET",
@@ -429,7 +435,7 @@ class TestFirebaseAuth(unittest.TestCase):
         self.assertEqual(status, 200)
         html_str = body.decode("utf-8")
         self.assertIn("家庭用量汇总", html_str)
-        self.assertIn("admin@paytonpei.top", html_str)
+        self.assertIn("admin@example.com", html_str)
         self.assertIn("退出", html_str)
 
         # Authenticated pages must have Cache-Control: no-store
@@ -438,7 +444,7 @@ class TestFirebaseAuth(unittest.TestCase):
     def test_expired_session_rejected(self):
         # Create expired session in DB
         with db.get_connection(self.db_path) as conn:
-            sess_id = db.create_session(conn, "admin@paytonpei.top", expires_days=-1)
+            sess_id = db.create_session(conn, "admin@example.com", expires_days=-1)
 
         status, _, headers = self._dash_request(
             "GET",
@@ -450,7 +456,7 @@ class TestFirebaseAuth(unittest.TestCase):
 
     def test_logout_invalidates_session_and_clears_cookie(self):
         with db.get_connection(self.db_path) as conn:
-            sess_id = db.create_session(conn, "admin@paytonpei.top")
+            sess_id = db.create_session(conn, "admin@example.com")
 
         # Call /auth/logout with valid Origin and Cookie
         status, body, headers = self._dash_request(
@@ -549,7 +555,7 @@ class TestFirebaseAuth(unittest.TestCase):
         self.assertIn("default-src 'self'", csp)
         self.assertIn("script-src 'self' https://apis.google.com https://www.gstatic.com", csp)
         self.assertIn("connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com", csp)
-        self.assertIn("frame-src https://kanjo-family-usage.firebaseapp.com", csp)
+        self.assertIn("frame-src https://example-family-usage.firebaseapp.com", csp)
         self.assertIn("img-src 'self' data: https://lh3.googleusercontent.com", csp)
         self.assertIn("style-src 'self' 'unsafe-inline'", csp)
         self.assertIn("base-uri 'none'", csp)

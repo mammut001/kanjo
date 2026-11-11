@@ -4,7 +4,7 @@ set -euo pipefail
 # Kanjo family usage deployment script
 # Designed to run idempotently on the VPS at /opt/family-usage
 
-DEPLOY_DIR="/opt/family-usage"
+DEPLOY_DIR="${FAMILY_DEPLOY_DIR:-/opt/family-usage}"
 if [ -d "${DEPLOY_DIR}" ]; then
   cd "${DEPLOY_DIR}"
 fi
@@ -36,8 +36,13 @@ else
   echo "Note: ${ENV_FILE} not found; proceeding with environment defaults"
 fi
 
-TAILSCALE_IP="${TAILSCALE_IP:-100.115.238.6}"
+TAILSCALE_IP="${TAILSCALE_IP:-}"
 PUBLISH_TAILSCALE="${PUBLISH_TAILSCALE:-0}"
+
+if [ "${PUBLISH_TAILSCALE}" = "1" ] && [ -z "${TAILSCALE_IP}" ]; then
+  echo "Error: TAILSCALE_IP environment variable must be set when PUBLISH_TAILSCALE=1" >&2
+  exit 1
+fi
 
 # Determine TUNNEL_ID from env or credentials file
 if [ -z "${TUNNEL_ID:-}" ]; then
@@ -53,13 +58,23 @@ fi
 
 echo "=== Deploying Kanjo Family Usage Server ==="
 echo "Working directory:    ${BASE_DIR}"
-echo "Tailscale IP:         ${TAILSCALE_IP}"
+if [ "${PUBLISH_TAILSCALE}" = "1" ]; then
+  echo "Tailscale IP:         ${TAILSCALE_IP}"
+fi
 echo "Publish Tailscale:    ${PUBLISH_TAILSCALE}"
 echo "Tunnel ID:            ${TUNNEL_ID}"
 
 # 1. Render cloudflared/config.yml from template
 if [ -f "cloudflared/config.yml.template" ]; then
-  sed "s/TUNNEL_ID/${TUNNEL_ID}/g" cloudflared/config.yml.template > cloudflared/config.yml
+  FAMILY_HOSTNAME="${FAMILY_HOSTNAME:-}"
+  if [ -z "${FAMILY_HOSTNAME}" ] && [ -n "${FAMILY_PUBLIC_ORIGIN:-}" ]; then
+    FAMILY_HOSTNAME=$(echo "${FAMILY_PUBLIC_ORIGIN}" | sed -E 's|^https?://||' | sed -E 's|/.*$||')
+  fi
+  if [ -n "${FAMILY_HOSTNAME}" ]; then
+    sed -e "s/TUNNEL_ID/${TUNNEL_ID}/g" -e "s/YOUR_DOMAIN/${FAMILY_HOSTNAME}/g" cloudflared/config.yml.template > cloudflared/config.yml
+  else
+    sed "s/TUNNEL_ID/${TUNNEL_ID}/g" cloudflared/config.yml.template > cloudflared/config.yml
+  fi
   echo "✓ Rendered cloudflared/config.yml"
 else
   echo "Error: cloudflared/config.yml.template not found" >&2

@@ -7,6 +7,7 @@ enum KanjoAppLauncher {
     private static var windowPreviewDelegate: WindowPreviewAppDelegate?
 
     static func main() {
+        FamilyReportMigration.migrate()
         if SnapshotConfig.isSnapshotMode {
             SnapshotRunner.runCLI()
         } else if CommandLine.arguments.contains("--window") {

@@ -1,7 +1,7 @@
 ﻿# PowerShell 5.1 compatible installer for Kanjo Family Reporter on Windows (no admin rights required)
 [CmdletBinding()]
 param(
-    [string]$Server = "https://usage.paytonpei.top",
+    [string]$Server = "",
     [switch]$Uninstall,
     [string]$Version = "latest",
     [switch]$SkipReport,
@@ -90,6 +90,34 @@ if ($Uninstall) {
 
     Write-Host "`n卸载完成！/ Uninstall complete." -ForegroundColor Green
     exit 0
+}
+
+# -----------------------------------------------------------------------------
+# Verify / Prompt for Family Server URL
+# -----------------------------------------------------------------------------
+if (-not $Server) {
+    if ($Interactive) {
+        while (-not $Server) {
+            $inputServer = Read-Host "请输入家庭服务器地址 / Enter family server URL (e.g. https://usage.example.com)"
+            if ($inputServer) {
+                $trimmed = $inputServer.Trim()
+                if ($trimmed.StartsWith("https://", [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $Server = $trimmed
+                } else {
+                    Write-Warning "服务器地址必须以 https:// 开头 / Server URL must start with https://"
+                }
+            }
+        }
+    } else {
+        Write-Error "缺少必填参数 -Server。非交互或 -NoPrompt 模式下必须指定家庭服务器地址 (e.g. -Server https://usage.example.com) / Missing required parameter: -Server. In non-interactive or -NoPrompt mode, you must provide the family server URL."
+        exit 1
+    }
+} else {
+    $Server = $Server.Trim()
+    if (-not $Server.StartsWith("https://", [System.StringComparison]::OrdinalIgnoreCase)) {
+        Write-Error "服务器地址必须以 https:// 开头 / Server URL must start with https://: ${Server}"
+        exit 1
+    }
 }
 
 # -----------------------------------------------------------------------------
