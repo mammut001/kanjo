@@ -83,6 +83,7 @@ jobs:
               throw "Expected installer without -Server in -NoPrompt mode to fail, but it exited with 0"
           }
           Write-Host "Installer correctly exited with non-zero code ($LASTEXITCODE) when -Server was omitted."
+          exit 0
       - name: Run installer (isolated, no schedule)
         shell: pwsh
         run: |
