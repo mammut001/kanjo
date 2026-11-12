@@ -25,36 +25,24 @@ public static class AppSetup
         L10n.ResetCache();
     }
 
+    /// <summary>
+    /// 设定当前外观。`dark` / `light` 是**显式覆盖**（截图脚本、单测），优先于设置且不写设置；
+    /// 传 null / 无法识别的值时清掉覆盖，改为跟随设置（缺省 Dark）。
+    ///
+    /// 主题变体、色板、禁用态资源三者的同步都在 <see cref="Theme.Appearance"/> 里做。
+    /// </summary>
     public static void ApplyAppearance(string? appearance)
     {
-        if (Application.Current is not { } app) return;
-        // Avalonia 的 Application 属性带线程校验：如果当前不在 UI 线程（例如某个测试
-        // 先建了 headless 会话，后续测试在测试线程上跑），直接改会抛
-        // "Call from invalid thread"。这种情况下只更新 Palette（纯静态），
-        // 主题变体由已经建立会话的那个线程负责。
-        void Apply()
+        if (AppearanceChoices.Parse(appearance) is { } explicitChoice)
         {
-            if (appearance is "dark")
-            {
-                app.RequestedThemeVariant = ThemeVariant.Dark;
-                Palette.IsDark = true;
-            }
-            else if (appearance is "light")
-            {
-                app.RequestedThemeVariant = ThemeVariant.Light;
-                Palette.IsDark = false;
-            }
-            else
-            {
-                Palette.IsDark = app.ActualThemeVariant == ThemeVariant.Dark;
-            }
-            // 禁用态资源是「按当时的色板取值的画笔」：外观一变必须重写，
-            // 否则深色快照里的禁用下拉仍是浅色底（看起来像一块白板）。
-            AppStyles.RefreshPaletteResources(app);
+            Appearance.Override = explicitChoice;
+            Appearance.Force(explicitChoice);
+            return;
         }
-
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
-        else Palette.IsDark = appearance is "dark";
+        // 没有显式外观：跟随设置。此时 Application 可能还没有（更别说设置），先按默认 Dark 起，
+        // 等 AppServices 建好之后 SnapshotRunner / KanjoApplication 会再 Apply(settings) 一次。
+        Appearance.Override = null;
+        Appearance.Force(AppearanceChoice.Dark);
     }
 }
 

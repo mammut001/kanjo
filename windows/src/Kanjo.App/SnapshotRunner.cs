@@ -30,6 +30,9 @@ public static class SnapshotRunner
 
             var services = AppServices.Create(Environment.GetCommandLineArgs());
             services.LoadQuietly();
+            // 外观：`--snapshot-appearance light|dark` 是显式覆盖，否则用设置（缺省 Dark）。
+            // 必须在建界面之前定好，否则代码里取色的画笔会停在上一套。
+            Appearance.Apply(services.Settings);
             // 截图可复现：相对日期与订阅账期倒计时都按报告时间算，而不是墙钟。
             ShortDate.ReferenceNow = services.Now;
 
@@ -105,6 +108,8 @@ public static class SnapshotRunner
             L10n.ResourcesRoot = previousRoot;
             ShortDate.ReferenceNow = null;
             HoverLayer.PinnedId = null;
+            // 进程内只出一次图；清掉显式覆盖，免得影响同一进程里的其它渲染。
+            Appearance.Override = null;
         }
     }
 

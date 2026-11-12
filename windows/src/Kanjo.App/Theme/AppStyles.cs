@@ -85,12 +85,16 @@ public static class AppStyles
         // 禁用态用和启用态**同一个底**（Palette.ControlSurfaceColor），只有文字与描边变淡。
         // Mac 上禁用就是这个观感：控件还在，只是不能点。若用 ControlFill（比启用底更深/更浅的
         // 一层），深色下禁用控件会比启用的还亮，反而更抢眼。
+        //
+        // 禁用文字用 Secondary（卡片上 6.6:1 / 背景上 5.9:1）而不是 Disabled（3.1:1）：
+        // 下拉里显示的是**当前值**（"Fri"、"16:40"），那是要读的信息，不该淡成「控件坏了」的灰。
+        // 真正的禁用按钮（Apply / Reset）走 <see cref="Ui.DisabledButton"/>，仍是明确的灰。
         app.Resources["ComboBoxBackgroundDisabled"] = new SolidColorBrush(Palette.ControlSurfaceColor);
         app.Resources["ComboBoxBorderBrushDisabled"] = Palette.CardBorder;
-        app.Resources["ComboBoxForegroundDisabled"] = Palette.Disabled;
+        app.Resources["ComboBoxForegroundDisabled"] = Palette.Secondary;
         app.Resources["TextControlBackgroundDisabled"] = new SolidColorBrush(Palette.ControlSurfaceColor);
         app.Resources["TextControlBorderBrushDisabled"] = Palette.CardBorder;
-        app.Resources["TextControlForegroundDisabled"] = Palette.Disabled;
+        app.Resources["TextControlForegroundDisabled"] = Palette.Secondary;
     }
 
     private static Style InputStyle<T>() where T : Control => new(x => x.OfType<T>())

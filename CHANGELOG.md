@@ -6,7 +6,34 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Windows: an Appearance setting.** Settings has a new Appearance card right below Language with
+  **Dark** (the new default on Windows), **Light** and **System** (follow Windows). The label and the three
+  choices are localised like the rest of the app. The choice is stored in the same settings file as Language
+  (`appearance`; a missing value means Dark) and applies live — no restart — by switching
+  `Application.RequestedThemeVariant`; **System** maps to `ThemeVariant.Default`. Every palette brush and
+  colour token is re-resolved on the switch, including the ones pages read from code (panel background,
+  window surface, card and control fills), so nothing keeps a light colour in the dark theme or the other way
+  round. The macOS app is unchanged and still follows the system appearance. `--snapshot` still renders both
+  themes explicitly (`--snapshot-appearance light|dark`), and there is a new dark Settings snapshot showing
+  the card. Four new tests cover the Dark default, the settings round-trip, the System mapping and the live
+  theme-variant change.
+
 ### Fixed
+
+- **Windows: settings controls no longer look disabled when they are not.** The day and time ComboBoxes in the
+  quota-reset rows painted their selected value ("Fri", "16:40") in the disabled grey, so an untouched row read
+  as unavailable; the selected text now uses the primary text colour whenever the control is enabled. Apply and
+  Reset still look disabled until something changes, which is correct.
+- **Windows: the subscription Edit button looks enabled.** It was styled with the disabled foreground even
+  though it is always usable (it only opens the local edit form; Apply, Cancel and Remove inside the form are
+  what the CLI actually gates). It now uses the normal enabled button style, matching the macOS
+  `SubscriptionSettingsRow` rules.
+- **Windows: a readable renewal-day stepper.** The renewal day used a bare numeric input whose two arrows were
+  drawn as 10px glyphs beside each other. It is now a pair of 30×30 stepper buttons with a solid control surface,
+  a 1px stroke and a thickened chevron, with the disabled colours kept for out-of-range values; both themes were
+  checked in the regenerated snapshots.
 
 - **Windows: nothing is clipped at the card edge any more.** The page margin and the card padding were adding up
   to a 32px double inset inside a 360px panel, so the regenerated snapshots had content squeezed against the

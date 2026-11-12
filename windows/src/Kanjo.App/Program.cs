@@ -123,9 +123,8 @@ public sealed class KanjoApplication : Application
         var services = _services;
         L10n.Store = services.Settings;
         L10n.ResetCache();
-        Palette.IsDark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
-        // 禁用态资源按色板取值，外观确定之后要重写一遍（否则深色下禁用下拉仍是浅色底）。
-        AppStyles.RefreshPaletteResources(this);
+        // 外观：设置里的值（缺省 Dark）—— 在窗口建出来之前就定好，首帧就是正确颜色。
+        Appearance.Apply(services.Settings);
         desktop.Exit += (_, _) => DisposeServices();
 
         if (args.Contains("--window"))

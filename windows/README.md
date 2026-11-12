@@ -103,6 +103,9 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
 可滚动的页面按整页高度渲染（和 Mac 的 TALL 截图一致）。面板会挂进一个不显示的 `Window`（TopLevel）再截：
 `TextBox`、`Button` 这类模板控件只有在 TopLevel 下才会套用 ControlTheme，否则截出来是空白的。
 
+**两种外观：** `--snapshot-appearance light|dark` 显式指定本次截图的主题，优先于设置里的 Appearance
+（截图不读也不写用户的选择），所以同一套脚本每次都能同时出浅色和深色图。
+
 **相对日期与「现在」：** 正常运行（托盘 / `--window`）时「现在」就是真实时钟，和 Mac 一致
 （「active yesterday」「renews in 2 days」都跟着当天走）。只有 `--snapshot` 会把「现在」固定在报告的
 `generated_at`，这样同一份数据每次截出的图逐像素一致。
@@ -192,6 +195,11 @@ Body 14 / Caption 12。Windows 上用 Segoe UI Variable（回退 Segoe UI）。
 - **右键菜单是「Show in Explorer」**（Mac 是 Finder），终端优先 Windows Terminal（`wt -d <path>`），
   没有就用 `powershell -NoExit -Command Set-Location`。
 - **iCloud sync 一节只显示标题 + 「Mac only」说明**，没有开关（Windows 版不做手机快照上传）。
+- **外观是 Windows 专有设置，默认深色。** 设置页 Language 下面的 Appearance 卡可选 Dark（默认）/
+  Light / System（跟随 Windows）。值存在同一个 `settings.json` 的 `appearance` 键（缺省 = Dark），
+  改了立即生效：切 `Application.RequestedThemeVariant`（System → `ThemeVariant.Default`），
+  同时重新解析代码里取色的所有画笔与 token（`Theme/Appearance.cs`）。Mac 版没有这个设置，
+  仍按系统外观走；`--snapshot-appearance light|dark` 依然可以显式截两种主题。
 - **CLI 命令不走 shell**：直接起 `python` 子进程（Mac 走 `/bin/zsh -l -c`），所以设置里的
   「Runs as a subprocess…」文案不同。
 - **强调色按钮跟随窗口激活状态**：SwiftUI 的 `.borderedProminent` 只在活动窗口里是蓝的；

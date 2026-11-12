@@ -50,6 +50,10 @@ public sealed class PanelWindow : Window
         };
         Content = _surface;
 
+        // 换外观：窗口表面那一层（没有 Mica 时的实色底 + 描边）也是构造时取色的。
+        Appearance.Changed += OnAppearanceChanged;
+        Closed += (_, _) => Appearance.Changed -= OnAppearanceChanged;
+
         // 强调色按钮只在活动窗口里是蓝的：面板弹出时算活动窗口，收起 / 失焦算非活动。
         Deactivated += (_, _) =>
         {
@@ -87,6 +91,14 @@ public sealed class PanelWindow : Window
             _surface.Background = Brushes.Transparent;
             _surface.BorderThickness = new Thickness(0);
         }
+    }
+
+    /// <summary>外观切换：没有 Mica 时那层实色底 / 描边要换成新色板（Mica 下保持透明）。</summary>
+    private void OnAppearanceChanged()
+    {
+        if (ActualTransparencyLevel == WindowTransparencyLevel.Mica) return;
+        _surface.Background = Palette.PanelBackground;
+        _surface.BorderBrush = Palette.CardBorder;
     }
 
     /// <summary>放在工作区右下角（托盘上方），像 macOS 从菜单栏弹出。</summary>

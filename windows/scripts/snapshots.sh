@@ -52,7 +52,8 @@ for entry in "${routes[@]}"; do
 done
 
 for entry in "overview|overview-dark.png" "project:0|project-0-dark.png" \
-             "disk|disk-dark.png" "settings|settings-dark.png"; do
+             "disk|disk-dark.png" "settings|settings-dark.png" \
+             "settings:subscriptions:codex|settings-subscriptions-codex-dark.png"; do
   shoot "${entry%%|*}" "${entry##*|}" dark
 done
 

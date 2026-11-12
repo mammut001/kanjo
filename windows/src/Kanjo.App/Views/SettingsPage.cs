@@ -145,6 +145,7 @@ public sealed class SettingsPage : ScrollPage
         }
 
         _root.Children.Add(LanguageSection());
+        _root.Children.Add(AppearanceSection());
         _root.Children.Add(DataSourceSection());
         _root.Children.Add(RefreshSection());
         _root.Children.Add(ICloudSection());
@@ -246,6 +247,27 @@ public sealed class SettingsPage : ScrollPage
         });
         return Section(L10n.Tr("settings.section.language"),
             [SimpleRow(L10n.Tr("settings.language"), null, picker)]);
+    }
+
+    // MARK: - Appearance（Windows 专有：Mac 版永远跟随系统）
+
+    /// <summary>
+    /// 外观卡片：Dark（默认）/ Light / System。
+    /// 选择立即生效（<see cref="App.Appearance.Choose"/>），不重启；System 等于跟随 Windows。
+    /// </summary>
+    private Control AppearanceSection()
+    {
+        // 显示的是**设置里的值**（不是截图的显式覆盖）：--snapshot-appearance 只决定这张图用哪套
+        // 颜色，不代表用户选了那个外观，所以截图里这一格应始终显示设置本身（缺省 Dark）。
+        var current = Appearance.FromSettings(S);
+        var options = AppearanceChoices.All.Select(c => c.Label()).ToList();
+        var picker = Picker.Make(options, AppearanceChoices.All.ToList().IndexOf(current), index =>
+        {
+            Appearance.Choose(S, AppearanceChoices.All[index]);
+            // 外观一变整页都会重建一次（PanelView 订阅了 Appearance），这里不用再手动 Rebuild。
+        });
+        return Section(WindowsL10n.Tr("settings.section.appearance"),
+            [SimpleRow(WindowsL10n.Tr("settings.appearance"), WindowsL10n.Tr("settings.appearance.note"), picker)]);
     }
 
     // MARK: - Data source

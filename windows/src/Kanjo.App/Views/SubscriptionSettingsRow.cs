@@ -11,7 +11,7 @@ namespace Kanjo.App.Views;
 /// 展示：档位 · 月费、Renews on day N 步进、Apply / Reset / Edit、来源、billing 链接。
 /// 编辑：档位下拉（来自 `config plans --json`）+ 自定义文本、月费、续费日、Apply / Cancel / Remove。
 ///
-/// 步进箭头是 32×32 的可点图标；指针停在上面时滚轮滚页面（<see cref="WheelPolicy"/> 会拦下来），
+/// 续费日用的是两个 30×30 的步进按钮；指针停在上面时滚轮滚页面（<see cref="WheelPolicy"/> 会拦下来），
 /// 不会像以前那样「滚一下就悄悄改了续费日」。
 /// </summary>
 public sealed class SubscriptionSettingsRow : StackPanel
@@ -127,12 +127,15 @@ public sealed class SubscriptionSettingsRow : StackPanel
         var actions = Ui.H(8);
         var apply = Ui.AccentButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
         var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit, compact: true);
+        // Edit 只切换本地的「编辑表单」，不碰 CLI，所以**始终可用**（Mac 版把它和 Apply / Reset
+        // 放在同一个 `.disabled(...)` 里，结果在 --data / 文件来源下连编辑都进不去）。
+        // 真正需要 gating 的是表单里的 Apply / Remove（它们写配置）。
         var edit = Ui.StandardButton(L10n.Tr("settings.edit"), () =>
         {
             SyncInputs(sub);
             _editing = true;
             Rebuild();
-        }, enabled: CanEdit, compact: true);
+        }, compact: true);
         actions.Children.Add(apply);
         actions.Children.Add(reset);
         actions.Children.Add(edit);
@@ -224,15 +227,16 @@ public sealed class SubscriptionSettingsRow : StackPanel
         var priceBlock = Ui.V(4);
         priceBlock.Children.Add(Ui.Text(L10n.Tr("settings.monthly_price_usd"), Type.CaptionSize,
             FontWeight.SemiBold, Palette.Secondary));
-        var priceRow = Ui.H(10);
         var price = Ui.TextField(_price, L10n.Tr("settings.monthly_price_usd"), mono: true, width: 110);
         var priceField = price.Box;
         priceField.TextChanged += (_, _) => _price = priceField.Text ?? "";
         ToolTip.SetTip(priceField, L10n.Tr("settings.monthly_price_usd"));
-        priceRow.Children.Add(price.Root);
-        priceRow.Children.Add(Stepper(!_saving));
-        priceBlock.Children.Add(priceRow);
+        priceBlock.Children.Add(price.Root);
         box.Children.Add(priceBlock);
+
+        // 续费日步进器单独一行：和 110px 的价格框并排会超出 332px 的可用宽度
+        // （旧版两个小箭头总宽才 52px 所以放得下，换成 96px 的数字框后必须落行）。
+        box.Children.Add(Stepper(!_saving));
 
         var actions = Ui.H(8);
         var applyEnabled = !_saving && !_services.IsLoading;
@@ -286,50 +290,62 @@ public sealed class SubscriptionSettingsRow : StackPanel
     }
 
     /// <summary>
-    /// 步进控件（SwiftUI 的 `Stepper`）：左边一行「Renews on day N」，右边两个 32×32 箭头。
-    /// 箭头是普通可点区域（不是 NumericUpDown），所以不会自己吞滚轮；滚轮由页面处理。
+    /// 续费日步进控件：一行「Renews on day N」+ 两个并排的 30×30 步进按钮。
+    ///
+    /// 为什么不用 <see cref="NumericUpDown"/>：Avalonia 的 Fluent 模板把它画成并排的两个 10px 小箭头
+    /// （比自己画还小、还淡），在 360px 面板里既不好点也不好认。这里按 WinUI 的观感自绘：
+    /// 实色控件底 + 1px 描边 + 12px 的箭头，箭头用次要色（卡片上 6.6:1 / 5.9:1，深色 8.5 / 9.7），
+    /// 两种外观下都看得清。数值本身就在左边的文字里（和 Mac 的 Stepper 一致）。
+    ///
+    /// 滚轮仍归页面：这两个是普通可点区域，<see cref="WheelPolicy"/> 不会把它们当成值控件。
     /// </summary>
     private Control Stepper(bool enabled)
     {
-        var row = Ui.H(6);
-        row.Children.Add(Ui.Text(L10n.TrL(null, "settings.renews_on_day", _day), Type.CaptionSize, null,
-            enabled ? Palette.Foreground : Palette.Secondary));
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var label = Ui.Text(L10n.TrL(null, "settings.renews_on_day", _day), Type.CaptionSize, null,
+            enabled ? Palette.Foreground : Palette.Secondary);
+        label.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(label, 0);
+        row.Children.Add(label);
 
-        var arrows = Ui.H(0);
-        Control ArrowGlyph(Control glyph)
-        {
-            glyph.HorizontalAlignment = HorizontalAlignment.Center;
-            glyph.VerticalAlignment = VerticalAlignment.Center;
-            return new Grid { Width = 26, Height = 22, Children = { glyph } };
-        }
-
-        var up = new Clickable(ArrowGlyph(Icons.ChevronUp(9, enabled ? Palette.Secondary : Palette.Disabled)), () =>
-        {
-            _day = _day >= 28 ? 1 : _day + 1;
-            Rebuild();
-        }, L10n.Tr("settings.renews_day_help"), radius: 4)
-        {
-            Width = 26,
-            Height = 22,
-        };
-        var down = new Clickable(ArrowGlyph(Icons.ChevronDown(9, enabled ? Palette.Secondary : Palette.Disabled)), () =>
-        {
-            _day = _day <= 1 ? 28 : _day - 1;
-            Rebuild();
-        }, L10n.Tr("settings.renews_day_help"), radius: 4)
-        {
-            Width = 26,
-            Height = 22,
-        };
-        arrows.Children.Add(up);
-        arrows.Children.Add(down);
-        if (!enabled)
-        {
-            arrows.Opacity = 0.6;
-            arrows.IsHitTestVisible = false;
-        }
+        var arrows = Ui.H(6);
+        arrows.HorizontalAlignment = HorizontalAlignment.Right;
+        arrows.VerticalAlignment = VerticalAlignment.Center;
+        arrows.Children.Add(SpinButton(Icons.ChevronUp(14, enabled ? Palette.Secondary : Palette.Disabled, 1.8),
+            () =>
+            {
+                _day = _day >= 28 ? 1 : _day + 1;
+                Rebuild();
+            }, enabled));
+        arrows.Children.Add(SpinButton(Icons.ChevronDown(14, enabled ? Palette.Secondary : Palette.Disabled, 1.8),
+            () =>
+            {
+                _day = _day <= 1 ? 28 : _day - 1;
+                Rebuild();
+            }, enabled));
+        Grid.SetColumn(arrows, 1);
         row.Children.Add(arrows);
         return row;
+    }
+
+    /// <summary>一个 30×30 的步进按钮：控件底 + 1px 描边 + 居中的箭头。</summary>
+    private Control SpinButton(Control glyph, Action onClick, bool enabled)
+    {
+        glyph.HorizontalAlignment = HorizontalAlignment.Center;
+        glyph.VerticalAlignment = VerticalAlignment.Center;
+        var button = new Clickable(new Panel { Width = 30, Height = 30, Children = { glyph } }, onClick,
+            L10n.Tr("settings.renews_day_help"), radius: 4)
+        {
+            Width = 30,
+            Height = 30,
+            Background = enabled ? Palette.ControlSurface : Palette.DisabledFill,
+            BorderBrush = new SolidColorBrush(enabled ? Palette.CardStrokeColor : Palette.DisabledColor),
+            BorderThickness = new Thickness(1),
+            IsHitTestVisible = enabled,
+            IsEnabled = enabled,
+        };
+        if (!enabled) button.Opacity = 0.9;
+        return button;
     }
 
     private void Rebuild()

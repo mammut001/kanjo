@@ -18,14 +18,16 @@ public static class Icons
 {
     private const double G = 12; // 图标几何坐标系边长
 
-    private static Control Glyph(string data, double size, IBrush? brush, bool filled)
+    private static Control Glyph(string data, double size, IBrush? brush, bool filled,
+        double? strokeThickness = null)
     {
         var path = new Path
         {
             Data = Geometry.Parse(data),
             Fill = filled ? brush ?? Palette.Foreground : null,
             Stroke = filled ? null : brush ?? Palette.Foreground,
-            StrokeThickness = 1.1,
+            // 默认 1.1 对 12px 的小图标够用；步进箭头这种要「一眼看见」的给小号也加粗。
+            StrokeThickness = strokeThickness ?? 1.1,
             StrokeLineCap = PenLineCap.Round,
             StrokeJoin = PenLineJoin.Round,
             Stretch = Stretch.None,
@@ -198,12 +200,12 @@ public static class Icons
     public static Control ChevronDownUp(double size = 8, IBrush? brush = null) => Glyph(
         "M3.2,4.6 L6,1.8 L8.8,4.6 M3.2,7.4 L6,10.2 L8.8,7.4", size, brush, filled: false);
 
-    /// <summary>chevron.down / chevron.up（步进器的小箭头）。</summary>
-    public static Control ChevronUp(double size = 7, IBrush? brush = null) => Glyph(
-        "M1.5,6.5 L4.5,3.5 L7.5,6.5", size, brush, filled: false);
+    /// <summary>chevron.down / chevron.up（步进器的箭头）：给小号也加粗到 1.8，小按钮里才看得见。</summary>
+    public static Control ChevronUp(double size = 7, IBrush? brush = null, double strokeThickness = 1.1) => Glyph(
+        "M1.5,6.5 L4.5,3.5 L7.5,6.5", size, brush, filled: false, strokeThickness: strokeThickness);
 
-    public static Control ChevronDown(double size = 7, IBrush? brush = null) => Glyph(
-        "M1.5,3.5 L4.5,6.5 L7.5,3.5", size, brush, filled: false);
+    public static Control ChevronDown(double size = 7, IBrush? brush = null, double strokeThickness = 1.1) =>
+        Glyph("M1.5,3.5 L4.5,6.5 L7.5,3.5", size, brush, filled: false, strokeThickness: strokeThickness);
 
     /// <summary>状态小点（托盘状态 / 圆点）。</summary>
     public static Control StatusDot(IBrush brush, double size = 6) => new Ellipse

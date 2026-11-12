@@ -124,15 +124,18 @@ public sealed class SegmentedControl : Border
                 Background = isSelected ? Palette.Accent : Brushes.Transparent,
                 MinHeight = 26,
             };
-            chip.Transitions = new Avalonia.Animation.Transitions
+            if (!Motion.Snapshot)
             {
-                new Avalonia.Animation.BrushTransition
+                chip.Transitions = new Avalonia.Animation.Transitions
                 {
-                    Property = BackgroundProperty,
-                    Duration = TimeSpan.FromMilliseconds(Metrics.StateTransitionMilliseconds),
-                    Easing = new Avalonia.Animation.Easings.LinearEasing(),
-                },
-            };
+                    new Avalonia.Animation.BrushTransition
+                    {
+                        Property = BackgroundProperty,
+                        Duration = TimeSpan.FromMilliseconds(Metrics.StateTransitionMilliseconds),
+                        Easing = new Avalonia.Animation.Easings.LinearEasing(),
+                    },
+                };
+            }
             if (!isSelected)
             {
                 chip.PointerEntered += (_, _) => chip.Background = Palette.RowHover;
@@ -171,6 +174,10 @@ public static class Picker
             IsEnabled = enabled,
             CornerRadius = new CornerRadius(4),
             MinHeight = 32,
+            // 选中的值是这个控件的主要内容，启用时必须用正文色。
+            // 不显式给的话模板会走主题里的 ComboBoxForeground，某些状态（禁用 / 失焦）下是灰的，
+            // 一眼看上去像「控件坏了」而不是「值是这个」。
+            Foreground = enabled ? Palette.Foreground : Palette.Secondary,
         };
         if (enabled)
         {

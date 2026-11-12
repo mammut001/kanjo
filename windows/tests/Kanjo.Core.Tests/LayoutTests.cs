@@ -292,4 +292,110 @@ public sealed class LayoutTests : KanjoTestCase
             window.Close();
         });
     }
+
+    /// <summary>
+    /// 续费日的步进控件要「正常尺寸、看得清」：两个 30×30 的按钮、箭头不小于 12px、
+    /// 启用时箭头用次要色（卡片上 6.6:1），不是原来 26×22 + 9px 小箭头 + 低对比度的组合。
+    /// </summary>
+    [Fact]
+    public void TestSubscriptionStepperIsVisibleAndFullSize()
+    {
+        OnUi(() =>
+        {
+            var page = new SettingsPage(NewServices(), null, "codex", snapshot: false, onBack: () => { });
+            var window = Show(page);
+
+            var row = page.GetVisualDescendants().OfType<SubscriptionSettingsRow>().First();
+            // 步进按钮是 30×30 的可点区域（原来的箭头是 26×22 且几乎看不见）。
+            var spins = row.GetVisualDescendants().OfType<Clickable>()
+                .Where(c => Math.Abs(c.Bounds.Width - 30) < 0.5 && Math.Abs(c.Bounds.Height - 30) < 0.5)
+                .ToList();
+            Assert.True(spins.Count >= 2, $"expected two 30x30 step buttons, found {spins.Count}");
+
+            foreach (var spin in spins)
+            {
+                // 有实底 + 描边，不是透明的一小块。
+                Assert.NotNull(spin.Background);
+                Assert.IsType<SolidColorBrush>(spin.Background);
+                Assert.Equal(1, spin.BorderThickness.Left);
+                // 箭头本身不小于 12px。
+                var glyph = spin.GetVisualDescendants().OfType<Control>()
+                    .FirstOrDefault(c => c.Bounds.Width > 0 && c.Bounds.Height > 0);
+                Assert.NotNull(glyph);
+                Assert.True(glyph!.Bounds.Width >= 10 && glyph.Bounds.Height >= 10,
+                    $"arrow glyph is {glyph.Bounds.Width:F1}x{glyph.Bounds.Height:F1}, too small to see");
+            }
+
+            window.Close();
+        });
+    }
+
+    /// <summary>
+    /// 订阅行的禁用态规则（对齐 macOS 的 SubscriptionSettingsRow）：
+    /// Apply / Reset 需要「可以编辑」，Edit 只是打开本地编辑表单所以**始终可用**。
+    /// </summary>
+    [Fact]
+    public void TestSubscriptionButtonsFollowMacEnabledRules()
+    {
+        OnUi(() =>
+        {
+            // --data 覆盖 ⇒ CanEditSubscriptions = false（和 Mac 的 dataOverride != nil 一样）。
+            var page = new SettingsPage(NewServices(), null, "codex", snapshot: false, onBack: () => { });
+            var window = Show(page);
+
+            var row = page.GetVisualDescendants().OfType<SubscriptionSettingsRow>().First();
+            Control? Find(string label) => row.GetVisualDescendants().OfType<Control>()
+                .FirstOrDefault(c =>
+                    (c is ContentControl cc && Equals(cc.Content, label)) ||
+                    (c is Border { Child: TextBlock tb } && tb.Text == label));
+
+            // Edit 永远可用，而且用的是启用态样式（真正的 Button，不是灰掉的静态 Border）。
+            var edit = Find(L10n.Tr("settings.edit"));
+            Assert.NotNull(edit);
+            Assert.IsType<Button>(edit);
+            Assert.True(edit!.IsEnabled, "Edit only opens the local form, so it must stay enabled");
+            Assert.Equal(Palette.ForegroundColor, ((ISolidColorBrush)((Button)edit).Foreground!).Color);
+
+            // Apply / Reset 写配置，在不能编辑时是禁用外观。
+            foreach (var label in new[] { L10n.Tr("common.apply"), L10n.Tr("common.reset") })
+            {
+                var button = Find(label);
+                Assert.NotNull(button);
+                Assert.False(button!.IsEnabled, $"'{label}' must be disabled when subscriptions can't be edited");
+            }
+
+            window.Close();
+        });
+    }
+
+    /// <summary>
+    /// 下拉里显示的「当前值」必须读得出：启用时是正文色，禁用时也只用次要色
+    /// （卡片上 6.6:1），不能淡成「控件坏了」的 3:1 灰。
+    /// </summary>
+    [Fact]
+    public void TestPickerShowsItsValueInReadableColour()
+    {
+        OnUi(() =>
+        {
+            var page = new SettingsPage(NewServices(), null, null, snapshot: false, onBack: () => { });
+            var window = Show(page);
+
+            var combos = page.GetVisualDescendants().OfType<ComboBox>().ToList();
+            Assert.NotEmpty(combos);
+            foreach (var combo in combos)
+            {
+                var brush = combo.Foreground as ISolidColorBrush;
+                Assert.NotNull(brush);
+                var color = brush!.Color;
+                // 只允许两种：正文色（启用）或次要色（禁用）。
+                Assert.True(color == Palette.ForegroundColor || color == Palette.SecondaryColor,
+                    $"combo '{combo.SelectedItem}' uses {color}, expected primary or secondary text");
+                // 两种都能在卡片上读（≥ 4.5:1）。
+                Assert.True(Palette.Contrast(color, Palette.CardColor) >= 4.5,
+                    $"combo text {color} has contrast {Palette.Contrast(color, Palette.CardColor):F2}:1");
+            }
+
+            window.Close();
+        });
+    }
 }

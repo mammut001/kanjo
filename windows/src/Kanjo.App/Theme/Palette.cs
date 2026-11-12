@@ -24,13 +24,6 @@ public static class Palette
     /// </summary>
     private static Color? _platformAccent;
 
-    public static void ApplyAppearance(string? appearance)
-    {
-        if (appearance is "dark") IsDark = true;
-        else if (appearance is "light") IsDark = false;
-        else IsDark = Application.Current?.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
-    }
-
     /// <summary>
     /// 读取系统强调色（<c>PlatformSettings.GetColorValues().AccentColor1</c>）。
     /// 必须在渲染后端起来之后调用；headless / 无平台设置时静默保留默认值。
@@ -109,6 +102,9 @@ public static class Palette
     /// 否则深色下禁用控件比启用的还亮（#303030 vs #1A1A1A），看起来像另一套控件。
     /// </summary>
     public static Color ControlSurfaceColor => Hex(0xFFFFFF, 0x1A1A1A);
+
+    /// <summary>同上，直接当画笔用（NumericUpDown 这类要设 Background 的控件）。</summary>
+    public static IBrush ControlSurface => new SolidColorBrush(ControlSurfaceColor);
 
     /// <summary>悬停卡 / 弹出层的阴影（离屏渲染下用偏移的半透明圆角矩形模拟）。</summary>
     public static BoxShadows CardShadow => IsDark

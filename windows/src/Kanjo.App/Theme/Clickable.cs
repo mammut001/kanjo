@@ -34,15 +34,20 @@ public sealed class Clickable : Border
         if (!string.IsNullOrEmpty(tip)) ToolTip.SetTip(this, tip);
 
         // 过渡只作用在 Background 上：90ms 的线性淡入，和 WinUI 的悬停一致。
-        Transitions = new Transitions
+        // 截图 / headless 测试（Motion.Snapshot）不挂过渡：那里没有渲染循环，过渡时钟拿不到
+        // MediaContext 会在别的线程上报 "Call from invalid thread"。
+        if (!Motion.Snapshot)
         {
-            new BrushTransition
+            Transitions = new Transitions
             {
-                Property = BackgroundProperty,
-                Duration = TimeSpan.FromMilliseconds(Metrics.StateTransitionMilliseconds),
-                Easing = new LinearEasing(),
-            },
-        };
+                new BrushTransition
+                {
+                    Property = BackgroundProperty,
+                    Duration = TimeSpan.FromMilliseconds(Metrics.StateTransitionMilliseconds),
+                    Easing = new LinearEasing(),
+                },
+            };
+        }
 
         PointerEntered += (_, _) =>
         {

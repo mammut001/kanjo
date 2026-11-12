@@ -17,10 +17,12 @@ public sealed class PanelView : Grid
 
     private readonly AppServices _services;
     private readonly Border _contentHost;
-    private readonly Clickable _refreshButton;
-    private readonly TextBlock _statusText;
+    // 底栏里的两个控件随外观重建（图标的取色是构造时的），所以不是 readonly。
+    private Clickable _refreshButton = null!;
+    private TextBlock _statusText = null!;
     private readonly StackPanel _banners;
     private readonly HoverLayer _hover = new();
+    private Border? _footer;
 
     public AppRoute Route { get; private set; }
 
@@ -38,20 +40,6 @@ public sealed class PanelView : Grid
         ClipToBounds = !snapshotMode;
         Background = Palette.PanelBackground;
 
-        _statusText = Ui.Text("", 12, null, Palette.Secondary);
-        _statusText.VerticalAlignment = VerticalAlignment.Center;
-
-        _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
-        {
-            // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
-            Task.Run(() =>
-            {
-                if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
-                else _services.RequestUserRefresh();
-                _services.NotifyChanged();
-            });
-        }, L10n.Tr("menu.refresh_now"));
-
         _banners = Ui.V(6);
         _banners.Margin = new Thickness(10, 10, 10, 2);
         _banners.IsVisible = false;
@@ -66,9 +54,9 @@ public sealed class PanelView : Grid
         Grid.SetRow(_contentHost, 1);
         Children.Add(_contentHost);
 
-        var footer = BuildFooter();
-        Grid.SetRow(footer, 2);
-        Children.Add(footer);
+        _footer = BuildFooter();
+        Grid.SetRow(_footer, 2);
+        Children.Add(_footer);
 
         Grid.SetRow(_hover, 0);
         Grid.SetRowSpan(_hover, 3);
@@ -76,8 +64,38 @@ public sealed class PanelView : Grid
         HoverLayer.Current = _hover;
 
         _services.NavigateRequested += Navigate;
+        // 换外观：代码里所有画笔都是构造时取值的（卡片底 / 文字 / 描边 / 禁用态），
+        // 所以这里把整块面板重建一次，而不是指望它们自己跟着变。
+        // 弱引用订阅：面板会被丢弃重建，静态事件不能让旧面板活着。
+        Appearance.Watch(this, p => p.OnAppearanceChanged());
+        DetachedFromVisualTree += (_, _) => Appearance.Unwatch(this);
         Rebuild();
         _services.Changed += OnChanged;
+    }
+
+    /// <summary>外观切换后重建外壳 + 页面（色板已由 <see cref="Appearance"/> 切好）。</summary>
+    internal void OnAppearanceChanged()
+    {
+        void Apply()
+        {
+            Background = Palette.PanelBackground;
+
+            // 底栏自己的背景 / 描边 / 图标颜色也是构造时取的，跟着换一份。
+            // 重建后要保证悬停层仍在最上面（它跨三行画悬停卡）。
+            if (_footer is not null) Children.Remove(_footer);
+            Children.Remove(_hover);
+            _footer = BuildFooter();
+            Grid.SetRow(_footer, 2);
+            Children.Add(_footer);
+            Children.Add(_hover);
+
+            // 内容区里的页面同样是构造时取色，整页重建一次。
+            _hover.Hide();
+            Rebuild();
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+        else Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
     }
 
     private void OnChanged()
@@ -256,9 +274,23 @@ public sealed class PanelView : Grid
 
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
     /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边三个图标按钮（带 tooltip）。</summary>
-    private Control BuildFooter()
+    private Border BuildFooter()
     {
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
+
+        // 底栏的图标 / 文字都按当前外观取色，所以每次构建都重新造（外观切换时会重建底栏）。
+        _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
+        {
+            // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
+            Task.Run(() =>
+            {
+                if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
+                else _services.RequestUserRefresh();
+                _services.NotifyChanged();
+            });
+        }, L10n.Tr("menu.refresh_now"));
+        _statusText = Ui.Text("", 12, null, Palette.Secondary);
+        _statusText.VerticalAlignment = VerticalAlignment.Center;
 
         var left = Ui.H(4);
         left.Children.Add(_refreshButton);
