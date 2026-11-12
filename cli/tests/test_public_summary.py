@@ -295,6 +295,30 @@ class PublicSummaryExportTest(unittest.TestCase):
         self.assertEqual(len(top_argon), 1)
         self.assertEqual(top_argon[0]["tokens_total"], argon_models[0]["tokens_total"])
 
+    def test_models_used_lists_every_model_beyond_top_models_cap(self):
+        from kanjo.pricing import PriceBook
+        from kanjo.sources.base import Message, Session
+
+        names = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-5.5",
+                 "gpt-5-mini", "gemini-3.8-flash", "grok-4.7-build", "qwen3.8-max",
+                 "deepseek-v4-flash", "kimi-k2.7", "glm-5.2", "minimax-m3"]
+        s = Session(id="many-models", agent="opencode", file="/path/many.db")
+        s.messages = [Message(ts=1793500000.0 + i * 60, model=name, input=1000 + i, output=100)
+                      for i, name in enumerate(names)]
+        scan_res = export.ScanResult(sessions=[s], failed_files=[], stats={})
+        summary = export.build_public_summary(prices=PriceBook(), scan_result=scan_res)
+
+        for period in [summary["all_time"]] + summary["months"] + summary["weeks"]:
+            self.assertEqual(len(period["top_models"]), 8)
+            self.assertEqual(len(period["models_used"]), len(names))
+            self.assertEqual(period["models_used"], sorted(period["models_used"]))
+            self.assertTrue({m["model"] for m in period["top_models"]} <= set(period["models_used"]))
+        self.assertEqual(export.check_public_summary_invariants(summary), [])
+
+        summary["all_time"]["models_used"] = summary["all_time"]["models_used"][:3]
+        problems = export.check_public_summary_invariants(summary)
+        self.assertTrue(any("not in models_used" in p for p in problems))
+
     def test_provider_models_invariant_check(self):
         code, out, _ = self._run_cli("export", "--public-summary")
         self.assertEqual(code, 0)
