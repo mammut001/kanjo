@@ -16,19 +16,29 @@ namespace Kanjo.App;
 public sealed class TrayController : IDisposable
 {
     private readonly AppServices _services;
+    private readonly UpdateService? _updates;
     private readonly TrayIcon _tray;
     private readonly NativeMenu _menu;
+    private readonly NativeMenuItem _restartToUpdate;
     private PanelWindow? _panel;
     private bool _disposed;
 
-    public TrayController(AppServices services)
+    public TrayController(AppServices services, UpdateService? updates = null)
     {
         _services = services;
+        _updates = updates;
 
         _menu = new NativeMenu();
         _menu.Items.Add(MenuItem(L10n.Tr("menu.back_to_overview"), () => ShowPanel()));
         _menu.Items.Add(MenuItem(L10n.Tr("menu.refresh_now"), RefreshNow));
         _menu.Items.Add(MenuItem(L10n.Tr("menu.settings"), () => ShowPanel(AppRoute.Settings)));
+
+        // 「Restart to update」只在已下载好更新时出现（Mac 版没有更新界面，别的提示一律不做）。
+        _restartToUpdate = new NativeMenuItem(WindowsL10n.Tr("update.restart_to_install"));
+        _restartToUpdate.Click += (_, _) => RestartToUpdate();
+        _restartToUpdate.IsVisible = updates?.HasReadyUpdate == true;
+        _menu.Items.Add(_restartToUpdate);
+
         _menu.Items.Add(new NativeMenuItemSeparator());
         _menu.Items.Add(MenuItem(L10n.Tr("menu.quit"), Quit));
 
@@ -43,7 +53,36 @@ public sealed class TrayController : IDisposable
         TrayIcon.SetIcons(Application.Current!, new TrayIcons { _tray });
 
         _services.Changed += UpdateTray;
+        if (_updates is not null) _updates.Changed += UpdateRestartItem;
         UpdateTray();
+    }
+
+    /// <summary>更新下载完成后才把菜单项显示出来（Windows 的通知区域菜单是活的原生菜单）。</summary>
+    private void UpdateRestartItem()
+    {
+        void Apply()
+        {
+            if (_disposed) return;
+            _restartToUpdate.IsVisible = _updates?.HasReadyUpdate == true;
+        }
+        if (Dispatcher.UIThread.CheckAccess()) Apply();
+        else Dispatcher.UIThread.Post(Apply);
+    }
+
+    /// <summary>装了已下载的更新并重启（Velopack 会在这里结束进程）。</summary>
+    private void RestartToUpdate()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                _updates?.RestartToUpdate();
+            }
+            catch (Exception)
+            {
+                // 更新器起不来就算了，下次启动照样会应用。
+            }
+        });
     }
 
     private static NativeMenuItem MenuItem(string header, Action action)
@@ -127,6 +166,7 @@ public sealed class TrayController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _services.Changed -= UpdateTray;
+        if (_updates is not null) _updates.Changed -= UpdateRestartItem;
         _tray.IsVisible = false;
         _tray.Dispose();
     }

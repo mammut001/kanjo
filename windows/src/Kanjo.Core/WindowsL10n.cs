@@ -79,6 +79,13 @@ public static class WindowsL10n
             ["zh-Hans"] = "需要一台装了 Docker 的 VPS、Cloudflare 上的域名和一个 Firebase 项目。部署完成后可以切回「加入家庭」上报这台电脑的用量。",
             ["fr"] = "Nécessite un VPS avec Docker, un domaine sur Cloudflare et un projet Firebase. Une fois déployé, revenez à « Rejoindre une famille » pour rapporter l'usage de ce PC.",
         },
+        // 托盘菜单：只在更新已经下载完、可以立刻装上时出现（Mac 版没有更新界面）。
+        ["update.restart_to_install"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Restart to update",
+            ["zh-Hans"] = "重启以更新",
+            ["fr"] = "Redémarrer pour mettre à jour",
+        },
     };
 
     /// <summary>取覆盖文案；没有覆盖的 key 回退到 Mac 字符串表。</summary>

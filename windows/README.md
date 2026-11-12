@@ -6,7 +6,8 @@ JSON 契约（见仓库根目录的 `CONTRACT.md`）。设计决策见 `docs/win
 
 已完成：核心层（模型 / 解码 / 格式化 / 时间范围 / 方块图 / 热力条 / 订阅 / 调度 / 设置存储 / CLI 调用 / 本地化）
 + 外壳（托盘图标、弹出面板、底栏）+ 全部页面（总览、项目详情、桶详情、磁盘、设置）+ 悬停卡 / 右键菜单 / 拖动排序
-+ 后台行为（文件监听、兜底定时器、睡眠 / 唤醒 / 节电模式、磁盘预取、定时发布、家庭上报、单实例）。
++ 后台行为（文件监听、兜底定时器、睡眠 / 唤醒 / 节电模式、磁盘预取、定时发布、家庭上报、单实例）
++ 打包（Velopack 安装包、内置 Python + CLI、自动更新、Windows CI）。
 
 ## 结构
 
@@ -15,9 +16,13 @@ windows/
   Kanjo.Windows.sln
   src/Kanjo.Core      # net10.0 类库，无 UI 依赖（从 Mac 的 KanjoCore 移植）
   src/Kanjo.App       # Avalonia 11 桌面应用（Fluent 主题）
+  src/Kanjo.App/Assets    # Kanjo.ico（应用图标）/ Tray.ico / TrayError.ico（托盘）
   tests/Kanjo.Core.Tests  # xUnit，逐条移植 ui/Tests/KanjoTests
   snapshots/          # 各路由的离屏截图（见下）
   scripts/snapshots.sh    # 一次生成全部截图
+  scripts/build-release.sh / .ps1   # 打包：publish + python + CLI + vpk（见下）
+  scripts/smoke.ps1       # 安装后冒烟测试（真机）
+  scripts/make-icons.py   # 由 ui/Resources/Kanjo.png 生成 .ico（需要 Pillow）
 ```
 
 本地化文案直接链接 Mac 版的 `ui/Sources/KanjoCore/Resources/{en,zh-Hans,fr}.lproj/Localizable.strings`
@@ -165,7 +170,119 @@ Mac 上不存在这个脚本，所以 App 里没有对应提示。
 **单实例：** 只有托盘模式限制单实例；`--window`（开发预览）和 `--snapshot`（离屏截图）可以随便开多个。
 第二次启动会等 2 秒尝试连上主实例的管道，连不上就当作自己启动（宁可多开也不开不起来）。
 
+## 打包、安装、更新（批次 5）
+
+正式版用 **Velopack** 打成 per-user 安装包（`%LOCALAPPDATA%\Kanjo`，不需要管理员权限），
+支持从 GitHub Releases 自动更新。版本号来自仓库根目录的 `VERSION`（App 的 `Version` 由 MSBuild 读这个文件，
+所以 **App 版本 == CLI 版本**；`build-release` 也会核对传进来的版本号）。
+
+### 产物
+
+| 文件 | 说明 |
+|---|---|
+| `windows/dist/<rid>/` | 发布文件夹：`Kanjo.exe` + .NET 10 运行时 + `python\` + `cli\` + `sample.json` |
+| `windows/dist/Kanjo-<rid>-<version>.zip` | 同一个文件夹的 zip（本地试用 / 手动分发） |
+| `windows/dist/releases/<rid>/Kanjo-<rid>-Setup.exe` | 安装包（`vpk pack` 生成），装到 `%LOCALAPPDATA%\Kanjo` |
+| `windows/dist/releases/<rid>/Kanjo-<version>-<rid>-full.nupkg` | 更新包（自动更新下载这个） |
+| `windows/dist/releases/<rid>/RELEASES-<rid>` | 更新清单（`UpdateManager` 读它） |
+
+`<rid>` 是 `win-x64` 或 `win-arm64`；通道名也用 `<rid>`，两种架构的更新互不干扰。
+
+### 构建
+
+Windows（CI 走这条）：
+
+```powershell
+dotnet tool install -g vpk --version 1.2.158   # 一次性
+pwsh windows/scripts/build-release.ps1 -Version (Get-Content -Raw VERSION).Trim() -Rid win-x64
+```
+
+macOS（本地交叉编译，dotnet publish 支持；vpk 用 `[win]` 指令也能从 macOS 打 Windows 安装包）：
+
+```bash
+dotnet tool install -g vpk --version 1.2.158
+bash windows/scripts/build-release.sh "$(tr -d '[:space:]' < VERSION)" win-x64
+```
+
+两个脚本做的事一样：`dotnet publish -c Release -r <rid> --self-contained`（单文件夹，不做 single-file——
+Avalonia 的原生库必须和 exe 并排；**不做 trimming**，Avalonia 依赖反射）→ 下载官方免安装 Python 3.12.8
+（和 `scripts/install-family-windows.ps1` 同 URL、同 SHA-256 校验）→ 拷贝 CLI → `vpk pack`。
+
+`PublishReadyToRun=true` 在 macOS 上交叉编译也能用（产物是 win-x64 的 R2R，已核对 CLR 头不是 ILOnly）。
+
+### Python + CLI 是怎么装进包里的
+
+```
+<install>\Kanjo.exe
+<install>\sample.json                 CLI 不可用时的兜底数据
+<install>\python\python.exe           官方 embeddable 3.12.8（amd64 / arm64 各一份）
+<install>\python\python312._pth       末尾加了 ../cli
+<install>\cli\kanjo\...               cli/kanjo 去掉 __pycache__ / *.pyc
+<install>\cli\pricing.json
+<install>\cli\pricing_overrides.json
+```
+
+- `python312._pth` 里的 `../cli` 是相对 `python.exe` 的，所以 `<install>\cli` 直接进了 `sys.path`，
+  `<install>\python\python.exe -m kanjo --version` 就能跑。CLI 只用标准库，**不需要** `import site`
+  （那一行保持注释）。
+- App 的 `CliRunner` 找的正是 `<appdir>\python\python.exe` 和 `<appdir>\cli`（`DefaultPaths.BundledPython` /
+  `BundledCliDirectory`），所以装好后不用装任何 Python，也不用改设置。
+- `cli\` 的内容和 CI 里 `kanjo-cli.zip` 那一步完全一样（同一个目录结构、同样剔掉字节码）。
+
+### 安装
+
+双击 `Kanjo-win-x64-Setup.exe`（Arm64 机器用 `Kanjo-win-arm64-Setup.exe`）。不需要管理员权限：
+装到 `%LOCALAPPDATA%\Kanjo\current`，开始菜单出现「Kanjo」，**不会**创建桌面快捷方式
+（`vpk pack --shortcuts StartMenuRoot`）。安装完自动启动一次。
+
+包**没有代码签名**，所以 Windows 可能弹「Windows 已保护你的电脑」：点「更多信息 → 仍要运行」。
+
+### 自动更新
+
+- `UpdateManager` 用 `GithubSource("https://github.com/mammut001/kanjo")`，检查当前 `<rid>` 通道的
+  `RELEASES-<rid>`；启动 30 秒后检查一次，之后每 6 小时一次（`Core/UpdatePolicy.cs`）。
+- 有新版就在后台**下载**；装的时候是「下次启动」：Velopack 的 `SetAutoApplyOnStartup` 在下次启动时
+  换掉文件再拉起新版本。**不会**自己重启。
+- Mac 版没有更新界面，所以这里也不弹窗、不在面板里提示。唯一的 UI 是托盘菜单里多一项
+  **「重启以更新 / Restart to update」**，而且只在更新已经下载好之后才出现（`WindowsL10n` 里的
+  `update.restart_to_install`）。
+- 这些情况**完全不碰更新**：`--snapshot`、`--window`、Debug 构建、不是 Velopack 装的（开发运行、
+  解压出来的文件夹、便携版）。
+
+### 卸载
+
+「设置 → 应用 → 已安装的应用 → Kanjo → 卸载」，或者运行 `%LOCALAPPDATA%\Kanjo\Update.exe --uninstall`。
+Velopack 会删掉程序目录、开始菜单快捷方式和 `Run` 键（如果曾经有）。**用户数据保留**：
+
+- `%APPDATA%\Kanjo`（设置 `settings.json`）
+- `%LOCALAPPDATA%\kanjo`（CLI 的账本 / 缓存）
+- Windows 凭据管理器里的 `KanjoFamilyReport`（和 CLI 共用；要清就 `python -m kanjo family-token clear`）
+
+和 Mac 的 zap 规则一致：卸载不删数据，想彻底清干净得手动删上面两个目录。
+
+**开机自启：** Mac 版没有开机自启（`ui/` 里没有 Login Item 注册），所以 Windows 版默认也不注册
+`HKCU\...\Run\Kanjo`。卸载钩子仍然会把这个键清掉（`Core/WindowsStartup.RemoveRunEntry`），
+免得旧版本或手动设置留下的项指向已删除的 exe。
+
+### 冒烟测试（真机装完后跑）
+
+```powershell
+pwsh windows/scripts/smoke.ps1                 # 默认查 %LOCALAPPDATA%\Kanjo\current
+pwsh windows/scripts/smoke.ps1 -InstallDir "D:\Kanjo\current"
+```
+
+逐项打印 PASS / FAIL：`Kanjo.exe` 存在 → `python\python.exe -m kanjo --version` → `cli\` 里
+`kanjo\` 和两个 pricing 文件齐全 → `Kanjo.exe --snapshot $env:TEMP\kanjo-smoke.png --route overview`
+出图。任何一项失败退出码 1。
+
+### CI
+
+`.github/workflows/ci.yml` 的 `windows-app` 任务（`windows-latest`）：`dotnet build -warnaserror` +
+`dotnet test windows/Kanjo.Windows.sln`（每次 push / PR）。打 tag（`v*`）时额外跑
+`build-release.ps1` 的 win-x64 与 win-arm64、`vpk pack`，把 `Setup.exe` / `nupkg` / `RELEASES` / zip
+作为 workflow artifact 上传；如果维护者已经建好了对应的 GitHub Release，再用 `gh release upload` 附上去
+（release 还不存在只记一条 warning，不会让任务失败）。tag 名必须和 `VERSION` 一致。
+
 ## 这一批没做的
 
-- 开机自启（批次 5 随安装包一起做）。
-- Velopack 安装包 / 自动更新 / CI（批次 5）
+- 代码签名（spec 的「不做」一节）：首次运行会有 SmartScreen 提示。

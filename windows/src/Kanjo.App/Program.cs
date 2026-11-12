@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Kanjo.Core;
+using Velopack;
 
 namespace Kanjo.App;
 
@@ -18,6 +19,18 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Velopack 必须第一个跑：安装后首次启动 / 更新后的钩子、启动时应用已下载的更新都靠它。
+        // 开发运行（Debug）和截图 / 预览模式不允许它接管进程（见 UpdatePolicy）。
+        var velopack = VelopackApp.Build()
+            .SetAutoApplyOnStartup(UpdatePolicy.ShouldAutoApplyOnStartup(args, DefaultPaths.IsDebugBuild));
+        if (OperatingSystem.IsWindows())
+        {
+            // 卸载钩子：清掉可能存在的开机自启项（App 默认不写它，见 WindowsStartup；这里只是兜底）。
+            // 用户数据 %APPDATA%\Kanjo 和 %LOCALAPPDATA%\kanjo 一律保留，和 Mac 的 zap 规则一致。
+            velopack = velopack.OnBeforeUninstallFastCallback(_ => WindowsStartup.RemoveRunEntry());
+        }
+        velopack.Run();
+
         L10n.Store ??= AppSettings.ForLaunch(args, AppSettings.ReadEnvironment());
         L10n.ResetCache();
 
@@ -77,6 +90,7 @@ public sealed class KanjoApplication : Application
 
     private TrayController? _tray;
     private AppServices? _services;
+    private UpdateService? _updates;
 
     public override void Initialize()
     {
@@ -136,7 +150,12 @@ public sealed class KanjoApplication : Application
         {
             // 纯托盘应用：不占任务栏按钮，关掉主窗口也不会退出。
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _tray = new TrayController(services);
+
+            // 自动更新（只在 Velopack 装出来的正式版里跑；见 UpdatePolicy）。
+            // Mac 版没有更新界面，所以这里也不提示：后台下载，下次启动装上，
+            // 托盘菜单只在「已经下载好、可以立刻重启装上」时多一项。
+            _updates = UpdateService.Create(args);
+            _tray = new TrayController(services, _updates);
 
             // 第二次启动的实例请求激活：把已运行实例的面板弹出来。
             if (SingleInstance is { IsPrimary: true } coordinator)
@@ -148,6 +167,7 @@ public sealed class KanjoApplication : Application
             // 后台行为：先出托盘图标，再跑第一次刷新 / 兜底定时器 / 日志监听（不阻塞首帧）。
             desktop.Startup += async (_, _) =>
             {
+                _updates?.Start();
                 await Task.Run(services.StartBackground);
                 services.NotifyChanged();
             };
@@ -160,6 +180,7 @@ public sealed class KanjoApplication : Application
     {
         _services?.Background.Dispose();
         _services?.DiskPrefetch.Dispose();
+        _updates?.Dispose();
         SingleInstance?.Dispose();
         _tray?.Dispose();
     }

@@ -14,9 +14,17 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- 开发时在 macOS 上也要能编译 / 运行；Windows 打包时由 CI 指定 win-x64 / win-arm64。 -->
     <RuntimeIdentifiers>win-x64;win-arm64;osx-arm64;osx-x64</RuntimeIdentifiers>
-    <!-- NU1903: Avalonia.Desktop 在 Linux 上会传递 Tmds.DBus.Protocol 0.21.2（有已知漏洞）。
-         我们只发 Windows（Mac 仅用于开发），这条传递依赖不会进入产物；等 Avalonia 升级会自动消失。 -->
-    <NoWarn>20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400NoWarn);NU1903</NoWarn>
+    <!-- 版本号来自仓库根目录的 VERSION（Mac 包和 CLI 也读同一个文件），App 版本 == CLI 版本。
+         Velopack 的 packVersion 也由 CI / build-release 从同一个文件算出来。
+         用正斜杠：MSBuild 在 Windows 和 macOS 上都能读。 -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../../VERSION').Trim())</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <!-- 版本号是三段（0.5.1），不要 SDK 自动追加 git 的短哈希。 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- 应用图标（多尺寸 .ico，由 ui/Resources/Kanjo.png 转出来）：编译进 exe，资源管理器 / 任务栏都用它。 -->
+    <ApplicationIcon>Assets\Kanjo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +34,11 @@
     <PackageReference Include="Avalonia.Headless" Version="11.3.6" />
     <PackageReference Include="Avalonia.Skia" Version="11.3.6" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.6" />
+    <!-- 安装包 / 自动更新（批次 5）。vpk CLI 的版本钉在 windows/scripts/*.sh 和 CI 里，两者一致。 -->
+    <PackageReference Include="Velopack" Version="1.2.158" />
+    <!-- Avalonia 的 Linux 后端传递 Tmds.DBus.Protocol 0.21.2，有已知漏洞（GHSA-xrw6-gwf8-vvr9）。
+         显式钉到已修复的 0.21.3；Windows 产物不含它，这里只是把恢复出来的依赖版本提上去。 -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +50,14 @@
          直接链接 ui/fixtures/sample.json，不复制文件。 -->
     <Content Include="..\..\..\ui\fixtures\sample.json" Link="sample.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 托盘图标（正常 / 出错）按资源嵌入：Windows 上 Avalonia 会用 ICO 里最合适的一档尺寸。
+         应用图标走 ApplicationIcon（编译进 exe），这里不重复。 -->
+    <AvaloniaResource Include="Assets\Kanjo.ico" Link="Assets\Kanjo.ico" />
+    <AvaloniaResource Include="Assets\Tray.ico" Link="Assets\Tray.ico" />
+    <AvaloniaResource Include="Assets\TrayError.ico" Link="Assets\TrayError.ico" />
   </ItemGroup>
 
 </Project>

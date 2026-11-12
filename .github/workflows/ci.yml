@@ -223,3 +223,102 @@ jobs:
               throw "Expected 'not set', got '$clearedStatus'"
           }
           Write-Host "Family token cleared by uninstall."
+
+  # Desktop app: build + unit tests on every push / PR. The installers are only built for tags,
+  # because the self-contained publish + vpk pack takes a few minutes per architecture.
+  windows-app:
+    name: Windows app
+    runs-on: windows-latest
+    # Release assets are uploaded with GITHUB_TOKEN; everything else only reads the repo.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      # Warnings are errors so the "0 warnings" promise cannot silently regress.
+      - name: Build (Debug, warnings as errors)
+        run: dotnet build windows/Kanjo.Windows.sln -c Debug -warnaserror
+      - name: Build (Release, warnings as errors)
+        run: dotnet build windows/Kanjo.Windows.sln -c Release -warnaserror
+      # Tests run in Debug: they need the repo root (Debug-only assembly metadata) to read the
+      # SwiftUI fixtures under ui/.
+      - name: Test
+        run: dotnet test windows/Kanjo.Windows.sln -c Debug --no-build --logger "trx;LogFileName=kanjo.trx"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-app-tests
+          path: "**/TestResults/kanjo.trx"
+          if-no-files-found: ignore
+
+      # Everything below only runs for tags (v*).
+      - name: Install vpk
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: dotnet tool install -g vpk --version 1.2.158
+
+      - name: Build releases (publish + python + CLI + vpk pack)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw VERSION).Trim()
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          if ($version -ne $tag) { throw "VERSION ($version) does not match tag ($tag)" }
+          # `dotnet tool install -g` puts vpk in %USERPROFILE%\.dotnet\tools.
+          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+          foreach ($rid in @("win-x64", "win-arm64")) {
+            Write-Host "==> $rid"
+            pwsh -NoProfile -File windows/scripts/build-release.ps1 -Version $version -Rid $rid
+            if ($LASTEXITCODE -ne 0) { throw "build-release.ps1 failed for $rid ($LASTEXITCODE)" }
+          }
+
+      - name: Upload installer artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: kanjo-windows
+          path: |
+            windows/dist/Kanjo-win-*.zip
+            windows/dist/releases/**
+          if-no-files-found: error
+
+      # Attach to the GitHub Release when the maintainer has already created it.
+      # A missing release is not a failure: the artifacts stay on the workflow run.
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = (Get-Content -Raw VERSION).Trim()
+          $files = @(
+            "windows/dist/releases/win-x64/Kanjo-win-x64-Setup.exe",
+            "windows/dist/releases/win-x64/Kanjo-$version-win-x64-full.nupkg",
+            "windows/dist/releases/win-x64/RELEASES-win-x64",
+            "windows/dist/releases/win-x64/releases.win-x64.json",
+            "windows/dist/releases/win-arm64/Kanjo-win-arm64-Setup.exe",
+            "windows/dist/releases/win-arm64/Kanjo-$version-win-arm64-full.nupkg",
+            "windows/dist/releases/win-arm64/RELEASES-win-arm64",
+            "windows/dist/releases/win-arm64/releases.win-arm64.json",
+            "windows/dist/Kanjo-win-x64-$version.zip",
+            "windows/dist/Kanjo-win-arm64-$version.zip"
+          ) | Where-Object { Test-Path $_ }
+          if (-not $files) { throw "no release artifacts to upload" }
+
+          gh release view $tag --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::Release $tag does not exist yet; skipping upload (artifacts are on this run)."
+            exit 0
+          }
+          $attempt = 0
+          while ($true) {
+            gh release upload $tag @files --clobber
+            if ($LASTEXITCODE -eq 0) { break }
+            $attempt++
+            if ($attempt -ge 3) { throw "gh release upload failed with $LASTEXITCODE" }
+            Start-Sleep -Seconds 5
+          }
+          Write-Host "Uploaded $($files.Count) file(s) to release $tag."
