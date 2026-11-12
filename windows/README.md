@@ -86,6 +86,11 @@ dotnet run --project windows\src\Kanjo.App -- --snapshot windows\snapshots\overv
 `--snapshot` 用 Avalonia.Headless + Skia 离屏渲染，所以在 macOS 上也能出图，
 不依赖显示器 / 窗口管理器。
 
+**相对日期与「现在」：** 正常运行（托盘 / `--window`）时「现在」就是真实时钟，和 Mac 一致
+（「active yesterday」「renews in 2 days」都跟着当天走）。只有 `--snapshot` 会把「现在」固定在报告的
+`generated_at`，这样同一份数据每次截出的图逐像素一致（相对日期、账期倒计时、页脚的
+「Updated HH:MM」都不会变）。截图里的页脚因此显示报告的整点时间，而不是截图时刻。
+
 ## 设置与数据位置
 
 - 设置：`%APPDATA%\Kanjo\settings.json`（键名与 Mac 版 `SettingsKeys.swift` 一致）。

@@ -36,22 +36,23 @@ public static class Palette
 
     // MARK: - 文字与底色
 
+    /// <summary>系统语义前景色（Mac 是 .primary）。</summary>
     public static IBrush Foreground => IsDark
         ? new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF5))
         : new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1C));
 
     public static IBrush Secondary => new SolidColorBrush(IsDark
-        ? Color.FromArgb(0x9E, 0xF2, 0xF2, 0xF5)
-        : Color.FromArgb(0x9E, 0x1A, 0x1A, 0x1C));
+        ? Color.FromArgb(0xA0, 0xF2, 0xF2, 0xF5)
+        : Color.FromArgb(0xA0, 0x1A, 0x1A, 0x1C));
 
     public static IBrush Tertiary => new SolidColorBrush(IsDark
-        ? Color.FromArgb(0x70, 0xF2, 0xF2, 0xF5)
-        : Color.FromArgb(0x70, 0x1A, 0x1A, 0x1C));
+        ? Color.FromArgb(0x66, 0xF2, 0xF2, 0xF5)
+        : Color.FromArgb(0x66, 0x1A, 0x1A, 0x1C));
 
-    /// <summary>面板根背景。Windows 11 上由窗口 Mica 透出，其它平台用近似材质色。</summary>
+    /// <summary>面板根背景：Mac 的 .regularMaterial 浅色下约为 #F1F1F1。</summary>
     public static IBrush PanelBackground => new SolidColorBrush(IsDark
-        ? Color.FromRgb(0x24, 0x24, 0x26)
-        : Color.FromRgb(0xF4, 0xF4, 0xF6));
+        ? Color.FromRgb(0x22, 0x22, 0x24)
+        : Color.FromRgb(0xF1, 0xF1, 0xF1));
 
     /// <summary>分组底色：一层很淡的填充，替代卡片描边。</summary>
     public static IBrush GroupFill => new SolidColorBrush(IsDark
@@ -82,10 +83,9 @@ public static class Palette
     /// <summary>置顶：琥珀色。</summary>
     public static IBrush Pin => new SolidColorBrush(Hex(0xC2861A, 0xE8B44F));
 
-    /// <summary>热力条空周的底色。</summary>
-    public static IBrush HeatEmpty => new SolidColorBrush(IsDark
-        ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)
-        : Color.FromArgb(0x14, 0x00, 0x00, 0x00));
+    /// <summary>热力条空周的底色：Color.primary.opacity(0.08)。</summary>
+    public static IBrush HeatEmpty => new SolidColorBrush(
+        IsDark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x14, 0x00, 0x00, 0x00));
 
     // MARK: - 状态色
 
@@ -102,11 +102,15 @@ public static class Palette
         ? new SolidColorBrush(Color.FromRgb(0x6F, 0xA8, 0xFF))
         : new SolidColorBrush(Color.FromRgb(0x1F, 0x6F, 0xEB));
 
-    /// <summary>Mosaic 方块上的文字颜色。</summary>
+    /// <summary>Mosaic 方块上的文字颜色：Color.white.opacity(0.92)。</summary>
     public static IBrush OnTile => new SolidColorBrush(Color.FromArgb(0xEB, 0xFF, 0xFF, 0xFF));
 }
 
-/// <summary>版式常量：整个面板只用这几档字号，层级靠字号 / 字重 / 次要色，不靠边框。</summary>
+/// <summary>
+/// 版式常量。前四个照抄 Mac 的 Metrics；总览页用的是「扁平」一套。
+/// <see cref="ContentInset"/> / <see cref="MosaicInset"/> 与 Mac 参考截图一致：
+/// 文字区块左右留 10pt，马赛克几乎满宽（留 1.5pt 给圆角）。
+/// </summary>
 public static class Metrics
 {
     public const double PagePadding = 14;
@@ -114,10 +118,19 @@ public static class Metrics
     public const double RowInset = 10;
     public const double GroupRadius = 10;
 
-    // 总览：列表行直接放在面板上（没有分组底色）。页边距更窄，行内缩进更大。
+    // 总览：列表行直接放在面板上（没有分组底色）。
     public const double FlatPagePadding = 8;
     public const double ListInset = 16;
     public const double RowRadius = 6;
+
+    /// <summary>总览文字区块的左右留白（参考截图 10pt）。</summary>
+    public const double ContentInset = 10;
+
+    /// <summary>马赛克与面板边缘的距离（参考截图 1.5pt，视觉上几乎满宽）。</summary>
+    public const double MosaicInset = 1.5;
+
+    /// <summary>项目行内上下留白（Swift ProjectRow.padV）。</summary>
+    public const double RowPadV = 7;
 
     public const double PanelWidth = 360;
     public const double PanelHeight = 620;

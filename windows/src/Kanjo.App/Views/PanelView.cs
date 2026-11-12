@@ -16,8 +16,9 @@ public enum Route
 }
 
 /// <summary>
-/// 面板外壳：360×620，圆角、无标题栏。批次 1 只实现概览页；其它路由显示占位。
-/// 底部一条玻璃条：刷新按钮 + 更新时间 + 磁盘 / 设置 / 退出。
+/// 面板外壳：360×620，圆角、无标题栏。
+/// 批次 1 只实现概览页；磁盘 / 设置是占位页（可导航、可退出）。
+/// 底部一条玻璃条：刷新按钮 + 「Updated HH:MM」+ 右侧磁盘 / 设置 / 退出（对应 Mac 的 footer）。
 /// </summary>
 public sealed class PanelView : Grid
 {
@@ -26,6 +27,7 @@ public sealed class PanelView : Grid
 
     private readonly AppServices _services;
     private readonly Border _contentHost;
+    private readonly Clickable _refreshButton;
     private readonly TextBlock _statusText;
 
     public Route Route { get; private set; }
@@ -47,11 +49,20 @@ public sealed class PanelView : Grid
 
         _statusText = Ui.Text("", 11, null, Palette.Secondary);
 
+        _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
+        {
+            // 刷新可能跑 CLI（几秒），放后台线程，回来后通知 UI。
+            Task.Run(() =>
+            {
+                _services.Refresh();
+                _services.NotifyChanged();
+            });
+        }, L10n.Tr("menu.refresh_now"));
+
         _contentHost = new Border
         {
             Background = Brushes.Transparent,
             ClipToBounds = true,
-            Margin = new Thickness(0),
         };
         Grid.SetRow(_contentHost, 1);
         Children.Add(_contentHost);
@@ -60,6 +71,7 @@ public sealed class PanelView : Grid
         Grid.SetRow(footer, 2);
         Children.Add(footer);
 
+        _services.NavigateRequested += Navigate;
         Rebuild();
         _services.Changed += OnChanged;
     }
@@ -74,6 +86,12 @@ public sealed class PanelView : Grid
         Rebuild();
     }
 
+    public void Navigate(Route route)
+    {
+        Route = route;
+        Rebuild();
+    }
+
     public void Rebuild()
     {
         if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -81,6 +99,7 @@ public sealed class PanelView : Grid
             Avalonia.Threading.Dispatcher.UIThread.Post(Rebuild);
             return;
         }
+
         if (SnapshotMode && Route == Route.Overview)
         {
             _contentHost.Child = null;
@@ -91,89 +110,62 @@ public sealed class PanelView : Grid
             _contentHost.Child = Route switch
             {
                 Route.Overview => new OverviewView(_services),
-                _ => new PlaceholderView(_services, Route),
+                _ => new PlaceholderView(Route),
             };
         }
-        _statusText.Text = SnapshotMode
-            // 截图要可复现：不写墙钟时间，用数据源描述代替。
-            ? _services.DescribeSource()
-            : _services.IsLoading
-                ? L10n.Tr("menu.refreshing")
-                : _services.LastRefresh is { } t
-                    ? L10n.TrL(null, "menu.updated_at", ShortDate.Clock(t))
-                    : L10n.Tr("menu.not_refreshed_yet");
+
+        _refreshButton.Opacity = _services.IsLoading ? 0.45 : 1;
+        // 状态文字：正常运行时是真实时钟；--snapshot 时固定在报告时间，保证图片可复现。
+        // 数据源说明只放在悬停提示里（和 Mac 一致）。
+        _statusText.Text = _services.IsLoading
+            ? L10n.Tr("menu.refreshing")
+            : L10n.TrL(null, "menu.updated_at", ShortDate.Clock(_services.Now));
+        ToolTip.SetTip(_statusText, _services.DescribeSource());
     }
 
+    /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
     private Control BuildFooter()
     {
         var bar = Ui.H(2);
         bar.Margin = new Thickness(5, 3, 5, 3);
-
-        var refresh = FooterIcon(Icons.Refresh(12, Palette.Secondary), L10n.Tr("menu.refresh_now"), () =>
-        {
-            // 刷新可能跑 CLI（几秒），放后台线程，回来后通知 UI。
-            Task.Run(() =>
-            {
-                _services.Refresh();
-                _services.NotifyChanged();
-            });
-        });
-        bar.Children.Add(refresh);
+        bar.Children.Add(_refreshButton);
         bar.Children.Add(_statusText);
-        bar.Children.Add(new Panel { HorizontalAlignment = HorizontalAlignment.Stretch });
-        bar.Children.Add(FooterIcon(Icons.Disk(12, Palette.Secondary), L10n.Tr("menu.disk"), () => Navigate(Route.Disk)));
-        bar.Children.Add(FooterIcon(Icons.Gear(12, Palette.Secondary), L10n.Tr("menu.settings"), () => Navigate(Route.Settings)));
-        bar.Children.Add(FooterIcon(Icons.Power(12, Palette.Secondary), L10n.Tr("menu.quit"), () =>
-        {
-            if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                desktop.Shutdown();
-            }
-        }));
+        bar.Children.Add(Ui.Spacer());
+        bar.Children.Add(Ui.IconButton(Icons.Disk(12, Palette.Secondary), () => Navigate(Route.Disk),
+            L10n.Tr("menu.disk"), active: Route == Route.Disk));
+        bar.Children.Add(Ui.IconButton(Icons.Gear(12, Palette.Secondary), () => Navigate(Route.Settings),
+            L10n.Tr("menu.settings"), active: Route == Route.Settings));
+        bar.Children.Add(Ui.IconButton(Icons.Power(12, Palette.Secondary), Quit, L10n.Tr("menu.quit")));
 
-        var glass = new Border
+        return new Border
         {
             Child = bar,
             CornerRadius = new CornerRadius(12),
             Background = Palette.GroupFill,
             Margin = new Thickness(8, 4, 8, 8),
         };
-        return glass;
     }
 
-    private void Navigate(Route route)
+    private static void Quit()
     {
-        Route = route;
-        Rebuild();
-    }
-
-    private static Control FooterIcon(Control glyph, string tip, Action onClick)
-    {
-        var button = new Button
+        if (Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
         {
-            Content = glyph,
-            Width = 26,
-            Height = 26,
-            Padding = new Thickness(0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-        };
-        button.Click += (_, _) => onClick();
-        ToolTip.SetTip(button, tip);
-        return button;
+            desktop.Shutdown();
+        }
+        else
+        {
+            Environment.Exit(0);
+        }
     }
 }
 
 /// <summary>批次 1 的占位页：项目详情 / 桶页 / 磁盘 / 设置留到批次 2。</summary>
 public sealed class PlaceholderView : Border
 {
-    public PlaceholderView(AppServices services, Route route)
+    public PlaceholderView(Route route)
     {
-        Padding = new Thickness(Metrics.PagePadding, 20, Metrics.PagePadding, 0);
-
+        Padding = new Thickness(Metrics.PagePadding, 16, Metrics.PagePadding, 0);
         var box = Ui.V(8);
         var title = route switch
         {
@@ -184,6 +176,7 @@ public sealed class PlaceholderView : Border
         };
         box.Children.Add(Ui.Text(title, 14, FontWeight.SemiBold));
         box.Children.Add(Ui.Text(L10n.Tr("menu.project_missing"), 11, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(L10n.Tr("overview.no_usage"), 11, null, Palette.Tertiary, wrap: true));
         Child = box;
     }
 }

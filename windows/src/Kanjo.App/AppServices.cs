@@ -1,3 +1,4 @@
+using Kanjo.App.Views;
 using Kanjo.Core;
 
 namespace Kanjo.App;
@@ -32,19 +33,31 @@ public sealed class AppServices
         // 截图要可复现：热力条 / 相对日期都基于报告时间，而不是墙钟。
         SnapshotMode = arguments.Contains("--snapshot") ||
                        arguments.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal));
-        _now = SnapshotMode ? null : DateTimeOffset.UtcNow;
     }
 
-    private readonly DateTimeOffset? _now;
+    /// <summary>订阅卡是否展开（「Show N more」开关；批次 2 会存进设置）。</summary>
+    public bool SubscriptionCardExpanded { get; set; }
+
+    /// <summary>「+N more」模型的展开状态（批次 2 接上完整列表）。</summary>
+    public bool ModelsExpanded { get; set; }
+
+    /// <summary>页面切换请求（底栏按钮 / 续费日提醒的「Set now」）。</summary>
+    public event Action<Route>? NavigateRequested;
+
+    public void RequestNavigate(Route route) => NavigateRequested?.Invoke(route);
 
     /// <summary>截图模式（--snapshot）：所有「现在」都取报告时间，保证图片可复现。</summary>
     public bool SnapshotMode { get; }
 
-    /// <summary>当前时刻。截图模式下固定在报告的 generated_at。</summary>
-    public DateTimeOffset Now => _now ?? ReportGeneratedAt ?? DateTimeOffset.UtcNow;
-
-    private DateTimeOffset? ReportGeneratedAt =>
-        Report is { } r ? ReportDates.ParseTimestamp(r.GeneratedAt) : null;
+    /// <summary>
+    /// 当前时刻：正常运行时是真实时钟（和 Mac 一致）；只有 --snapshot 才固定在报告的 generated_at，
+    /// 这样截图里的相对日期 / 账期倒计时可复现。
+    /// </summary>
+    public DateTimeOffset Now => SnapshotMode
+        ? Report is { } r && ReportDates.ParseTimestamp(r.GeneratedAt) is { } generated
+            ? generated
+            : DateTimeOffset.UtcNow
+        : DateTimeOffset.UtcNow;
 
     public static AppServices Create(string[] arguments, string? settingsDirectory = null)
     {
