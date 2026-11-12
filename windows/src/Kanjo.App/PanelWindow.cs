@@ -37,12 +37,14 @@ public sealed class PanelWindow : Window
             Child = _panel,
         };
 
-        // 点到别处自动收起（和 Mac 的菜单栏弹出面板一致）。
+        // 强调色按钮只在活动窗口里是蓝的（SwiftUI 的 borderedProminent 也是这样）：
+        // 面板弹出时算活动窗口，收起 / 失焦算非活动。不在激活状态变化时重建页面
+        // （那会丢掉设置页里正在输入的内容），只在弹出 / 收起时更新一次。
         Deactivated += (_, _) =>
         {
+            WindowActivation.SetActive(false);
             if (!taskbar) Hide();
         };
-
         ProjectActions.ClipboardWriter = text => Clipboard?.SetTextAsync(text);
         KeyDown += (_, e) =>
         {
@@ -55,6 +57,9 @@ public sealed class PanelWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        // 面板一出现就是活动窗口（SwiftUI 的 borderedProminent 这时才是蓝的）。
+        WindowActivation.SetActive(true);
+        _panel.Rebuild();
         if (ShowInTaskbar) return;
         PlaceAboveTray();
     }

@@ -29,6 +29,23 @@ public static class Program
             return SnapshotRunner.Run(snapshotPath, route, scale, appearance);
         }
 
+        // 单实例：托盘应用第二次启动时把「激活面板」发给已运行的实例，然后自己退出。
+        // --window（开发预览）不限制，方便同时开窗口和托盘。
+        SingleInstanceCoordinator? single = null;
+        if (!args.Contains("--window"))
+        {
+            single = new SingleInstanceCoordinator();
+            if (!single.IsPrimary)
+            {
+                single.RequestActivation();
+                single.Dispose();
+                return 0;
+            }
+        }
+
+        // 主实例：协调器交给 KanjoApplication，收到「激活」时把面板弹出来。
+        KanjoApplication.SingleInstance = single;
+
         try
         {
             return AppBuilder.Configure<KanjoApplication>()
@@ -45,13 +62,21 @@ public static class Program
             Console.Error.WriteLine("If this machine has no display, use --snapshot <out.png> instead.");
             return 1;
         }
+        finally
+        {
+            single?.Dispose();
+        }
     }
 }
 
 /// <summary>Fluent 主题 + 面板样式 + 托盘 / 窗口的启动编排。</summary>
 public sealed class KanjoApplication : Application
 {
+    /// <summary>主实例的单实例协调器（<see cref="Program.Main"/> 创建，收到「激活」时弹出面板）。</summary>
+    public static SingleInstanceCoordinator? SingleInstance { get; set; }
+
     private TrayController? _tray;
+    private AppServices? _services;
 
     public override void Initialize()
     {
@@ -81,21 +106,22 @@ public sealed class KanjoApplication : Application
         }
 
         var args = desktop.Args ?? Environment.GetCommandLineArgs();
-        var services = AppServices.Create(args);
+        _services = AppServices.Create(args);
+        var services = _services;
         L10n.Store = services.Settings;
         L10n.ResetCache();
         Palette.IsDark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
-
-        // 数据加载放到首帧之后：先出面板（loading 态），不阻塞窗口出现。
-        desktop.Startup += async (_, _) =>
-        {
-            await Task.Run(services.LoadQuietly);
-            services.NotifyChanged();
-        };
+        desktop.Exit += (_, _) => DisposeServices();
 
         if (args.Contains("--window"))
         {
             // 开发预览：可以带 --route 直接打开某一页（和 Mac 的 --window --route 一致）。
+            // 后台行为（监听 / 定时器）在预览模式下也运行（Mac 的 ReportStore 是单例）。
+            desktop.Startup += async (_, _) =>
+            {
+                await Task.Run(services.StartBackground);
+                services.NotifyChanged();
+            };
             var rawRoute = DefaultPaths.FlagValue("--route", args);
             var route = DevRoutes.Resolve(rawRoute, services.Report) ?? AppRoute.Overview;
             desktop.MainWindow = new PanelWindow(services, taskbar: true, route: route)
@@ -111,8 +137,30 @@ public sealed class KanjoApplication : Application
             // 纯托盘应用：不占任务栏按钮，关掉主窗口也不会退出。
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _tray = new TrayController(services);
+
+            // 第二次启动的实例请求激活：把已运行实例的面板弹出来。
+            if (SingleInstance is { IsPrimary: true } coordinator)
+            {
+                coordinator.ActivateRequested += () => _tray?.ActivateFromSecondLaunch();
+                coordinator.FlushPending();
+            }
+
+            // 后台行为：先出托盘图标，再跑第一次刷新 / 兜底定时器 / 日志监听（不阻塞首帧）。
+            desktop.Startup += async (_, _) =>
+            {
+                await Task.Run(services.StartBackground);
+                services.NotifyChanged();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void DisposeServices()
+    {
+        _services?.Background.Dispose();
+        _services?.DiskPrefetch.Dispose();
+        SingleInstance?.Dispose();
+        _tray?.Dispose();
     }
 }

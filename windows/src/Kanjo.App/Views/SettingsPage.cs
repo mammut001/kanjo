@@ -54,7 +54,12 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         Content = _root;
         Rebuild();
         _services.Family.Activity.Changed += OnExternalChange;
-        DetachedFromVisualTree += (_, _) => _services.Family.Activity.Changed -= OnExternalChange;
+        _services.Publish.Activity.Changed += OnExternalChange;
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _services.Family.Activity.Changed -= OnExternalChange;
+            _services.Publish.Activity.Changed -= OnExternalChange;
+        };
 
         if (snapshot)
         {
@@ -192,6 +197,8 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             index =>
             {
                 Set(SettingsKeys.SourceKind, index == 0 ? "file" : "cli");
+                // Mac：`onChange(of: sourceKind) { store.applySettings() }`（会重建数据源 / 监听 / 定时器）。
+                _services.ApplySettings();
                 Rebuild();
             })
         {
@@ -291,19 +298,8 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     {
         var box = Ui.V(3);
         box.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
-        var text = new TextBox
-        {
-            Text = S.Str(key, ""),
-            Watermark = placeholder,
-            FontSize = 11,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
-            FontFamily = mono ? Type.Mono : Type.Font,
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.CardBackground,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
-        };
+        var field = Ui.TextField(S.Str(key, ""), placeholder, mono: mono);
+        var text = field.Box;
         text.LostFocus += (_, _) => S.Set(key, text.Text ?? "");
         text.KeyDown += (_, e) =>
         {
@@ -313,7 +309,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
                 _services.ApplySettings();
             }
         };
-        box.Children.Add(text);
+        box.Children.Add(field.Root);
         return box;
     }
 
@@ -376,6 +372,8 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             new DropdownControl(labels[index], labels, i =>
             {
                 Set(SettingsKeys.RefreshMinutes, intervals[i]);
+                // Mac：`onChange(of: refreshMinutes) { store.restartTimer() }` —— 改了就重排兜底定时器。
+                _services.RestartFallbackTimer();
                 Rebuild();
             })));
         content.Children.Add(Ui.Text(L10n.Tr("settings.refresh_note"), 10.5, null, Palette.Secondary, wrap: true));
@@ -500,20 +498,10 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     {
         var box = Ui.V(4);
         box.Children.Add(Ui.Text(label, 11, null, Palette.Secondary));
-        var text = new TextBox
-        {
-            Text = S.Str(key, ""),
-            Watermark = placeholder,
-            FontSize = 11,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.CardBackground,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
-        };
+        var field = Ui.TextField(S.Str(key, ""), placeholder);
+        var text = field.Box;
         text.LostFocus += (_, _) => S.Set(key, text.Text ?? "");
-        box.Children.Add(text);
+        box.Children.Add(field.Root);
         return box;
     }
 

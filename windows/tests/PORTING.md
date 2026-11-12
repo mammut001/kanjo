@@ -43,6 +43,13 @@ C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 | `DevRouteTests.cs` | `--route` 解析（含需要报告才能解析的取值、索引越界、订阅编辑路由、悬停锚点） |
 | `DiskSelectionTests.cs` | 磁盘可选条目、选择集与失效条目、清理计划分组（整条目 vs 子路径、最深的条目优先、报告顺序、Other 分组）、`DiskReportState` 状态机、Older than 档位与 caption、扫描时间文案、`DiskStore` 文件源拒绝清理 |
 | `SettingsValidationTests.cs` | 订阅编辑表单校验与字段计算（计划必填 / 价格必填 / 非法价格 / 已知档位用标价 / 覆盖价 / 自定义档位 / 续费日越界）、菜单标题、选择回填、`config` 参数顺序、agent 列表顺序、家庭范围文案、额度重置取值、Windows 专属文案覆盖（三语）、凭据存储假实现与 `ReportActivity` |
+| `RefreshEngineTests.cs` | 文件事件 → 防抖 / 最大等待 / 刷新中合并、兜底定时器取值与重排、睡眠 / 唤醒 / 节电模式、面板打开只在过期时刷、用户刷新取消待触发任务、监听器重建 |
+| `DiskPrefetchTests.cs` | 第一次预取等 15 秒、之后立即、取消与释放 |
+| `ReportStoresTests.cs` | 发布 / 家庭上报的命令行参数、令牌只走环境变量、`pushed` / `unchanged` / `sent` / `error` / 非 0 退出 / 超时的结果解析、状态文案与持久化、调度（退避与间隔）不满足时不发 |
+| `SingleInstanceTests.cs` | 主实例监听、第二实例发送激活、启动瞬间的激活请求补发、假传输层与命名（真实实现只验证名字生成与 Mutex 互斥） |
+| `LogWatchPathsTests.cs` | 只有 CLI 数据源且没有 `--data` 才监听、`paths --json` 跨 agent 去重（Windows 路径忽略大小写）、过滤不存在的目录 |
+| `FileSystemLogWatcherTests.cs` | 真实 `FileSystemWatcher`：缺失目录不建监听、写文件会触发回调、释放后不再触发 |
+| `AppServicesBackgroundTests.cs` | 后台接线：刷新保留上一份报告、磁盘预取（含 `--disk-data` 跳过）、文件来源 / `--data` 不挂监听、兜底定时器跟着设置、电源事件到达调度器、截图模式静止、`ApplySettings` 重排 |
 
 ## 跳过的 Mac 专属用例
 
@@ -62,5 +69,6 @@ C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 | `SnapshotRecordTests.testMobileSnapshotDecodesWithoutFullExportFields` | **未跳过**：等价用例是 `DecodingTests.TestSlimMobileSessionsDecode` + `TestMissingSubscriptionsDecodesAsNil`（手机快照的字段缺失语义已在解码层覆盖）。 |
 | `SnapshotRecordTests.testSplitPayload*`（4 条） | CloudKit 分片上传，Windows 不做 iCloud。 |
 | `FamilyTokenKeychain`（`MockFamilyTokenStorage` 那部分） | macOS Keychain；Windows 版用凭据管理器（`WindowsCredentialFamilyTokenStorage`，非 Windows 开发运行退回内存实现）。等价的假实现用例是 `SettingsValidationTests.TestInMemoryTokenStorage` / `TestCredentialStorageFallsBackOffWindows`。 |
+| `RefreshSchedulerTests` 之外的 FSEvents / `NSWorkspace` 相关行为 | Mac 的 `LogWatcher` 直接包了 CoreServices 的 `FSEventStream`，没有单元测试；Windows 版把监听器抽象成 `ILogWatcherFactory`，`RefreshEngineTests` 用假实现验证防抖链路，`FileSystemLogWatcherTests` 用临时目录验证真实的 `FileSystemWatcher`。电源事件同理（`FakePowerMonitor` + `WindowsPowerMonitor.QueryLowPowerMode` 的守卫）。 |
 
 `KanjoTestCase.swift` 没有测试用例；对应的是 `KanjoTestCase.cs`（每个测试强制英文 + 隔离内存设置）。

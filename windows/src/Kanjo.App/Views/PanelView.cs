@@ -43,11 +43,11 @@ public sealed class PanelView : Grid
 
         _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
         {
-            // 刷新可能跑 CLI（几秒），放后台线程，回来后通知 UI。
+            // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
             Task.Run(() =>
             {
                 if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
-                else _services.Refresh();
+                else _services.RequestUserRefresh();
                 _services.NotifyChanged();
             });
         }, L10n.Tr("menu.refresh_now"));

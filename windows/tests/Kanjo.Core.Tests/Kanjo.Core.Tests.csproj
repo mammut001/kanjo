@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kanjo.Core\Kanjo.Core.csproj" />
+    <!-- 后台接线（AppServices）也要测：只引用程序集，不创建任何窗口。 -->
+    <ProjectReference Include="..\..\src\Kanjo.App\Kanjo.App.csproj" />
   </ItemGroup>
 
 </Project>

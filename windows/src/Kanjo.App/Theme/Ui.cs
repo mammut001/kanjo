@@ -160,9 +160,12 @@ public static class Ui
     /// <summary>
     /// 主要按钮（borderedProminent 近似）：强调色底、白字。Avalonia 的 Button 依赖模板，
     /// 离屏渲染时模板不实例化 → 用自绘的 Clickable 保证截图里也能看到。
+    /// SwiftUI 的 borderedProminent 只在窗口是活动窗口时画强调色，非活动窗口里就是普通灰白按钮；
+    /// 这里按 <see cref="WindowActivation"/> 复刻同一条规则（截图 = 非活动窗口）。
     /// </summary>
     public static Clickable ProminentButton(string text, Action onClick, IBrush? tint = null, double size = 11.5)
     {
+        if (!WindowActivation.IsActive) return BorderedButton(text, onClick, enabled: true, size: size);
         var label = Text(text, size, FontWeight.SemiBold, Brushes.White);
         label.TextAlignment = TextAlignment.Center;
         var body = new Border
@@ -183,6 +186,7 @@ public static class Ui
     public static Clickable ProminentButton(string text, Action onClick, bool enabled, IBrush? tint = null,
         double size = 11.5)
     {
+        if (!WindowActivation.IsActive) return BorderedButton(text, onClick, enabled, size);
         var button = ProminentButton(text, onClick, enabled ? tint : Palette.Tertiary, size);
         button.IsEnabled = enabled;
         button.Opacity = enabled ? 1 : 0.9;
@@ -217,6 +221,50 @@ public static class Ui
     public static Clickable SmallLink(string text, Action onClick, bool enabled = true) =>
         new(Text(text, 10.5, null, enabled ? Palette.Accent : Palette.Tertiary), onClick, radius: 4,
             hoverFill: enabled);
+
+    /// <summary>输入框 + 输入框里的占位符（占位符用和正文一样的字体）。</summary>
+    public sealed record TextInput(TextBox Box, Grid Root);
+
+    /// <summary>
+    /// 圆角输入框（Mac 的 `.roundedBorder`）。占位符自己画：Avalonia 的 `Watermark` 是模板里的另一个
+    /// TextBlock，字体不跟随 TextBox，等宽输入框的占位符会和正文对不上（Mac 上是同一个字体）。
+    /// </summary>
+    public static TextInput TextField(string? text, string? placeholder, bool mono = false,
+        double? width = null, bool password = false)
+    {
+        var box = new TextBox
+        {
+            Text = text ?? "",
+            FontSize = 11,
+            MinHeight = 24,
+            Padding = new Thickness(6, 2, 6, 2),
+            FontFamily = mono ? Type.Mono : Type.Font,
+            CornerRadius = new CornerRadius(6),
+            Background = Palette.CardBackground,
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(0.5),
+        };
+        if (password) box.PasswordChar = '•';
+        if (width is { } w) box.Width = w;
+        var root = new Grid();
+
+        if (string.IsNullOrEmpty(placeholder))
+        {
+            root.Children.Add(box);
+            return new TextInput(box, root);
+        }
+
+        var hint = Text(placeholder, 11, null, Palette.Tertiary, maxLines: 1, mono: mono);
+        // 左缘和 TextBox 里的正文对齐（Fluent 模板自己还有一点内边距）。
+        hint.Margin = new Thickness(6, 0, 9, 0);
+        hint.VerticalAlignment = VerticalAlignment.Center;
+        hint.IsHitTestVisible = false;
+        hint.IsVisible = string.IsNullOrEmpty(box.Text);
+        box.TextChanged += (_, _) => hint.IsVisible = string.IsNullOrEmpty(box.Text);
+        root.Children.Add(box);
+        root.Children.Add(hint);
+        return new TextInput(box, root);
+    }
 
     /// <summary>带 margin 的包装（省一次局部变量）。</summary>
     public static T WithMargin<T>(this T control, double left, double top, double right, double bottom)

@@ -95,13 +95,12 @@ public sealed class SubscriptionSettingsRow : StackPanel
         plan.Margin = new Thickness(11, 0, 0, 0);
         box.Children.Add(plan);
 
-        // Mac 的 Stepper 只画 label + 一对箭头（数字就在 label 里），没有单独的数值框。
+        // Mac：label 里的「Renews on day N」是 primary 色，只有箭头（控件）在不能编辑时变淡。
         var stepper = Stepper(CanEdit, "settings.renews_on_day", _day);
         stepper.Margin = new Thickness(11, 0, 0, 0);
         ToolTip.SetTip(stepper, CanEdit
             ? L10n.Tr("settings.renews_day_help")
             : L10n.Tr("settings.renews_day_disabled_help"));
-        if (!CanEdit) stepper.Opacity = 0.6;
         box.Children.Add(stepper);
 
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
@@ -197,32 +196,24 @@ public sealed class SubscriptionSettingsRow : StackPanel
         }
 
         var priceRow = Ui.H(8);
-        var priceField = new TextBox
-        {
-            Text = _price,
-            Watermark = L10n.Tr("settings.monthly_price_usd"),
-            Width = 85,
-            FontSize = 11,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
-            FontFamily = Type.Mono,
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.CardBackground,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
-        };
+        // 价格框是等宽的（SwiftUI：`.font(.system(size: 11, design: .monospaced))`），占位符同样用等宽字体。
+        var price = Ui.TextField(_price, L10n.Tr("settings.monthly_price_usd"), mono: true, width: 85);
+        var priceField = price.Box;
         priceField.TextChanged += (_, _) => _price = priceField.Text ?? "";
         ToolTip.SetTip(priceField, L10n.Tr("settings.monthly_price_usd"));
-        priceRow.Children.Add(priceField);
+        priceRow.Children.Add(price.Root);
         // 价格框后面是「Renews on day N」+ 步进箭头，顺序和 Mac 一样。
         priceRow.Children.Add(Stepper(!_saving, "settings.renews_on_day", _day));
         box.Children.Add(priceRow);
 
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
-        // Mac：Apply 是 borderedProminent，但禁用时看起来和普通 bordered 一样（快照里就是灰白）。
-        var applyButton = _saving
-            ? Ui.BorderedButton(L10n.Tr("common.apply"), ApplyManual, enabled: false)
-            : Ui.ProminentButton(L10n.Tr("common.apply"), ApplyManual);
+        // Mac：Apply 一直是 `.borderedProminent`（SettingsView.swift 的 editingForm），
+        // 只在 saving / loading 时整块 `.disabled` —— 禁用态的 borderedProminent 在浅色下
+        // 就是普通灰白按钮，所以这里禁用时退回 bordered 外观。
+        var applyEnabled = !_saving && !_services.IsLoading;
+        var applyButton = applyEnabled
+            ? Ui.ProminentButton(L10n.Tr("common.apply"), ApplyManual)
+            : Ui.BorderedButton(L10n.Tr("common.apply"), ApplyManual, enabled: false);
         var cancelButton = Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
         {
             _editing = false;

@@ -25,6 +25,8 @@ public static class SnapshotRunner
         try
         {
             AppSetup.ConfigureHeadless(appearance);
+            // Mac 的截图是在非活动窗口里截的：borderedProminent 按钮就是灰白的。
+            WindowActivation.Reset();
 
             var services = AppServices.Create(Environment.GetCommandLineArgs());
             services.LoadQuietly();

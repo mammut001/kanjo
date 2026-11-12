@@ -131,7 +131,7 @@ public static class ProcessRunner
 /// Python 查找顺序：内置 `&lt;appdir&gt;\python\python.exe` → `py -3` → PATH 上的 `python`。
 /// CLI 目录查找顺序：内置 `&lt;appdir&gt;\cli` → 仓库 `cli/`（仅 Debug）→ `%LOCALAPPDATA%\KanjoFamily\cli`。
 /// </summary>
-public sealed class CliRunner
+public sealed class CliRunner : IReportCommandRunner
 {
     public const string DefaultModule = "kanjo";
 
@@ -331,24 +331,69 @@ public sealed class CliRunner
         return result;
     }
 
-    /// <summary>`kanjo publish-usage --repo … [--file …] [--branch …]`（超时 120 秒）。</summary>
-    public string PublishUsage(string repo, string? file, string? branch)
+    /// <summary>`kanjo publish-usage --repo … [--file …] [--branch …]` 的参数（Mac 的 PublishCommand）。</summary>
+    public static List<string> PublishUsageArguments(string repo, string? file, string? branch)
     {
         var args = new List<string> { "publish-usage", "--repo", repo.Trim() };
         if (!string.IsNullOrWhiteSpace(file)) args.AddRange(["--file", file.Trim()]);
         if (!string.IsNullOrWhiteSpace(branch)) args.AddRange(["--branch", branch.Trim()]);
-        return RunDetailed(args, "publish output", TimeSpan.FromSeconds(120)).Stdout;
+        return args;
     }
 
-    /// <summary>`kanjo report-family --url … [--member-label …]`（超时 45 秒），令牌只走环境变量。</summary>
-    public string ReportFamily(string url, string? memberLabel, string token)
+    /// <summary>`kanjo report-family --url … [--member-label …]` 的参数（Mac 的 FamilyReportCommand）。</summary>
+    public static List<string> ReportFamilyArguments(string url, string? memberLabel)
     {
         var args = new List<string> { "report-family", "--url", url.Trim() };
         if (!string.IsNullOrWhiteSpace(memberLabel)) args.AddRange(["--member-label", memberLabel.Trim()]);
-        var env = new Dictionary<string, string>(StringComparer.Ordinal)
+        return args;
+    }
+
+    /// <summary>`kanjo publish-usage --repo … [--file …] [--branch …]`（超时 120 秒）。</summary>
+    public string PublishUsage(string repo, string? file, string? branch) =>
+        RunDetailed(PublishUsageArguments(repo, file, branch), "publish output",
+            PublishStore.Timeout).Stdout;
+
+    /// <summary>`kanjo report-family --url … [--member-label …]`（超时 45 秒），令牌只走环境变量。</summary>
+    public string ReportFamily(string url, string? memberLabel, string token) =>
+        RunDetailed(ReportFamilyArguments(url, memberLabel), "family report output",
+            FamilyReportStore.Timeout, FamilyReportEnvironment(token)).Stdout;
+
+    /// <summary>令牌只走环境变量（和 Mac 一样，永远不出现在命令行参数里）。</summary>
+    public static Dictionary<string, string> FamilyReportEnvironment(string token) =>
+        new(StringComparer.Ordinal) { ["KANJO_FAMILY_TOKEN"] = token.Trim() };
+
+    /// <summary>
+    /// 和 <see cref="PublishUsage"/> 一样，但把「超时 / 非 0 退出 / 空输出」原样交回给调用方：
+    /// 发布到网站要自己决定错误文案（Mac 是 <c>recordFailure</c>，不是抛异常）。
+    /// </summary>
+    public CliResult RunPublishUsage(string repo, string file, string branch) =>
+        RunForReport(PublishUsageArguments(repo, file, branch), PublishStore.Timeout);
+
+    /// <summary>同上，用于家庭上报。</summary>
+    public CliResult RunFamilyReport(string url, string? memberLabel, string token) =>
+        RunForReport(ReportFamilyArguments(url, memberLabel), FamilyReportStore.Timeout,
+            FamilyReportEnvironment(token));
+
+    private CliResult RunForReport(IReadOnlyList<string> arguments, TimeSpan timeout,
+        IReadOnlyDictionary<string, string>? extraEnvironment = null)
+    {
+        var python = PythonExecutable is null ? ResolvePython() : (PythonExecutable, PythonPrefixArguments);
+        if (python is not { } py)
         {
-            ["KANJO_FAMILY_TOKEN"] = token.Trim(),
-        };
-        return RunDetailed(args, "family report output", TimeSpan.FromSeconds(45), env).Stdout;
+            throw DataSourceError.LaunchFailed("Python not found: bundle <appdir>\\python\\python.exe, or install Python 3.");
+        }
+        var cwd = ResolveCliDirectory(WorkingDirectory);
+        if (cwd is null)
+        {
+            throw DataSourceError.LaunchFailed(
+                "Kanjo CLI directory not found: bundle <appdir>\\cli, repo cli/, or %LOCALAPPDATA%\\KanjoFamily\\cli.");
+        }
+        var env = new Dictionary<string, string>(Environment, StringComparer.Ordinal);
+        if (extraEnvironment is not null)
+        {
+            foreach (var (key, value) in extraEnvironment) env[key] = value;
+        }
+        var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
+        return ProcessRunner.Run(py.Item1, fullArgs, cwd, timeout, env);
     }
 }
