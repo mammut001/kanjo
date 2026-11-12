@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..identity import ScratchpadDecoder
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -25,6 +26,7 @@ from .base import (
     parse_iso,
     paths_from_args,
     unique,
+    split_path_list,
 )
 
 AGENT = "workbuddy"
@@ -47,10 +49,10 @@ def roots(agent: str = "workbuddy") -> List[str]:
         default = "~/.workbuddy/projects"
 
     if env_val:
-        return [os.path.abspath(os.path.expanduser(p)) for p in env_val.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(env_val) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.abspath(os.path.expanduser(default))]
+    return [winsupport.abspath(winsupport.expanduser(default))]
 
 
 def discover(dirs: Optional[List[str]] = None, agent: str = "workbuddy") -> List[Tuple[str, Optional[str]]]:

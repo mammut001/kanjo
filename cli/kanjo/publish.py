@@ -39,7 +39,7 @@ def _error(message: str) -> int:
 
 def _git(repo: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", repo] + list(args),
-                          capture_output=True, text=True, check=False)
+                          capture_output=True, text=True, encoding="utf-8", check=False)
 
 
 def _git_error(res: subprocess.CompletedProcess) -> str:
@@ -92,13 +92,13 @@ def cmd_publish_usage(args) -> int:
 
     # 1. Check PATH is a git repository
     res = subprocess.run(["git", "-C", repo, "rev-parse", "--is-inside-work-tree"],
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, encoding="utf-8", check=False)
     if res.returncode != 0 or res.stdout.strip() != "true":
         return _error("%s is not a git repository" % repo)
 
     # Check current branch equals required branch
     res = subprocess.run(["git", "-C", repo, "branch", "--show-current"],
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, encoding="utf-8", check=False)
     current_branch = res.stdout.strip()
     if current_branch != branch:
         return _error("current branch '%s' does not match required branch '%s'" % (current_branch, branch))
@@ -106,7 +106,7 @@ def cmd_publish_usage(args) -> int:
     # 2. git -C PATH pull --ff-only origin <branch>
     if not dry_run:
         res = subprocess.run(["git", "-C", repo, "pull", "--ff-only", "origin", branch],
-                             capture_output=True, text=True, check=False)
+                             capture_output=True, text=True, encoding="utf-8", check=False)
         if res.returncode != 0:
             err = res.stderr.strip() or res.stdout.strip()
             return _error("git pull --ff-only failed: %s" % err)
@@ -168,14 +168,14 @@ def cmd_publish_usage(args) -> int:
     week_key = _week_key(doc)
 
     res = subprocess.run(["git", "-C", repo, "add", "--", file_rel],
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, encoding="utf-8", check=False)
     if res.returncode != 0:
         err = res.stderr.strip() or res.stdout.strip()
         return _error("git add failed: %s" % err)
 
     commit_msg = "chore: update AI token usage (%s)" % week_key
     res = subprocess.run(["git", "-C", repo, "commit", "-m", commit_msg, "--", file_rel],
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, encoding="utf-8", check=False)
     if res.returncode != 0:
         err = res.stderr.strip() or res.stdout.strip()
         return _error("git commit failed: %s" % err)

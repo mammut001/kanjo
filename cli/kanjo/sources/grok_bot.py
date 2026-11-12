@@ -13,6 +13,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -20,6 +21,7 @@ from .base import (
     clean_title,
     env_dirs,
     unique,
+    split_path_list,
 )
 
 AGENT = "grok_bot"
@@ -29,15 +31,19 @@ _MAX_BLOB_BYTES = 64 * 1024 * 1024
 def roots() -> List[str]:
     explicit = os.environ.get("KANJO_GROK_BOT_DIR") or os.environ.get("GROK_BOT_DIR")
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
+    if winsupport.is_windows():
+        # Grok Bot has no Windows build; an explicit KANJO_GROK_BOT_DIR is the only
+        # way to scan it there (handled above), otherwise it is silently skipped.
+        return []
     candidates = [
-        os.path.expanduser("~/Library/Application Support/Grok Bot/sand-client-persistence"),
-        os.path.expanduser("~/.config/Grok Bot/sand-client-persistence"),
+        winsupport.expanduser("~/Library/Application Support/Grok Bot/sand-client-persistence"),
+        winsupport.expanduser("~/.config/Grok Bot/sand-client-persistence"),
     ]
-    existing = [os.path.abspath(c) for c in candidates if os.path.isdir(c)]
-    return existing[:1] if existing else [os.path.abspath(candidates[0])]
+    existing = [winsupport.abspath(c) for c in candidates if os.path.isdir(c)]
+    return existing[:1] if existing else [winsupport.abspath(candidates[0])]
 
 
 def _load_blob(path: str) -> Optional[dict]:
@@ -125,7 +131,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     entries = val.get("entries") or []
 
     # Find roster rows in the same directory to match title, cwd and stable session id
-    roster_rows = _find_roster_rows(os.path.dirname(os.path.abspath(path)))
+    roster_rows = _find_roster_rows(os.path.dirname(winsupport.abspath(path)))
     entry_ids: Set[str] = set()
     first_user_text: Optional[str] = None
 
@@ -153,7 +159,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
         title = clean_title(matched_row.get("title"))
         raw_path = matched_row.get("path")
         if isinstance(raw_path, str) and raw_path.strip():
-            cwd = os.path.abspath(os.path.expanduser(raw_path.strip()))
+            cwd = winsupport.abspath(winsupport.expanduser(raw_path.strip()))
     elif first_user_text:
         title = clean_title(first_user_text)
 

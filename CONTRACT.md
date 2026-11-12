@@ -341,6 +341,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 
 - `kind` 与 `deletable` 的默认对应：`cache` → always；`sessions` → after_import；`scratch` / `worktrees` → when_clean；`memory`（如 Antigravity 的跨会话记忆）→ never；`other` → never。
 - `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]`：只对 `blocked` 为空的条目生效；文件移入 `~/.Trash/kanjo-<时间戳>/`，不直接删除；git worktree 通过主仓库 `git worktree remove` 拆除；没有 `--yes` 时等同 `--dry-run`。输出 JSON：`{ "moved": [...路径], "freed_bytes": N, "skipped": [{ "id", "reason" }] }`。
+  - Windows 上没有 `~/.Trash`：文件和目录交给回收站（`SHFileOperationW`，`FOF_ALLOWUNDO`），结果里额外带 `"trash_dir": "Recycle Bin"`（字面字符串，不是路径）。`moved` / `freed_bytes` / `skipped` 的含义不变；被别的程序占用而移不动的文件是单条 `{ "id": <条目 id>, "reason": "move_failed" }`，不影响同一条目里的其他文件。显式给了 `trash_dir`（或 `KANJO_TRASH_DIR`）时仍按普通目录移动。
 - UI 永远不自己删文件，只调用 `kanjo disk clean`，并且先用 `--dry-run` 展示将要移动的内容，用户确认后再带 `--yes` 执行。
 
 ## 11. 手机快照 (`kanjo export --mobile`)

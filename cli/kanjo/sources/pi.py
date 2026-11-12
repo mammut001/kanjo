@@ -14,6 +14,7 @@ import json
 import os
 from typing import Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -23,6 +24,7 @@ from .base import (
     parse_iso,
     paths_from_args,
     unique,
+    split_path_list,
 )
 
 AGENT = "pi"
@@ -58,8 +60,8 @@ def roots(agent: str = "pi") -> List[str]:
 
     if explicit:
         paths = []
-        for p in explicit.split(os.pathsep):
-            exp = os.path.expanduser(p)
+        for p in split_path_list(explicit):
+            exp = winsupport.expanduser(p)
             if os.path.isdir(os.path.join(exp, "agent", "sessions")):
                 paths.append(os.path.join(exp, "agent", "sessions"))
             elif os.path.isdir(os.path.join(exp, "sessions")):
@@ -69,7 +71,7 @@ def roots(agent: str = "pi") -> List[str]:
         return paths
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.expanduser(default_dir)]
+    return [winsupport.expanduser(default_dir)]
 
 
 def discover(dirs: Optional[List[str]] = None, agent: str = "pi") -> List[Tuple[str, Optional[str]]]:

@@ -45,7 +45,27 @@ from .sources.base import AGENT_LABELS
 from .subscriptions import known_monthly_price
 
 DEFAULT_THRESHOLD = 0.8
-DEFAULT_DIR = os.path.join("~", ".config", "kanjo")
+
+
+def _prefix_match(path: str, prefix: str) -> bool:
+    """``path.startswith(prefix)``; case- and separator-insensitive for Windows paths."""
+    from . import winsupport
+    if winsupport.is_windows_path(path) or winsupport.is_windows_path(prefix):
+        return winsupport.normcase_key(path).startswith(
+            winsupport.normcase_key(prefix).rstrip("\\/"))
+    return path.startswith(prefix)
+
+
+def default_dir() -> str:
+    """``~/.config/kanjo`` on POSIX, ``%APPDATA%\\kanjo`` on Windows."""
+    from . import winsupport
+    return winsupport.kanjo_config_dir()
+
+
+def default_paths() -> List[str]:
+    from . import winsupport
+    base = os.path.expanduser(os.environ.get("KANJO_CONFIG_DIR") or default_dir())
+    return [winsupport.join(base, "attribution.toml"), winsupport.join(base, "attribution.json")]
 
 
 class ConfigError(Exception):
@@ -72,15 +92,20 @@ class Config:
 
     def match_override(self, path: Optional[str]):
         """Longest prefix among overrides and exclude -> ("override", project id),
-        ("exclude", None) or None. Plain string prefix match, as documented."""
+        ("exclude", None) or None. Plain string prefix match, as documented.
+
+        Windows paths compare case-insensitively and treat ``\\`` and ``/`` alike,
+        so an override written as ``C:\\Users\\Alice\\scratch`` covers a session cwd
+        logged as ``c:/users/alice/scratch/x``.
+        """
         if not path:
             return None
         best = None
         for prefix, target in self.overrides.items():
-            if path.startswith(prefix) and (best is None or len(prefix) > len(best[0])):
+            if _prefix_match(path, prefix) and (best is None or len(prefix) > len(best[0])):
                 best = (prefix, "override", target)
         for prefix in self.exclude:
-            if path.startswith(prefix) and (best is None or len(prefix) > len(best[0])):
+            if _prefix_match(path, prefix) and (best is None or len(prefix) > len(best[0])):
                 best = (prefix, "exclude", None)
         return (best[1], best[2]) if best else None
 
@@ -394,16 +419,23 @@ def _family(raw) -> dict:
     return out
 
 
-def default_paths() -> List[str]:
-    base = os.path.expanduser(os.environ.get("KANJO_CONFIG_DIR") or DEFAULT_DIR)
-    return [os.path.join(base, "attribution.toml"), os.path.join(base, "attribution.json")]
-
-
 def config_paths(path: Optional[str] = None):
     """Primary config (existing JSON fallback included), and its sibling overrides."""
     candidates = [os.path.expanduser(path)] if path else default_paths()
     primary = next((p for p in candidates if os.path.isfile(p)), candidates[0])
     return primary, os.path.join(os.path.dirname(primary), "overrides.json")
+
+
+def default_config_paths() -> List[str]:
+    """Every default config file, in the order ``load`` looks for them.
+
+    Used where the fingerprint must see all of them, including a file the current
+    ``--config`` does not point at.
+    """
+    from . import winsupport
+    base = os.path.expanduser(os.environ.get("KANJO_CONFIG_DIR") or default_dir())
+    return [winsupport.join(base, name)
+            for name in ("attribution.toml", "attribution.json", "overrides.json")]
 
 
 def read_overrides(path: str) -> dict:

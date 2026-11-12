@@ -17,7 +17,7 @@ from kanjo.config import ConfigError
 from kanjo.export import build_export, check_invariants
 from kanjo.subscriptions import subscriptions
 
-from tests.support import ALICE, FIXTURE_DIRS, check_subscriptions, standard_fs, validate_contract
+from tests.support import ALICE, FIXTURE_DIRS, check_subscriptions, has_tz_database, standard_fs, validate_contract
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc)
 DAY = 86400
@@ -173,6 +173,8 @@ class SubscriptionTest(unittest.TestCase):
                 self.assertEqual(sub["cycle_end"], "2026-10-24T12:00:00Z")
                 check_subscriptions(self, {"claude": sub})
 
+    @unittest.skipUnless(has_tz_database("America/Montreal"),
+                         "needs the IANA tz database (tzdata on Windows)")
     def test_rolling_window_preserves_time_across_dst_and_month_boundaries(self):
         self.write_claude(drop_created=True)
         for now, start, end in (
@@ -462,13 +464,20 @@ class SubscriptionTest(unittest.TestCase):
 
     def test_cycle_uses_report_timezone(self):
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 10}}}).subscriptions
+        now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
+        # UTC needs no tz database, so this half of the check runs everywhere.
+        utc = self.collect(manual, now=now, tz="UTC")["claude"]
+        self.assertEqual(utc["cycle_start"], "2026-03-10T00:00:00Z")
+
+    @unittest.skipUnless(has_tz_database("Asia/Shanghai", "America/Montreal"),
+                         "needs the IANA tz database (tzdata on Windows)")
+    def test_cycle_uses_report_timezone_with_named_zones(self):
+        manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 10}}}).subscriptions
         # 2026-04-09 17:00 UTC is 2026-04-10 01:00 in Shanghai, so the 10th has started
         now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
         shanghai = self.collect(manual, now=now, tz="Asia/Shanghai")["claude"]
         self.assertEqual(shanghai["cycle_start"], "2026-04-09T16:00:00Z")
         self.assertEqual(shanghai["cycle_end"], "2026-05-09T16:00:00Z")
-        utc = self.collect(manual, now=now, tz="UTC")["claude"]
-        self.assertEqual(utc["cycle_start"], "2026-03-10T00:00:00Z")
         # Montreal is UTC-4 in October and UTC-5 in November, so the two midnights differ
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 25}}}).subscriptions
         now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
@@ -571,13 +580,39 @@ class SubscriptionTest(unittest.TestCase):
             claude = doc["subscriptions"]["claude"]
             self.assertEqual(claude["plan"], "max_5x")
             self.assertEqual(claude["source"], "detected")
-            self.assertEqual(claude["cycle_start"], "2026-04-09T16:00:00Z")
-            self.assertEqual(claude["cycle_end"], "2026-05-09T16:00:00Z")
+            # The anchored cycle's exact instants depend on the named zone (see
+            # test_export_subscriptions_use_the_named_zone); without tzdata it falls
+            # back to the host offset. The shape holds either way.
+            self.assertEqual(claude["cycle_source"], "subscription_date")
+            self.assertEqual(claude["anchor_day"], 10)
+            self.assertRegex(claude["cycle_start"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+            self.assertRegex(claude["cycle_end"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+            self.assertLess(claude["cycle_start"], claude["cycle_end"])
+            # The rolling 30-day window ends at "now", so it needs no zone data.
             codex = doc["subscriptions"]["codex"]
             self.assertEqual(codex["plan"], "plus")
             self.assertEqual(codex["cycle_start"], "2026-03-10T17:00:00Z")
             self.assertEqual(codex["cycle_end"], "2026-04-09T17:00:00Z")
             self.assertNotIn("antigravity", doc["subscriptions"])
+        finally:
+            fs.cleanup()
+
+    @unittest.skipUnless(has_tz_database("Asia/Shanghai"),
+                         "needs the IANA tz database (tzdata on Windows)")
+    def test_export_subscriptions_use_the_named_zone(self):
+        fs = standard_fs()
+        try:
+            now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
+            self.write_claude(created="2026-01-10T08:00:00Z")
+            self.write_codex(plan="plus", fetched=now.timestamp())
+            env = {"KANJO_CLAUDE_CONFIG": self.claude_path, "KANJO_TOKEI_DIR": self.dir, "TZ": "Asia/Shanghai"}
+            with mock.patch.dict(os.environ, env):
+                doc = build_export(dirs=FIXTURE_DIRS, fs_root=fs.root, home=ALICE, now=now, tokei_dir=self.dir)
+            # 2026-04-09 17:00 UTC is 2026-04-10 01:00 in Shanghai, so the anchored
+            # cycle starts at the 10th's midnight there: 16:00Z the day before.
+            claude = doc["subscriptions"]["claude"]
+            self.assertEqual(claude["cycle_start"], "2026-04-09T16:00:00Z")
+            self.assertEqual(claude["cycle_end"], "2026-05-09T16:00:00Z")
         finally:
             fs.cleanup()
 

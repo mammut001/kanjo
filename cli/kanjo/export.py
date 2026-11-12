@@ -16,7 +16,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from . import attribution as attr
 from . import quota
-from .config import Config
+from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
 from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
@@ -31,7 +31,8 @@ from .sources import (
     qwenwork, workbuddy, workbuddy_ai, zcode,
 )
 from . import __version__
-from .sources.base import AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day, local_timezone_name
+from .sources.base import (AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day,
+                           local_timezone_name, local_zone)
 
 SCHEMA_VERSION = 1
 COST_NOTE = "API-equivalent cost estimated from public API prices. Not actual subscription spend."
@@ -112,6 +113,8 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
         if dirs is not None:
             roots = dirs.get(agent, [])
         else:
+            # On Windows a macOS-only agent's roots() returns [] unless the user
+            # points a KANJO_*_DIR at real logs, so an override is still honoured.
             roots = module.roots()
         st = SourceStats(agent=agent, dirs=[r for r in roots])
         stats[agent] = st
@@ -1087,9 +1090,7 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     config_paths = []
     if cfg.source:
         config_paths.append(cfg.source)
-    config_paths.append(os.path.expanduser("~/.config/kanjo/attribution.toml"))
-    config_paths.append(os.path.expanduser("~/.config/kanjo/attribution.json"))
-    config_paths.append(os.path.expanduser("~/.config/kanjo/overrides.json"))
+    config_paths.extend(default_config_paths())
     if cfg.source:
         config_paths.append(os.path.join(os.path.dirname(cfg.source), "overrides.json"))
 
@@ -1355,11 +1356,7 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
             resolver.add_remote_hint(path, remote)
 
     tz_name = local_timezone_name()
-    try:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(tz_name)
-    except Exception:
-        tz = datetime.now().astimezone().tzinfo or timezone.utc
+    tz = local_zone(tz_name)
 
     all_time = PublicPeriodAgg("all")
     months: Dict[str, PublicPeriodAgg] = {}
@@ -1500,11 +1497,7 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         scope_agents = list(config.family_agents)
 
     tz_name = local_timezone_name()
-    try:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(tz_name)
-    except Exception:
-        tz = datetime.now().astimezone().tzinfo or timezone.utc
+    tz = local_zone(tz_name)
 
     since_ts = None
     if config.family_since:

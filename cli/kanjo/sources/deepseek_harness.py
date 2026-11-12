@@ -17,6 +17,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -24,6 +25,7 @@ from .base import (
     clean_title,
     env_dirs,
     unique,
+    split_path_list,
 )
 
 AGENT = "deepseek_harness"
@@ -35,10 +37,10 @@ def roots() -> List[str]:
         or os.environ.get("TOKEI_DSH_DECOMPRESSED_DIR")
     )
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.abspath(os.path.expanduser("~/.tokei/cache/dsh-sessions"))]
+    return [winsupport.abspath(winsupport.expanduser("~/.tokei/cache/dsh-sessions"))]
 
 
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:

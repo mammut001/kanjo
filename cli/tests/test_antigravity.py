@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest import mock
 
-from kanjo import disk
+from kanjo import disk, winsupport
 from kanjo.sources import antigravity
 
 
@@ -23,11 +23,12 @@ class AntigravitySourceTest(unittest.TestCase):
     def test_roots_default_includes_both_directories(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             r = antigravity.roots()
+            # Same strings as before on POSIX; backslashes under the profile on Windows.
             expected = [
-                os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
-                os.path.expanduser("~/.gemini/antigravity/conversations"),
-                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
-                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity-cli/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity-ide/conversations"),
+                winsupport.expanduser("~/.gemini/gemini-cli/conversations"),
             ]
             self.assertEqual(r, expected)
 
@@ -107,11 +108,13 @@ class AntigravitySourceTest(unittest.TestCase):
     def test_disk_default_roots_has_both_directories(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             agy_dirs = disk.default_roots()["antigravity_dirs"]
+            # The defaults are "~/..." literals, so the separator is the host's.
+            home = os.path.expanduser("~")
             expected = [
-                os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
-                os.path.expanduser("~/.gemini/antigravity/conversations"),
-                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
-                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
+                os.path.join(home, ".gemini", "antigravity-cli", "conversations"),
+                os.path.join(home, ".gemini", "antigravity", "conversations"),
+                os.path.join(home, ".gemini", "antigravity-ide", "conversations"),
+                os.path.join(home, ".gemini", "gemini-cli", "conversations"),
             ]
             self.assertEqual(agy_dirs, expected)
 

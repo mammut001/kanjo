@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Kanjo.Core</RootNamespace>
+    <AssemblyName>Kanjo.Core</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- 本地化文案直接链接 Mac 版的那三份 Localizable.strings（不复制文件、不复制翻译）。 -->
+  <ItemGroup>
+    <Content Include="..\..\..\ui\Sources\KanjoCore\Resources\**\Localizable.strings"
+             Link="Resources\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 电源事件（睡眠 / 唤醒）：Windows 上来自 SystemEvents.PowerModeChanged。
+         非 Windows 上这个程序集不会被调用（WindowsPowerMonitor 有 OperatingSystem.IsWindows() 守卫）。 -->
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="10.0.0" />  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>KanjoRepoRoot</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\'))</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>KanjoConfiguration</_Parameter1>
+      <_Parameter2>$(Configuration)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

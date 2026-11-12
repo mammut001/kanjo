@@ -465,61 +465,66 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         self.assertEqual(json_no_cache, json_warm)
 
     def test_sqlite_direct_open_avoids_copy_and_fallback_works(self):
-        with tempfile.NamedTemporaryFile(suffix=".db") as f:
-            conn = sqlite3.connect(f.name)
-            conn.execute("CREATE TABLE t (x INTEGER);")
-            conn.execute("INSERT INTO t VALUES (42);")
-            conn.commit()
-            conn.close()
+        # A bare mkstemp path instead of NamedTemporaryFile: Windows keeps the
+        # handle open with a share mode that blocks SQLite's own open.
+        tmp = tempfile.mkdtemp(prefix="kanjo-sqlite-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        db = os.path.join(tmp, "direct.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE t (x INTEGER);")
+        conn.execute("INSERT INTO t VALUES (42);")
+        conn.commit()
+        conn.close()
 
-            # Direct read-only open succeeds without shutil.copy2
-            with mock.patch("shutil.copy2") as mock_copy:
-                with open_sqlite_ro(f.name) as c:
-                    val = c.execute("SELECT x FROM t").fetchone()[0]
-                    self.assertEqual(val, 42)
-                mock_copy.assert_not_called()
+        # Direct read-only open succeeds without shutil.copy2
+        with mock.patch("shutil.copy2") as mock_copy:
+            with open_sqlite_ro(db) as c:
+                val = c.execute("SELECT x FROM t").fetchone()[0]
+                self.assertEqual(val, 42)
+            mock_copy.assert_not_called()
 
-            # When direct connect fails, falls back to copying
-            orig_connect = sqlite3.connect
-            def fail_direct(db, *args, **kwargs):
-                if str(db).startswith("file:"):
-                    raise sqlite3.OperationalError("mock direct failure")
-                return orig_connect(db, *args, **kwargs)
-
-            with mock.patch("sqlite3.connect", side_effect=fail_direct):
-                with open_sqlite_ro(f.name) as c:
-                    val = c.execute("SELECT x FROM t").fetchone()[0]
-                    self.assertEqual(val, 42)
+        # When direct connect fails, falls back to copying
+        orig_connect = sqlite3.connect
+        def fail_direct(target, *args, **kwargs):
+            if str(target).startswith("file:"):
+                raise sqlite3.OperationalError("mock direct failure")
+            return orig_connect(target, *args, **kwargs)
+        with mock.patch("sqlite3.connect", side_effect=fail_direct):
+            with open_sqlite_ro(db) as c:
+                val = c.execute("SELECT x FROM t").fetchone()[0]
+                self.assertEqual(val, 42)
 
     def test_never_uses_immutable_when_wal_exists(self):
-        with tempfile.NamedTemporaryFile(suffix=".db") as f:
-            conn = sqlite3.connect(f.name)
-            conn.execute("CREATE TABLE t (x);")
-            conn.commit()
-            conn.close()
+        tmp = tempfile.mkdtemp(prefix="kanjo-sqlite-wal-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        db = os.path.join(tmp, "wal.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE t (x);")
+        conn.commit()
+        conn.close()
 
-            wal = f.name + "-wal"
-            with open(wal, "w") as wf:
-                wf.write("dummy wal")
+        wal = db + "-wal"
+        with open(wal, "w") as wf:
+            wf.write("dummy wal")
 
-            opened_uris = []
-            orig_connect = sqlite3.connect
-            def spy_connect(db, *args, **kwargs):
-                opened_uris.append(str(db))
-                return orig_connect(db, *args, **kwargs)
+        opened_uris = []
+        orig_connect = sqlite3.connect
+        def spy_connect(uri, *args, **kwargs):
+            opened_uris.append(str(uri))
+            return orig_connect(uri, *args, **kwargs)
 
-            with mock.patch("sqlite3.connect", side_effect=spy_connect):
-                try:
-                    with open_sqlite_ro(f.name):
-                        pass
-                except Exception:
+        with mock.patch("sqlite3.connect", side_effect=spy_connect):
+            try:
+                with open_sqlite_ro(db):
                     pass
+            except Exception:
+                pass
 
-            if os.path.exists(wal):
-                os.remove(wal)
+        if os.path.exists(wal):
+            os.remove(wal)
 
-            for u in opened_uris:
-                self.assertNotIn("immutable=1", u)
+        for u in opened_uris:
+            self.assertNotIn("immutable=1", u)
 
     def test_antigravity_protobuf_varint_and_filtering(self):
         # 1-byte vs multi-byte varints
@@ -555,16 +560,19 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         # Verify assistant message mentioning 'user' does not trigger json.loads
         line_assistant_with_user = b'{"timestamp":"2026-07-01T01:00:03Z","type":"response_item","payload":{"role":"assistant","content":[{"text":"help the user with authentication"}]}}\n'
         with mock.patch("json.loads", wraps=json.loads) as mock_loads:
-            # Create a minimal temp codex file
-            with tempfile.NamedTemporaryFile(suffix=".jsonl") as tf:
-                meta = b'{"timestamp":"2026-07-01T01:00:00Z","type":"session_meta","payload":{"id":"test-1"}}\n'
+            # Create a minimal temp codex file. NamedTemporaryFile would keep an
+            # exclusive handle on Windows, so the file is closed before parsing.
+            tmp = tempfile.mkdtemp(prefix="kanjo-codex-")
+            self.addCleanup(shutil.rmtree, tmp, True)
+            name = os.path.join(tmp, "log.jsonl")
+            meta = b'{"timestamp":"2026-07-01T01:00:00Z","type":"session_meta","payload":{"id":"test-1"}}\n'
+            with open(name, "wb") as tf:
                 tf.write(meta)
                 tf.write(line_assistant_with_user)
-                tf.flush()
-                codex.parse_file(tf.name)
-                # json.loads should be called for session_meta, but NOT for line_assistant_with_user
-                loaded_lines = [call.args[0] for call in mock_loads.call_args_list if call.args]
-                self.assertNotIn(line_assistant_with_user, loaded_lines)
+            codex.parse_file(name)
+            # json.loads should be called for session_meta, but NOT for line_assistant_with_user
+            loaded_lines = [call.args[0] for call in mock_loads.call_args_list if call.args]
+            self.assertNotIn(line_assistant_with_user, loaded_lines)
 
     def test_custom_dump_and_load_session_equivalence(self):
         s = Session(
@@ -599,11 +607,13 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         self.assertEqual(loaded.remote_hints, s.remote_hints)
 
     def test_extract_paths_equivalence(self):
+        # `~` expands with the separators of the home path itself (os.path.join).
+        home_notes = os.path.join(os.path.expanduser("~"), "Documents", "notes.txt")
         cases = [
             ("git diff /Users/alice/repo/file.py", ["/Users/alice/repo/file.py"]),
             ('python3 "/Users/alice/my project/main.py" --arg /tmp/test.txt', ["/Users/alice/my project/main.py", "/tmp/test.txt"]),
             ("echo hello world no paths here", []),
-            ("cat ~/Documents/notes.txt /etc/hosts", [os.path.expanduser("~") + "/Documents/notes.txt", "/etc/hosts"]),
+            ("cat ~/Documents/notes.txt /etc/hosts", [home_notes, "/etc/hosts"]),
             ("invalid /!notapath /#bad", []),
         ]
         for text, expected in cases:

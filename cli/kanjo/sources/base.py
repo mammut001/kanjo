@@ -5,13 +5,16 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import posixpath
 import re
 import shutil
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional
+
+from .. import winsupport
 
 AGENT_LABELS = {
     "claude": "Claude Code",
@@ -136,7 +139,9 @@ def local_day(ts: float) -> str:
 
 def local_timezone_name() -> str:
     """IANA name of the zone ``local_day`` uses: $TZ, else the /etc/localtime
-    symlink target (macOS and most Linux), else /etc/timezone, else UTC."""
+    symlink target (macOS and most Linux), else /etc/timezone, else the UTC
+    offset. Windows has no tz database path, so it always ends at the offset
+    (``Etc/GMT+N`` or ``UTC``), which needs no ``tzdata`` package."""
     tz = os.environ.get("TZ", "").lstrip(":")
     if tz and "/" in tz and not tz.startswith("/"):
         return tz
@@ -157,12 +162,45 @@ def local_timezone_name() -> str:
                 return name
     except OSError:
         pass
+    return offset_timezone_name()
+
+
+def offset_timezone_name() -> str:
+    """The current UTC offset as a fixed zone name (``Etc/GMT+5`` or ``UTC``)."""
     offset = datetime.now().astimezone().utcoffset()
     if not offset:
         return "UTC"
     # no IANA name available: Etc/GMT zones have inverted signs
     hours = int(offset.total_seconds() // 3600)
     return "Etc/GMT%+d" % (-hours) if offset.total_seconds() % 3600 == 0 else "UTC"
+
+
+def fixed_offset_tz(name: Optional[str]):
+    """A fixed-offset tzinfo for an ``Etc/GMT±N`` name, without the tz database."""
+    if name:
+        m = re.match(r"^Etc/GMT([+-])(\d{1,2})$", name.strip())
+        if m:
+            hours = int(m.group(2))
+            if m.group(1) == "+":
+                hours = -hours  # Etc/GMT+5 is UTC-5
+            return timezone(timedelta(hours=hours))
+    local = datetime.now().astimezone().utcoffset() or timedelta(0)
+    return timezone(local)
+
+
+def local_zone(name: Optional[str] = None):
+    """tzinfo for ``name`` (default: the local zone).
+
+    Falls back to a fixed UTC offset when the IANA database is unavailable, which
+    is the normal case on Windows without the ``tzdata`` package. Never raises, so
+    no caller needs the tz database to exist.
+    """
+    zone_name = name or local_timezone_name()
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(zone_name)
+    except Exception:
+        return fixed_offset_tz(zone_name)
 
 
 def _is_cjk(ch: str) -> bool:
@@ -474,9 +512,24 @@ short_title = clean_title
 # at shell operators.
 _UNQUOTED_PATH = re.compile(r"""(?<![^\s"'`=(<>|&;,])((?:~|/)[^\s"'`;|&<>(){}$,]*)""")
 _QUOTED_PATH = re.compile(r"""(["'])((?:~|/)[^"'\r\n`;]*?)\1""")
+# Windows paths in free text: C:\a\b, c:/a/b, \\server\share. Only used on Windows
+# (or when the text itself names a drive path), so POSIX extraction is unchanged.
+_UNQUOTED_WIN_PATH = re.compile(
+    r"""(?<![^\s"'`=(<>|&;,])((?:[A-Za-z]:[\\/]|\\\\|~/)[^\s"'`;|&<>(){}$,]*)""")
+_QUOTED_WIN_PATH = re.compile(r"""(")([A-Za-z]:[\\/][^"\r\n`;]*)"|(')([A-Za-z]:[\\/][^'\r\n`;]*)'""")
 _TRAILING = ".,:;)]}\\"
 _VALID_SECOND_CHAR = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~-")
-_HOME = os.path.expanduser("~")
+
+
+def _expand_home(p: str, home: str) -> str:
+    """``~`` -> ``home`` with the separator style of the home path."""
+    if p == "~":
+        return home
+    rest = p[2:]
+    if winsupport.is_windows_path(home):
+        parts = [part for part in re.split(r"[\\/]+", rest) if part]
+        return winsupport.join(home, *parts) if parts else home
+    return home + p[1:]
 
 
 def _finish(path: str, home: str) -> Optional[str]:
@@ -488,22 +541,36 @@ def _finish(path: str, home: str) -> Optional[str]:
     if p.startswith("~"):
         if not (p == "~" or p.startswith("~/") or p.startswith("~\\")):
             return None
-        p = home + p[1:]
+        p = _expand_home(p, home)
     is_win = bool(re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", p))
     if not (p.startswith("/") or is_win):
         return None
     if p.startswith("/") and (len(p) < 2 or p.startswith("//") or p[1] not in _VALID_SECOND_CHAR):
         return None
-    return os.path.normpath(p)
+    return winsupport.normpath(p)
+
+
+def _wants_windows_paths(text: str) -> bool:
+    """Extract drive/UNC paths too: always on Windows, and for text that names one.
+
+    macOS logs can still contain a Windows command (a session about a Windows
+    build), so a ``C:\\...`` or ``\\\\server\\share`` in the text is recognised on
+    any host.
+    """
+    return winsupport.is_windows() or bool(
+        re.search(r"""(?:^|[\s"'`=(])(?:[A-Za-z]:[\\/]|\\\\)""", text))
 
 
 def extract_paths(text: str, home: Optional[str] = None) -> List[str]:
     """Absolute paths mentioned in a shell command (or similar free text).
     Quoted paths may contain spaces; an unquoted path inside a quoted span is
     not counted again."""
-    if not text or not isinstance(text, str) or ("/" not in text and "~" not in text):
+    if not text or not isinstance(text, str):
         return []
-    home = home or _HOME
+    windows = _wants_windows_paths(text)
+    if "/" not in text and "~" not in text and "\\" not in text and not windows:
+        return []
+    home = home or winsupport.expanduser("~")
     found: List[str] = []
     spans = []
     for m in _QUOTED_PATH.finditer(text):
@@ -511,12 +578,28 @@ def extract_paths(text: str, home: Optional[str] = None) -> List[str]:
         spans.append((m.start(), m.end()))
         if p:
             found.append(p)
+    if windows:
+        for m in _QUOTED_WIN_PATH.finditer(text):
+            if spans and any(a <= m.start() < b for a, b in spans):
+                continue
+            value = m.group(2) if m.group(2) is not None else m.group(4)
+            p = _finish(value, home)
+            spans.append((m.start(), m.end()))
+            if p and p not in found:
+                found.append(p)
     for m in _UNQUOTED_PATH.finditer(text):
         if spans and any(a <= m.start() < b for a, b in spans):
             continue
         p = _finish(m.group(1), home)
         if p:
             found.append(p)
+    if windows:
+        for m in _UNQUOTED_WIN_PATH.finditer(text):
+            if spans and any(a <= m.start() < b for a, b in spans):
+                continue
+            p = _finish(m.group(1), home)
+            if p and p not in found:
+                found.append(p)
     return found
 
 
@@ -533,16 +616,16 @@ def absolutize(path, cwd: Optional[str], home: Optional[str] = None) -> Optional
         if re.match(r"^/[A-Za-z]:", p):
             p = p[1:]
     if p.startswith("~/") or p == "~" or p.startswith("~\\"):
-        p = (home or os.path.expanduser("~")) + p[1:]
-    is_abs = p.startswith("/") or bool(re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", p))
+        p = _expand_home(p, home or winsupport.expanduser("~"))
+    is_abs = p.startswith("/") or winsupport.is_windows_path(p)
     if not is_abs:
         if not cwd or re.match(r"^[a-z][a-z0-9+.\-]*:", p, re.I):
             return None
-        if "\\" in cwd and "/" not in cwd:
-            p = cwd.rstrip("\\") + "\\" + p.replace("/", "\\")
-        else:
-            p = os.path.join(cwd, p)
-    return os.path.normpath(p)
+        if winsupport.is_windows_path(cwd):
+            # Node tools write relative paths with either separator.
+            return winsupport.normpath(winsupport.join(cwd, *[x for x in re.split(r"[\\/]+", p) if x]))
+        p = posixpath.join(cwd, *[x for x in p.split("/") if x])
+    return winsupport.normpath(p)
 
 
 def unique(items: Iterable[str]) -> List[str]:
@@ -555,13 +638,39 @@ def unique(items: Iterable[str]) -> List[str]:
     return out
 
 
+def split_path_list(value: str) -> List[str]:
+    """A ``PATH``-style list. ``;`` separates Windows paths, ``:`` POSIX paths.
+
+    Windows uses ``;`` and drive letters contain a ``:``, so a list that looks like
+    Windows paths is always split on ``;`` first — also when this runs on macOS
+    (tests set ``C:\\a;C:\\b``). POSIX values keep using ``os.pathsep``.
+    """
+    if ";" in value and re.search(r"(?:^|;)\s*[A-Za-z]:[\\/]", value):
+        return [p for p in value.split(";") if p]
+    return [p for p in value.split(os.pathsep) if p]
+
+
 def env_dirs(var: str, defaults: List[str]) -> List[str]:
     value = os.environ.get(var)
     if value:
-        return [os.path.expanduser(p) for p in value.split(os.pathsep) if p]
+        return [winsupport.expanduser(p) for p in split_path_list(value)]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.expanduser(p) for p in defaults]
+    return [winsupport.expanduser(p) for p in defaults]
+
+
+def platform_dirs(defaults: List[str], windows_defaults: Optional[List[str]] = None) -> List[str]:
+    """Every default root for this platform, expanded.
+
+    ``defaults`` are the macOS/Linux locations; ``windows_defaults`` replace them
+    on Windows. Without an explicit Windows list, the same names are used, which is
+    correct for dot-dirs: ``~/.claude`` expands to ``%USERPROFILE%\\.claude`` there.
+    """
+
+    chosen = defaults
+    if windows_defaults is not None and winsupport.is_windows():
+        chosen = windows_defaults
+    return [winsupport.expanduser(p) for p in chosen]
 
 
 def paths_from_args(args, cwd: Optional[str], path_keys, cmd_keys, home: Optional[str] = None) -> List[str]:
@@ -590,6 +699,7 @@ def git_branch(cwd: Optional[str]) -> Optional[str]:
     """Recover branch name from .git/HEAD in cwd (or linked worktree) without invoking git."""
     if not cwd or not os.path.isdir(cwd):
         return None
+    win = winsupport.is_windows_path(cwd)
     dotgit = os.path.join(cwd, ".git")
     head_file = None
     if os.path.isdir(dotgit):
@@ -600,9 +710,15 @@ def git_branch(cwd: Optional[str]) -> Optional[str]:
                 line = f.read().strip()
                 if line.startswith("gitdir:"):
                     gdir = line.split(":", 1)[1].strip()
-                    if not os.path.isabs(gdir):
-                        gdir = os.path.normpath(os.path.join(cwd, gdir))
-                    head_file = os.path.join(gdir, "HEAD")
+                    if win:
+                        # git writes "C:/..." (forward slashes) even on Windows.
+                        if not (os.path.isabs(gdir) or winsupport.is_windows_path(gdir)):
+                            gdir = winsupport.normpath(winsupport.join(cwd, gdir))
+                        head_file = winsupport.join(gdir, "HEAD")
+                    else:
+                        if not os.path.isabs(gdir):
+                            gdir = os.path.normpath(os.path.join(cwd, gdir))
+                        head_file = os.path.join(gdir, "HEAD")
         except OSError:
             pass
     if head_file and os.path.isfile(head_file):
@@ -616,6 +732,22 @@ def git_branch(cwd: Optional[str]) -> Optional[str]:
     return None
 
 
+def sqlite_uri_path(path: str) -> str:
+    """The path part of a SQLite ``file:`` URI.
+
+    Windows paths need the URI form ``file:///C:/dir/db`` (``file:C:\\dir\\db`` is
+    not a valid URI there; SQLite treats the ``C:`` as a scheme). POSIX paths keep
+    the ``/abs/path`` spelling they always had.
+    """
+    if winsupport.is_windows_path(path):
+        from urllib.parse import quote
+        return "/" + quote(path.replace("\\", "/"), safe="/:")
+    if path.startswith("/"):
+        # A POSIX path stays POSIX even on a Windows host (logs from another machine).
+        return posixpath.normpath(path)
+    return os.path.abspath(path)
+
+
 @contextlib.contextmanager
 def open_sqlite_ro(path: str):
     """Open SQLite db in read-only mode.
@@ -626,18 +758,28 @@ def open_sqlite_ro(path: str):
     if not os.path.isfile(path):
         raise ParseError("database file not found: %s" % path)
 
-    abs_path = os.path.abspath(path)
+    abs_path = sqlite_uri_path(path)
     wal_exists = os.path.isfile(path + "-wal")
     direct_conn = None
     try:
         c = sqlite3.connect(f"file:{abs_path}?mode=ro", uri=True, timeout=1)
-        c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        try:
+            c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        except sqlite3.Error:
+            # A connection that fails its probe still holds the file open; on
+            # Windows that blocks the caller's cleanup (WinError 32).
+            c.close()
+            raise
         direct_conn = c
     except sqlite3.Error:
         if not wal_exists:
             try:
                 c = sqlite3.connect(f"file:{abs_path}?mode=ro&immutable=1", uri=True, timeout=1)
-                c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+                try:
+                    c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+                except sqlite3.Error:
+                    c.close()
+                    raise
                 direct_conn = c
             except sqlite3.Error:
                 pass

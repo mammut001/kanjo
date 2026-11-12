@@ -14,7 +14,7 @@ from kanjo import cli, config, quota
 from kanjo.config import ConfigError
 from kanjo.export import build_export
 
-from tests.support import ALICE, FIXTURE_DIRS, check_quota_windows, standard_fs
+from tests.support import ALICE, FIXTURE_DIRS, check_quota_windows, has_tz_database, standard_fs
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc).timestamp()
 HOUR = 3600
@@ -157,6 +157,8 @@ class QuotaTest(unittest.TestCase):
         qw = quota.quota_windows(directory=self.dir, now=NOW)
         self.assertNotIn("grok", qw)
 
+    @unittest.skipUnless(has_tz_database("America/New_York", "Europe/Paris"),
+                         "needs the IANA tz database (tzdata on Windows)")
     def test_manual_weekly_reset_and_dst(self):
         # Saturday Oct 24, 2026 at 12:00 UTC
         # Config weekly_reset = "tue 05:00" in report timezone America/New_York (EDT, UTC-4)

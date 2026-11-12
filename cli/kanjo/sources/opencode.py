@@ -25,13 +25,20 @@ from .base import (
     short_title,
 )
 
+from .. import winsupport
+
 AGENT = "opencode"
 PATH_KEYS = {"file_path", "path", "filepath", "directory", "dir", "cwd", "workdir", "target_file", "file"}
 CMD_KEYS = {"command", "cmd"}
 
 
 def roots() -> List[str]:
-    return env_dirs("KANJO_OPENCODE_DIR", ["~/.local/share/opencode"])
+    if winsupport.is_windows():
+        # OpenCode keeps its XDG-style data dir under the profile on Windows.
+        default = winsupport.join(winsupport.user_profile() or "", ".local", "share", "opencode")
+    else:
+        default = "~/.local/share/opencode"
+    return env_dirs("KANJO_OPENCODE_DIR", [default])
 
 
 def _db_path(root: str) -> Optional[str]:

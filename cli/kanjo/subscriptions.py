@@ -226,6 +226,12 @@ def _zone(name: str):
     try:
         return ZoneInfo(name)
     except Exception:
+        from . import winsupport
+        if winsupport.is_windows():
+            # Windows has no system tz database; zoneinfo needs the tzdata package.
+            # Rather than fail the whole export, use the current UTC offset.
+            from .sources.base import local_zone
+            return local_zone(name)
         return timezone.utc
 
 

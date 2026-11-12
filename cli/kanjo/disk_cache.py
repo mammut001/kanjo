@@ -9,11 +9,30 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from . import winsupport
 from .cache import _cache_dir
 
 
 def cache_path() -> str:
     return os.path.join(_cache_dir(), "disk-report.json")
+
+
+# ``scanned_at`` is written as ISO 8601 with microsecond resolution, while the
+# clock that stamps it advances in coarser ticks (``time.time()`` only moves every
+# ~15.6 ms on Windows, NTFS stores 100 ns). A file written in the same tick can
+# therefore carry an mtime fractionally newer than the boundary, and would be
+# mistaken for an edit. 50 ms is below the smallest real edit these caches track
+# and well under the 1 s deltas the invalidation tests use.
+#
+# Windows only: the coarse clock tick is what makes it necessary there. POSIX
+# hosts keep the exact ``st_mtime <= scanned`` comparison they have always had, so
+# their cache decisions do not change at all.
+_SIG_TOLERANCE_WINDOWS = 0.05
+
+
+def _sig_tolerance() -> float:
+    """How much an mtime may exceed ``scanned_at`` and still count as unchanged."""
+    return _SIG_TOLERANCE_WINDOWS if winsupport.is_windows() else 0.0
 
 
 def _scan_time(doc: dict) -> float:
@@ -47,12 +66,16 @@ def load_cached_report(roots: dict, now: float, max_age: float) -> Tuple[Optiona
         worktrees = payload.get("worktrees") or {}
         valid_entries = {}
         all_valid = True
+        # Zero off Windows, so POSIX keeps the exact comparison.
+        tolerance = _sig_tolerance()
         for agent in doc.get("agents", []):
             for entry in agent.get("entries", []):
                 p = entry.get("path")
                 try:
                     st = os.stat(p)
-                    if st.st_mtime <= scanned:
+                    # A coarse clock tick can leave a directory's mtime fractionally
+                    # past the boundary (Windows); anything newer is a real edit.
+                    if st.st_mtime <= scanned + tolerance:
                         valid_entries[entry["id"]] = entry
                     else:
                         all_valid = False

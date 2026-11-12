@@ -6,6 +6,26 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Kanjo for Windows.** A native Avalonia app (`windows/`) with the same tray panel, pages, hover cards and background behaviour as the Mac app, sharing the Python CLI and the same JSON contract. Ships as `KanjoApp-win-x64-Setup.exe` / `KanjoApp-win-arm64-Setup.exe`: per-user install in `%LOCALAPPDATA%\KanjoApp` with **no admin rights**, official embeddable Python 3.12.8 and the CLI bundled, so no Python install is needed. Start menu shortcut, no desktop shortcut, automatic updates from GitHub Releases (checked 30 s after launch and every 6 h, applied on the next start; a "Restart to update" tray item appears once a download is ready). Uninstall keeps your data (`%APPDATA%\Kanjo`, `%LOCALAPPDATA%\kanjo`).
+- **Windows app CI** (`windows-app` job): `dotnet build -warnaserror` + `dotnet test` on every push, and installer builds for win-x64 / win-arm64 on `v*` tags, uploaded as artifacts and attached to the matching release when it exists.
+
+### Fixed
+
+- **Windows installer no longer collides with the CLI's data folder.** The Velopack pack id was `Kanjo`, so the install root `%LOCALAPPDATA%\Kanjo` was the same folder as the CLI's `%LOCALAPPDATA%\kanjo` (case-insensitive on Windows) that the family reporter already creates: setup failed with "already installed" on those machines and uninstalling would have deleted the ledger. The pack id is now `KanjoApp` (`%LOCALAPPDATA%\KanjoApp`, product name still "Kanjo"); every data path is unchanged.
+- **The installed app uses its bundled Python and CLI.** The data source defaulted to "JSON file" whenever `sourceKind` had never been written, so a fresh install rendered `sample.json` instead of this machine's usage. It now defaults to the CLI whenever a CLI directory exists (as the Mac app does), shows "Bundled CLI <version>" (the bundle ships `cli/VERSION`), and the settings placeholder is the command that actually runs (`<appdir>\python\python.exe -m kanjo export`).
+- **Tray icon is the Kanjo mark.** It used to be a thin ring + cross that rendered as an orange "⊕" at 16 px. It is now the app mark (rounded tile + mosaic blocks) drawn per size (16 / 20 / 24 only carry three blocks, 32+ the full five), with a red dot for the error state.
+
+### Changed
+
+- **Windows artifact names follow the pack id.** The installer is now `KanjoApp-win-x64-Setup.exe` / `KanjoApp-win-arm64-Setup.exe` and the update package `KanjoApp-<version>-<rid>-full.nupkg`; the Start Menu entry, window and Apps list still say "Kanjo". A machine that installed the earlier `Kanjo`-id build needs that one uninstalled once — it is a different install root, so it will not update into `KanjoApp` itself.
+- **The CLI runs on Windows.** Agent logs are found in their real Windows locations (`%USERPROFILE%\.claude`, `%USERPROFILE%\.codex`, `%USERPROFILE%\.gemini`, `%APPDATA%\<app>`, `%LOCALAPPDATA%\<app>`); Kanjo's own files live in `%APPDATA%\kanjo` (config) and `%LOCALAPPDATA%\kanjo` (ledger, cache). `kanjo disk` and `disk clean` work on Windows and move files to the **Recycle Bin** (`SHFileOperationW`) instead of `~/.Trash`; the result reports `"trash_dir": "Recycle Bin"`. Claude quota reads the OAuth token from `%USERPROFILE%\.claude\.credentials.json`. A file locked by a running agent is a per-item `move_failed`, not a failed run.
+- **Windows CI runs the full CLI suite** (Python 3.9 and 3.12), not just the reporter tests.
+- Project attribution compares Windows paths case-insensitively and treats `\` and `/` alike, so session cwds written by Node tools (`c:/users/...`) match repos on disk; `%TEMP%` and `%LOCALAPPDATA%\Temp` count as temporary like `/tmp`.
+- Timezones fall back to the current UTC offset when `zoneinfo` has no database (the normal case on Windows without `tzdata`): quota and billing-cycle dates still work, nothing crashes.
+- macOS-only agents (Grok Bot, QoderWork, Qoder IDE, MiMo Code) are silently skipped on Windows and listed by `kanjo doctor` / `kanjo paths` instead of erroring.
+
 ## [0.5.2] - 2026-11-12
 
 ### Added

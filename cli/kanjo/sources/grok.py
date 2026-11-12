@@ -14,7 +14,8 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
-from .base import Message, ParseError, Session, env_dirs, parse_iso, short_title
+from .. import winsupport
+from .base import Message, ParseError, Session, env_dirs, parse_iso, short_title, split_path_list
 
 AGENT = "grok"
 
@@ -23,8 +24,8 @@ def roots() -> List[str]:
     explicit = os.environ.get("KANJO_GROK_DIR")
     if explicit:
         paths = []
-        for p in explicit.split(os.pathsep):
-            exp = os.path.expanduser(p)
+        for p in split_path_list(explicit):
+            exp = winsupport.expanduser(p)
             if os.path.isdir(exp) and os.path.basename(exp) != "sessions" and os.path.isdir(os.path.join(exp, "sessions")):
                 paths.append(os.path.join(exp, "sessions"))
             else:
@@ -32,7 +33,7 @@ def roots() -> List[str]:
         return paths
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.expanduser("~/.grok/sessions")]
+    return [winsupport.expanduser("~/.grok/sessions")]
 
 
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:

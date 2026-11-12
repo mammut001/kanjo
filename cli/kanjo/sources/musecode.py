@@ -13,6 +13,7 @@ import math
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -21,6 +22,7 @@ from .base import (
     env_dirs,
     parse_iso,
     unique,
+    split_path_list,
 )
 
 AGENT = "musecode"
@@ -29,11 +31,11 @@ AGENT = "musecode"
 def roots() -> List[str]:
     explicit = os.environ.get("KANJO_MUSECODE_DIR") or os.environ.get("TOKEI_MUSE_DIR")
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    default = os.path.expanduser("~/.local/share/muse")
-    return [os.path.abspath(default)]
+    # XDG data dir on POSIX, %LOCALAPPDATA%\muse on Windows.
+    return [winsupport.abspath(winsupport.local_data_dir("muse"))]
 
 
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
@@ -51,8 +53,7 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                 continue
             seen.add(real)
             parent = None
-            norm = os.path.normpath(path)
-            parts = norm.split(os.sep)
+            parts = winsupport.path_parts(path)
             if "subagent" in parts:
                 idx = parts.index("subagent")
                 if idx > 0:
@@ -89,8 +90,7 @@ def _parse_ts(val: Any) -> Optional[float]:
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     parent_id = subagent_of
-    norm = os.path.normpath(path)
-    parts = norm.split(os.sep)
+    parts = winsupport.path_parts(path)
     if not parent_id and "subagent" in parts:
         idx = parts.index("subagent")
         if idx > 0:
@@ -141,7 +141,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 meta = payload.get("record") if isinstance(payload.get("record"), dict) else {}
                 workspace = meta.get("workspace_root")
                 if isinstance(workspace, str) and workspace:
-                    session.note_cwd(os.path.abspath(workspace))
+                    session.note_cwd(winsupport.abspath(workspace))
                 continue
 
             if payload_type == "session.workspace_branch.observed":

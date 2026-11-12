@@ -230,9 +230,10 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertNotIn("token", raw)
         self.assertNotIn("auth", raw)
 
-        # Check file mode is 0600
-        mode = stat.S_IMODE(os.stat(cache_file).st_mode)
-        self.assertEqual(mode, 0o600)
+        # Check file mode is 0600 (POSIX mode bits; Windows has no equivalent)
+        if os.name != "nt":
+            mode = stat.S_IMODE(os.stat(cache_file).st_mode)
+            self.assertEqual(mode, 0o600)
 
     def test_subscriptions_uses_fetched_plan_without_tokei(self):
         now = datetime(2024, 10, 27, 10, 0, tzinfo=timezone.utc)

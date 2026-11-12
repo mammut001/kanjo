@@ -18,12 +18,16 @@ The registered worktree list read from ``.git/worktrees`` is what
 
 from __future__ import annotations
 
+import ntpath
 import os
+import posixpath
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import unquote
+
+from . import winsupport
 
 # Directories that never become a project on their own (missing-path fallback).
 _TEMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
@@ -34,6 +38,18 @@ _CLEAN_CACHE: Dict[str, Optional[str]] = {}
 _WINDOWS_ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
 
 
+def _temp_roots() -> Tuple[str, ...]:
+    """Temporary directory roots, POSIX ones plus ``%TEMP%`` / ``%LOCALAPPDATA%\\Temp``."""
+    return _TEMP_PREFIXES + _win_temp_prefixes()
+
+
+def _win_temp_prefixes() -> Tuple[str, ...]:
+    """``%TEMP%`` / ``%LOCALAPPDATA%\\Temp`` as temporary roots (PathKinds parity)."""
+    if not winsupport.is_windows():
+        return ()
+    return tuple(p for p in winsupport.temp_dirs() if p)
+
+
 def _is_win_path(p: str) -> bool:
     """Windows absolute path (C:\\..., C:/..., \\\\server\\...). Backslash is a
     separator only in these; in POSIX paths it is an ordinary character (and
@@ -41,21 +57,66 @@ def _is_win_path(p: str) -> bool:
     return bool(_WINDOWS_ABS_PATH.match(p or ""))
 
 
+def _win_key(p: str) -> str:
+    """Comparison key for a Windows path: separators unified, case folded."""
+    return ntpath.normcase(ntpath.normpath(p.replace("/", "\\")))
+
+
+def _canon_win(p: str) -> str:
+    """Canonical spelling of a Windows path: backslashes, upper-case drive, no ``.``/``..``."""
+    out = ntpath.normpath(p.replace("/", "\\"))
+    if len(out) >= 2 and out[1] == ":":
+        out = out[0].upper() + out[1:]
+    return out
+
+
 def _is_subpath(p: str, prefix: str) -> bool:
     if not _is_win_path(prefix):
         clean_prefix = prefix.rstrip("/")
         return p == clean_prefix or p.startswith(clean_prefix + "/")
-    clean_prefix = prefix.rstrip("/\\")
-    if p == clean_prefix:
+    c, pre = _win_key(p), _win_key(prefix).rstrip("\\/")
+    if c == pre:
         return True
-    return p.startswith(clean_prefix + "/") or p.startswith(clean_prefix + "\\")
+    return c.startswith(pre + "\\") or c.startswith(pre + "/")
+
+
+def _rel_under(path: str, root: str) -> Optional[str]:
+    """``path`` relative to ``root`` when it is inside it, else ``None``.
+
+    Separators of the path's own flavour are used: ``/`` for POSIX paths (also on
+    a Windows host) and ``\\`` for Windows paths, so a slice never leaves a mixed
+    spelling behind.
+    """
+    if not path or not root:
+        return None
+    base = root.rstrip("\\/")
+    if not winsupport.is_subpath(path, base):
+        return None
+    rel = path[len(base):]
+    if _is_win_path(base):
+        return rel.lstrip("\\/")
+    return rel[1:] if rel.startswith("/") else rel
+
+
+def _join_rel(root: str, rel: str) -> str:
+    """``root`` + relative ``rel`` with the separator rules of ``root``."""
+    if not rel:
+        return root
+    return winsupport.join(root, *[p for p in re.split(r"[\\/]+", rel) if p])
+
+
+def _same_path(p: str, prefix: str) -> bool:
+    """``p == prefix`` with Windows case/separator folding, exact on POSIX."""
+    if _is_win_path(p) or _is_win_path(prefix):
+        return _win_key(p).rstrip("\\/") == _win_key(prefix).rstrip("\\/")
+    return p == prefix
 
 
 def _path_basename(path: str) -> str:
     if not _is_win_path(path):
         return os.path.basename(path.rstrip("/"))
     p = path.rstrip("/\\")
-    return p.split("/")[-1].split("\\")[-1]
+    return ntpath.basename(p)
 
 
 def clear_clean_cache() -> None:
@@ -85,9 +146,11 @@ def normalize_remote(url: str) -> Optional[str]:
         p = unquote(u[len("file://"):])
         if re.match(r"^/[A-Za-z]:", p):
             p = p[1:]
-        return os.path.normpath(p)
+        return _canon_win(p) if _is_win_path(p) else winsupport.normpath(p)
     if u.startswith("/") or u.startswith("~") or u.startswith(".") or bool(_WINDOWS_ABS_PATH.match(u)):
-        return os.path.normpath(os.path.expanduser(u))
+        if _is_win_path(u):
+            return _canon_win(os.path.expanduser(u))
+        return winsupport.normpath(os.path.expanduser(u))
     m = re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*://(.*)$", u)
     if m:
         rest = m.group(1)
@@ -267,15 +330,24 @@ class Resolver:
     def _alias_key(value: str) -> str:
         value = (value or "").strip()
         if value.startswith("/") or value.startswith("~") or bool(_WINDOWS_ABS_PATH.match(value)):
-            return os.path.normpath(os.path.expanduser(value))
+            if _is_win_path(value):
+                # Windows aliases match regardless of case and separators, so a config
+                # written as C:\Users\Alice\hits a log path of c:/users/alice.
+                return os.path.expanduser(value)
+            return winsupport.normpath(winsupport.expanduser(value))
         return normalize_remote(value) or value.lower()
 
     def canonical_id(self, pid: str, paths=()) -> str:
         if pid in self._alias_of:
             return self._alias_of[pid]
+        if _is_win_path(pid):
+            # Windows paths are matched case- and separator-insensitively.
+            for key, canonical in self._alias_of.items():
+                if _is_win_path(key) and _same_path(pid, key):
+                    return canonical
         for p in paths:
             for key, canonical in self._alias_of.items():
-                if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and (p == key or _is_subpath(p, key)):
+                if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and (_same_path(p, key) or _is_subpath(p, key)):
                     return canonical
         return pid
 
@@ -288,7 +360,16 @@ class Resolver:
             return os.path.realpath(path)
         real = os.path.realpath(self.fs_root + path)
         root = os.path.realpath(self.fs_root)
-        return real[len(root):] or "/" if real.startswith(root) else os.path.normpath(path)
+        if not real.startswith(root):
+            return winsupport.normpath(path)
+        if winsupport.is_windows_path(path):
+            # ``fs_root`` stands in for "/" and only ever holds POSIX log paths, so a
+            # Windows path has no filesystem meaning here: keep its own spelling.
+            return winsupport.normpath(path)
+        # ``realpath`` answers in the host's spelling. A POSIX log path must stay
+        # POSIX -- on Windows the slice would otherwise yield "\Users\alice\...",
+        # which is neither absolute nor comparable with the logged path.
+        return real[len(root):].replace(os.sep, "/") or "/"
 
     def _exists_cached(self, path: str) -> bool:
         if path not in self._exists:
@@ -312,7 +393,8 @@ class Resolver:
                     self._dir_repo[alt] = info
                 return info
 
-        leaf_checked = leaf_is_dir or not _FILE_LIKE.search(os.path.basename(path))
+        win = _is_win_path(path)
+        leaf_checked = leaf_is_dir or not _FILE_LIKE.search(_path_basename(path))
         chain = []
         cur = path
         result = None
@@ -328,14 +410,16 @@ class Resolver:
                     break
             if check:
                 chain.append(cur)
-                dotgit = os.path.join(cur, ".git")
+                dotgit = winsupport.join(cur, ".git") if win else os.path.join(cur, ".git")
                 if os.path.lexists(self._fs(dotgit)):
                     info = self._read_repo(cur, dotgit)
                     if info is not None:
                         result = info
                         break
             check = True
-            parent = os.path.dirname(cur)
+            # A Windows path must be walked with Windows rules even when the scan
+            # runs on another OS (tests) or the path came from another machine.
+            parent = winsupport.dirname(cur) if win else os.path.dirname(cur)
             if parent == cur:
                 break
             cur = parent
@@ -344,7 +428,7 @@ class Resolver:
         sig = None
         dumped = None
         if result is not None:
-            dotgit = os.path.join(result.root, ".git")
+            dotgit = winsupport.join(result.root, ".git")
             stat_path = self._fs(dotgit)
             if self.repo_cache is not None and stat_path in self.repo_cache._stat_sig_cache:
                 sig = self.repo_cache._stat_sig_cache[stat_path]
@@ -390,6 +474,22 @@ class Resolver:
         return result
 
     def _read_repo(self, root: str, dotgit: str) -> Optional[RepoInfo]:
+        win = _is_win_path(root) or _is_win_path(dotgit)
+
+        def j(path: str, *parts: str) -> str:
+            # Rules of the path's own flavour, also when this runs on Windows with
+            # POSIX paths from another machine (os.path.join would mix separators).
+            return winsupport.join(path, *parts)
+
+        def d(path: str) -> str:
+            return winsupport.dirname(path)
+
+        def b(path: str) -> str:
+            return winsupport.basename(path)
+
+        def norm(path: str) -> str:
+            return _canon_win(path) if _is_win_path(path) else winsupport.normpath(path)
+
         if os.path.isdir(self._fs(dotgit)):
             gitdir = dotgit
         else:
@@ -401,29 +501,29 @@ class Resolver:
             if not content.startswith("gitdir:"):
                 return None
             gitdir = content[len("gitdir:"):].strip()
-            if not os.path.isabs(gitdir):
-                gitdir = os.path.normpath(os.path.join(root, gitdir))
+            if not (os.path.isabs(gitdir) or winsupport.is_windows_path(gitdir)):
+                gitdir = norm(j(root, gitdir))
         common = gitdir
-        commondir_file = os.path.join(gitdir, "commondir")
+        commondir_file = j(gitdir, "commondir")
         if os.path.isfile(self._fs(commondir_file)):
             try:
                 with open(self._fs(commondir_file), "r", encoding="utf-8") as handle:
                     rel = handle.read().strip()
-                common = os.path.normpath(os.path.join(gitdir, rel))
+                common = norm(j(gitdir, rel))
             except OSError:
                 pass
-        elif os.path.basename(os.path.dirname(gitdir)) == "worktrees":
+        elif b(d(gitdir)) == "worktrees":
             # pruned worktree: admin dir is gone, but the layout tells us the main repo
-            common = os.path.dirname(os.path.dirname(gitdir))
-        if not (self._exists_cached(os.path.join(common, "HEAD")) or
-                self._exists_cached(os.path.join(common, "config")) or
-                self._exists_cached(os.path.join(dotgit, "HEAD")) or
-                self._exists_cached(os.path.join(dotgit, "config"))):
+            common = d(d(gitdir))
+        if not (self._exists_cached(j(common, "HEAD")) or
+                self._exists_cached(j(common, "config")) or
+                self._exists_cached(j(dotgit, "HEAD")) or
+                self._exists_cached(j(dotgit, "config"))):
             return None
-        main_root = os.path.dirname(common) if os.path.basename(common) == ".git" else root
+        main_root = d(common) if b(common) == ".git" else root
         remote_url = None
         try:
-            with open(self._fs(os.path.join(common, "config")), "r", encoding="utf-8", errors="replace") as handle:
+            with open(self._fs(j(common, "config")), "r", encoding="utf-8", errors="replace") as handle:
                 remote_url = pick_remote(parse_git_config_remotes(handle.read()))
         except OSError:
             pass
@@ -438,7 +538,7 @@ class Resolver:
         parent directory up). The outer repo's own ``outer`` is filled in the
         same way, so a chain of remote-less repos ends at the first one with a
         remote or at the outermost one."""
-        parent = os.path.dirname(info.main_root)
+        parent = winsupport.dirname(info.main_root)
         if parent == info.main_root:
             return None
         outer = self._repo_for_path(parent, True)
@@ -450,7 +550,10 @@ class Resolver:
     def _project_for_repo(self, info: RepoInfo) -> Optional[Project]:
         if not self.fs_root and info.remote_url is None and info.outer is None and not self._aliased(info):
             roots = [r for r in (info.main_root, info.root) if r]
-            if any((r.rstrip("/") + "/").startswith(_TEMP_PREFIXES) for r in roots):
+            # A remote-less checkout under a temp dir (%TEMP%, /tmp, /var/folders) is
+            # throwaway and never a project.
+            if any(any(winsupport.is_subpath(r, temp.rstrip("/\\")) for temp in _temp_roots())
+                   for r in roots):
                 return None
         if info.outer is not None and not self._aliased(info):
             # remote-less repo nested in another repo: the outer repo's project
@@ -466,7 +569,7 @@ class Resolver:
         if remote:
             pid, name, rem = remote, _remote_display_name(info.remote_url) or remote, remote
         else:
-            pid, name, rem = info.main_root, os.path.basename(info.main_root) or info.main_root, None
+            pid, name, rem = info.main_root, _path_basename(info.main_root) or info.main_root, None
         project = self._get_project(pid, name, rem, [info.root, info.main_root])
         self._register_worktrees(info, project.id)
         return project
@@ -475,9 +578,9 @@ class Resolver:
         """The user aliased this repo's own path (not merely a parent of it)."""
         own = (info.root, info.main_root)
         for key in self._alias_of:
-            if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and any(p == key or _is_subpath(p, key) for p in own):
+            if (key.startswith("/") or bool(_WINDOWS_ABS_PATH.match(key))) and any(_same_path(p, key) or _is_subpath(p, key) for p in own):
                 outer_paths = (info.outer.root, info.outer.main_root) if info.outer else ()
-                if not any(o == key or _is_subpath(o, key) for o in outer_paths):
+                if not any(_same_path(o, key) or _is_subpath(o, key) for o in outer_paths):
                     return True
         return False
 
@@ -501,7 +604,7 @@ class Resolver:
         if info.common_dir in self._seen_common:
             return
         self._seen_common.add(info.common_dir)
-        wt_root = os.path.join(info.common_dir, "worktrees")
+        wt_root = winsupport.join(info.common_dir, "worktrees")
         try:
             names = os.listdir(self._fs(wt_root))
         except OSError:
@@ -509,14 +612,14 @@ class Resolver:
         added = []
         for name in names:
             try:
-                with open(self._fs(os.path.join(wt_root, name, "gitdir")), "r", encoding="utf-8") as handle:
+                with open(self._fs(winsupport.join(wt_root, name, "gitdir")), "r", encoding="utf-8") as handle:
                     target = handle.read().strip()
             except OSError:
                 continue
-            if target.endswith("/.git"):
-                target = target[:-5]
+            # git writes "C:/dir/.git" on Windows; accept either separator here.
+            target = re.sub(r"[\\/]\.git$", "", target) if target else target
             if target:
-                target = os.path.normpath(target)
+                target = _canon_win(target) if _is_win_path(target) else winsupport.normpath(target)
                 self._worktrees[target] = pid
                 self._worktrees[_private_alias(target)] = pid
                 added.append(target)
@@ -558,19 +661,21 @@ class Resolver:
             if re.match(r"^/[A-Za-z]:", p):
                 p = p[1:]
         if p.startswith("~"):
-            p = os.path.expanduser(p)
+            p = winsupport.expanduser(p)
         is_abs = p.startswith("/") or bool(_WINDOWS_ABS_PATH.match(p))
         if not is_abs:
             _CLEAN_CACHE[path] = None
             return None
         p = p.rstrip(".,:;")
         if _is_win_path(p):
-            res = os.path.normpath(p) if p else None
+            # Windows tools write C:\Users\x, c:/users/x and //server/share alike;
+            # one canonical spelling keeps the caches and comparisons consistent.
+            res = _canon_win(p) if p else None
         elif (len(p) > 1 and not p.endswith("/") and "//" not in p
                 and "/./" not in p and "/../" not in p and not p.endswith("/.") and not p.endswith("/..")):
             res = p
         else:
-            res = os.path.normpath(p) if p else None
+            res = winsupport.normpath(p) if p else None
         _CLEAN_CACHE[path] = res
         return res
 
@@ -687,12 +792,16 @@ class Resolver:
         return None
 
     def _missing_ok(self, p: str) -> bool:
-        if p == self.home or not _is_subpath(p, self.home):
+        # The home path itself and agent state dirs (~/.claude, ~/.codex, ~/.gemini)
+        # never become a project; neither do temporary directories. On Windows this
+        # also covers the dotted state dirs written under %APPDATA%. ``p`` is
+        # compared case- and separator-insensitively there.
+        if winsupport.same_path(p, self.home) or not _is_subpath(p, self.home):
             return False
-        if any((p + "/").startswith(t) for t in _TEMP_PREFIXES):
+        if any(winsupport.is_subpath(p, temp) for temp in _temp_roots()):
             return False
-        rel = os.path.relpath(p, self.home)
-        first_comp = (rel.replace("\\", "/") if _is_win_path(p) else rel).split("/")[0]
+        rel = winsupport.relpath(p, self.home)
+        first_comp = rel.replace("\\", "/").split("/")[0] if _is_win_path(p) or "\\" in rel else rel.split("/")[0]
         if first_comp.startswith("."):
             return False  # agent state dirs (~/.claude, ~/.codex, ~/.gemini ...)
         return True
@@ -704,13 +813,29 @@ class Resolver:
             return None
         if path in table:
             return path, table[path]
-        win = _is_win_path(path)
+        if _is_win_path(path):
+            # Windows paths are case-insensitive and mix ``\`` with ``/``: compare on
+            # the folded spelling, but hand back the key as it was stored.
+            folded = {}
+            for key, value in table.items():
+                if isinstance(key, str) and _is_win_path(key):
+                    folded.setdefault(_win_key(key).rstrip("\\") + "\\", (key, value))
+            if folded:
+                current = _win_key(path)
+                idx = len(current)
+                while True:
+                    idx = current.rfind("\\", 0, idx)
+                    if idx == -1:
+                        break
+                    hit = folded.get(current[:idx] + "\\")
+                    if hit is not None:
+                        return hit
+                if "" in table:
+                    return "", table[""]
+            return None
         idx = len(path)
         while True:
-            if win:
-                idx = max(path.rfind("/", 0, idx), path.rfind("\\", 0, idx))
-            else:
-                idx = path.rfind("/", 0, idx)
+            idx = path.rfind("/", 0, idx)
             if idx == -1:
                 break
             cand = path[:idx]
@@ -719,7 +844,7 @@ class Resolver:
                 return cand_slash, table[cand_slash]
             if cand and cand in table:
                 return cand, table[cand]
-        if (path.startswith("/") or bool(_WINDOWS_ABS_PATH.match(path))) and "" in table:
+        if path.startswith("/") and "" in table:
             return "", table[""]
         return None
 
@@ -808,7 +933,7 @@ class Resolver:
                 for tp in self._iter_tool_paths(s):
                     clean_tp = self.clean(tp)
                     if clean_tp:
-                        paths.append(os.path.normpath(clean_tp))
+                        paths.append(winsupport.normpath(clean_tp))
                 s_tool_paths[sid] = paths
             return s_tool_paths[sid]
 
@@ -869,12 +994,11 @@ class Resolver:
                     tps = get_session_tool_paths(s)
                     falls_under = False
                     for r in bproj.local_paths:
-                        r_prefix = r.rstrip("/") + "/"
-                        if any(c and (c == r or c.startswith(r_prefix)) for c in s_cwds):
+                        if any(c and _rel_under(c, r) is not None for c in s_cwds):
                             falls_under = True
                             break
                         for clean_tp in tps:
-                            if clean_tp == r or clean_tp.startswith(r_prefix):
+                            if _rel_under(clean_tp, r) is not None:
                                 falls_under = True
                                 break
                     if falls_under:
@@ -882,11 +1006,10 @@ class Resolver:
                             bproj_relevant_sigs[s.id] = lazy_sigs[s.id]
                         for clean_tp in tps:
                             for r in bproj.local_paths:
-                                r_prefix = r.rstrip("/") + "/"
-                                if clean_tp.startswith(r_prefix):
-                                    rel = clean_tp[len(r_prefix):]
-                                    first_comp = rel.split("/", 1)[0]
-                                    if "/" in rel and first_comp not in (".git", "node_modules"):
+                                rel = _rel_under(clean_tp, r)
+                                if rel:
+                                    first_comp = re.split(r"[\\/]", rel, 1)[0]
+                                    if re.search(r"[\\/]", rel) and first_comp not in (".git", "node_modules"):
                                         distinct_rels.add(rel)
 
                 # 2. From on-disk files in bproj roots
@@ -917,7 +1040,7 @@ class Resolver:
                 for pid, roots in known_projects.items():
                     count = 0
                     for rel in distinct_rels:
-                        if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                        if any(self._exists_cached(_join_rel(root, rel)) for root in roots):
                             count += 1
                     if count > 0:
                         matches[pid] = count
@@ -957,7 +1080,7 @@ class Resolver:
         for s in session_list:
             clean = clean_cwds.get(id(s))
             if clean:
-                norm = os.path.normpath(clean)
+                norm = winsupport.normpath(clean)
                 candidate_cwds.add(norm)
                 sessions_by_norm_cwd[norm].append(s)
 
@@ -992,10 +1115,9 @@ class Resolver:
                         continue
 
             # Gather sessions whose normalized cwd == d or inside d + "/"
-            d_slash = d + "/"
             d_sessions = []
             for norm_cwd, slist in sessions_by_norm_cwd.items():
-                if norm_cwd == d or norm_cwd.startswith(d_slash):
+                if _rel_under(norm_cwd, d) is not None:
                     d_sessions.extend(slist)
 
             d_relevant_sigs: Dict[str, str] = {}
@@ -1007,17 +1129,17 @@ class Resolver:
             distinct_rels = set()
             for s in d_sessions:
                 for norm_tp in get_session_tool_paths(s):
-                    if norm_tp.startswith(d_slash):
-                        rel = norm_tp[len(d_slash):]
-                        first_comp = rel.split("/", 1)[0]
-                        if "/" in rel and first_comp not in (".git", "node_modules"):
+                    rel = _rel_under(norm_tp, d)
+                    if rel:
+                        first_comp = re.split(r"[\\/]", rel, 1)[0]
+                        if re.search(r"[\\/]", rel) and first_comp not in (".git", "node_modules"):
                             distinct_rels.add(rel)
 
             matches: Dict[str, int] = {}
             for pid, roots in known_projects.items():
                 count = 0
                 for rel in distinct_rels:
-                    if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                    if any(self._exists_cached(_join_rel(root, rel)) for root in roots):
                         count += 1
                 if count > 0:
                     matches[pid] = count
@@ -1026,10 +1148,10 @@ class Resolver:
             if matches:
                 max_count = max(matches.values())
                 top_pids = sorted([pid for pid, cnt in matches.items() if cnt == max_count])
-                d_parent = os.path.dirname(d)
+                d_parent = winsupport.dirname(d)
                 best_pid = max(
                     top_pids,
-                    key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                    key=lambda pid: 1 if any(winsupport.dirname(r) == d_parent for r in known_projects[pid]) else 0,
                 )
 
             # Signal B: parent session / tool_paths cross-reference
@@ -1039,7 +1161,7 @@ class Resolver:
                 for parent_s, parent_pid, tps in get_parent_sessions_info():
                     matched = False
                     for norm_tp in tps:
-                        if norm_tp == d or norm_tp.startswith(d_slash):
+                        if _rel_under(norm_tp, d) is not None:
                             parent_refs[parent_pid] += 1
                             matched = True
                     if matched:
@@ -1047,10 +1169,10 @@ class Resolver:
                 if parent_refs:
                     max_refs = max(parent_refs.values())
                     top_parent_pids = sorted([pid for pid, cnt in parent_refs.items() if cnt == max_refs])
-                    d_parent = os.path.dirname(d)
+                    d_parent = winsupport.dirname(d)
                     best_pid = max(
                         top_parent_pids,
-                        key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                        key=lambda pid: 1 if any(winsupport.dirname(r) == d_parent for r in known_projects[pid]) else 0,
                     )
                     for parent_s, p_pid in matching_parents:
                         if p_pid == best_pid and hasattr(parent_s, "id"):
@@ -1106,11 +1228,21 @@ def _encode_component(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9]", "-", name)
 
 
+# Claude Code scratchpads: /tmp/claude-<uid>/<encoded cwd>/... on POSIX,
+# %TEMP%\claude-<uid>\<encoded cwd>\... on Windows (the separator is either).
+_SCRATCH_WIN_RE = re.compile(r"claude-\d+[\\/]([^\\/]+)(?:[\\/]|$)")
+_CLAUDE_PROJECT_DIR_WIN_RE = re.compile(r"[\\/]\.claude[\\/]projects[\\/]([^\\/]+)(?:[\\/]|$)")
+_WIN_ENCODED_RE = re.compile(r"^([A-Za-z])--(.*)$")
+
+
 class ScratchpadDecoder:
     """Claude Code scratchpads live in ``/tmp/claude-<uid>/<encoded cwd>/<session>/scratchpad``;
     the encoded cwd replaces every non-alphanumeric character with ``-``.
     Decoding is ambiguous (``tcf-canada`` vs ``tcf/canada``), so it walks the
-    real filesystem to find the directory whose encoding matches."""
+    real filesystem to find the directory whose encoding matches.
+
+    On Windows the same encoding turns ``C:\\Users\\alice\\proj`` into
+    ``C--Users-alice-proj``, so decoding starts at the drive root."""
 
     def __init__(self, fs_root: Optional[str] = None):
         self.fs_root = (fs_root or "").rstrip("/")
@@ -1126,14 +1258,60 @@ class ScratchpadDecoder:
         m = _CLAUDE_PROJECT_DIR_RE.search(path)
         if m:
             return m.group(1)
+        # Windows: %TEMP%\claude-<uid>\C--Users-... ; the encoded name starts "C--".
+        m = _SCRATCH_WIN_RE.search(path)
+        if m and _WIN_ENCODED_RE.match(m.group(1)):
+            return m.group(1)
+        m = _CLAUDE_PROJECT_DIR_WIN_RE.search(path)
+        if m and _WIN_ENCODED_RE.match(m.group(1)):
+            return m.group(1)
         return None
+
+    def _fs(self, path: str) -> str:
+        """Real filesystem spelling of ``path`` (``fs_root`` stands in for the root)."""
+        if not self.fs_root:
+            return path
+        if winsupport.is_windows_path(path):
+            return self.fs_root + "/" + path.replace("\\", "/").replace(":", "")
+        return self.fs_root + path
 
     def decode(self, encoded: str) -> Optional[str]:
         if encoded in self._cache:
             return self._cache[encoded]
-        result = self._walk("/", encoded[1:], 0) if encoded.startswith("-") else None
+        result = None
+        win = _WIN_ENCODED_RE.match(encoded or "")
+        if win:
+            # "C--Users-alice-proj" -> walk from C:\ with "Users-alice-proj".
+            result = self._walk_windows(win.group(1), win.group(2), 0)
+        elif encoded.startswith("-"):
+            result = self._walk("/", encoded[1:], 0)
         self._cache[encoded] = result
         return result
+
+    def _walk_windows(self, drive: str, rest: str, depth: int) -> Optional[str]:
+        base = drive.upper() + ":\\"
+        return self._walk_windows_from(base, rest, depth)
+
+    def _walk_windows_from(self, base: str, rest: str, depth: int) -> Optional[str]:
+        if depth > 32:
+            return None
+        try:
+            entries = os.listdir(self._fs(base))
+        except OSError:
+            return None
+        for name in sorted(entries, key=len, reverse=True):
+            enc = _encode_component(name)
+            if not enc:
+                continue
+            full = winsupport.join(base, name)
+            if rest == enc:
+                if os.path.isdir(self._fs(full)):
+                    return full
+            elif rest.startswith(enc + "-") and os.path.isdir(self._fs(full)):
+                found = self._walk_windows_from(full, rest[len(enc) + 1:], depth + 1)
+                if found:
+                    return found
+        return None
 
     def _walk(self, base: str, rest: str, depth: int) -> Optional[str]:
         if depth > 32:
@@ -1147,7 +1325,9 @@ class ScratchpadDecoder:
             enc = _encode_component(name)
             if not enc:
                 continue
-            full = os.path.join(base, name)
+            # The decoded path is POSIX whatever the host: join with "/" so a
+            # Windows run cannot turn "/Users/alice" into "/Users\alice".
+            full = posixpath.join(base, name)
             if rest == enc:
                 if os.path.isdir(self.fs_root + full):
                     return full

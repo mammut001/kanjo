@@ -27,6 +27,14 @@ ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 GZIP_MAGIC = b"\x1f\x8b"
 
 
+def default_cache_dir() -> str:
+    """Claude Desktop's Chromium cache: ``%APPDATA%\\Claude`` on Windows."""
+    from . import winsupport
+    if winsupport.is_windows():
+        return winsupport.join(winsupport.app_support_dir("Claude"), "Cache", "Cache_Data")
+    return DEFAULT_CLAUDE_CACHE_DIR
+
+
 def _pct(value) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
@@ -226,7 +234,7 @@ def scan_claude_desktop_cache(now: float, cache_dir: Optional[str] = None) -> Op
     if not cache_dir:
         cache_dir = os.environ.get("KANJO_CLAUDE_CACHE_DIR")
     if not cache_dir:
-        cache_dir = DEFAULT_CLAUDE_CACHE_DIR
+        cache_dir = default_cache_dir()
     cache_dir = os.path.expanduser(cache_dir)
 
     try:
