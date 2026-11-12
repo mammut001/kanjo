@@ -6,6 +6,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-12
+
+### Added
+
+- **Windows family reporter.** A no-admin PowerShell installer (`install-family-windows.ps1`) sets up the CLI, stores the token in Credential Manager and reports every 30 minutes.
+- **Homebrew.** `brew install --cask mammut001/kanjo/kanjo`.
+
+### Changed
+
+- **Family usage is self-hosted and opt-in.** No built-in server address: Settings asks whether you join a family (enter its address and token) or host one ([deployment guide](family-server/DEPLOY.md)). Existing members who had reporting on keep their old address. The Windows installer requires `-Server`.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added
