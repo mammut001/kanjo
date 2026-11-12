@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Kanjo.App</RootNamespace>
+    <AssemblyName>Kanjo</AssemblyName>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- 开发时在 macOS 上也要能编译 / 运行；Windows 打包时由 CI 指定 win-x64 / win-arm64。 -->
+    <RuntimeIdentifiers>win-x64;win-arm64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <!-- NU1903: Avalonia.Desktop 在 Linux 上会传递 Tmds.DBus.Protocol 0.21.2（有已知漏洞）。
+         我们只发 Windows（Mac 仅用于开发），这条传递依赖不会进入产物；等 Avalonia 升级会自动消失。 -->
+    <NoWarn>20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Skia" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kanjo.Core\Kanjo.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 示例数据：命令行 data 参数留空时的兜底（打包时也带上）。
+         直接链接 ui/fixtures/sample.json，不复制文件。 -->
+    <Content Include="..\..\..\ui\fixtures\sample.json" Link="sample.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
