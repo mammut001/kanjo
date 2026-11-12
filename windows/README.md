@@ -182,8 +182,8 @@ Mac 上不存在这个脚本，所以 App 里没有对应提示。
 |---|---|
 | `windows/dist/<rid>/` | 发布文件夹：`Kanjo.exe` + .NET 10 运行时 + `python\` + `cli\` + `sample.json` |
 | `windows/dist/Kanjo-<rid>-<version>.zip` | 同一个文件夹的 zip（本地试用 / 手动分发） |
-| `windows/dist/releases/<rid>/Kanjo-<rid>-Setup.exe` | 安装包（`vpk pack` 生成），装到 `%LOCALAPPDATA%\Kanjo` |
-| `windows/dist/releases/<rid>/Kanjo-<version>-<rid>-full.nupkg` | 更新包（自动更新下载这个） |
+| `windows/dist/releases/<rid>/KanjoApp-<rid>-Setup.exe` | 安装包（`vpk pack` 生成），装到 `%LOCALAPPDATA%\KanjoApp` |
+| `windows/dist/releases/<rid>/KanjoApp-<version>-<rid>-full.nupkg` | 更新包（自动更新下载这个） |
 | `windows/dist/releases/<rid>/RELEASES-<rid>` | 更新清单（`UpdateManager` 读它） |
 
 `<rid>` 是 `win-x64` 或 `win-arm64`；通道名也用 `<rid>`，两种架构的更新互不干扰。
@@ -214,26 +214,41 @@ Avalonia 的原生库必须和 exe 并排；**不做 trimming**，Avalonia 依�
 
 ```
 <install>\Kanjo.exe
-<install>\sample.json                 CLI 不可用时的兜底数据
+<install>\sample.json                 CLI 不可用时的兜底数据（只在「文件来源 + 路径留空」时读）
 <install>\python\python.exe           官方 embeddable 3.12.8（amd64 / arm64 各一份）
 <install>\python\python312._pth       末尾加了 ../cli
 <install>\cli\kanjo\...               cli/kanjo 去掉 __pycache__ / *.pyc
 <install>\cli\pricing.json
 <install>\cli\pricing_overrides.json
+<install>\cli\VERSION                 设置页「Bundled CLI 0.5.1」读这个（和 Mac 的 .app 一样）
 ```
 
 - `python312._pth` 里的 `../cli` 是相对 `python.exe` 的，所以 `<install>\cli` 直接进了 `sys.path`，
   `<install>\python\python.exe -m kanjo --version` 就能跑。CLI 只用标准库，**不需要** `import site`
   （那一行保持注释）。
 - App 的 `CliRunner` 找的正是 `<appdir>\python\python.exe` 和 `<appdir>\cli`（`DefaultPaths.BundledPython` /
-  `BundledCliDirectory`），所以装好后不用装任何 Python，也不用改设置。
-- `cli\` 的内容和 CI 里 `kanjo-cli.zip` 那一步完全一样（同一个目录结构、同样剔掉字节码）。
+  `BundledCliDirectory`；`<appdir>` 是 `AppContext.BaseDirectory`，安装版里就是
+  `%LOCALAPPDATA%\KanjoApp\current\`），所以装好后不用装任何 Python，也不用改设置。
+- **默认数据源是 CLI**（`Core/SourceResolution.cs`，对应 Mac 的 `ReportStore.init`）：
+  找得到内置 CLI 就用 CLI，找不到才用 JSON 文件；文件来源下只有路径留空才会读 `sample.json`。
+  所以安装版永远不会悄悄显示示例数据——没有 agent 日志时，面板显示的是 Mac 那套「首次扫描 / 空报告」状态，
+  CLI 失败时显示 Mac 的错误状态（`OverviewPage.ErrorOrLoading`）。
+- 设置页的命令占位符就是实际执行的命令：有内置 Python 时是
+  `<appdir>\python\python.exe -m kanjo export`（`DefaultPaths.DefaultCliCommand`）。
+- `cli\` 的内容除了多一个 `VERSION`，和 CI 里 `kanjo-cli.zip` 那一步完全一样（同一个目录结构、同样剔掉字节码）。
 
 ### 安装
 
-双击 `Kanjo-win-x64-Setup.exe`（Arm64 机器用 `Kanjo-win-arm64-Setup.exe`）。不需要管理员权限：
-装到 `%LOCALAPPDATA%\Kanjo\current`，开始菜单出现「Kanjo」，**不会**创建桌面快捷方式
+双击 `KanjoApp-win-x64-Setup.exe`（Arm64 机器用 `KanjoApp-win-arm64-Setup.exe`）。不需要管理员权限：
+装到 `%LOCALAPPDATA%\KanjoApp\current`，开始菜单出现「Kanjo」，**不会**创建桌面快捷方式
 （`vpk pack --shortcuts StartMenuRoot`）。安装完自动启动一次。
+
+**为什么安装目录叫 `KanjoApp` 而不是 `Kanjo`：** Windows 路径不区分大小写，`%LOCALAPPDATA%\Kanjo`
+和 CLI 的数据 / 缓存目录 `%LOCALAPPDATA%\kanjo`（批次 4 起就在这里）是**同一个文件夹**。先用过 CLI /
+家庭上报的机器上，Setup.exe 会以为「已经装过了」，而卸载会连账本一起删掉。所以包的 id（决定安装根目录）
+是 `KanjoApp`，产品名仍然是 `Kanjo`（`--packTitle Kanjo`：开始菜单和应用列表都显示 Kanjo），
+**所有数据目录保持原样**，老用户的数据不受影响。`Core/AppPaths.cs` 是这几条路径的唯一来源，
+`AppPathsTests` 会断言安装根目录和每个数据 / 缓存目录都不同。
 
 包**没有代码签名**，所以 Windows 可能弹「Windows 已保护你的电脑」：点「更多信息 → 仍要运行」。
 
@@ -251,8 +266,9 @@ Avalonia 的原生库必须和 exe 并排；**不做 trimming**，Avalonia 依�
 
 ### 卸载
 
-「设置 → 应用 → 已安装的应用 → Kanjo → 卸载」，或者运行 `%LOCALAPPDATA%\Kanjo\Update.exe --uninstall`。
-Velopack 会删掉程序目录、开始菜单快捷方式和 `Run` 键（如果曾经有）。**用户数据保留**：
+「设置 → 应用 → 已安装的应用 → Kanjo → 卸载」，或者运行 `%LOCALAPPDATA%\KanjoApp\Update.exe --uninstall`。
+Velopack 会删掉程序目录 `%LOCALAPPDATA%\KanjoApp`、开始菜单快捷方式和 `Run` 键（如果曾经有）。
+**用户数据保留**（数据目录都不在安装根目录里，所以卸载不会碰到它们）：
 
 - `%APPDATA%\Kanjo`（设置 `settings.json`）
 - `%LOCALAPPDATA%\kanjo`（CLI 的账本 / 缓存）
@@ -267,13 +283,30 @@ Velopack 会删掉程序目录、开始菜单快捷方式和 `Run` 键（如果�
 ### 冒烟测试（真机装完后跑）
 
 ```powershell
-pwsh windows/scripts/smoke.ps1                 # 默认查 %LOCALAPPDATA%\Kanjo\current
-pwsh windows/scripts/smoke.ps1 -InstallDir "D:\Kanjo\current"
+pwsh windows/scripts/smoke.ps1                 # 默认查 %LOCALAPPDATA%\KanjoApp\current
+pwsh windows/scripts/smoke.ps1 -InstallDir "D:\KanjoApp\current"
 ```
 
-逐项打印 PASS / FAIL：`Kanjo.exe` 存在 → `python\python.exe -m kanjo --version` → `cli\` 里
-`kanjo\` 和两个 pricing 文件齐全 → `Kanjo.exe --snapshot $env:TEMP\kanjo-smoke.png --route overview`
-出图。任何一项失败退出码 1。
+逐项打印 PASS / FAIL，任何一项失败退出码 1：
+
+1. `Kanjo.exe` 在 `%LOCALAPPDATA%\KanjoApp\current`；
+2. `python\python.exe -m kanjo --version` 输出 `kanjo 0.5.1`；
+3. `cli\` 里 `kanjo\`、两个 pricing 文件和 `VERSION` 齐全；
+4. 在安装目录里跑 `python\python.exe -m kanjo export` 退出 0 且 stdout 是 JSON；
+5. `Kanjo.exe --print-source=<file>`：解析出来的 python 是 `<appdir>\python\python.exe`、
+   CLI 目录是 `<appdir>\cli`、数据源是 CLI（不是示例数据 / 文件），并且安装根目录和每个数据目录都不同；
+6. `Kanjo.exe --snapshot` 能出 PNG。
+
+`--print-source` 是批次 5 加的诊断开关，只读（不跑 CLI、不写设置），输出 `key=value` 一行一条：
+
+```text
+appDir / installRoot / settingsFile
+source=cli|file, sourceStored, sampleData=true|false
+python, pythonArgs, bundledPython
+cliDir, bundledCli, cliVersion
+workingDirectorySetting, commandSetting, defaultCommand
+file
+```
 
 ### CI
 

@@ -189,8 +189,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
     private Control DataSourceSection()
     {
-        var kind = SourceKinds.Parse(S.GetString(SettingsKeys.SourceKind))
-                   ?? (DefaultPaths.CliDirectoryExists ? SourceKind.Cli : SourceKind.File);
+        var kind = SourceResolution.Resolve(S.GetString(SettingsKeys.SourceKind));
         var segmented = new SegmentedControl(
             SourceKinds.All.Select(k => k.Label()).ToList(),
             kind == SourceKind.File ? 0 : 1,
@@ -258,39 +257,70 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         get
         {
             var command = S.Str(SettingsKeys.CliCommand, "").Trim();
-            return command.Length == 0 ? "python -m kanjo export" : command;
+            return command.Length == 0 ? DefaultPaths.DefaultCliCommand : command;
         }
     }
 
+    /// <summary>
+    /// 和 Mac 的 <c>DefaultPaths.cliDescription(customDirectory:customCommand:)</c> 一一对应：
+    /// 自定义过就是「Custom」，否则按解析出来的 CLI 目录说「Bundled CLI &lt;version&gt;」/「Repository cli/」/ 实际路径。
+    /// 版本从内置 CLI 目录里的 <c>VERSION</c> 读（打包脚本会把仓库的 VERSION 拷进 cli\，和 Mac 的 .app 一样）。
+    /// </summary>
     private string CliDescription()
     {
+        var command = S.Str(SettingsKeys.CliCommand, "");
         if (S.Str(SettingsKeys.CliWorkingDirectory, "").Trim().Length > 0 ||
-            (S.Str(SettingsKeys.CliCommand, "").Length > 0 &&
-             S.Str(SettingsKeys.CliCommand, "") != "python3 -m kanjo export"))
+            (command.Length > 0 && command != DefaultPaths.DefaultCliCommand))
         {
             return L10n.Tr("settings.cli_source.custom");
         }
-        if (DefaultPaths.BundledCliDirectory is { } bundled)
+
+        var resolved = DefaultPaths.ResolvedCliDirectory();
+        if (resolved is null) return L10n.Tr("settings.cli_source.unavailable");
+
+        if (DefaultPaths.BundledCliDirectory is { } bundled && AppPaths.SameDirectory(resolved, bundled))
         {
-            var version = "unknown";
-            try
-            {
-                var file = Path.Combine(bundled, "VERSION");
-                if (File.Exists(file)) version = File.ReadAllText(file).Trim();
-            }
-            catch (Exception)
-            {
-                // 读不到就用 unknown。
-            }
-            return L10n.TrL(null, "settings.cli_source.bundled", version);
+            return L10n.TrL(null, "settings.cli_source.bundled", BundledCliVersion(bundled));
         }
-        if (DefaultPaths.RepoCliDirectory is { } repo && DefaultPaths.IsCliDirectory(repo))
+        if (DefaultPaths.RepoCliDirectory is { } repo && AppPaths.SameDirectory(resolved, repo))
         {
             return L10n.Tr("settings.cli_source.repo");
         }
-        return DefaultPaths.CliDirectoryExists
-            ? DefaultPaths.ResolvedCliDirectory() ?? L10n.Tr("settings.cli_source.unavailable")
-            : L10n.Tr("settings.cli_source.unavailable");
+        return resolved;
+    }
+
+    /// <summary>内置 CLI 的版本：读 cli\VERSION（和 Mac 的 .app 一样）；读不到就说 unknown。</summary>
+    private static string BundledCliVersion(string cliDirectory)
+    {
+        try
+        {
+            var file = Path.Combine(cliDirectory, "VERSION");
+            if (File.Exists(file))
+            {
+                var text = File.ReadAllText(file).Trim();
+                if (text.Length > 0) return text;
+            }
+        }
+        catch (Exception)
+        {
+            // 读不到就用 unknown。
+        }
+        // 兜底：CLI 的 __init__.py 里也有 __version__（VERSION 文件漏拷时还能显示对）。
+        try
+        {
+            var init = Path.Combine(cliDirectory, "kanjo", "__init__.py");
+            if (File.Exists(init))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    File.ReadAllText(init), "__version__\\s*=\\s*\"([^\"]+)\"");
+                if (match.Success) return match.Groups[1].Value;
+            }
+        }
+        catch (Exception)
+        {
+            // 同上。
+        }
+        return "unknown";
     }
 
     /// <summary>带标签的文本框（label 在上，输入框在下；回车应用并刷新）。Mac 这几个框都用等宽字体。</summary>

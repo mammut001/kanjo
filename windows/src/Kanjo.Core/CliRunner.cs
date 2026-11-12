@@ -135,8 +135,11 @@ public sealed class CliRunner : IReportCommandRunner
 {
     public const string DefaultModule = "kanjo";
 
-    /// <summary>设置里命令留空时用的默认导出命令（Windows 上是 py -3）。</summary>
-    public const string DefaultCliCommand = "py -3 -m kanjo export";
+    /// <summary>
+    /// 设置里命令留空时显示的默认导出命令。转发到 <see cref="DefaultPaths.DefaultCliCommand"/>：
+    /// 有内置 Python 时是 `&lt;appdir&gt;\python\python.exe -m kanjo export`，和实际执行的一致。
+    /// </summary>
+    public static string DefaultCliCommand => DefaultPaths.DefaultCliCommand;
 
     public string? PythonExecutable { get; init; }
     public IReadOnlyList<string> PythonPrefixArguments { get; init; } = [];

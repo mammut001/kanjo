@@ -295,12 +295,12 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = (Get-Content -Raw VERSION).Trim()
           $files = @(
-            "windows/dist/releases/win-x64/Kanjo-win-x64-Setup.exe",
-            "windows/dist/releases/win-x64/Kanjo-$version-win-x64-full.nupkg",
+            "windows/dist/releases/win-x64/KanjoApp-win-x64-Setup.exe",
+            "windows/dist/releases/win-x64/KanjoApp-$version-win-x64-full.nupkg",
             "windows/dist/releases/win-x64/RELEASES-win-x64",
             "windows/dist/releases/win-x64/releases.win-x64.json",
-            "windows/dist/releases/win-arm64/Kanjo-win-arm64-Setup.exe",
-            "windows/dist/releases/win-arm64/Kanjo-$version-win-arm64-full.nupkg",
+            "windows/dist/releases/win-arm64/KanjoApp-win-arm64-Setup.exe",
+            "windows/dist/releases/win-arm64/KanjoApp-$version-win-arm64-full.nupkg",
             "windows/dist/releases/win-arm64/RELEASES-win-arm64",
             "windows/dist/releases/win-arm64/releases.win-arm64.json",
             "windows/dist/Kanjo-win-x64-$version.zip",

@@ -34,13 +34,16 @@ public sealed class AppSettings : ILanguageSettings
         _values = seed;
     }
 
-    /// <summary>默认设置目录：`%APPDATA%\Kanjo`（非 Windows 下用 XDG 配置目录，便于在 Mac 上开发）。</summary>
+    /// <summary>
+    /// 默认设置目录：Windows 是 `%APPDATA%\Kanjo`（见 <see cref="AppPaths.SettingsDirectoryName"/>）；
+    /// 其它平台用 XDG 配置目录下的 `kanjo`（小写），和以前一样，免得开发机上已有的设置被孤立。
+    /// </summary>
     public static string DefaultDirectory()
     {
         var appData = Environment.GetEnvironmentVariable("APPDATA");
-        if (!string.IsNullOrEmpty(appData)) return Path.Combine(appData, "Kanjo");
+        if (!string.IsNullOrEmpty(appData)) return Path.Combine(appData, AppPaths.SettingsDirectoryName);
         var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-        if (!string.IsNullOrEmpty(xdg)) return Path.Combine(xdg, "Kanjo");
+        if (!string.IsNullOrEmpty(xdg)) return Path.Combine(xdg, "kanjo");
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "kanjo");
     }
 

@@ -34,6 +34,14 @@ public static class Program
         L10n.Store ??= AppSettings.ForLaunch(args, AppSettings.ReadEnvironment());
         L10n.ResetCache();
 
+        // 诊断：`--print-source[=<file>]` 打印解析出来的 python / CLI 目录 / 数据源后退出 0。
+        // 读的是真实设置（和托盘运行时同一份），但只读不写；冒烟测试用它对安装版做断言。
+        if (args.Contains("--print-source") ||
+            args.Any(a => a.StartsWith("--print-source=", StringComparison.Ordinal)))
+        {
+            return SourceDiagnostics.Print(Console.Out, args);
+        }
+
         if (DefaultPaths.FlagValue("--snapshot", args) is { } snapshotPath)
         {
             var route = DefaultPaths.FlagValue("--route", args) ?? "overview";

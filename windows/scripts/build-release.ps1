@@ -109,6 +109,8 @@ Copy-Item -Recurse -Path (Join-Path $Repo "cli\kanjo\*") -Destination (Join-Path
 Get-ChildItem -Path (Join-Path $CliDir "kanjo") -Recurse -Include "__pycache__", "*.pyc" |
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item -Path (Join-Path $Repo "cli\pricing.json"), (Join-Path $Repo "cli\pricing_overrides.json") -Destination $CliDir
+# Settings shows "Bundled CLI <version>" by reading cli/VERSION (same as the Mac bundle).
+Copy-Item -Path (Join-Path $Repo "VERSION") -Destination (Join-Path $CliDir "VERSION")
 
 Write-Host "==> verify bundle layout" -ForegroundColor Cyan
 $required = @(
@@ -117,6 +119,7 @@ $required = @(
     (Join-Path $CliDir "kanjo\__init__.py"),
     (Join-Path $CliDir "pricing.json"),
     (Join-Path $CliDir "pricing_overrides.json"),
+    (Join-Path $CliDir "VERSION"),
     (Join-Path $Out "sample.json")
 )
 foreach ($item in $required) {
@@ -138,8 +141,11 @@ $Rel = Join-Path $Dist "releases\$Rid"
 if (Test-Path $Rel) { Remove-Item -Recurse -Force $Rel }
 $Vpk = Get-Command vpk -ErrorAction SilentlyContinue
 if (-not $Vpk) { throw "vpk not found (dotnet tool install -g vpk --version 1.2.158)" }
+# packId (KanjoApp) decides the install root %LOCALAPPDATA%\KanjoApp; it must differ from
+# the CLI's %LOCALAPPDATA%\kanjo (see windows/src/Kanjo.Core/AppPaths.cs). --packTitle sets
+# the Start Menu shortcut and Apps-list name back to "Kanjo".
 vpk pack `
-    --packId Kanjo `
+    --packId KanjoApp `
     --packTitle Kanjo `
     --packVersion $Version `
     --packDir $Out `

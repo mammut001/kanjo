@@ -286,7 +286,7 @@ public sealed class AppServices
     /// </summary>
     public void SetupWatcher()
     {
-        var kind = SourceKinds.Parse(Settings.GetString(SettingsKeys.SourceKind)) ?? SourceKind.File;
+        var kind = SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind));
         if (!LogWatchPaths.ShouldWatch(DataOverride is not null, kind))
         {
             Background.StopWatcher();
@@ -320,7 +320,7 @@ public sealed class AppServices
     public IReadOnlyList<string> ReportPaths(CliRunner runner) => LogWatchPaths.Flatten(runner.Paths());
 
     private bool UsesCliSource =>
-        (SourceKinds.Parse(Settings.GetString(SettingsKeys.SourceKind)) ?? SourceKind.File) == SourceKind.Cli;
+        SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind)) == SourceKind.Cli;
 
     /// <summary>用量刷新完成后：磁盘预取 + 监听器自愈。都放后台，不阻塞 UI。</summary>
     private void AfterRefresh(UsageReport? report)
@@ -362,18 +362,30 @@ public sealed class AppServices
         }
     }
 
-    /// <summary>当前数据源的可读描述（出错时也能显示，方便排查）。</summary>
+    /// <summary>当前数据源的可读描述（和 Mac 的 <c>makeSource</c> 文案一致，出错时也能显示）。</summary>
     public string DescribeSource()
     {
         if (DataOverride is { } path) return $"File (--data): {path}";
-        var kind = SourceKinds.Parse(Settings.GetString(SettingsKeys.SourceKind)) ?? SourceKind.File;
+        var kind = SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind));
         if (kind == SourceKind.File)
         {
-            var raw = Settings.Str(SettingsKeys.FilePath, SettingsDefaults.FilePath).Trim();
-            var file = raw.Length == 0 ? DefaultPaths.SampleFixture : DefaultPaths.ExpandTilde(raw);
-            return $"File: {file}";
+            return $"File: {SourceResolution.FileFor(Settings.GetString(SettingsKeys.FilePath))}";
         }
-        return "Command: python -m kanjo export";
+        return DescribeCliSource();
+    }
+
+    /// <summary>
+    /// CLI 来源的描述：`Command: python -m kanjo export (in &lt;cli dir&gt;)`。
+    /// 安装版里 python 和 cli 目录都是包里的（&lt;appdir&gt;\python\python.exe、&lt;appdir&gt;\cli），
+    /// 用真实解析出来的值，而不是写死一句默认命令。
+    /// </summary>
+    private string DescribeCliSource()
+    {
+        var runner = BuildRunner();
+        var python = runner.PythonExecutable ?? CliRunner.ResolvePython()?.Executable;
+        var cwd = CliRunner.ResolveCliDirectory(runner.WorkingDirectory);
+        var command = python is null ? "python -m kanjo export" : $"{Path.GetFileName(python)} -m kanjo export";
+        return $"Command: {command}" + (cwd is null ? "" : $" (in {cwd})");
     }
 
     private UsageReport LoadReport()
@@ -384,12 +396,11 @@ public sealed class AppServices
             return new FileDataSource(path).Load();
         }
 
-        var kind = SourceKinds.Parse(Settings.GetString(SettingsKeys.SourceKind)) ?? SourceKind.File;
+        var kind = SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind));
         if (kind == SourceKind.File)
         {
-            var raw = Settings.Str(SettingsKeys.FilePath, SettingsDefaults.FilePath).Trim();
-            var file = raw.Length == 0 ? DefaultPaths.SampleFixture : DefaultPaths.ExpandTilde(raw);
-            return new FileDataSource(file).Load();
+            // 只有文件来源且路径留空时才读示例数据（Mac 的 settings.file_note）。
+            return new FileDataSource(SourceResolution.FileFor(Settings.GetString(SettingsKeys.FilePath))).Load();
         }
 
         return BuildRunner().Export();
@@ -435,7 +446,7 @@ public sealed class AppServices
     /// <summary>设置里的订阅编辑只在 CLI 数据源且没有 --data 覆盖时可用。</summary>
     public bool CanEditSubscriptions =>
         DataOverride is null &&
-        SourceKinds.Parse(Settings.GetString(SettingsKeys.SourceKind)) == SourceKind.Cli;
+        SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind)) == SourceKind.Cli;
 
     /// <summary>磁盘页的数据源：`--disk-data` 文件，否则 CLI（`disk --json --max-age 21600 [--rescan]`）。</summary>
     private (IDiskSource Source, string Description) MakeDiskSource(bool rescan)

@@ -78,15 +78,10 @@ public sealed class DiskReportCache
 
     public DiskReportCache(string? directory = null)
     {
-        var baseDir = directory ?? Path.Combine(LocalAppData(), "Kanjo");
+        // 默认 `%LOCALAPPDATA%\kanjo`（和 CLI 共用那一层，文件名不冲突）：安装根目录是
+        // `%LOCALAPPDATA%\KanjoApp`，所以这里不会和安装目录撞车（见 AppPaths）。
+        var baseDir = directory ?? Path.Combine(AppPaths.LocalAppData(), AppPaths.CliDirectoryName);
         FilePath = Path.Combine(baseDir, "disk-report.json");
-    }
-
-    private static string LocalAppData()
-    {
-        var local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
-        if (!string.IsNullOrEmpty(local)) return local;
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData", "Local");
     }
 
     public DiskReport? Load()

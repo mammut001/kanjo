@@ -124,6 +124,8 @@ cp -R "$REPO/cli/kanjo/." "$CLI_DIR/kanjo/"
 find "$CLI_DIR/kanjo" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find "$CLI_DIR/kanjo" -name '*.pyc' -delete 2>/dev/null || true
 cp "$REPO/cli/pricing.json" "$REPO/cli/pricing_overrides.json" "$CLI_DIR/"
+# Settings shows "Bundled CLI <version>" by reading cli/VERSION (same as the Mac bundle).
+cp "$REPO/VERSION" "$CLI_DIR/VERSION"
 
 echo "==> verify bundle layout"
 for required in \
@@ -132,6 +134,7 @@ for required in \
   "$CLI_DIR/kanjo/__init__.py" \
   "$CLI_DIR/pricing.json" \
   "$CLI_DIR/pricing_overrides.json" \
+  "$CLI_DIR/VERSION" \
   "$OUT/sample.json"; do
   [[ -f "$required" ]] || { echo "missing in bundle: $required" >&2; exit 1; }
 done
@@ -153,8 +156,11 @@ if [[ -n "$VPK" ]]; then
   rm -rf "$REL"
   # vpk needs the .NET runtime it was built against; ROLL_FORWARD lets it run on a newer one.
   VPK_ENV=(env DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}" DOTNET_ROLL_FORWARD=Major)
+  # packId (KanjoApp) decides the install root %LOCALAPPDATA%\KanjoApp; it must differ from
+  # the CLI's %LOCALAPPDATA%\kanjo (see windows/src/Kanjo.Core/AppPaths.cs). --packTitle sets
+  # the Start Menu shortcut and Apps-list name back to "Kanjo".
   if "${VPK_ENV[@]}" vpk '[win]' pack \
-      --packId Kanjo \
+      --packId KanjoApp \
       --packTitle Kanjo \
       --packVersion "$VERSION" \
       --packDir "$OUT" \

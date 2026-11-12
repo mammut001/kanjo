@@ -57,7 +57,11 @@ public static class DefaultPaths
     /// <summary>仓库里和 ui/ 并排的 cli/ 目录（仅 Debug）。</summary>
     public static string? RepoCliDirectory =>        RepoRoot is { } root ? Path.Combine(root, "cli") : null;
 
-    /// <summary>随包附带的内置 CLI（`&lt;appdir&gt;\cli`）。</summary>
+    /// <summary>
+    /// 随包附带的内置 CLI（`&lt;appdir&gt;\cli`）。
+    /// 安装版里 `&lt;appdir&gt;` 是 `AppContext.BaseDirectory`，也就是
+    /// `%LOCALAPPDATA%\KanjoApp\current\`（Velopack 的 current 目录）。
+    /// </summary>
     public static string? BundledCliDirectory
     {
         get
@@ -141,10 +145,27 @@ public static class DefaultPaths
         return null;
     }
 
-    /// <summary>设置里的命令留空时用的默认导出命令：Windows 是 `py -3 -m kanjo export`，开发（macOS）是 `python3 -m kanjo export`。</summary>
-    public static string DefaultCliCommand => OperatingSystem.IsWindows()
-        ? "py -3 -m kanjo export"
-        : "python3 -m kanjo export";
+    /// <summary>
+    /// 设置里的命令留空时实际跑的命令：有内置 Python 就是
+    /// `&lt;appdir&gt;\python\python.exe -m kanjo export`（安装版真实跑的这条），
+    /// 否则 Windows 上是 `py -3 -m kanjo export`、开发（macOS）是 `python3 -m kanjo export`。
+    /// 设置页把这个值当占位符显示，所以它必须和真正执行的命令一致。
+    /// </summary>
+    public static string DefaultCliCommand
+    {
+        get
+        {
+            if (BundledPython is { } bundled)
+            {
+                return $"{QuoteIfNeeded(bundled)} -m kanjo export";
+            }
+            return OperatingSystem.IsWindows() ? "py -3 -m kanjo export" : "python3 -m kanjo export";
+        }
+    }
+
+    /// <summary>路径里有空格时加引号（`%LOCALAPPDATA%` 一般没有，但用户名可能带空格）。</summary>
+    private static string QuoteIfNeeded(string path) =>
+        path.Contains(' ') ? $"\"{path}\"" : path;
 
     /// <summary>`--flag value` 取参数（同 <see cref="FlagValue"/>）。</summary>
     public static string? Flag(string flag, IReadOnlyList<string>? arguments = null) =>

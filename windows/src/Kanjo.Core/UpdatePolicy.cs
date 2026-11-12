@@ -19,11 +19,12 @@ public static class UpdatePolicy
 
     /// <summary>
     /// 这些模式不碰更新：`--snapshot` 是离屏截图（进程马上退出，更新器会把 exe 换掉），
-    /// `--window` 是开发预览。
+    /// `--window` 是开发预览，`--print-source` 是诊断（同样立刻退出）。
     /// </summary>
     public static bool IsDisabledMode(IReadOnlyList<string> args) =>
-        args.Any(a => a is "--snapshot" or "--window") ||
-        args.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal));
+        args.Any(a => a is "--snapshot" or "--window" or "--print-source") ||
+        args.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal) ||
+                      a.StartsWith("--print-source=", StringComparison.Ordinal));
 
     /// <summary>
     /// 是否应该检查 / 下载更新：必须是 Velopack 装的（否则没有可应用的目录）、不是 Debug 构建、
