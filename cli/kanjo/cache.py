@@ -34,11 +34,7 @@ def _cache_dir() -> str:
     if explicit:
         return os.path.expanduser(explicit)
     from . import winsupport
-    if winsupport.is_windows():
-        local = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
-        return os.path.join(local, "kanjo", "cache")
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return os.path.join(base, "kanjo")
+    return winsupport.kanjo_cache_dir()
 
 
 def _signature(path: str) -> Optional[list]:

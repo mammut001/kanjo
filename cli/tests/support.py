@@ -46,6 +46,22 @@ ALICE = "/Users/alice"
 GITHUB = ALICE + "/Documents/GitHub"
 
 
+def has_tz_database(*names) -> bool:
+    """True when ``zoneinfo`` can load these zones.
+
+    Windows has no system tz database; the ``tzdata`` package provides one. Tests
+    that assert real DST transitions need it, so they skip instead of failing when
+    it is missing (the CLI itself falls back to a fixed offset and never crashes).
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        for name in names or ("UTC",):
+            ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
+
 class FakeFS:
     """A temp directory standing in for "/" (passed to Resolver as fs_root)."""
 

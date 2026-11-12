@@ -14,6 +14,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -21,6 +22,7 @@ from .base import (
     clean_title,
     env_dirs,
     open_sqlite_ro,
+    split_path_list,
 )
 
 AGENT = "openclaw"
@@ -29,10 +31,10 @@ AGENT = "openclaw"
 def roots() -> List[str]:
     explicit = os.environ.get("KANJO_OPENCLAW_DIR") or os.environ.get("OPENCLAW_STATE_DIR")
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [os.path.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    return [os.path.abspath(os.path.expanduser("~/.openclaw"))]
+    return [os.path.abspath(winsupport.expanduser("~/.openclaw"))]
 
 
 def _openclaw_agent_dbs(root: str) -> List[str]:
@@ -54,7 +56,7 @@ def _openclaw_agent_dbs(root: str) -> List[str]:
                     cur.execute("SELECT path FROM agent_databases")
                     for (raw_path,) in cur:
                         if isinstance(raw_path, str) and raw_path.strip():
-                            exp = os.path.expandvars(os.path.expanduser(raw_path.strip()))
+                            exp = os.path.expandvars(winsupport.expanduser(raw_path.strip()))
                             res = exp if os.path.isabs(exp) else os.path.join(root, exp)
                             real = os.path.realpath(res)
                             if os.path.isfile(real) and real not in seen:

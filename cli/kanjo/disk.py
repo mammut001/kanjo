@@ -2,8 +2,10 @@
 
 ``kanjo disk`` reports bytes with ``st_blocks * 512`` (actual allocated space).
 ``kanjo disk clean`` moves files into ``~/.Trash/kanjo-<timestamp>/`` and never
-unlinks them. Git worktrees are removed with ``git worktree remove`` instead.
-Nothing is moved unless ``--yes`` is passed. The UI only calls this command.
+unlinks them; on Windows it hands them to the Recycle Bin (``SHFileOperationW``)
+instead and reports ``"Recycle Bin"`` as the trash folder. Git worktrees are
+removed with ``git worktree remove`` instead. Nothing is moved unless ``--yes``
+is passed. The UI only calls this command.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from . import disk_cache
+from . import disk_cache, winsupport
 from .ledger import Ledger, paths_of
 from .sources import (
     antigravity, claude, codebuddy, codex, copilot, deepseek_harness,
@@ -95,10 +97,33 @@ def parse_older_than(text: str) -> int:
 
 
 def trash_base() -> str:
+    """``$KANJO_TRASH_DIR`` or ``~/.Trash`` (POSIX only; Windows uses the Recycle Bin)."""
     explicit = os.environ.get("KANJO_TRASH_DIR")
     if explicit:
         return os.path.expanduser(explicit)
     return os.path.expanduser("~/.Trash")
+
+
+def use_recycle_bin(explicit_trash_dir: Optional[str] = None) -> bool:
+    """True when clean should hand items to the Recycle Bin instead of a Trash folder.
+
+    Windows only, and only when nothing pinned a Trash directory: ``trash_dir`` and
+    ``KANJO_TRASH_DIR`` are explicit targets (tests and ops use them to keep the
+    move inside a temp tree), and an explicit target always wins.
+    """
+    if not winsupport.is_windows():
+        return False
+    return not explicit_trash_dir and not os.environ.get("KANJO_TRASH_DIR")
+
+
+def _default_scratch() -> str:
+    """Claude Code's scratch dir: ``/tmp/claude-<uid>``, or ``%TEMP%\\claude-<uid>``."""
+    uid = os.getuid() if hasattr(os, "getuid") else 0
+    if winsupport.is_windows():
+        base = winsupport.temp_dirs()
+        return winsupport.join(base[0], "claude-%s" % uid) if base else winsupport.join(
+            winsupport.local_app_data() or os.path.expanduser("~"), "Temp", "claude-%s" % uid)
+    return "/tmp/claude-%s" % uid
 
 
 def default_roots() -> dict:
@@ -109,11 +134,38 @@ def default_roots() -> dict:
     and logs, and the Antigravity brain and cache are siblings of those directories
     (so the default layout is unchanged). ``KANJO_SCRATCH_DIR``, ``KANJO_GROK_DIR``
     and ``KANJO_CLAUDE_APP_CACHE`` exist so tests never touch the real machine.
+
+    On Windows the defaults follow each tool's own layout: dot-dirs stay in
+    ``%USERPROFILE%``, Electron apps move from ``~/Library/Application Support`` to
+    ``%APPDATA%``, XDG data dirs to ``%LOCALAPPDATA%`` (OpenCode keeps
+    ``%USERPROFILE%\\.local\\share\\opencode``), and macOS-only desktop apps are skipped.
     """
-    uid = os.getuid() if hasattr(os, "getuid") else 0
+    win = winsupport.is_windows()
+
+    def _dir(env_name: str, mac_default: str, windows_default: Optional[str] = None) -> Optional[str]:
+        """An explicit env override always wins; otherwise the platform default.
+
+        ``windows_default=None`` marks a macOS-only tool: nothing is scanned on
+        Windows unless the user points ``KANJO_*_DIR`` at it.
+        """
+        explicit = os.environ.get(env_name)
+        if explicit:
+            return os.path.expanduser(explicit)
+        if os.environ.get("KANJO_DATA_DIR"):
+            return None
+        if win:
+            return windows_default
+        return os.path.expanduser(mac_default)
+
+    opencode_default = (winsupport.join(winsupport.user_profile() or "", ".local", "share", "opencode")
+                        if win else "~/.local/share/opencode")
+    claude_app_default = (winsupport.join(winsupport.app_data() or "", "Claude")
+                          if win else "~/Library/Application Support/Claude")
+    devin_default = winsupport.join(winsupport.local_data_dir("devin"), "cli") if win else "~/.local/share/devin/cli"
+    musecode_default = winsupport.local_data_dir("muse") if win else "~/.local/share/muse"
     return {
         "claude_projects": env_dirs("KANJO_CLAUDE_DIR", ["~/.claude/projects"]),
-        "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or ("/tmp/claude-%s" % uid)),
+        "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or _default_scratch()),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
             "~/.gemini/antigravity-cli/conversations",
@@ -121,14 +173,14 @@ def default_roots() -> dict:
             "~/.gemini/antigravity-ide/conversations",
             "~/.gemini/gemini-cli/conversations",
         ]),
-        "grok": os.path.expanduser(os.environ["KANJO_GROK_DIR"]) if os.environ.get("KANJO_GROK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.grok")),
-        "qwen": os.path.expanduser(os.environ["KANJO_QWEN_DIR"]) if os.environ.get("KANJO_QWEN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwen")),
-        "commandcode": os.path.expanduser(os.environ["KANJO_COMMANDCODE_DIR"]) if os.environ.get("KANJO_COMMANDCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.commandcode")),
+        "grok": _dir("KANJO_GROK_DIR", "~/.grok", "~/.grok"),
+        "qwen": _dir("KANJO_QWEN_DIR", "~/.qwen", "~/.qwen"),
+        "commandcode": _dir("KANJO_COMMANDCODE_DIR", "~/.commandcode", "~/.commandcode"),
         "claude_app": os.path.expanduser(
-            os.environ.get("KANJO_CLAUDE_APP_CACHE") or "~/Library/Application Support/Claude"),
-        "minimax": os.path.expanduser(os.environ["KANJO_MINIMAX_DIR"]) if os.environ.get("KANJO_MINIMAX_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.minimax")),
-        "opencode": os.path.expanduser(os.environ["KANJO_OPENCODE_DIR"]) if os.environ.get("KANJO_OPENCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/opencode")),
-        "copilot": os.path.expanduser(os.environ["KANJO_COPILOT_DIR"]) if os.environ.get("KANJO_COPILOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.copilot")),
+            os.environ.get("KANJO_CLAUDE_APP_CACHE") or claude_app_default),
+        "minimax": _dir("KANJO_MINIMAX_DIR", "~/.minimax", "~/.minimax"),
+        "opencode": _dir("KANJO_OPENCODE_DIR", "~/.local/share/opencode", opencode_default),
+        "copilot": _dir("KANJO_COPILOT_DIR", "~/.copilot", "~/.copilot"),
         "pi": os.path.expanduser(os.environ["KANJO_PI_DIR"]) if os.environ.get("KANJO_PI_DIR") else (
             os.path.expanduser(os.environ["PI_CODING_AGENT_DIR"]) if os.environ.get("PI_CODING_AGENT_DIR") else (
                 os.path.expanduser(os.environ["PI_CODING_AGENT_SESSION_DIR"]) if os.environ.get("PI_CODING_AGENT_SESSION_DIR") else (
@@ -136,29 +188,29 @@ def default_roots() -> dict:
                 )
             )
         ),
-        "workbuddy": os.path.expanduser(os.environ["KANJO_WORKBUDDY_DIR"]) if os.environ.get("KANJO_WORKBUDDY_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy")),
-        "workbuddy_ai": os.path.expanduser(os.environ["KANJO_WORKBUDDY_AI_DIR"]) if os.environ.get("KANJO_WORKBUDDY_AI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.workbuddy-ai")),
+        "workbuddy": _dir("KANJO_WORKBUDDY_DIR", "~/.workbuddy", "~/.workbuddy"),
+        "workbuddy_ai": _dir("KANJO_WORKBUDDY_AI_DIR", "~/.workbuddy-ai", "~/.workbuddy-ai"),
         "qwenwork": os.path.expanduser(os.environ["KANJO_QWENWORK_DIR"]) if os.environ.get("KANJO_QWENWORK_DIR") else (
             os.path.expanduser(os.environ["TOKEI_QWENWORK_HOME"]) if os.environ.get("TOKEI_QWENWORK_HOME") else (
                 None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwenworkcn")
             )
         ),
-        "grok_bot": os.path.expanduser(os.environ["KANJO_GROK_BOT_DIR"]) if os.environ.get("KANJO_GROK_BOT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/Grok Bot")),
-        "qoderwork": os.path.expanduser(os.environ["KANJO_QODERWORK_DIR"]) if os.environ.get("KANJO_QODERWORK_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/QoderWork")),
-        "qodercli": os.path.expanduser(os.environ["KANJO_QODERCLI_DIR"]) if os.environ.get("KANJO_QODERCLI_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qoder")),
-        "qodercli_cn": os.path.expanduser(os.environ["KANJO_QODERCLI_CN_DIR"]) if os.environ.get("KANJO_QODERCLI_CN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qoder-cn")),
-        "zcode": os.path.expanduser(os.environ["KANJO_ZCODE_DIR"]) if os.environ.get("KANJO_ZCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.zcode")),
-        "kimicode": os.path.expanduser(os.environ["KANJO_KIMICODE_DIR"]) if os.environ.get("KANJO_KIMICODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.kimi-code")),
-        "musecode": os.path.expanduser(os.environ["KANJO_MUSECODE_DIR"]) if os.environ.get("KANJO_MUSECODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/muse")),
-        "codebuddy": os.path.expanduser(os.environ["KANJO_CODEBUDDY_DIR"]) if os.environ.get("KANJO_CODEBUDDY_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.codebuddy")),
-        "qoder_ide": os.path.expanduser(os.environ["KANJO_QODER_IDE_DIR"]) if os.environ.get("KANJO_QODER_IDE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/Qoder/SharedClientCache/cache/db")),
-        "hermes": os.path.expanduser(os.environ["KANJO_HERMES_DIR"]) if os.environ.get("KANJO_HERMES_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.hermes")),
-        "openclaw": os.path.expanduser(os.environ["KANJO_OPENCLAW_DIR"]) if os.environ.get("KANJO_OPENCLAW_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.openclaw")),
-        "devin": os.path.expanduser(os.environ["KANJO_DEVIN_DIR"]) if os.environ.get("KANJO_DEVIN_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.local/share/devin/cli")),
-        "mimocode": os.path.expanduser(os.environ["KANJO_MIMOCODE_DIR"]) if os.environ.get("KANJO_MIMOCODE_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/Library/Application Support/mimocode")),
-        "prime_agent": os.path.expanduser(os.environ["KANJO_PRIME_AGENT_DIR"]) if os.environ.get("KANJO_PRIME_AGENT_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.prime/agent/sessions")),
-        "omp": os.path.expanduser(os.environ["KANJO_OMP_DIR"]) if os.environ.get("KANJO_OMP_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.omp/agent/sessions")),
-        "deepseek_harness": os.path.expanduser(os.environ["KANJO_DEEPSEEK_HARNESS_DIR"]) if os.environ.get("KANJO_DEEPSEEK_HARNESS_DIR") else (None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.tokei/cache/dsh-sessions")),
+        "grok_bot": _dir("KANJO_GROK_BOT_DIR", "~/Library/Application Support/Grok Bot"),
+        "qoderwork": _dir("KANJO_QODERWORK_DIR", "~/Library/Application Support/QoderWork"),
+        "qodercli": _dir("KANJO_QODERCLI_DIR", "~/.qoder", "~/.qoder"),
+        "qodercli_cn": _dir("KANJO_QODERCLI_CN_DIR", "~/.qoder-cn", "~/.qoder-cn"),
+        "zcode": _dir("KANJO_ZCODE_DIR", "~/.zcode", "~/.zcode"),
+        "kimicode": _dir("KANJO_KIMICODE_DIR", "~/.kimi-code", "~/.kimi-code"),
+        "musecode": _dir("KANJO_MUSECODE_DIR", "~/.local/share/muse", musecode_default),
+        "codebuddy": _dir("KANJO_CODEBUDDY_DIR", "~/.codebuddy", "~/.codebuddy"),
+        "qoder_ide": _dir("KANJO_QODER_IDE_DIR", "~/Library/Application Support/Qoder/SharedClientCache/cache/db"),
+        "hermes": _dir("KANJO_HERMES_DIR", "~/.hermes", "~/.hermes"),
+        "openclaw": _dir("KANJO_OPENCLAW_DIR", "~/.openclaw", "~/.openclaw"),
+        "devin": _dir("KANJO_DEVIN_DIR", "~/.local/share/devin/cli", devin_default),
+        "mimocode": _dir("KANJO_MIMOCODE_DIR", "~/Library/Application Support/mimocode"),
+        "prime_agent": _dir("KANJO_PRIME_AGENT_DIR", "~/.prime/agent/sessions", "~/.prime/agent/sessions"),
+        "omp": _dir("KANJO_OMP_DIR", "~/.omp/agent/sessions", "~/.omp/agent/sessions"),
+        "deepseek_harness": _dir("KANJO_DEEPSEEK_HARNESS_DIR", "~/.tokei/cache/dsh-sessions", "~/.tokei/cache/dsh-sessions"),
     }
 
 
@@ -177,13 +229,15 @@ def _measure_heavy_dir(dir_path: str, dir_st) -> Tuple[int, int, Optional[float]
     """
     errors = 0
     total_bytes = None
-    try:
-        proc = subprocess.run(["du", "-sk", dir_path], capture_output=True, timeout=30)
-        if proc.returncode == 0:
-            first_col = proc.stdout.split(None, 1)[0]
-            total_bytes = int(first_col) * 1024
-    except Exception:
-        pass
+    if not winsupport.is_windows():
+        # Windows has no du(1); the scandir walk below measures the directory instead.
+        try:
+            proc = subprocess.run(["du", "-sk", dir_path], capture_output=True, timeout=30)
+            if proc.returncode == 0:
+                first_col = proc.stdout.split(None, 1)[0]
+                total_bytes = int(first_col) * 1024
+        except Exception:
+            pass
 
     file_count = 0
     oldest = dir_st.st_mtime
@@ -236,18 +290,19 @@ def _measure_heavy_dirs(dirs: List[Tuple[str, Any]]) -> Tuple[int, int, Optional
     paths = [p for p, _ in dirs]
     measured_paths: Dict[str, int] = {}
 
-    try:
-        proc = subprocess.run(["du", "-sk"] + paths, capture_output=True, timeout=60)
-        if proc.returncode == 0:
-            for line in proc.stdout.splitlines():
-                parts = line.split(b"\t", 1)
-                if len(parts) == 2:
-                    try:
-                        measured_paths[parts[1].decode("utf-8")] = int(parts[0]) * 1024
-                    except (ValueError, UnicodeDecodeError):
-                        pass
-    except Exception:
-        pass
+    if not winsupport.is_windows():
+        try:
+            proc = subprocess.run(["du", "-sk"] + paths, capture_output=True, timeout=60)
+            if proc.returncode == 0:
+                for line in proc.stdout.splitlines():
+                    parts = line.split(b"\t", 1)
+                    if len(parts) == 2:
+                        try:
+                            measured_paths[parts[1].decode("utf-8")] = int(parts[0]) * 1024
+                        except (ValueError, UnicodeDecodeError):
+                            pass
+        except Exception:
+            pass
 
     for p, st in dirs:
         ts = st.st_mtime
@@ -430,6 +485,11 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     On a sessions entry, a log file with no ledger row is skipped even when the
     entry itself is allowed; ``--older-than`` still moves the other files when
     ``not_imported`` is the only block.
+
+    On Windows things go to the Recycle Bin instead of ``~/.Trash``, and the result
+    then carries ``"trash_dir": "Recycle Bin"``. An explicit ``trash_dir`` (or
+    ``KANJO_TRASH_DIR``) still pins a real folder, so a caller that wants the move
+    confined to a temp tree keeps working on Windows.
     """
     now = time.time() if now is None else now
     ledger = ledger or Ledger()
@@ -442,8 +502,9 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
             by_id[entry["id"]] = entry
             owners[entry["id"]] = agent["agent"]
     do_it = bool(yes) and not dry_run
+    recycle_bin = use_recycle_bin(trash_dir)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    trash_root = os.path.join(trash_dir or trash_base(), "kanjo-" + stamp)
+    trash_root = "" if recycle_bin else os.path.join(trash_dir or trash_base(), "kanjo-" + stamp)
     moved: List[str] = []
     skipped = []
     freed = 0
@@ -469,7 +530,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 file_skips: List[dict] = []
             else:
                 part_moved, part_freed, reason, file_skips = _clean_tree(
-                    entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported)
+                    entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
+                    recycle_bin=recycle_bin)
         except OSError:
             # A partial per-file clean may already have moved files before failing.
             if do_it:
@@ -485,7 +547,11 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         skipped.extend(file_skips)
     if do_it and moved:
         disk_cache.invalidate()
-    return {"moved": moved, "freed_bytes": freed, "skipped": skipped}
+    result = {"moved": moved, "freed_bytes": freed, "skipped": skipped}
+    if winsupport.is_windows():
+        # On Windows there is no Trash folder unless one was pinned explicitly.
+        result["trash_dir"] = trash_root if trash_root else winsupport.RECYCLE_BIN
+    return result
 
 
 # ---- scanning targets -----------------------------------------------------------------
@@ -868,7 +934,8 @@ def _import_counts(agent: str, root: str, imported: Dict[str, set]) -> Tuple[int
     if logs is None:
         return 0, 0
     known = imported.get(agent) or set()
-    imported_files = sum(1 for path in logs if path in known or os.path.normpath(path) in known)
+    imported_files = sum(1 for path in logs
+                         if path in known or winsupport.normpath(path) in known)
     return len(logs), imported_files
 
 
@@ -974,8 +1041,8 @@ def _worktree_dirty(path: str) -> bool:
             return _WORKTREE_DIRTY_CACHE[key]
     try:
         proc = subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-C", path, "status", "--porcelain"],
-            capture_output=True, text=True, timeout=60, env=_git_env(),
+            ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path, "status", "--porcelain"],
+            capture_output=True, text=True, encoding="utf-8", timeout=60, env=_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return True
@@ -1025,28 +1092,36 @@ def _main_repo(path: str) -> Optional[str]:
 
 # ---- clean ----------------------------------------------------------------------------
 def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash_root: str,
-                agent: str = "", imported: Optional[Dict[str, set]] = None):
+                agent: str = "", imported: Optional[Dict[str, set]] = None,
+                recycle_bin: bool = False):
     root = entry["path"]
     if not os.path.exists(root):
         return [], 0, "not_found", []
     if agent in ("minimax", "opencode", "qoderwork", "zcode", "qoder_ide", "hermes", "devin", "mimocode"):
         return [], 0, "never", []
+
+    def _dest(*parts) -> Optional[str]:
+        """Trash destination, or None when the Recycle Bin is the target."""
+        if recycle_bin:
+            return None
+        return os.path.join(trash_root, *parts)
+
     if days is None:
         if do_it:
-            dest = os.path.join(trash_root, entry["id"], os.path.basename(os.path.normpath(root)))
-            _relocate(root, dest)
+            _relocate(root, _dest(entry["id"], os.path.basename(os.path.normpath(root))))
         return [root], entry["bytes"], None, []
     logs = None
     if entry.get("kind") == "sessions":
         logs = _log_paths(agent, root)
-    log_set = set(os.path.normpath(path) for path in logs) if logs is not None else None
+    # Empty when the entry is not a sessions folder (nothing is a log file then).
+    log_set = set(winsupport.normpath(path) for path in logs or ())
     known = (imported or {}).get(agent) or set()
     files = _files_older_than(root, now, days)
     movable = []
     file_skips = []
     for path, nbytes, rel in files:
-        norm = os.path.normpath(path)
-        if log_set is not None and norm in log_set and path not in known and norm not in known:
+        norm = winsupport.normpath(path)
+        if norm in log_set and path not in known and norm not in known:
             file_skips.append({"id": path, "reason": "not_imported"})
             continue
         movable.append((path, nbytes, rel))
@@ -1054,12 +1129,20 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
         return [], 0, "newer_than_cutoff", []
     moved = []
     freed = 0
+    locked = []
     for path, nbytes, rel in movable:
         if do_it:
-            _relocate(path, os.path.join(trash_root, entry["id"], rel))
+            try:
+                _relocate(path, _dest(entry["id"], rel))
+            except OSError:
+                if not winsupport.is_windows():
+                    raise
+                # A file held open by a running agent: report that file, keep going.
+                locked.append({"id": path, "reason": "move_failed"})
+                continue
         moved.append(path)
         freed += nbytes
-    return moved, freed, None, file_skips
+    return moved, freed, None, file_skips + locked
 
 
 def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
@@ -1075,8 +1158,8 @@ def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
         return [], 0, "not_a_worktree"
     try:
         subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-C", main, "worktree", "remove", path],
-            check=True, capture_output=True, text=True, timeout=120, env=_git_env(),
+            ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", main, "worktree", "remove", path],
+            check=True, capture_output=True, text=True, encoding="utf-8", timeout=120, env=_git_env(),
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return [], 0, "worktree_remove_failed"
@@ -1114,12 +1197,26 @@ def _has_newer_file(root: str, now: float, days: int) -> bool:
     return False
 
 
-def _relocate(src: str, dst: str) -> None:
+def _relocate(src: str, dst: Optional[str]) -> None:
+    """Move ``src`` aside: into the Trash tree on POSIX, into the Recycle Bin on Windows.
+
+    ``dst`` is the Trash destination and is required on POSIX. On Windows ``dst`` is
+    ``None`` when the Recycle Bin is the target (``SHFileOperationW`` picks the name
+    and restores the original path); a real ``dst`` still moves the item there, which
+    is what an explicitly pinned ``trash_dir`` asks for.
+    """
+    if winsupport.is_windows() and dst is None:
+        code = winsupport.recycle([src])
+        if code is None:
+            raise OSError(errno.EIO, "Recycle Bin is unavailable", src)
+        if code != 0:
+            raise OSError(errno.EACCES, "cannot move %s to the Recycle Bin (code %s)" % (src, code), src)
+        return
     parent = os.path.dirname(dst)
     if parent:
         os.makedirs(parent, exist_ok=True)
     try:
-        os.rename(src, dst)
+        os.replace(src, dst)
     except OSError as exc:
         if exc.errno != errno.EXDEV:
             raise
@@ -1130,7 +1227,16 @@ def _refused(path: str) -> bool:
     norm = _norm(path)
     home = _norm(os.path.expanduser("~"))
     banned = {"/", home, "/tmp", "/private", "/private/tmp", "/var", "/Users"}
-    return norm in banned
+    if winsupport.is_windows():
+        # Any drive root (C:\), the user profile and the directories Windows needs.
+        if re.match(r"^[A-Za-z]:[\\/]?$", norm):
+            return True
+        for var in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "SYSTEMROOT"):
+            value = os.environ.get(var)
+            if value:
+                banned.add(_norm(value))
+    # Windows paths compare case-insensitively; POSIX keys are unchanged.
+    return winsupport.normcase_key(norm) in {winsupport.normcase_key(p) for p in banned}
 
 
 def _parents(paths: List[str]) -> List[str]:
@@ -1150,7 +1256,8 @@ def _isdir(path: str) -> bool:
 
 
 def _norm(path: str) -> str:
-    return os.path.normpath(os.path.abspath(path))
+    """Absolute normalized path (Windows spellings stay Windows on any host)."""
+    return winsupport.normpath(winsupport.abspath(path))
 
 
 def _git_env() -> dict:
@@ -1158,3 +1265,8 @@ def _git_env() -> dict:
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_OPTIONAL_LOCKS"] = "0"
     return env
+
+
+def _no_hooks() -> str:
+    """``core.hooksPath`` that disables hooks: ``/dev/null`` on POSIX, ``nul`` on Windows."""
+    return os.devnull

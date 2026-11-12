@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import io
 import json
+import ntpath
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from unittest import mock
 
-from kanjo import cli, ledger, cache, winsupport, quota_fetch
+from kanjo import cli, disk, ledger, cache, winsupport, quota_fetch
 from kanjo.identity import Resolver
 from kanjo.sources import base, antigravity
 
@@ -214,8 +218,10 @@ class WindowsDataCacheDirTest(unittest.TestCase):
              mock.patch.dict(os.environ, env, clear=True):
             d_dir = ledger.data_dir()
             c_dir = cache._cache_dir()
-            self.assertEqual(d_dir, os.path.join("C:\\Users\\Alice\\AppData\\Local", "kanjo", "data"))
-            self.assertEqual(c_dir, os.path.join("C:\\Users\\Alice\\AppData\\Local", "kanjo", "cache"))
+            # Windows paths use '\' regardless of the OS running the test.
+            local = "C:\\Users\\Alice\\AppData\\Local"
+            self.assertEqual(d_dir, ntpath.join(local, "kanjo", "data"))
+            self.assertEqual(c_dir, ntpath.join(local, "kanjo", "cache"))
 
     def test_env_override_takes_precedence(self):
         env = {
@@ -230,13 +236,17 @@ class WindowsDataCacheDirTest(unittest.TestCase):
 
 
 class WindowsDiskGuardTest(unittest.TestCase):
-    def test_disk_command_rejected_on_windows(self):
-        with mock.patch("kanjo.winsupport.is_windows", return_value=True):
-            err = io.StringIO()
-            with mock.patch("sys.stderr", err):
-                code = cli.main(["disk"])
-            self.assertEqual(code, 2)
-            self.assertIn("not supported on Windows", err.getvalue())
+    def test_disk_command_runs_on_windows(self):
+        """`kanjo disk` is supported on Windows now (batch 4): it scans and reports JSON."""
+        tmp = tempfile.mkdtemp(prefix="kanjo-win-disk-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        roots = {key: [] for key in disk.default_roots()}
+        with mock.patch("kanjo.winsupport.is_windows", return_value=True), \
+             mock.patch.dict(os.environ, {"KANJO_DATA_DIR": os.path.join(tmp, "data"),
+                                          "KANJO_CACHE_DIR": os.path.join(tmp, "cache")}, clear=False):
+            doc = disk.report(roots=roots, now=time.time(), rescan=True)
+        self.assertEqual(doc["schema_version"], 1)
+        self.assertEqual(doc["agents"], [])
 
 
 class WindowsPathHandlingTest(unittest.TestCase):

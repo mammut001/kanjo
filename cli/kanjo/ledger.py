@@ -39,10 +39,7 @@ def data_dir() -> str:
     if explicit:
         return os.path.expanduser(explicit)
     from . import winsupport
-    if winsupport.is_windows():
-        local = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
-        return os.path.join(local, "kanjo", "data")
-    return os.path.join(os.path.expanduser("~"), ".local", "share", "kanjo")
+    return winsupport.kanjo_data_dir()
 
 
 def entry_key(agent: str, session_id: str, parent: Optional[str]) -> str:

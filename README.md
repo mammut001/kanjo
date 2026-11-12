@@ -126,6 +126,8 @@ cd kanjo && ./install.sh
 
 This installs `kanjo` for terminal use; the app already includes its own CLI. Python 3.9+ and the standard library only.
 
+The CLI also runs on Windows (Python 3.9+): agent logs are read from `%USERPROFILE%\.claude`, `%USERPROFILE%\.codex`, `%APPDATA%` and `%LOCALAPPDATA%`, and `kanjo disk clean` moves files to the Recycle Bin.
+
 ```bash
 kanjo doctor      # which logs were found
 kanjo projects    # table of repos by cost
@@ -372,6 +374,8 @@ brew install --cask mammut001/kanjo/kanjo
 git clone https://github.com/mammut001/kanjo.git
 cd kanjo && ./install.sh
 ```
+
+CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`、`%APPDATA%`、`%LOCALAPPDATA%` 读取，`kanjo disk clean` 会移到回收站。
 
 ### 家庭用量（可选）
 

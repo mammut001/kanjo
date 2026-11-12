@@ -6,6 +6,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The CLI runs on Windows.** Agent logs are found in their real Windows locations (`%USERPROFILE%\.claude`, `%USERPROFILE%\.codex`, `%USERPROFILE%\.gemini`, `%APPDATA%\<app>`, `%LOCALAPPDATA%\<app>`); Kanjo's own files live in `%APPDATA%\kanjo` (config) and `%LOCALAPPDATA%\kanjo` (ledger, cache). `kanjo disk` and `disk clean` work on Windows and move files to the **Recycle Bin** (`SHFileOperationW`) instead of `~/.Trash`; the result reports `"trash_dir": "Recycle Bin"`. Claude quota reads the OAuth token from `%USERPROFILE%\.claude\.credentials.json`. A file locked by a running agent is a per-item `move_failed`, not a failed run.
+- **Windows CI runs the full CLI suite** (Python 3.9 and 3.12), not just the reporter tests.
+
+### Changed
+
+- Project attribution compares Windows paths case-insensitively and treats `\` and `/` alike, so session cwds written by Node tools (`c:/users/...`) match repos on disk; `%TEMP%` and `%LOCALAPPDATA%\Temp` count as temporary like `/tmp`.
+- Timezones fall back to the current UTC offset when `zoneinfo` has no database (the normal case on Windows without `tzdata`): quota and billing-cycle dates still work, nothing crashes.
+- macOS-only agents (Grok Bot, QoderWork, Qoder IDE, MiMo Code) are silently skipped on Windows and listed by `kanjo doctor` / `kanjo paths` instead of erroring.
+
 ## [0.5.1] - 2026-11-12
 
 ### Added

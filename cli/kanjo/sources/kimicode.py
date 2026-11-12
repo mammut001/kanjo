@@ -14,6 +14,7 @@ import math
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -22,6 +23,7 @@ from .base import (
     env_dirs,
     parse_iso,
     unique,
+    split_path_list,
 )
 
 AGENT = "kimicode"
@@ -35,15 +37,15 @@ def roots() -> List[str]:
         or os.environ.get("KIMI_SHARE_DIR")
     )
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
     candidates = [
-        os.path.expanduser("~/.kimi-code"),
-        os.path.expanduser("~/.kimi"),
+        winsupport.expanduser("~/.kimi-code"),
+        winsupport.expanduser("~/.kimi"),
     ]
-    existing = [os.path.abspath(c) for c in candidates if os.path.exists(c)]
-    return existing if existing else [os.path.abspath(candidates[0])]
+    existing = [winsupport.abspath(c) for c in candidates if os.path.exists(c)]
+    return existing if existing else [winsupport.abspath(candidates[0])]
 
 
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
@@ -146,7 +148,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     actual_parent = subagent_of or parent_id
     session = Session(id=sid, agent=AGENT, file=path, subagent_of=actual_parent)
     if cwd:
-        session.note_cwd(os.path.abspath(os.path.expanduser(cwd)))
+        session.note_cwd(winsupport.abspath(winsupport.expanduser(cwd)))
 
     messages: List[Message] = []
     seen_events: Set[Tuple] = set()

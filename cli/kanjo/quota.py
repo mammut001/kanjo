@@ -34,9 +34,8 @@ import math
 import os
 import time
 from typing import Dict, Optional, Tuple
-from zoneinfo import ZoneInfo
 
-from .sources.base import iso_utc, local_timezone_name
+from .sources.base import iso_utc, local_timezone_name, local_zone
 
 MAX_AGE_DAYS = 14
 DEFAULT_WEEKLY_HOURS = 168
@@ -83,7 +82,7 @@ def parse_weekly_reset(value: str, where: str = "weekly_reset") -> Tuple[str, in
 
 def next_occurrence(weekly_reset: str, now: float, tz_name: Optional[str] = None) -> float:
     """Next occurrence of weekly_reset ('tue 05:00') strictly after now, in tz_name."""
-    tz = ZoneInfo(tz_name or local_timezone_name())
+    tz = local_zone(tz_name)
     now_dt = datetime.fromtimestamp(now, tz=tz)
     _, target_weekday, hour, minute = parse_weekly_reset(weekly_reset)
 

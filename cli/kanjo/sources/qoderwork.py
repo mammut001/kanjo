@@ -11,6 +11,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -18,6 +19,7 @@ from .base import (
     clean_title,
     env_dirs,
     open_sqlite_ro,
+    split_path_list,
 )
 
 AGENT = "qoderwork"
@@ -26,15 +28,19 @@ AGENT = "qoderwork"
 def roots() -> List[str]:
     explicit = os.environ.get("KANJO_QODERWORK_DIR") or os.environ.get("TOKEI_QODER_DB")
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
+    if winsupport.is_windows():
+        # QoderWork is a macOS-only desktop app; an explicit KANJO_QODERWORK_DIR is
+        # the only way to scan it on Windows.
+        return []
     candidates = [
-        os.path.expanduser("~/Library/Application Support/QoderWork/data"),
-        os.path.expanduser("~/Library/Application Support/Qoder/data"),
+        winsupport.expanduser("~/Library/Application Support/QoderWork/data"),
+        winsupport.expanduser("~/Library/Application Support/Qoder/data"),
     ]
-    existing = [os.path.abspath(c) for c in candidates if os.path.exists(c)]
-    return existing[:1] if existing else [os.path.abspath(candidates[0])]
+    existing = [winsupport.abspath(c) for c in candidates if os.path.exists(c)]
+    return existing[:1] if existing else [winsupport.abspath(candidates[0])]
 
 
 def _db_path(root: str) -> Optional[str]:

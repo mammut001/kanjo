@@ -11,6 +11,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -18,6 +19,7 @@ from .base import (
     clean_title,
     env_dirs,
     open_sqlite_ro,
+    split_path_list,
 )
 
 AGENT = "mimocode"
@@ -31,8 +33,8 @@ def roots() -> List[str]:
     )
     if explicit:
         paths = []
-        for p in explicit.split(os.pathsep):
-            exp = os.path.abspath(os.path.expanduser(p))
+        for p in split_path_list(explicit):
+            exp = winsupport.abspath(winsupport.expanduser(p))
             if os.path.isdir(os.path.join(exp, "data")):
                 paths.append(os.path.join(exp, "data"))
             else:
@@ -40,14 +42,18 @@ def roots() -> List[str]:
         return paths
     if os.environ.get("KANJO_DATA_DIR"):
         return []
+    if winsupport.is_windows():
+        # MiMo Code is a macOS-only desktop app; an explicit KANJO_MIMOCODE_DIR is
+        # the only way to scan it on Windows.
+        return []
     candidates = [
-        os.path.expanduser("~/Library/Application Support/mimocode"),
-        os.path.expanduser("~/Library/Application Support/mimocode/data"),
-        os.path.expanduser("~/.local/share/mimocode"),
-        os.path.expanduser("~/.local/share/mimocode/data"),
+        winsupport.expanduser("~/Library/Application Support/mimocode"),
+        winsupport.expanduser("~/Library/Application Support/mimocode/data"),
+        winsupport.expanduser("~/.local/share/mimocode"),
+        winsupport.expanduser("~/.local/share/mimocode/data"),
     ]
-    existing = [os.path.abspath(c) for c in candidates if os.path.exists(c)]
-    return existing[:1] if existing else [os.path.abspath(candidates[0])]
+    existing = [winsupport.abspath(c) for c in candidates if os.path.exists(c)]
+    return existing[:1] if existing else [winsupport.abspath(candidates[0])]
 
 
 def _db_paths_for_root(root: str) -> List[str]:

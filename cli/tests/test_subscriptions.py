@@ -17,7 +17,7 @@ from kanjo.config import ConfigError
 from kanjo.export import build_export, check_invariants
 from kanjo.subscriptions import subscriptions
 
-from tests.support import ALICE, FIXTURE_DIRS, check_subscriptions, standard_fs, validate_contract
+from tests.support import ALICE, FIXTURE_DIRS, check_subscriptions, has_tz_database, standard_fs, validate_contract
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc)
 DAY = 86400
@@ -173,6 +173,8 @@ class SubscriptionTest(unittest.TestCase):
                 self.assertEqual(sub["cycle_end"], "2026-10-24T12:00:00Z")
                 check_subscriptions(self, {"claude": sub})
 
+    @unittest.skipUnless(has_tz_database("America/Montreal"),
+                         "needs the IANA tz database (tzdata on Windows)")
     def test_rolling_window_preserves_time_across_dst_and_month_boundaries(self):
         self.write_claude(drop_created=True)
         for now, start, end in (

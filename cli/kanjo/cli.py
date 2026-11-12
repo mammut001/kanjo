@@ -238,12 +238,20 @@ def _print_subscriptions(cfg) -> None:
               % (agent, sub["plan_label"], price, anchor, sub["source"]))
 
 
+def _default_config_hint() -> str:
+    """``none (defaults; looked in <dir>/attribution.toml|json)`` for the current platform."""
+    if not winsupport.is_windows():
+        return "none (defaults; looked in ~/.config/kanjo/attribution.toml|json)"
+    base = winsupport.kanjo_config_dir()
+    return "none (defaults; looked in %sattribution.toml|json)" % winsupport.join(base, "")
+
+
 def cmd_doctor(args) -> int:
     print("kanjo %s, Python %s" % (__version__, sys.version.split()[0]))
     cfg = None
     try:
         cfg = load_config(args.config)
-        print("config: %s" % (cfg.source or "none (defaults; looked in ~/.config/kanjo/attribution.toml|json)"))
+        print("config: %s" % (cfg.source or _default_config_hint()))
         print("  dominant_threshold=%s aliases=%d overrides=%d exclude=%d"
               % (cfg.dominant_threshold, len(cfg.aliases), len(cfg.overrides), len(cfg.exclude)))
     except ConfigError as exc:
@@ -270,6 +278,11 @@ def cmd_doctor(args) -> int:
             print("  " + f)
         if len(result.failed_files) > 20:
             print("  ... and %d more" % (len(result.failed_files) - 20))
+    unsupported = winsupport.unsupported_agents()
+    if unsupported:
+        print("\nnot supported on Windows:")
+        for agent, reason in unsupported.items():
+            print("  %s: %s" % (AGENT_LABELS.get(agent, agent), reason))
     return 0
 
 
@@ -323,21 +336,26 @@ def _format_disk(doc: dict) -> str:
 def cmd_paths(args) -> int:
     result = {}
     for agent, module in SOURCES.items():
+        if not winsupport.is_supported(agent):
+            continue  # no Windows build: not silently broken, just absent
         existing = [os.path.abspath(r) for r in module.roots() if os.path.exists(r)]
         result[agent] = existing
+    unsupported = winsupport.unsupported_agents()
     if args.json:
+        # Every value must stay a list of paths: the app decodes this map as
+        # agent -> [path]. The unsupported agents are listed by `kanjo doctor` and
+        # in the text (non-JSON) output instead.
         sys.stdout.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     else:
         for agent, paths in result.items():
             for p in paths:
                 print("%s\t%s" % (agent, p))
+        for agent, reason in unsupported.items():
+            print("%s\tnot supported on Windows: %s" % (agent, reason))
     return 0
 
 
 def cmd_disk(args) -> int:
-    if winsupport.is_windows():
-        print("kanjo: disk command is not supported on Windows", file=sys.stderr)
-        return 2
     if getattr(args, "disk_cmd", None) == "clean":
         try:
             days = parse_older_than(args.older_than) if args.older_than else None
@@ -406,7 +424,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     def common(p, threshold=True):
-        p.add_argument("--config", metavar="PATH", help="attribution config (default ~/.config/kanjo/attribution.toml)")
+        p.add_argument("--config", metavar="PATH",
+                       help="attribution config (default ~/.config/kanjo/attribution.toml, "
+                            "or %%APPDATA%%\\kanjo\\attribution.toml on Windows)")
         if threshold:
             p.add_argument("--threshold", type=float, metavar="F",
                            help="dominant project threshold, overrides dominant_threshold (default 0.8)")

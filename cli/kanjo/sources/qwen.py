@@ -23,6 +23,7 @@ import json
 import os
 from typing import Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import Message, ParseError, Session, env_dirs, parse_iso, short_title
 
 AGENT = "qwen"
@@ -122,15 +123,15 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
 
 def _locate_qwen_root(path: str) -> str:
     """Ascend from path until finding ~/.qwen or directory containing projects/usage."""
-    cur = os.path.dirname(os.path.abspath(path))
+    cur = os.path.dirname(winsupport.abspath(path))
     while cur and cur != "/":
         if os.path.isdir(os.path.join(cur, "usage")) or os.path.isdir(os.path.join(cur, "projects")):
             return cur
         cur = os.path.dirname(cur)
     explicit = os.environ.get("KANJO_QWEN_DIR")
     if explicit:
-        return os.path.expanduser(explicit)
-    return os.path.expanduser("~/.qwen")
+        return winsupport.expanduser(explicit)
+    return winsupport.expanduser("~/.qwen")
 
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:

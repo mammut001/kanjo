@@ -110,7 +110,9 @@ def save_quota_cache(data: dict) -> None:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
             f.write("\n")
         try:
-            os.chmod(tmp, 0o600)
+            # POSIX mode bits only; Windows has no equivalent and would raise here.
+            if not winsupport.is_windows():
+                os.chmod(tmp, 0o600)
         except OSError:
             pass
         os.replace(tmp, path)
@@ -161,7 +163,7 @@ def _find_antigravity_processes() -> List[dict]:
         try:
             out = subprocess.run(
                 ["/bin/ps", "-ax", "-o", "pid=,command="],
-                capture_output=True, text=True, timeout=3, check=False
+                capture_output=True, text=True, encoding="utf-8", timeout=3, check=False
             ).stdout
         except (OSError, subprocess.SubprocessError):
             return []
@@ -204,7 +206,7 @@ def _antigravity_ports(pid: int, known_port: Optional[int]) -> List[int]:
                 try:
                     res = subprocess.run(
                         ["netstat", "-ano"],
-                        capture_output=True, text=True, timeout=5, check=False
+                        capture_output=True, text=True, encoding="utf-8", timeout=5, check=False
                     )
                     pattern = rf"^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+{int(pid)}\s*$"
                     found = [int(m.group(1)) for m in re.finditer(pattern, res.stdout, re.M | re.I)]
@@ -219,7 +221,7 @@ def _antigravity_ports(pid: int, known_port: Optional[int]) -> List[int]:
                     try:
                         res = subprocess.run(
                             [lsof, "-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", str(pid)],
-                            capture_output=True, text=True, timeout=2, check=False
+                            capture_output=True, text=True, encoding="utf-8", timeout=2, check=False
                         )
                         found = [int(v) for v in re.findall(r":(\d+)\s+\(LISTEN\)", res.stdout)]
                         for p in found:
@@ -550,15 +552,64 @@ def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
 
 
 # -----------------------------------------------------------------------------
-# 3. Claude Code (HTTPS api.anthropic.com via macOS Keychain / ~/.claude.json)
+# 3. Claude Code (HTTPS api.anthropic.com via macOS Keychain / Windows .credentials.json)
 # -----------------------------------------------------------------------------
 
+def _claude_oauth_token_from_json(raw_text: str) -> Optional[str]:
+    """``claudeAiOauth.accessToken`` from the Claude Code credentials JSON, if unexpired."""
+    try:
+        data = json.loads(raw_text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    oauth = data.get("claudeAiOauth") or {}
+    token = oauth.get("accessToken") if isinstance(oauth, dict) else None
+    if not isinstance(token, str) or not token.strip():
+        return None
+    expires_at = oauth.get("expiresAt") if isinstance(oauth, dict) else None
+    if isinstance(expires_at, (int, float)):
+        exp = float(expires_at)
+        if exp < 10_000_000_000:
+            exp *= 1000  # seconds to ms
+        if exp <= (time.time() + 30) * 1000:
+            return None  # expired
+    return token.strip()
+
+
+def claude_credentials_path() -> str:
+    """Where Claude Code keeps its OAuth credentials.
+
+    macOS uses the Keychain; on Windows Claude Code writes the same JSON blob to
+    ``%USERPROFILE%\\.claude\\.credentials.json``. ``KANJO_CLAUDE_CREDENTIALS``
+    overrides the file on any platform (tests use it).
+    """
+    explicit = os.environ.get("KANJO_CLAUDE_CREDENTIALS")
+    if explicit:
+        return os.path.expanduser(explicit)
+    return winsupport.join(winsupport.expanduser("~"), ".claude", ".credentials.json")
+
+
 def _load_claude_credentials() -> Optional[str]:
-    """Retrieve Claude Code access token from macOS Keychain via security command."""
+    """Claude Code OAuth access token: ``.credentials.json`` on Windows, Keychain on macOS.
+
+    The token is only ever returned; it is never printed or logged.
+    """
+    if winsupport.is_windows():
+        try:
+            with open(claude_credentials_path(), "r", encoding="utf-8") as handle:
+                token = _claude_oauth_token_from_json(handle.read())
+            if token:
+                return token
+            _debug_log("claude", "no_credentials")
+            return None
+        except (OSError, UnicodeDecodeError):
+            _debug_log("claude", "no_credentials")
+            return None
     try:
         res = subprocess.run(
             ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            capture_output=True, text=True, timeout=3, check=False
+            capture_output=True, text=True, encoding="utf-8", timeout=3, check=False
         )
         if res.returncode != 0:
             _debug_log("claude", "keychain_denied")
@@ -566,19 +617,7 @@ def _load_claude_credentials() -> Optional[str]:
         raw_text = res.stdout.strip()
         if not raw_text:
             return None
-        data = json.loads(raw_text)
-        if isinstance(data, dict):
-            oauth = data.get("claudeAiOauth") or {}
-            token = oauth.get("accessToken")
-            if isinstance(token, str) and token.strip():
-                expires_at = oauth.get("expiresAt")
-                if isinstance(expires_at, (int, float)):
-                    exp = float(expires_at)
-                    if exp < 10_000_000_000:
-                        exp *= 1000  # seconds to ms
-                    if exp <= (time.time() + 30) * 1000:
-                        return None  # expired
-                return token.strip()
+        return _claude_oauth_token_from_json(raw_text)
     except Exception:
         pass
     return None

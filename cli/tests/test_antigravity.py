@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest import mock
 
-from kanjo import disk
+from kanjo import disk, winsupport
 from kanjo.sources import antigravity
 
 
@@ -23,11 +23,12 @@ class AntigravitySourceTest(unittest.TestCase):
     def test_roots_default_includes_both_directories(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             r = antigravity.roots()
+            # Same strings as before on POSIX; backslashes under the profile on Windows.
             expected = [
-                os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
-                os.path.expanduser("~/.gemini/antigravity/conversations"),
-                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
-                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity-cli/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity/conversations"),
+                winsupport.expanduser("~/.gemini/antigravity-ide/conversations"),
+                winsupport.expanduser("~/.gemini/gemini-cli/conversations"),
             ]
             self.assertEqual(r, expected)
 

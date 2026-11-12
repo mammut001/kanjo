@@ -195,6 +195,7 @@ class DiskTest(unittest.TestCase):
         self.assertNotIn(memory["bytes"], (doc["reclaimable_bytes"],))  # memory is never reclaimable on its own
         self.assertEqual(doc["schema_version"], 1)
 
+    @unittest.skipIf(os.name == "nt", "os.chmod does not make a directory unreadable on Windows")
     def test_permission_errors_are_counted(self):
         secret = os.path.join(self.logs, "secret")
         self.write(os.path.join(secret, "hidden"), "nope")
@@ -284,7 +285,7 @@ class DiskTest(unittest.TestCase):
 
         expect = {}
         for path in (imported, image, meta, packed, store):
-            expect[path] = os.lstat(path).st_blocks * 512
+            expect[path] = disk._stat_bytes(os.lstat(path))
         done = self.clean(["claude:sessions"], older_than_days=5, yes=True, now=now)
         self.assertEqual(set(done["moved"]), set(expect))
         self.assertEqual(done["freed_bytes"], sum(expect.values()))
@@ -392,7 +393,7 @@ class DiskTest(unittest.TestCase):
         new = self.write(os.path.join(self.debug, "new.log"), "new")
         os.utime(old, (now - 10 * DAY, now - 10 * DAY))
         os.utime(new, (now - DAY, now - DAY))
-        expect = os.lstat(old).st_blocks * 512
+        expect = disk._stat_bytes(os.lstat(old))
         done = self.clean(["claude:debug"], older_than_days=5, yes=True, now=now)
         self.assertFalse(os.path.exists(old))
         self.assertTrue(os.path.exists(new))
@@ -462,6 +463,7 @@ class DiskTest(unittest.TestCase):
         self.assertTrue(os.path.exists(path))
         self.assertEqual(os.listdir(self.trash), [])
 
+    @unittest.skipIf(os.name == "nt", "os.symlink needs Developer Mode/admin rights on Windows")
     def test_parallel_scratch_matches_sequential_reference(self):
         for name in ("a", "b", "c", "empty"):
             os.makedirs(os.path.join(self.scratch, name))
@@ -667,7 +669,7 @@ def sequential_measure(root, now):
                 files += 1
         dirs[:] = [name for name in dirs if not os.path.islink(os.path.join(path, name))]
     newest = max(st.st_mtime for st in stats)
-    return {"bytes": sum(st.st_blocks * 512 for st in stats), "files": files,
+    return {"bytes": sum(disk._stat_bytes(st) for st in stats), "files": files,
             "oldest": min(st.st_mtime for st in stats), "newest": newest,
             "errors": 0, "active": now - newest < disk.ACTIVE_SECONDS}
 
@@ -682,7 +684,7 @@ def set_tree_mtime(path, ts):
 def git(cwd, *args):
     env = dict(os.environ)
     env["GIT_TERMINAL_PROMPT"] = "0"
-    cmd = ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+    cmd = ["git", "-c", "core.hooksPath=" + os.devnull, "-c", "commit.gpgsign=false",
            "-c", "user.email=kanjo@example.com", "-c", "user.name=kanjo"] + list(args)
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:

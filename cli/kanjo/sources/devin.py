@@ -11,6 +11,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import winsupport
 from .base import (
     Message,
     ParseError,
@@ -18,6 +19,7 @@ from .base import (
     clean_title,
     env_dirs,
     open_sqlite_ro,
+    split_path_list,
 )
 
 AGENT = "devin"
@@ -30,16 +32,25 @@ def roots() -> List[str]:
         or os.environ.get("KANJO_DEVIN_CLI_DB")
     )
     if explicit:
-        return [os.path.abspath(os.path.expanduser(p)) for p in explicit.split(os.pathsep) if p]
+        return [winsupport.abspath(winsupport.expanduser(p)) for p in split_path_list(explicit) if p]
     if os.environ.get("KANJO_DATA_DIR"):
         return []
-    candidates = [
-        os.path.expanduser("~/.local/share/devin/cli"),
-        os.path.expanduser("~/Library/Application Support/devin/cli"),
-        os.path.expanduser("~/.config/devin"),
-    ]
-    existing = [os.path.abspath(c) for c in candidates if os.path.exists(c)]
-    return existing[:1] if existing else [os.path.abspath(candidates[0])]
+    if winsupport.is_windows():
+        # Devin CLI is an XDG-style tool: same dot-dir under %USERPROFILE%, plus
+        # %LOCALAPPDATA%\devin for the desktop build.
+        candidates = [
+            winsupport.join(winsupport.local_data_dir("devin"), "cli"),
+            winsupport.expanduser("~/.devin/cli"),
+            winsupport.expanduser("~/.config/devin"),
+        ]
+    else:
+        candidates = [
+            winsupport.expanduser("~/.local/share/devin/cli"),
+            winsupport.expanduser("~/Library/Application Support/devin/cli"),
+            winsupport.expanduser("~/.config/devin"),
+        ]
+    existing = [winsupport.abspath(c) for c in candidates if os.path.exists(c)]
+    return existing[:1] if existing else [winsupport.abspath(candidates[0])]
 
 
 def _db_path(root: str) -> Optional[str]:
