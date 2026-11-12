@@ -14,7 +14,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Windows installer no longer collides with the CLI's data folder.** The Velopack pack id was `Kanjo`, so the install root `%LOCALAPPDATA%\Kanjo` was the same folder as the CLI's `%LOCALAPPDATA%\kanjo` (case-insensitive on Windows) that the family reporter already creates: setup failed with "already installed" on those machines and uninstalling would have deleted the ledger. The pack id is now `KanjoApp` (`%LOCALAPPDATA%\KanjoApp`, product name still "Kanjo"); every data path is unchanged.
-- **The installed app uses its bundled Python and CLI.** The data source defaulted to "JSON file" whenever `sourceKind` had never been written, so a fresh install rendered `sample.json` instead of this machine's usage. It now defaults to the CLI whenever a CLI directory exists (as the Mac app does), shows "Bundled CLI 0.5.1" (the bundle ships `cli/VERSION`), and the settings placeholder is the command that actually runs (`<appdir>\python\python.exe -m kanjo export`).
+- **The installed app uses its bundled Python and CLI.** The data source defaulted to "JSON file" whenever `sourceKind` had never been written, so a fresh install rendered `sample.json` instead of this machine's usage. It now defaults to the CLI whenever a CLI directory exists (as the Mac app does), shows "Bundled CLI <version>" (the bundle ships `cli/VERSION`), and the settings placeholder is the command that actually runs (`<appdir>\python\python.exe -m kanjo export`).
 - **Tray icon is the Kanjo mark.** It used to be a thin ring + cross that rendered as an orange "⊕" at 16 px. It is now the app mark (rounded tile + mosaic blocks) drawn per size (16 / 20 / 24 only carry three blocks, 32+ the full five), with a red dot for the error state.
 
 ### Changed
@@ -25,6 +25,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Project attribution compares Windows paths case-insensitively and treats `\` and `/` alike, so session cwds written by Node tools (`c:/users/...`) match repos on disk; `%TEMP%` and `%LOCALAPPDATA%\Temp` count as temporary like `/tmp`.
 - Timezones fall back to the current UTC offset when `zoneinfo` has no database (the normal case on Windows without `tzdata`): quota and billing-cycle dates still work, nothing crashes.
 - macOS-only agents (Grok Bot, QoderWork, Qoder IDE, MiMo Code) are silently skipped on Windows and listed by `kanjo doctor` / `kanjo paths` instead of erroring.
+
+## [0.5.2] - 2026-11-12
+
+### Added
+
+- **Distinct model count in the public summary.** Each period of `kanjo export --public-summary` now lists every model used (`models_used`), so a website can show how many models you used. `top_models` stays capped at 8.
+- **App Store preparation for the iOS app.** Encryption export compliance is declared in the build settings, and `ios/APP_STORE.md` holds the submission checklist, store text, privacy answers and review notes.
+
+### Fixed
+
+- **Publishing retries a failed push.** If a publish committed but the push failed (for example a git credentials problem), the next run reported "unchanged" and the commit stayed on the Mac until the numbers changed. It now pushes the pending commit. The push retry also works when the website repository has other uncommitted changes.
 
 ## [0.5.1] - 2026-11-12
 

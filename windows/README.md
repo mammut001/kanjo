@@ -220,7 +220,7 @@ Avalonia 的原生库必须和 exe 并排；**不做 trimming**，Avalonia 依�
 <install>\cli\kanjo\...               cli/kanjo 去掉 __pycache__ / *.pyc
 <install>\cli\pricing.json
 <install>\cli\pricing_overrides.json
-<install>\cli\VERSION                 设置页「Bundled CLI 0.5.1」读这个（和 Mac 的 .app 一样）
+<install>\cli\VERSION                 设置页「Bundled CLI <版本>」读这个（和 Mac 的 .app 一样）
 ```
 
 - `python312._pth` 里的 `../cli` 是相对 `python.exe` 的，所以 `<install>\cli` 直接进了 `sys.path`，
@@ -290,7 +290,7 @@ pwsh windows/scripts/smoke.ps1 -InstallDir "D:\KanjoApp\current"
 逐项打印 PASS / FAIL，任何一项失败退出码 1：
 
 1. `Kanjo.exe` 在 `%LOCALAPPDATA%\KanjoApp\current`；
-2. `python\python.exe -m kanjo --version` 输出 `kanjo 0.5.1`；
+2. `python\python.exe -m kanjo --version` 输出 `kanjo <版本>`（和仓库 VERSION 一致）；
 3. `cli\` 里 `kanjo\`、两个 pricing 文件和 `VERSION` 齐全；
 4. 在安装目录里跑 `python\python.exe -m kanjo export` 退出 0 且 stdout 是 JSON；
 5. `Kanjo.exe --print-source=<file>`：解析出来的 python 是 `<appdir>\python\python.exe`、

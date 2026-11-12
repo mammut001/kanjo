@@ -125,7 +125,10 @@ public sealed class SourceResolutionTests : KanjoTestCase
         Assert.Equal(DefaultPaths.AppDirectory, map["appDir"]);
         Assert.NotEqual("", map["python"]);
         Assert.Equal(DefaultPaths.RepoCliDirectory, map["cliDir"]);
-        Assert.Equal("0.5.1", map["cliVersion"]);
+        // The CLI version follows the repo VERSION file (bumped on every release).
+        var repoVersion = File.ReadAllText(
+            Path.Combine(Path.GetDirectoryName(DefaultPaths.RepoCliDirectory!)!, "VERSION")).Trim();
+        Assert.Equal(repoVersion, map["cliVersion"]);
     }
 
     /// <summary>诊断是只读的：不能因为读了一次就创建 / 改写设置文件。</summary>

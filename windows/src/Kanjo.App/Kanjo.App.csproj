@@ -21,7 +21,7 @@
     <FileVersion>$(Version)</FileVersion>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <!-- 版本号是三段（0.5.1），不要 SDK 自动追加 git 的短哈希。 -->
+    <!-- 版本号是三段（如 0.5.2），不要 SDK 自动追加 git 的短哈希。 -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- 应用图标（多尺寸 .ico，由 ui/Resources/Kanjo.png 转出来）：编译进 exe，资源管理器 / 任务栏都用它。 -->
     <ApplicationIcon>Assets\Kanjo.ico</ApplicationIcon>
