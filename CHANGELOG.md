@@ -6,6 +6,32 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows: the Settings page scrolls.** Scrollable pages derived from `ScrollViewer` (Settings, Overview,
+  project / bucket detail, disk) were styling themselves under their own type name, so Avalonia never applied
+  the Fluent `ScrollViewer` control theme: no `ScrollContentPresenter` was created and `Extent` stayed 0, which
+  made the wheel, the scrollbar thumb and touch panning do nothing. They now share a `ScrollPage` base that
+  restores the base style key. The mouse wheel over a closed ComboBox, a NumericUpDown or a single-line TextBox
+  now scrolls the page instead of changing its value (an open ComboBox drop-down still scrolls its own list, and
+  a nested scroller still wins until it reaches its edge).
+
+### Changed
+
+- **Windows: Fluent (Windows 11) redesign.** Surfaces, cards, type ramp and every colour token now follow
+  WinUI: Mica when the OS has it and a solid `#F3F3F3` / `#202020` fallback otherwise, 8px cards with a 1px
+  stroke and 16px padding (4px between cards in a group, 24px between groups), Segoe UI Variable with the
+  28 / 20 / 14 / 14 / 12 ramp, sentence-case BodyStrong section headers instead of grey ALL-CAPS, the Windows
+  accent colour (`AccentColor1`) for links and the primary button, Fluent ToggleSwitch / ComboBox / SelectorBar
+  pills, and an InfoBar for the `--data` warning. Text colours are solid rather than alpha-on-grey: primary
+  ≥ 12:1, secondary and captions ≥ 4.5:1, disabled text and strokes ≥ 3:1 against the surface they sit on
+  (`ContrastTests` asserts every pair in light and dark). Text on the treemap picks white or near-black per tile.
+- **Windows: smoother navigation.** Pages cross-fade with an 8px slide over 150 ms, the tray panel fades and
+  slides up over the same 150 ms, hover and press states run at 90 ms, and going back to the overview restores
+  its scroll position. All motion is skipped when the system animation setting is off or under `--snapshot`.
+  Opening Settings no longer blocks the UI thread on the CLI plan list (it loads in the background), and agents
+  without subscription info sit behind a "Show N more" link.
+
 ## [0.5.2] - 2026-11-12
 
 ### Added

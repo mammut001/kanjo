@@ -13,33 +13,19 @@ namespace Kanjo.App.Views;
 /// 按模型 → 不在项目里 → 对账 + 页脚。几何与 Mac 参考截图对齐。
 /// 所有「左内容 + 右对齐数值」的行都用 Grid 的 `*,Auto` 列，和 SwiftUI 的 Spacer 等价。
 /// </summary>
-public sealed class OverviewPage : ScrollViewer, ISnapshotPage
+public sealed class OverviewPage : ScrollPage
 {
-    /// <summary>截图模式：交出内容本身（不含滚动容器），由面板按整页高度渲染。</summary>
-    public Control SnapshotBody
-    {
-        get
-        {
-            var content = Content as Control ?? new Panel();
-            Content = null;
-            return content;
-        }
-    }
-
     private readonly AppServices _services;
     private readonly string? _anchor;
     private readonly bool _snapshot;
     private bool _showHidden;
     private bool _showAllModels;
 
-    public OverviewPage(AppServices services, string? anchor, bool snapshot)
+    public OverviewPage(AppServices services, string? anchor, bool snapshot) : base(snapshot)
     {
         _services = services;
         _anchor = anchor;
         _snapshot = snapshot;
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-        VerticalScrollBarVisibility = snapshot ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-        Background = Brushes.Transparent;
         Content = _services.Report is null ? ErrorOrLoading() : LoadedContent();
         if (snapshot)
         {
@@ -101,18 +87,19 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         var report = Report;
         var root = Ui.V(Metrics.SectionSpacing);
 
-        var heroBlock = Ui.V(TextListSpacing);
-        heroBlock.Children.Add(Hero(report, ctx, filtered, arranged.Visible, arranged.Hidden.Count)
-            .WithMargin(ContentInset, 0));
+        // Hero 卡片：标题 + 范围胶囊 + 大号金额 + 摘要 + 范围说明。
+        var heroBlock = Ui.V(10);
+        heroBlock.Children.Add(Hero(report, ctx, filtered, arranged.Visible, arranged.Hidden.Count));
+        root.Children.Add(Chrome.Card(heroBlock, Metrics.RowInset, 14));
+
         if (report.Subscriptions is { Count: > 0 })
         {
-            heroBlock.Children.Add(SubscriptionValueCard(report));
+            root.Children.Add(SubscriptionValueCard(report));
         }
         if (arranged.Visible.Any(p => p.Cost > 0))
         {
-            heroBlock.Children.Add(Mosaic(report, arranged.Visible));
+            root.Children.Add(MosaicCard(report, arranged.Visible));
         }
-        root.Children.Add(heroBlock);
 
         root.Children.Add(ProjectsSection(report, filtered, arranged, ctx));
         root.Children.Add(ModelsSection(report, filtered));
@@ -122,11 +109,11 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         if (ctx.IsAll) footer.Children.Add(ReconciliationLine(report));
         footer.Children.Add(Ui.Text(
             L10n.TrL(null, "overview.generated_footer", Fmt.Timestamp(report.GeneratedAt), report.SchemaVersion),
-            10, null, Palette.Tertiary));
-        footer.Margin = new Thickness(ContentInset, 0, ContentInset, 0);
+            Type.CaptionSize, null, Palette.Tertiary));
+        footer.Margin = new Thickness(4, 0, 4, 0);
         root.Children.Add(footer);
 
-        root.Margin = new Thickness(0, 16, 0, 10);
+        root.Margin = new Thickness(Metrics.PagePadding, 16, Metrics.PagePadding, 16);
         return root;
     }
 
@@ -136,10 +123,10 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         box.Margin = new Thickness(ContentInset, 28, ContentInset, 0);
         if (_services.Error is { } error)
         {
-            box.Children.Add(Ui.Text(L10n.Tr("menu.error_title"), 14, FontWeight.SemiBold, Palette.Bad));
+            box.Children.Add(Ui.Text(L10n.Tr("menu.error_title"), 15, FontWeight.SemiBold, Palette.Bad));
             box.Children.Add(new Border
             {
-                Child = Ui.Text(error, 11, null, Palette.Foreground, wrap: true, mono: true),
+                Child = Ui.Text(error, 12, null, Palette.Foreground, wrap: true, mono: true),
                 Padding = new Thickness(10),
                 CornerRadius = new CornerRadius(8),
                 Background = Palette.BadFill,
@@ -158,11 +145,11 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
             }));
             actions.Children.Add(Ui.BorderedButton(L10n.Tr("menu.open_settings"), () => _services.RequestNavigate(AppRoute.Settings)));
             box.Children.Add(actions);
-            box.Children.Add(Ui.Text(L10n.Tr("menu.expected_export_json"), 10.5, null, Palette.Secondary, wrap: true));
+            box.Children.Add(Ui.Text(L10n.Tr("menu.expected_export_json"), 12, null, Palette.Secondary, wrap: true));
             return box;
         }
-        box.Children.Add(Ui.Text(L10n.Tr("common.loading"), 11, FontWeight.Medium, Palette.Secondary));
-        box.Children.Add(Ui.Text(FirstScanHint.Explanation(), 11, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(L10n.Tr("common.loading"), 12, FontWeight.Medium, Palette.Secondary));
+        box.Children.Add(Ui.Text(FirstScanHint.Explanation(), 12, null, Palette.Secondary, wrap: true));
         return box;
     }
 
@@ -183,13 +170,14 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
     private Control Hero(UsageReport report, RangeContext ctx, FilteredReport filtered,
         IReadOnlyList<Project> visible, int hiddenCount)
     {
-        var box = Ui.V(3);
+        var box = Ui.V(4);
 
-        var title = Ui.H(4);
-        title.Children.Add(Ui.Text(L10n.Tr("overview.total_cost"), 11, null, Palette.Secondary));
+        var title = Ui.H(6);
+        title.Children.Add(Ui.Text(L10n.Tr("overview.total_cost"), Type.CaptionSize, FontWeight.SemiBold,
+            Palette.Secondary));
         if (report.CostNoteDisplayText is { } note)
         {
-            title.Children.Add(Icons.InfoCircle(11, Palette.Secondary));
+            title.Children.Add(Icons.InfoCircle(12, Palette.Secondary));
             ToolTip.SetTip(title, note);
         }
         var picker = new RangePicker(
@@ -201,18 +189,19 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 _services.NotifyChanged();
             });
 
-        box.Children.Add(Ui.Columns(
+        var titleRow = Ui.Columns(
             (title, new GridLength(1, GridUnitType.Star)),
-            (picker, GridLength.Auto)));
+            (picker, GridLength.Auto));
+        box.Children.Add(titleRow);
 
-        box.Children.Add(Widgets.HeroAmount(Fmt.Money(filtered.Cost, report.Currency), 34));
+        box.Children.Add(Widgets.HeroAmount(Fmt.Money(filtered.Cost, report.Currency), 36));
 
         var rangeText = filtered.FirstActive is null && !ctx.IsAll
             ? L10n.Tr("overview.no_usage")
             : ShortDate.Range(filtered.FirstActive, filtered.LastActive, compact: true);
         var summary = OverviewSummaryText.Make(ctx.Range, rangeText, visible.Count, filtered.Sessions,
             filtered.Tokens, hiddenCount);
-        box.Children.Add(Ui.Text(summary, 11, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(summary, Type.CaptionSize, null, Palette.Secondary, wrap: true));
 
         if (ctx.CaptionResult is { } caption)
         {
@@ -221,12 +210,13 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         return box;
     }
 
-    private Control Mosaic(UsageReport report, IReadOnlyList<Project> visible)
+    /// <summary>马赛克卡片：白卡 + 圆角，色块本身贴着卡片内侧。</summary>
+    private Control MosaicCard(UsageReport report, IReadOnlyList<Project> visible)
     {
-        var width = Metrics.PanelWidth - Metrics.MosaicInset * 2;
+        var width = Metrics.PanelWidth - Metrics.PagePadding * 2 - Metrics.RowInset * 2;
         var host = new Panel { Height = MosaicLayout.DefaultHeight };
         host.Children.Add(new MosaicView(visible, width, report.Currency, report.AgentLabels()));
-        return host.WithMargin(Metrics.MosaicInset, 0);
+        return Chrome.Card(host, Metrics.RowInset, Metrics.RowInset);
     }
 
     // MARK: - 订阅价值
@@ -242,21 +232,20 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         var expanded = _services.SubscriptionCardExpanded || autoExpand;
         var visible = SubscriptionOrder.Visible(ordered, expanded, limit: 3);
 
-        var section = Ui.V(0);
-        section.Children.Add(SectionHeader(L10n.Tr("overview.section.subscription_value")));
-        section.Children.Add(new Panel { Height = 1 });
+        var body = Ui.V(0);
+        body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
 
         for (var i = 0; i < visible.Count; i++)
         {
-            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            var line = SubscriptionLine(report, visible[i]).WithMargin(ContentInset, 4.5);
+            if (i > 0) body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+            var line = SubscriptionLine(report, visible[i]).WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8);
             MakeReorderable(line, visible[i].Agent, ordered.Select(r => r.Agent).ToList());
-            section.Children.Add(line);
+            body.Children.Add(line);
         }
 
         if (ordered.Count > 3)
         {
-            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
+            body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
             var label = expanded
                 ? L10n.Tr("overview.subscription_value.show_less")
                 : L10n.TrL(null, "overview.subscription_value.show_more", ordered.Count - 3);
@@ -265,14 +254,18 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 _services.SubscriptionCardExpanded = !_services.SubscriptionCardExpanded;
                 _services.NotifyChanged();
             });
-            section.Children.Add(toggle.WithMargin(ContentInset, 6, ContentInset, 6));
+            body.Children.Add(toggle.WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8));
         }
 
-        var explanation = Ui.Text(L10n.Tr("overview.subscription_value.explanation"), 10.5, null,
+        var explanation = Ui.Text(L10n.Tr("overview.subscription_value.explanation"), Type.CaptionSize, null,
             Palette.Tertiary, wrap: true);
-        section.Children.Add(explanation.WithMargin(ContentInset, 3, ContentInset, 6));
+        body.Children.Add(explanation.WithMargin(Metrics.RowInset, 4, Metrics.RowInset, 10));
 
-        if (RenewalNudgeLine(report) is { } nudge) section.Children.Add(nudge);
+        if (RenewalNudgeLine(report) is { } nudge) body.Children.Add(nudge);
+
+        var section = Ui.V(8);
+        section.Children.Add(SectionHeader(L10n.Tr("overview.section.subscription_value")));
+        section.Children.Add(Chrome.CardBare(body));
         return section;
     }
 
@@ -373,7 +366,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         var plan = Ui.Text(row.PlanLabel, 12);
         plan.VerticalAlignment = VerticalAlignment.Center;
         left.Children.Add(plan);
-        left.Children.Add(Ui.Text($"· {Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency)}", 11, null,
+        left.Children.Add(Ui.Text($"· {Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency)}", 12, null,
             Palette.Secondary));
         if (row.ExtraUsageEnabled)
         {
@@ -381,10 +374,10 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 L10n.Tr("overview.extra_usage_help")));
         }
 
-        var amount = Ui.Text(Fmt.Money(row.Usage, report.Currency), 12, FontWeight.Medium, family: Type.Rounded);
+        var amount = Ui.Text(Fmt.Money(row.Usage, report.Currency), 14, FontWeight.Medium, family: Type.Rounded);
         amount.TextAlignment = TextAlignment.Right;
-        var dot = Ui.Text("·", 11, null, Palette.Tertiary);
-        var multiple = Ui.Text(Fmt.Multiple(row.Multiplier), 11.5, FontWeight.Medium, Palette.Secondary);
+        var dot = Ui.Text("·", 12, null, Palette.Tertiary);
+        var multiple = Ui.Text(Fmt.Multiple(row.Multiplier), 13, FontWeight.Medium, Palette.Secondary);
         multiple.TextAlignment = TextAlignment.Right;
         multiple.MinWidth = 42;
 
@@ -402,7 +395,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         {
             var timezone = RangeEngine.TimezoneOf(report);
             var caption = Fmt.CycleCaption(sub, timezone, _services.Now);
-            var captionText = Ui.Text(caption, 10, null, Palette.Secondary, wrap: true)
+            var captionText = Ui.Text(caption, 12, null, Palette.Secondary, wrap: true)
                 .WithMargin(11, 0, 0, 0);
             if (SubscriptionValue.NeedsRenewalDay(sub)) ToolTip.SetTip(captionText, SubscriptionValue.AssumedDayHelp);
             else ToolTip.SetTip(captionText, Fmt.CycleDates(sub, timezone));
@@ -415,14 +408,13 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 
     private Control ProjectsSection(UsageReport report, FilteredReport filtered, Lists lists, RangeContext ctx)
     {
-        var section = Ui.V(0);
-        section.Children.Add(SectionHeader(L10n.Tr("settings.section.projects")));
+        var body = Ui.V(0);
 
         var legend = LegendAgents(filtered);
         if (legend.Count > 0)
         {
-            section.Children.Add(Widgets.Legend(legend, report.Currency)
-                .WithMargin(ContentInset, 2, ContentInset - 8, 6));
+            body.Children.Add(Widgets.Legend(legend, report.Currency)
+                .WithMargin(Metrics.RowInset, 10, Metrics.RowInset - 6, 4));
         }
 
         if (lists.Visible.Count == 0)
@@ -432,7 +424,8 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 : lists.Idle > 0
                     ? L10n.Tr("overview.projects.no_usage_range")
                     : L10n.Tr("overview.projects.all_hidden");
-            section.Children.Add(Ui.Text(text, 11, null, Palette.Secondary).WithMargin(ContentInset, 8, 0, 8));
+            body.Children.Add(Ui.Text(text, Type.CaptionSize, null, Palette.Secondary)
+                .WithMargin(Metrics.RowInset, 10, Metrics.RowInset, 12));
         }
 
         var heatEnd = HeatEndDate(report);
@@ -442,24 +435,28 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 
         for (var i = 0; i < lists.Visible.Count; i++)
         {
-            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            section.Children.Add(ProjectRow(lists.Visible[i], report.Currency, heatEnd, timezone, labels,
+            if (i > 0 || legend.Count > 0) body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+            body.Children.Add(ProjectRow(lists.Visible[i], report.Currency, heatEnd, timezone, labels,
                 pinned.Contains(lists.Visible[i].Id), i));
         }
 
         if (lists.Hidden.Count > 0)
         {
-            if (lists.Visible.Count > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            section.Children.Add(HiddenFooter(report, lists.Hidden));
+            if (lists.Visible.Count > 0) body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+            body.Children.Add(HiddenFooter(report, lists.Hidden));
         }
         if (!ctx.IsAll && lists.Idle > 0)
         {
-            section.Children.Add(Ui.Text(
+            body.Children.Add(Ui.Text(
                 lists.Idle == 1
                     ? L10n.TrL(null, "overview.projects.idle.singular", lists.Idle)
                     : L10n.TrL(null, "overview.projects.idle.plural", lists.Idle),
-                10.5, null, Palette.Tertiary).WithMargin(ContentInset, 6, 0, 6));
+                Type.CaptionSize, null, Palette.Tertiary).WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 10));
         }
+
+        var section = Ui.V(8);
+        section.Children.Add(SectionHeader(L10n.Tr("settings.section.projects")));
+        section.Children.Add(Chrome.CardBare(body));
         return section;
     }
 
@@ -509,7 +506,8 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
             Padding = new Thickness(ContentInset, Metrics.RowPadV, ContentInset, Metrics.RowPadV),
             CornerRadius = new CornerRadius(Metrics.RowRadius),
             Background = Brushes.Transparent,
-            Cursor = new Cursor(StandardCursorType.Hand),
+            // 指针默认是箭头：Windows 只在链接上用小手，列表行不是链接。
+            Cursor = new Cursor(StandardCursorType.Arrow),
         };
         ToolTip.SetTip(row, project.Id);
 
@@ -521,7 +519,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
             topLeft.Children.Add(Icons.Pin(8.5, Palette.Pin));
             ToolTip.SetTip(topLeft.Children[^1], L10n.Tr("overview.badge.pinned"));
         }
-        topLeft.Children.Add(Ui.Text(project.Name, 12.5, FontWeight.Medium));
+        topLeft.Children.Add(Ui.Text(project.Name, 14, FontWeight.Medium));
         var dots = Widgets.AgentDots(project.ByAgent, currency, 6, $"overview:hover:dots:{index}");
         topLeft.Children.Add(dots);
         if (project.PathMissing)
@@ -537,7 +535,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 
         var top = Ui.Columns(
             (topLeft, new GridLength(1, GridUnitType.Star)),
-            (Ui.Text(Fmt.Money(project.Cost, currency), 12.5, FontWeight.Medium), GridLength.Auto));
+            (Ui.Text(Fmt.Money(project.Cost, currency), 14, FontWeight.Medium), GridLength.Auto));
         box.Children.Add(top);
 
         var sessions = project.Sessions == 1
@@ -545,7 +543,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive))
             : L10n.TrL(null, "overview.row.subtitle.plural", project.Sessions,
                 Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive));
-        var subtitle = Ui.Text(sessions, 10.5, null, Palette.Secondary);
+        var subtitle = Ui.Text(sessions, 12, null, Palette.Secondary);
         ToolTip.SetTip(subtitle, L10n.TrL(null, "overview.row.last_active", Fmt.Day(project.LastActive)));
 
         var weeks = HeatStrip.Weekly(project.ByDay, heatEnd, RangeContext.FallbackAgent(project),
@@ -688,11 +686,11 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 if (i > 0) box.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
                 var hiddenRow = Ui.H(6);
                 hiddenRow.Margin = new Thickness(ContentInset, 5, ContentInset - 4, 5);
-                var name = Ui.Text(project.Name, 11.5, null, Palette.Secondary, maxLines: 1);
+                var name = Ui.Text(project.Name, 13, null, Palette.Secondary, maxLines: 1);
                 hiddenRow.Children.Add(name);
                 var spacer = new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
                 hiddenRow.Children.Add(spacer);
-                hiddenRow.Children.Add(Ui.Text(Fmt.Money(project.Cost, report.Currency), 11.5, null,
+                hiddenRow.Children.Add(Ui.Text(Fmt.Money(project.Cost, report.Currency), 13, null,
                     Palette.Secondary, family: Type.Rounded));
                 hiddenRow.Children.Add(RowIconButton(Icons.Eye(10, Palette.Secondary),
                     L10n.Tr("overview.action.unhide"), () => Unhide(project.Id)));
@@ -708,33 +706,37 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
     private Control ModelsSection(UsageReport report, FilteredReport filtered)
     {
         var models = ModelAggregation.Aggregate(filtered);
-        var section = Ui.V(0);
-        section.Children.Add(SectionHeader(L10n.Tr("overview.section.by_model")));
+        var body = Ui.V(0);
         if (models.Count == 0)
         {
-            section.Children.Add(Ui.Text(L10n.Tr("overview.models.no_usage_range"), 11, null, Palette.Secondary)
-                .WithMargin(ContentInset, 8, 0, 8));
-            return section;
+            body.Children.Add(Ui.Text(L10n.Tr("overview.models.no_usage_range"), Type.CaptionSize, null,
+                Palette.Secondary).WithMargin(Metrics.RowInset, 10, Metrics.RowInset, 12));
+        }
+        else
+        {
+            var shown = _showAllModels ? models : models.Take(8).ToList();
+            for (var i = 0; i < shown.Count; i++)
+            {
+                if (i > 0) body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+                body.Children.Add(ModelRow(shown[i], report.Currency, i));
+            }
+            if (models.Count > 8)
+            {
+                body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+                var label = _showAllModels
+                    ? L10n.Tr("common.show_fewer")
+                    : L10n.TrL(null, "overview.models.more", models.Count - 8);
+                body.Children.Add(Ui.LinkButton(label, () =>
+                {
+                    _showAllModels = !_showAllModels;
+                    _services.NotifyChanged();
+                }, Type.CaptionSize).WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8));
+            }
         }
 
-        var shown = _showAllModels ? models : models.Take(8).ToList();
-        for (var i = 0; i < shown.Count; i++)
-        {
-            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            section.Children.Add(ModelRow(shown[i], report.Currency, i));
-        }
-        if (models.Count > 8)
-        {
-            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            var label = _showAllModels
-                ? L10n.Tr("common.show_fewer")
-                : L10n.TrL(null, "overview.models.more", models.Count - 8);
-            section.Children.Add(Ui.LinkButton(label, () =>
-            {
-                _showAllModels = !_showAllModels;
-                _services.NotifyChanged();
-            }, 10.5).WithMargin(ContentInset, 6, ContentInset, 6));
-        }
+        var section = Ui.V(8);
+        section.Children.Add(SectionHeader(L10n.Tr("overview.section.by_model")));
+        section.Children.Add(Chrome.CardBare(body));
         return section;
     }
 
@@ -743,7 +745,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
     {
         var left = Ui.H(6);
         left.Children.Add(Ui.Dot(model.Agent));
-        var name = Ui.Text(model.Model, 11.5, family: Type.Mono, maxLines: 1);
+        var name = Ui.Text(model.Model, 13, family: Type.Mono, maxLines: 1);
         name.TextTrimming = TextTrimming.CharacterEllipsis;
         left.Children.Add(name);
         if (model.Estimated)
@@ -752,9 +754,9 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
                 L10n.Tr("project.estimated_help")));
         }
 
-        var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 11, FontWeight.Medium);
+        var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 12, FontWeight.Medium);
         tokens.TextAlignment = TextAlignment.Right;
-        var cost = Ui.Text(Fmt.Money(model.Cost, currency), 10.5, null, Palette.Secondary)
+        var cost = Ui.Text(Fmt.Money(model.Cost, currency), 12, null, Palette.Secondary)
             .WithMargin(6, 0, 0, 0);
         cost.TextAlignment = TextAlignment.Right;
 
@@ -777,16 +779,14 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 
     private Control BucketsSection(UsageReport report, FilteredReport filtered)
     {
-        var section = Ui.V(0);
-        section.Children.Add(SectionHeader(L10n.Tr("overview.section.not_in_project")));
-
-        section.Children.Add(BucketRow(L10n.Tr("overview.unattributed"), L10n.Tr("overview.unattributed_desc"),
+        var body = Ui.V(0);
+        body.Children.Add(BucketRow(L10n.Tr("overview.unattributed"), L10n.Tr("overview.unattributed_desc"),
             filtered.Unattributed.Sessions, Fmt.Money(filtered.Unattributed.Cost, report.Currency),
             filtered.Unattributed.SessionsDetail.Count == 0
                 ? null
                 : () => _services.RequestNavigate(AppRoute.BucketDetail("unattributed"))));
-        section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-        section.Children.Add(BucketRow(L10n.Tr("overview.excluded"), L10n.Tr("overview.excluded_desc"),
+        body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+        body.Children.Add(BucketRow(L10n.Tr("overview.excluded"), L10n.Tr("overview.excluded_desc"),
             filtered.Excluded.Sessions, Fmt.Money(filtered.Excluded.Cost, report.Currency),
             filtered.Excluded.SessionsDetail.Count == 0
                 ? null
@@ -794,9 +794,13 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 
         if (report.Buckets.ParseFailed.Sessions > 0)
         {
-            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
-            section.Children.Add(new ParseFailedRow(report.Buckets.ParseFailed));
+            body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
+            body.Children.Add(new ParseFailedRow(report.Buckets.ParseFailed));
         }
+
+        var section = Ui.V(8);
+        section.Children.Add(SectionHeader(L10n.Tr("overview.section.not_in_project")));
+        section.Children.Add(Chrome.CardBare(body));
         return section;
     }
 
@@ -809,10 +813,10 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
         var count = sessions == 1
             ? L10n.TrL(null, "overview.count.session.singular", sessions)
             : L10n.TrL(null, "overview.count.session.plural", sessions);
-        var sessionsText = Ui.Text(count, 10.5, null, Palette.Secondary);
+        var sessionsText = Ui.Text(count, 12, null, Palette.Secondary);
         sessionsText.TextAlignment = TextAlignment.Right;
 
-        var valueText = Ui.Text(value, 12, FontWeight.Medium, family: Type.Rounded);
+        var valueText = Ui.Text(value, 14, FontWeight.Medium, family: Type.Rounded);
         valueText.TextAlignment = TextAlignment.Right;
         valueText.MinWidth = 52;
 
@@ -820,7 +824,7 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
             (Ui.Text(name, 12), new GridLength(1, GridUnitType.Star)),
             (sessionsText, GridLength.Auto),
             (valueText.WithMargin(8, 0, 0, 0), GridLength.Auto)));
-        box.Children.Add(Ui.Text(desc, 10, null, Palette.Secondary, wrap: true, maxLines: 2));
+        box.Children.Add(Ui.Text(desc, 12, null, Palette.Secondary, wrap: true, maxLines: 2));
 
         if (action is null) return box;
         var clickable = new Clickable(box, action, L10n.Tr("overview.show_these_sessions"),
@@ -851,13 +855,17 @@ public sealed class OverviewPage : ScrollViewer, ISnapshotPage
             return line;
         }
         line.Children.Add(Icons.WarnTriangle(10, Palette.Bad));
-        line.Children.Add(Ui.Text(L10n.Tr("overview.reconcile_failed"), 12, FontWeight.SemiBold, Palette.Bad));
+        line.Children.Add(Ui.Text(L10n.Tr("overview.reconcile_failed"), 14, FontWeight.SemiBold, Palette.Bad));
         return line;
     }
 
     // MARK: - 版式
 
-    /// <summary>一节的小号全大写标题（左对齐，左右留 ContentInset）。</summary>
-    private static Control SectionHeader(string title) =>
-        Ui.SectionTitle(title).WithMargin(ContentInset, 0, ContentInset, 4);
+    /// <summary>一节的标题（BodyStrong 14 semibold、正文色，句首大写），左对齐。</summary>
+    private static Control SectionHeader(string title)
+    {
+        var label = Ui.SectionTitle(title);
+        label.Margin = new Thickness(2, 0, 2, 0);
+        return label;
+    }
 }

@@ -126,7 +126,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
         box.Children.Add(new Panel { Height = 60 });
         var spinner = new Spinner(16) { HorizontalAlignment = HorizontalAlignment.Center };
         box.Children.Add(spinner);
-        var text = Ui.Text(L10n.Tr("disk.loading"), 11, null, Palette.Secondary);
+        var text = Ui.Text(L10n.Tr("disk.loading"), 12, null, Palette.Secondary);
         text.TextAlignment = TextAlignment.Center;
         box.Children.Add(text);
         return box;
@@ -141,22 +141,21 @@ public sealed class DiskPage : Grid, ISnapshotPage
         box.Children.Add(back);
         var title = Ui.H(4);
         title.Children.Add(Icons.WarnTriangle(11, Palette.Bad));
-        title.Children.Add(Ui.Text(L10n.Tr("disk.error_title"), 14, FontWeight.SemiBold, Palette.Bad));
+        title.Children.Add(Ui.Text(L10n.Tr("disk.error_title"), 15, FontWeight.SemiBold, Palette.Bad));
         box.Children.Add(title);
         box.Children.Add(new Border
         {
-            Child = Ui.Text(message, 11, null, Palette.Foreground, wrap: true, mono: true),
+            Child = Ui.Text(message, 12, null, Palette.Foreground, wrap: true, mono: true),
             Padding = new Thickness(10),
             CornerRadius = new CornerRadius(8),
             Background = Palette.BadFill,
         });
-        box.Children.Add(Ui.Text(L10n.TrL(null, "settings.current_source", _services.Disk.SourceDescription),
-            10.5, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(L10n.TrL(null, "settings.current_source", _services.Disk.SourceDescription), 12, null, Palette.Secondary, wrap: true));
         var actions = Ui.H(8);
         actions.Children.Add(Ui.ProminentButton(L10n.Tr("common.retry"), () => _services.Disk.Refresh(rescan: true)));
         actions.Children.Add(Ui.BorderedButton(L10n.Tr("menu.open_settings"), _onSettings));
         box.Children.Add(actions);
-        box.Children.Add(Ui.Text(L10n.Tr("disk.expected_json"), 10.5, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(L10n.Tr("disk.expected_json"), 12, null, Palette.Secondary, wrap: true));
         return box;
     }
 
@@ -165,14 +164,9 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var agents = report.Agents.OrderByDescending(a => a.Bytes).ToList();
         var maxBytes = agents.Count == 0 ? 0 : agents.Max(a => a.Bytes);
 
-        var scroll = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = _snapshot
-                ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
-                : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Background = Brushes.Transparent,
-        };
+        // 用 ScrollPage（不是裸 ScrollViewer）：这样滚轮策略和别的页面一致，
+        // 指针停在下拉 / 输入框上时也滚页面。
+        var scroll = new ScrollPage(_snapshot);
 
         var root = Ui.V(Metrics.SectionSpacing);
         var back = Back();
@@ -184,16 +178,16 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var content = Ui.V(12);
         if (agents.Count == 0)
         {
-            content.Children.Add(Ui.Text(L10n.Tr("disk.no_disk_usage"), 11, null, Palette.Secondary));
+            content.Children.Add(Ui.Text(L10n.Tr("disk.no_disk_usage"), 12, null, Palette.Secondary));
         }
         foreach (var agent in agents) content.Children.Add(AgentBlock(agent, maxBytes));
-        var section = Chrome.Section(L10n.Tr("disk.by_agent"), content, padding: Metrics.RowInset);
+        var section = Chrome.LegacySection(L10n.Tr("disk.by_agent"), content);
         root.Children.Add(section);
 
         if (_actionError is { } banner && _pending is null)
         {
             root.Children.Add(Widgets.StatusBlock(true,
-                [Ui.Text(banner, 10.5, null, Palette.Bad, wrap: true)])
+                [Ui.Text(banner, 12, null, Palette.Bad, wrap: true)])
                 .WithMargin(Metrics.RowInset, 0, Metrics.RowInset, 0));
         }
 
@@ -217,14 +211,14 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var box = Ui.V(6);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var left = Ui.V(1);
-        left.Children.Add(Ui.Text(L10n.Tr("disk.total"), 11, null, Palette.Secondary));
+        left.Children.Add(Ui.Text(L10n.Tr("disk.total"), 12, null, Palette.Secondary));
         left.Children.Add(Widgets.HeroAmount(Fmt.Bytes(report.TotalBytes), 28));
         Grid.SetColumn(left, 0);
         top.Children.Add(left);
 
         var right = Ui.V(1);
         right.HorizontalAlignment = HorizontalAlignment.Right;
-        var reclaimLabel = Ui.Text(L10n.Tr("disk.reclaimable"), 11, null, Palette.Secondary);
+        var reclaimLabel = Ui.Text(L10n.Tr("disk.reclaimable"), 12, null, Palette.Secondary);
         reclaimLabel.TextAlignment = TextAlignment.Right;
         right.Children.Add(reclaimLabel);
         var reclaim = Widgets.HeroAmount(Fmt.Bytes(report.ReclaimableBytes), 28, Palette.Accent);
@@ -237,20 +231,20 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var captionRow = Ui.H(4);
         // 和 Mac 一样按真实时钟算「Scanned N min ago」（DiskView 里是 TimelineView(.now)），
         // 不用截图模式的固定时间：扫描时间本身就是数据里的值。
-        captionRow.Children.Add(Ui.Text(DiskScanCaption.Text(report, DateTimeOffset.UtcNow), 10.5, null,
+        captionRow.Children.Add(Ui.Text(DiskScanCaption.Text(report, DateTimeOffset.UtcNow), 12, null,
             Palette.Secondary));
         // `disk:expanded` 的 Mac 参考图是在重扫过程中截的：这里同样显示「· rescanning…」+ 转圈。
         if (_services.Disk.IsRescanning || (_snapshot && _expandAll))
         {
             // 资源串本身带「· 」前缀（Swift 里是独立的一段 Text）。
-            captionRow.Children.Add(Ui.Text(L10n.Tr("disk.rescanning"), 10.5, null, Palette.Secondary));
+            captionRow.Children.Add(Ui.Text(L10n.Tr("disk.rescanning"), 12, null, Palette.Secondary));
             captionRow.Children.Add(new Spinner(9));
         }
         box.Children.Add(captionRow);
 
         var note = Ui.H(4);
         note.Children.Add(Icons.InfoCircle(10, Palette.Tertiary));
-        note.Children.Add(Ui.Text(L10n.Tr("disk.ledger_note"), 10.5, null, Palette.Tertiary, wrap: true));
+        note.Children.Add(Ui.Text(L10n.Tr("disk.ledger_note"), 12, null, Palette.Tertiary, wrap: true));
         box.Children.Add(note);
         return box;
     }
@@ -258,7 +252,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
     private Control AgePicker()
     {
         var box = Ui.V(4);
-        box.Children.Add(Ui.Text(L10n.Tr("disk.older_than"), 11, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(L10n.Tr("disk.older_than"), 12, null, Palette.Secondary));
         var options = DiskAges.All.Select(a => a.Label()).ToList();
         var segmented = new SegmentedControl(options, DiskAges.All.ToList().IndexOf(_age), index =>
         {
@@ -291,8 +285,8 @@ public sealed class DiskPage : Grid, ISnapshotPage
             Width = 6, Height = 6, Fill = Palette.Agent(agent.Agent), VerticalAlignment = VerticalAlignment.Center,
         });
         left.Children.Add(Ui.Text(agent.Label, 12));
-        left.Children.Add(Ui.Text("·", 12, null, Palette.Tertiary));
-        left.Children.Add(Ui.Text(Fmt.Bytes(agent.Bytes), 12, FontWeight.Medium, family: Type.Rounded));
+        left.Children.Add(Ui.Text("·", 14, null, Palette.Tertiary));
+        left.Children.Add(Ui.Text(Fmt.Bytes(agent.Bytes), 14, FontWeight.Medium, family: Type.Rounded));
         Grid.SetColumn(left, 0);
         line.Children.Add(left);
         var chevron = Icons.Chevron(open, 9, Palette.Tertiary);
@@ -333,15 +327,29 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions($"{slot},Auto,*,Auto") };
         if (entry.IsReclaimable)
         {
+            // 磁盘行是「勾选若干条」的语义，所以仍然是 CheckBox（不是 ToggleSwitch）。
             var checkedNow = _selected.Contains(entry.Id);
-            var check = new CheckBoxControl(checkedNow, _checking || _applying || _pending is not null, () =>
+            var locked = _checking || _applying || _pending is not null;
+            var check = new CheckBox
             {
-                if (!_selected.Remove(entry.Id)) _selected.Add(entry.Id);
+                IsChecked = checkedNow,
+                IsEnabled = !locked,
+                MinWidth = 0,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                // Fluent 的 CheckBox 模板自带 32px 的高度和左边距，这里压回 16px 的槽位。
+                MinHeight = slot,
+                Height = slot,
+                Width = slot,
+            };
+            check.IsCheckedChanged += (_, _) =>
+            {
+                if (check.IsChecked == true) _selected.Add(entry.Id);
+                else _selected.Remove(entry.Id);
                 Rebuild();
-            });
+            };
             ToolTip.SetTip(check, L10n.TrL(null, "disk.clean_path", entry.Path));
-            check.VerticalAlignment = VerticalAlignment.Center;
-            check.HorizontalAlignment = HorizontalAlignment.Center;
             Grid.SetColumn(check, 0);
             top.Children.Add(check);
         }
@@ -365,7 +373,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
 
         var detail = Ui.V(2);
         detail.Margin = new Thickness(slot + 6, 0, 0, 0);
-        var path = Ui.Text(entry.Path, 10.5, null, Palette.Secondary, maxLines: 1, mono: true);
+        var path = Ui.Text(entry.Path, 12, null, Palette.Secondary, maxLines: 1, mono: true);
         path.TextTrimming = TextTrimming.CharacterEllipsis;
         ToolTip.SetTip(path, entry.Path);
         detail.Children.Add(path);
@@ -455,27 +463,27 @@ public sealed class DiskPage : Grid, ISnapshotPage
     private Control PlanCard(CleanResult result)
     {
         var box = Ui.V(10);
-        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.confirm_title"), 14, FontWeight.SemiBold));
-        box.Children.Add(Ui.Text(_age.Caption(), 10.5, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.confirm_title"), 15, FontWeight.SemiBold));
+        box.Children.Add(Ui.Text(_age.Caption(), 12, null, Palette.Secondary));
 
         var body = Ui.V(8);
         var groups = CleanPlan.Groups(_services.Disk.Report ?? DiskReport.Empty, result.Moved);
         if (result.Moved.Count == 0)
         {
-            body.Children.Add(Ui.Text(L10n.Tr("disk.card.nothing_moved"), 12, null, Palette.Secondary));
+            body.Children.Add(Ui.Text(L10n.Tr("disk.card.nothing_moved"), 14, null, Palette.Secondary));
         }
         foreach (var group in groups)
         {
             var block = Ui.V(2);
-            block.Children.Add(Ui.Text(group.Title, 12, FontWeight.Medium));
+            block.Children.Add(Ui.Text(group.Title, 14, FontWeight.Medium));
             foreach (var path in group.Paths)
             {
-                var text = Ui.Text(path, 10, null, Palette.Secondary, maxLines: 1, mono: true);
+                var text = Ui.Text(path, 12, null, Palette.Secondary, maxLines: 1, mono: true);
                 text.TextTrimming = TextTrimming.CharacterEllipsis;
                 ToolTip.SetTip(text, path);
                 block.Children.Add(text);
             }
-            block.Children.Add(Ui.Text(CleanPlan.CountAndSize(group.Paths.Count, group.Bytes), 10.5, null,
+            block.Children.Add(Ui.Text(CleanPlan.CountAndSize(group.Paths.Count, group.Bytes), 12, null,
                 Palette.Secondary));
             body.Children.Add(block);
         }
@@ -490,10 +498,10 @@ public sealed class DiskPage : Grid, ISnapshotPage
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
         };
         box.Children.Add(scroll);
-        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.warning"), 10.5, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.warning"), 12, null, Palette.Secondary, wrap: true));
         if (_actionError is { } error)
         {
-            box.Children.Add(Ui.Text(error, 10.5, null, Palette.Bad, wrap: true, mono: true));
+            box.Children.Add(Ui.Text(error, 12, null, Palette.Bad, wrap: true, mono: true));
         }
 
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
@@ -505,7 +513,8 @@ public sealed class DiskPage : Grid, ISnapshotPage
         }, enabled: !_applying);
         Grid.SetColumn(cancel, 0);
         actions.Children.Add(cancel);
-        var move = Ui.ProminentButton(WindowsL10n.Tr("disk.card.move_button"), Move, Palette.Bad);
+        // 移到回收站是破坏性动作：用危险色而不是强调色。
+        var move = Ui.ProminentButton(WindowsL10n.Tr("disk.card.move_button"), Move, true, Palette.Bad);
         Grid.SetColumn(move, 2);
         actions.Children.Add(move);
         if (_applying)
@@ -524,7 +533,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
     private Control ResultCard(CleanResult result)
     {
         var box = Ui.V(10);
-        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.moved_title"), 14, FontWeight.SemiBold));
+        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.moved_title"), 15, FontWeight.SemiBold));
         box.Children.Add(Widgets.HeroAmount(
             L10n.TrL(null, "disk.card.freed", Fmt.Bytes(result.FreedBytes)), 20, Palette.Accent));
         box.Children.Add(SkippedList(result));
@@ -543,13 +552,13 @@ public sealed class DiskPage : Grid, ISnapshotPage
     {
         var box = Ui.V(3);
         if (result.Skipped.Count == 0) return box;
-        box.Children.Add(Ui.Text(L10n.Tr("disk.card.skipped"), 10, FontWeight.SemiBold, Palette.Secondary));
+        box.Children.Add(Ui.Text(L10n.Tr("disk.card.skipped"), 12, FontWeight.SemiBold, Palette.Secondary));
         foreach (var skip in result.Skipped)
         {
             var item = Ui.V(1);
-            item.Children.Add(Ui.Text($"{skip.Id} — {DiskBlock.Short(skip.Reason)}", 11, null,
+            item.Children.Add(Ui.Text($"{skip.Id} — {DiskBlock.Short(skip.Reason)}", 12, null,
                 Palette.WarnInk, wrap: true));
-            item.Children.Add(Ui.Text(DiskBlock.Explanation(skip.Reason), 10, null, Palette.Secondary,
+            item.Children.Add(Ui.Text(DiskBlock.Explanation(skip.Reason), 12, null, Palette.Secondary,
                 wrap: true));
             box.Children.Add(item);
         }

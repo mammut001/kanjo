@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Kanjo.Core;
@@ -105,6 +107,7 @@ public sealed class KanjoApplication : Application
         Styles.Add(new FluentTheme());
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
 
+        // 全局字体 + 正文色（控件模板里的 TextBlock 也走这里）。
         Styles.Add(new Style(x => x.OfType<TextBlock>())
         {
             Setters =
@@ -116,6 +119,70 @@ public sealed class KanjoApplication : Application
         Styles.Add(new Style(x => x.OfType<Window>())
         {
             Setters = { new Setter(Avalonia.Controls.Window.BackgroundProperty, Palette.PanelBackground) },
+        });
+        // 输入类控件统一 Fluent 的圆角 + 描边（模板默认 4，这里显式钉住，深浅色都一样）。
+        Styles.Add(new Style(x => x.OfType<TextBox>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(4)),
+                new Setter(TemplatedControl.FontSizeProperty, Type.CaptionSize),
+                new Setter(TemplatedControl.MinHeightProperty, 32.0),
+            },
+        });
+        // 占位符（Watermark）在 Fluent 主题里用的是很淡的 tertiary 色，白卡上几乎看不见
+        // （用户报的「占位符看不见」）。这里不用原生 Watermark，自己画一层，
+        // 颜色 / 字体完全可控（Ui.TextField 里实现）。
+        Styles.Add(new Style(x => x.OfType<TextBox>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(4)),
+                new Setter(TemplatedControl.FontSizeProperty, Type.CaptionSize),
+                new Setter(TemplatedControl.MinHeightProperty, 32.0),
+            },
+        });
+        Styles.Add(new Style(x => x.OfType<ComboBox>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(4)),
+                new Setter(TemplatedControl.FontSizeProperty, Type.CaptionSize),
+                new Setter(TemplatedControl.MinHeightProperty, 32.0),
+            },
+        });
+        Styles.Add(new Style(x => x.OfType<Button>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(4)),
+                new Setter(TemplatedControl.FontSizeProperty, Type.BodySize),
+            },
+        });
+        // 禁用按钮 / 下拉：Fluent 模板默认是 #CCCCCC 底 + 灰字（2.7:1，几乎看不清）。
+        // 底色是模板里的 ContentPresenter 画的，所以要打到模板子元素才生效；
+        // 同时取消模板自带的禁用半透明（那会把对比度再压下去）。
+        Styles.Add(new Style(x => x.OfType<Button>().Class(":disabled").Template()
+            .OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, Palette.DisabledFill),
+                new Setter(ContentPresenter.ForegroundProperty, Palette.Disabled),
+                new Setter(ContentPresenter.BorderBrushProperty, Palette.DisabledStroke),
+            },
+        });
+        Styles.Add(new Style(x => x.OfType<Button>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 1.0) },
+        });
+        Styles.Add(new Style(x => x.OfType<ComboBox>().Class(":disabled"))
+        {
+            Setters =
+            {
+                new Setter(Visual.OpacityProperty, 1.0),
+                new Setter(TemplatedControl.ForegroundProperty, Palette.Disabled),
+            },
         });
     }
 

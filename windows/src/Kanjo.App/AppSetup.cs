@@ -17,7 +17,10 @@ public static class AppSetup
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         }
+        // 截图模式一律不做动画（可复现）。
+        Motion.Snapshot = true;
         ApplyAppearance(appearance);
+        Palette.ApplyPlatformAccent();
         L10n.Store ??= AppSettings.InMemory();
         L10n.ResetCache();
     }

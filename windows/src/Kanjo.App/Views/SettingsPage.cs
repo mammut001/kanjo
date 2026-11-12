@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -8,51 +7,58 @@ using Kanjo.Core;
 namespace Kanjo.App.Views;
 
 /// <summary>
-/// 设置页（SettingsView.swift），按 Mac 的顺序：
-/// Language / Data source / Refresh / iCloud sync（Windows 只留说明）/ Publish / Family usage /
-/// Projects / Quota reset / Subscriptions / Apply & Refresh。
-/// 所有写配置的动作都走 CLI（ConfigDataSource），文件 / 目录选择走 Avalonia StorageProvider。
+/// 设置页，版式照 Windows 11「设置」：一列分组，每个分组标题下是若干张卡片，
+/// 每张卡片是一行设置（左边标题 + 一行说明，右边右对齐的控件）。
+///
+/// 内容与 Mac 版逐条对应，顺序也保持：Language / Data source / Refresh / iCloud sync（Windows 只留说明）/
+/// Publish / Family usage / Projects / Quota reset / Subscriptions / Apply &amp; Refresh。
+/// 所有写配置的动作仍然走 CLI（ConfigDataSource），文件 / 目录选择走 Avalonia StorageProvider。
+///
+/// 订阅一节只在需要时展开：有订阅信息的 agent 直接列，没有的折叠在「Show N more」后面
+/// （和 Mac 总览的订阅价值卡同一个模式），这样 29 个 agent 也不会把页面撑得太长。
 /// </summary>
-public sealed class SettingsPage : ScrollViewer, ISnapshotPage
+public sealed class SettingsPage : ScrollPage
 {
-    /// <summary>截图模式：交出内容本身（不含滚动容器），由面板按整页高度渲染。</summary>
-    public Control SnapshotBody
-    {
-        get
-        {
-            var content = Content as Control ?? new Panel();
-            Content = null;
-            return content;
-        }
-    }
-
     private readonly AppServices _services;
     private readonly string? _anchor;
     private readonly string? _editingAgent;
     private readonly bool _snapshot;
     private readonly Action _onBack;
 
-    private readonly StackPanel _root = Ui.V(Metrics.SectionSpacing);
+    private readonly StackPanel _root = new()
+    {
+        Orientation = Orientation.Vertical,
+        Spacing = Metrics.SectionSpacing,
+    };
+
     private bool _gitMissingError;
     private bool _tokenPromptOpen;
     private string _tokenInput = "";
     private bool _familyAdvanced;
+    private bool _showAllSubscriptions;
 
     public SettingsPage(AppServices services, string? anchor, string? editingAgent, bool snapshot, Action onBack)
+        : base(snapshot)
     {
         _services = services;
         _anchor = anchor;
         _editingAgent = editingAgent;
         _snapshot = snapshot;
         _onBack = onBack;
+        // 正在编辑某个 agent 时默认把它露出来，不然「编辑」按钮点了没反应。
+        _showAllSubscriptions = editingAgent is not null;
 
-        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        VerticalScrollBarVisibility = snapshot
-            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
-            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
-        Background = Brushes.Transparent;
         Content = _root;
         Rebuild();
+        // 已知档位表要起 CLI（几十到几百毫秒），放后台预热，回来后重建订阅行让编辑表单用上真实档位。
+        // 截图 / 测试模式不起进程。
+        if (!_services.SnapshotMode)
+        {
+            _services.Config.BeginLoadKnownPlans(() =>
+            {
+                foreach (var row in _subscriptionRows.Values.OfType<SubscriptionSettingsRow>()) row.PlansLoaded();
+            });
+        }
         _services.Family.Activity.Changed += OnExternalChange;
         _services.Publish.Activity.Changed += OnExternalChange;
         DetachedFromVisualTree += (_, _) =>
@@ -61,29 +67,29 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             _services.Publish.Activity.Changed -= OnExternalChange;
         };
 
-        if (snapshot)
+        if (snapshot) ScrollToAnchor(anchor);
+    }
+
+    private void ScrollToAnchor(string? anchor)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            UpdateLayout();
+            if (anchor is null) return;
+            if (anchor == RouteAnchors.SettingsBottom)
+            {
+                ScrollTo(Math.Max(0, Extent.Height - Viewport.Height));
+            }
+            else if (SubscriptionSettingsRoute.Parse(anchor)?.Agent is { } agent &&
+                     _subscriptionRows.TryGetValue(agent, out var row))
             {
                 UpdateLayout();
-                if (anchor is null) return;
-                if (anchor == RouteAnchors.SettingsBottom)
+                if (row.TranslatePoint(new Point(0, 0), _root) is { } p)
                 {
-                    Offset = new Vector(0, Math.Max(0, Extent.Height - Viewport.Height));
+                    ScrollTo(Math.Min(p.Y - 12, Extent.Height - Viewport.Height));
                 }
-                else if (SubscriptionSettingsRoute.Parse(anchor)?.Agent is { } agent &&
-                         _subscriptionRows.TryGetValue(agent, out var row))
-                {
-                    // 滚到该 agent 的订阅行（布局完成后按实际位置算）。
-                    UpdateLayout();
-                    if (row.TranslatePoint(new Point(0, 0), _root) is { } p)
-                    {
-                        Offset = new Vector(0, Math.Max(0,
-                            Math.Min(p.Y - 12, Extent.Height - Viewport.Height)));
-                    }
-                }
-            }, Avalonia.Threading.DispatcherPriority.Loaded);
-        }
+            }
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private readonly Dictionary<string, Control> _subscriptionRows = new(StringComparer.Ordinal);
@@ -120,24 +126,22 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
     public void Rebuild()
     {
+        var keepOffset = !_snapshot ? VerticalOffset : 0;
         _root.Children.Clear();
         _subscriptionRows.Clear();
 
-        var header = Ui.V(8);
-        var back = Widgets.BackButton(L10n.Tr("common.done"), _onBack);
-        back.Margin = new Thickness(Metrics.BackInset - Metrics.RowInset, 0, 0, 0);
-        header.Children.Add(back);
-        header.Children.Add(Ui.Text(L10n.Tr("settings.title"), 15, FontWeight.SemiBold));
-        header.Margin = new Thickness(Metrics.RowInset, 0, 0, 0);
-        _root.Children.Add(header);
+        _root.Children.Add(Header());
 
         if (_services.DataOverride is { } overridePath)
         {
-            _root.Children.Add(Widgets.StatusBlock(false,
-            [
-                Ui.Text(L10n.TrL(null, "settings.data_override", overridePath), 10.5, FontWeight.Medium,
-                    Palette.WarnInk, wrap: true),
-            ]));
+            // WinUI 的 InfoBar：只有一条说明，不再重复页面标题当标题。
+            var bar = new InfoBar(
+                L10n.TrL(null, "settings.data_override", overridePath),
+                InfoBar.Level.Warning)
+            {
+                Margin = new Thickness(Metrics.PagePadding - 2, 12, Metrics.PagePadding - 2, 0),
+            };
+            _root.Children.Add(bar);
         }
 
         _root.Children.Add(LanguageSection());
@@ -151,8 +155,82 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         _root.Children.Add(SubscriptionsSection());
         _root.Children.Add(ApplySection());
 
-        _root.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 10);
+        _root.Margin = new Thickness(Metrics.PagePadding, 4, Metrics.PagePadding, 16);
+        if (keepOffset > 0) RestoreOffsetLater(keepOffset);
     }
+
+    /// <summary>页头：标题（Title 28）+ 副标题 + 返回链接。Windows 11 设置的页头节奏。</summary>
+    private Control Header()
+    {
+        var box = Ui.V(2);
+        box.Margin = new Thickness(2, 8, 2, 0);
+
+        var back = Widgets.BackButton(L10n.Tr("common.done"), _onBack);
+        back.Margin = new Thickness(-2, 0, 0, 4);
+        box.Children.Add(back);
+        box.Children.Add(Ui.Title(L10n.Tr("settings.title")));
+        return box;
+    }
+
+    /// <summary>
+    /// 一行设置：[标题 + 说明] …… [控件]。
+    /// Windows 11 设置页在窗口够宽时是左右排；窗口窄（我们这个面板只有 360px）时把控件落到下一行右对齐，
+    /// 免得标题被挤成「Fallback refre」这种截断。
+    /// </summary>
+    private static Control RowControl(string label, string? description, Control control)
+    {
+        var left = Ui.V(2);
+        var title = Ui.Text(label, Type.BodySize, wrap: true);
+        left.Children.Add(title);
+        if (!string.IsNullOrEmpty(description))
+        {
+            left.Children.Add(Ui.Text(description!, Type.CaptionSize, null, Palette.Secondary, wrap: true));
+        }
+        left.VerticalAlignment = VerticalAlignment.Center;
+
+        control.VerticalAlignment = VerticalAlignment.Center;
+
+        // 一行可用宽度：面板宽 - 页面留白 - 卡片描边 - 卡片内边距。
+        const double available = Metrics.PanelWidth - Metrics.PagePadding * 2 - 2 - Metrics.RowInset * 2;
+        // 控件自己想要的宽度：开关这类窄控件给 0（和标题同排），下拉 / 输入给 200。
+        var controlWidth = control.MinWidth > 0 ? control.MinWidth : 0;
+        const double minLabelWidth = 150;
+        var fitsBeside = controlWidth == 0 || controlWidth + minLabelWidth + 14 <= available;
+
+        Control body;
+        if (fitsBeside)
+        {
+            // 窄控件（开关）：标题 + 说明在左，控件右对齐同排。
+            control.HorizontalAlignment = HorizontalAlignment.Right;
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            left.Margin = new Thickness(0, 0, 14, 0);
+            Grid.SetColumn(left, 0);
+            grid.Children.Add(left);
+            Grid.SetColumn(control, 1);
+            grid.Children.Add(control);
+            body = grid;
+        }
+        else
+        {
+            // 宽控件（下拉 / 输入框）：360px 的面板放不下「标题 + 200px 控件」，
+            // 按 Windows 11 设置页的窄窗做法把控件落到下一行并右对齐。
+            control.HorizontalAlignment = HorizontalAlignment.Right;
+            var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 };
+            stack.Children.Add(left);
+            stack.Children.Add(control);
+            body = stack;
+        }
+
+        return new Border
+        {
+            Child = body,
+            MinHeight = Metrics.SettingRowMinHeight,
+            Padding = new Thickness(Metrics.RowInset, 10, Metrics.RowInset, 10),
+        };
+    }
+
+    private static Control SimpleRow(string label, string? description, Control control) =>
+        RowControl(label, description, control);
 
     // MARK: - Language
 
@@ -161,28 +239,13 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         var current = AppLanguages.Parse(S.Str(SettingsKeys.AppLanguage, SettingsDefaults.AppLanguage))
                       ?? AppLanguage.System;
         var options = AppLanguages.All.Select(l => l.DisplayName()).ToList();
-        var dropdown = new DropdownControl(options[(int)current], options, index =>
+        var picker = Picker.Make(options, (int)current, index =>
         {
             Set(SettingsKeys.AppLanguage, AppLanguages.All[index].RawValue());
             Rebuild();
         });
-        return Chrome.Section(L10n.Tr("settings.section.language"), Row(L10n.Tr("settings.language"), dropdown),
-            padding: Metrics.RowInset);
-    }
-
-    private static Control Row(string label, Control control)
-    {
-        // Mac：标签固定宽度，picker 铺满剩下的整行宽度（不是右对齐的小控件）。
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var text = Ui.Text(label, 12);
-        text.VerticalAlignment = VerticalAlignment.Center;
-        text.Margin = new Thickness(0, 0, 8, 0);
-        Grid.SetColumn(text, 0);
-        grid.Children.Add(text);
-        control.HorizontalAlignment = HorizontalAlignment.Stretch;
-        Grid.SetColumn(control, 1);
-        grid.Children.Add(control);
-        return grid;
+        return Section(L10n.Tr("settings.section.language"),
+            [SimpleRow(L10n.Tr("settings.language"), null, picker)]);
     }
 
     // MARK: - Data source
@@ -196,60 +259,40 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             index =>
             {
                 Set(SettingsKeys.SourceKind, index == 0 ? "file" : "cli");
-                // Mac：`onChange(of: sourceKind) { store.applySettings() }`（会重建数据源 / 监听 / 定时器）。
                 _services.ApplySettings();
                 Rebuild();
-            })
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
+            });
 
-        var content = Ui.V(8);
-        content.Children.Add(segmented);
+        var rows = new List<Control>
+        {
+            RowControl(L10n.Tr("settings.section.data_source"), null, segmented),
+        };
 
         if (kind == SourceKind.Cli)
         {
-            content.Children.Add(Ui.Text(CliDescription(), 10.5, null, Palette.Secondary, wrap: true));
-            content.Children.Add(Field(L10n.Tr("settings.command"), SettingsKeys.CliCommand,
+            rows.Add(InfoRow(Ui.Text(CliDescription(), Type.CaptionSize, null, Palette.Secondary, wrap: true)));
+            rows.Add(FieldRow(L10n.Tr("settings.command"), null, SettingsKeys.CliCommand,
                 DefaultPaths.DefaultCliCommand, mono: true));
-
-            var dirRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var dirField = Field(L10n.Tr("settings.working_directory"), SettingsKeys.CliWorkingDirectory,
-                DefaultPaths.ResolvedCliDirectory() ?? L10n.Tr("settings.inherit"), mono: true);
-            Grid.SetColumn(dirField, 0);
-            dirRow.Children.Add(dirField);
-            var choose = Ui.BorderedButton(L10n.Tr("settings.choose"), ChooseDirectory);
-            choose.Margin = new Thickness(6, 0, 0, 0);
-            choose.VerticalAlignment = VerticalAlignment.Bottom;
-            Grid.SetColumn(choose, 1);
-            dirRow.Children.Add(choose);
-            content.Children.Add(dirRow);
-
-            content.Children.Add(Ui.Text(WindowsL10n.Tr("settings.cli_note"), 10.5, null, Palette.Secondary,
-                wrap: true));
+            rows.Add(FieldWithButtonRow(L10n.Tr("settings.working_directory"), SettingsKeys.CliWorkingDirectory,
+                DefaultPaths.ResolvedCliDirectory() ?? L10n.Tr("settings.inherit"), L10n.Tr("settings.choose"),
+                ChooseDirectory, mono: true));
+            rows.Add(InfoRow(Ui.Text(WindowsL10n.Tr("settings.cli_note"), Type.CaptionSize, null, Palette.Secondary,
+                wrap: true)));
             var diskCommand = DiskCommand.Report(EffectiveCliCommand, false, null);
-            var diskText = Ui.Text(L10n.TrL(null, "settings.disk_command", diskCommand), 10.5, null,
+            var diskText = Ui.Text(L10n.TrL(null, "settings.disk_command", diskCommand), Type.CaptionSize, null,
                 Palette.Secondary, wrap: true, mono: true);
             ToolTip.SetTip(diskText, WindowsL10n.Tr("settings.disk_command_help"));
-            content.Children.Add(diskText);
+            rows.Add(InfoRow(diskText));
         }
         else
         {
-            var fileRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var fileField = Field(L10n.Tr("settings.json_file"), SettingsKeys.FilePath,
-                DefaultPaths.SampleFixture);
-            Grid.SetColumn(fileField, 0);
-            fileRow.Children.Add(fileField);
-            var choose = Ui.BorderedButton(L10n.Tr("settings.choose"), ChooseFile);
-            choose.Margin = new Thickness(6, 0, 0, 0);
-            choose.VerticalAlignment = VerticalAlignment.Bottom;
-            Grid.SetColumn(choose, 1);
-            fileRow.Children.Add(choose);
-            content.Children.Add(fileRow);
-            content.Children.Add(Ui.Text(L10n.Tr("settings.file_note"), 10.5, null, Palette.Secondary, wrap: true));
+            rows.Add(FieldWithButtonRow(L10n.Tr("settings.json_file"), SettingsKeys.FilePath,
+                DefaultPaths.SampleFixture, L10n.Tr("settings.choose"), ChooseFile));
+            rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.file_note"), Type.CaptionSize, null, Palette.Secondary,
+                wrap: true)));
         }
 
-        return Chrome.Section(L10n.Tr("settings.section.data_source"), content, padding: Metrics.RowInset);
+        return GroupedSection(L10n.Tr("settings.section.data_source"), rows);
     }
 
     private string EffectiveCliCommand
@@ -262,9 +305,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     }
 
     /// <summary>
-    /// 和 Mac 的 <c>DefaultPaths.cliDescription(customDirectory:customCommand:)</c> 一一对应：
-    /// 自定义过就是「Custom」，否则按解析出来的 CLI 目录说「Bundled CLI &lt;version&gt;」/「Repository cli/」/ 实际路径。
-    /// 版本从内置 CLI 目录里的 <c>VERSION</c> 读（打包脚本会把仓库的 VERSION 拷进 cli\，和 Mac 的 .app 一样）。
+    /// 和 Mac 的 <c>DefaultPaths.cliDescription(customDirectory:customCommand:)</c> 一一对应。
     /// </summary>
     private string CliDescription()
     {
@@ -289,7 +330,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         return resolved;
     }
 
-    /// <summary>内置 CLI 的版本：读 cli\VERSION（和 Mac 的 .app 一样）；读不到就说 unknown。</summary>
+    /// <summary>内置 CLI 的版本：读 cli\VERSION；读不到就说 unknown。</summary>
     private static string BundledCliVersion(string cliDirectory)
     {
         try
@@ -305,7 +346,6 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         {
             // 读不到就用 unknown。
         }
-        // 兜底：CLI 的 __init__.py 里也有 __version__（VERSION 文件漏拷时还能显示对）。
         try
         {
             var init = Path.Combine(cliDirectory, "kanjo", "__init__.py");
@@ -323,11 +363,18 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         return "unknown";
     }
 
-    /// <summary>带标签的文本框（label 在上，输入框在下；回车应用并刷新）。Mac 这几个框都用等宽字体。</summary>
-    private Control Field(string label, string key, string? placeholder, bool mono = true)
+    /// <summary>只有说明文字的一行（卡片内的灰色脚注）。</summary>
+    private static Control InfoRow(Control content) => new Border
     {
-        var box = Ui.V(3);
-        box.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
+        Child = content,
+        Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10),
+    };
+
+    /// <summary>标签 + 输入框的行（回车应用并刷新）。</summary>
+    private Control FieldRow(string label, string? description, string key, string? placeholder, bool mono = true)
+    {
+        var box = Ui.V(4);
+        box.Children.Add(Ui.Text(label, Type.CaptionSize, FontWeight.SemiBold, Palette.Secondary));
         var field = Ui.TextField(S.Str(key, ""), placeholder, mono: mono);
         var text = field.Box;
         text.LostFocus += (_, _) => S.Set(key, text.Text ?? "");
@@ -340,7 +387,35 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             }
         };
         box.Children.Add(field.Root);
-        return box;
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+        };
+    }
+
+    /// <summary>标签 + 输入框 + 右侧「Choose…」按钮。</summary>
+    private Control FieldWithButtonRow(string label, string key, string? placeholder, string buttonText,
+        Action onClick, bool mono = true)
+    {
+        var box = Ui.V(4);
+        box.Children.Add(Ui.Text(label, Type.CaptionSize, FontWeight.SemiBold, Palette.Secondary));
+        var field = Ui.TextField(S.Str(key, ""), placeholder, mono: mono);
+        var text = field.Box;
+        text.LostFocus += (_, _) => S.Set(key, text.Text ?? "");
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(field.Root, 0);
+        row.Children.Add(field.Root);
+        var choose = Ui.StandardButton(buttonText, onClick);
+        choose.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(choose, 1);
+        row.Children.Add(choose);
+        box.Children.Add(row);
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+        };
     }
 
     private async void ChooseFile()
@@ -391,116 +466,114 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
     private Control RefreshSection()
     {
-        var content = Ui.V(8);
+        var rows = new List<Control>();
         var minutes = S.Int(SettingsKeys.RefreshMinutes, SettingsDefaults.RefreshMinutes);
         var intervals = new[] { 0, 15, 30, 60 };
         var labels = intervals
             .Select(m => m == 0 ? L10n.Tr("settings.refresh_off") : L10n.TrL(null, "settings.refresh_minutes", m))
             .ToList();
         var index = Math.Max(0, Array.IndexOf(intervals, minutes));
-        content.Children.Add(Row(L10n.Tr("settings.auto_refresh"),
-            new DropdownControl(labels[index], labels, i =>
+        rows.Add(RowControl(L10n.Tr("settings.auto_refresh"), L10n.Tr("settings.refresh_note"),
+            Picker.Make(labels, index, i =>
             {
                 Set(SettingsKeys.RefreshMinutes, intervals[i]);
-                // Mac：`onChange(of: refreshMinutes) { store.restartTimer() }` —— 改了就重排兜底定时器。
                 _services.RestartFallbackTimer();
                 Rebuild();
             })));
-        content.Children.Add(Ui.Text(L10n.Tr("settings.refresh_note"), 10.5, null, Palette.Secondary, wrap: true));
 
         var mode = MenuBarModes.Parse(S.Str(SettingsKeys.MenuBarMode, SettingsDefaults.MenuBarMode))
                    ?? MenuBarMode.Cost;
         var modeOptions = MenuBarModes.All.Select(m => m.Label()).ToList();
-        content.Children.Add(Row(L10n.Tr("settings.menu_bar_shows"),
-            new DropdownControl(modeOptions[(int)mode], modeOptions, i =>
+        rows.Add(RowControl(L10n.Tr("settings.menu_bar_shows"), null,
+            Picker.Make(modeOptions, (int)mode, i =>
             {
                 Set(SettingsKeys.MenuBarMode, MenuBarModes.All[i].RawValue());
                 Rebuild();
             })));
 
-        content.Children.Add(CheckRow(L10n.Tr("settings.show_menu_bar_cost"),
+        rows.Add(ToggleRow(L10n.Tr("settings.show_menu_bar_cost"), null,
             S.Bool(SettingsKeys.ShowAmountInMenuBar, SettingsDefaults.ShowAmountInMenuBar),
             value => Set(SettingsKeys.ShowAmountInMenuBar, value)));
-        return Chrome.Section(L10n.Tr("settings.section.refresh"), content, padding: Metrics.RowInset);
+
+        return GroupedSection(L10n.Tr("settings.section.refresh"), rows);
     }
 
-    private Control CheckRow(string label, bool value, Action<bool> onChange)
-    {
-        var row = Ui.H(7);
-        row.Children.Add(new CheckBoxControl(value, false, () => onChange(!value)));
-        row.Children.Add(Ui.Text(label, 12));
-        return new Clickable(row, () => onChange(!value), radius: 4)
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Padding = new Thickness(0),
-        };
-    }
+    /// <summary>开关行（[标题 + 说明] …… ToggleSwitch）。</summary>
+    private static Control ToggleRow(string label, string? description, bool value, Action<bool> onChange) =>
+        RowControl(label, description, Toggle.Make(value, onChange));
 
     // MARK: - iCloud（Mac 专属）
 
-    private Control ICloudSection()
-    {
-        var content = Ui.V(6);
-        content.Children.Add(Ui.Text(WindowsL10n.Tr("settings.icloud.windows_only"), 10.5, null,
-            Palette.Secondary, wrap: true));
-        return Chrome.Section(L10n.Tr("settings.section.icloud"), content, padding: Metrics.RowInset);
-    }
+    private Control ICloudSection() =>
+        GroupedSection(L10n.Tr("settings.section.icloud"),
+        [
+            InfoRow(Ui.Text(WindowsL10n.Tr("settings.icloud.windows_only"), Type.CaptionSize, null,
+                Palette.Secondary, wrap: true)),
+        ]);
 
     // MARK: - Publish
 
     private Control PublishSection()
     {
         var enabled = S.Bool(SettingsKeys.PublishEnabled, SettingsDefaults.PublishEnabled);
-        var content = Ui.V(8);
-        content.Children.Add(CheckRow(L10n.Tr("settings.publish.enable"), enabled,
-            value => Set(SettingsKeys.PublishEnabled, value)));
+        var rows = new List<Control>
+        {
+            ToggleRow(L10n.Tr("settings.publish.enable"), L10n.Tr("settings.publish.note"), enabled,
+                value => Set(SettingsKeys.PublishEnabled, value)),
+        };
 
         if (enabled)
         {
             var frequency = PublishFrequencies.Parse(S.GetString(SettingsKeys.PublishFrequency))
                             ?? PublishFrequency.Weekly;
             var freqOptions = PublishFrequencies.All.Select(f => f.Label()).ToList();
-            content.Children.Add(Row(L10n.Tr("settings.publish.frequency"),
-                new DropdownControl(freqOptions[PublishFrequencies.All.ToList().IndexOf(frequency)], freqOptions, i =>
+            rows.Add(RowControl(L10n.Tr("settings.publish.frequency"), null,
+                Picker.Make(freqOptions, PublishFrequencies.All.ToList().IndexOf(frequency), i =>
                 {
                     Set(SettingsKeys.PublishFrequency, PublishFrequencies.All[i].RawValue());
                     Rebuild();
                 })));
 
             var repo = S.Str(SettingsKeys.PublishRepoPath, SettingsDefaults.PublishRepoPath);
+            var repoBlock = Ui.V(4);
+            repoBlock.Children.Add(Ui.Text(L10n.Tr("settings.publish.repo_path"), Type.CaptionSize,
+                FontWeight.SemiBold, Palette.Secondary));
             var repoRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var repoText = Ui.Text(repo.Length == 0 ? "—" : repo, 11, null,
+            var repoText = Ui.Text(repo.Length == 0 ? "—" : repo, Type.CaptionSize, null,
                 repo.Length == 0 ? Palette.Secondary : Palette.Foreground, maxLines: 1);
             repoText.TextTrimming = TextTrimming.CharacterEllipsis;
             Grid.SetColumn(repoText, 0);
             repoRow.Children.Add(repoText);
-            var choose = Ui.BorderedButton(L10n.Tr("settings.publish.choose_repo"), ChooseRepo);
+            var choose = Ui.StandardButton(L10n.Tr("settings.publish.choose_repo"), ChooseRepo);
             choose.Margin = new Thickness(8, 0, 0, 0);
             Grid.SetColumn(choose, 1);
             repoRow.Children.Add(choose);
-            var repoBlock = Ui.V(4);
-            repoBlock.Children.Add(Ui.Text(L10n.Tr("settings.publish.repo_path"), 11, null, Palette.Secondary));
             repoBlock.Children.Add(repoRow);
             if (_gitMissingError)
             {
-                repoBlock.Children.Add(Ui.Text(L10n.Tr("settings.publish.git_missing"), 10.5, null, Palette.Bad,
-                    wrap: true));
+                repoBlock.Children.Add(Ui.Text(L10n.Tr("settings.publish.git_missing"), Type.CaptionSize, null,
+                    Palette.Bad, wrap: true));
             }
-            content.Children.Add(repoBlock);
+            rows.Add(new Border
+            {
+                Child = repoBlock,
+                Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+            });
 
-            content.Children.Add(LabeledField(L10n.Tr("settings.publish.file_path"),
-                SettingsKeys.PublishFilePath, SettingsDefaults.PublishFilePath));
-            content.Children.Add(LabeledField(L10n.Tr("settings.publish.branch"),
-                SettingsKeys.PublishBranch, SettingsDefaults.PublishBranch));
+            rows.Add(FieldRow(L10n.Tr("settings.publish.file_path"), null, SettingsKeys.PublishFilePath,
+                SettingsDefaults.PublishFilePath, mono: false));
+            rows.Add(FieldRow(L10n.Tr("settings.publish.branch"), null, SettingsKeys.PublishBranch,
+                SettingsDefaults.PublishBranch, mono: false));
 
             var (statusText, statusError, statusWarn) = _services.Publish.StatusText();
             var statusRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var status = Ui.Text(statusText, 10.5, null,
-                statusError ? Palette.Bad : statusWarn ? Palette.QuotaWarn : Palette.Secondary, wrap: true);
+            var status = Ui.Text(statusText, Type.CaptionSize, null,
+                statusError ? Palette.Bad : statusWarn ? Palette.WarnInk : Palette.Secondary, wrap: true);
+            status.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(status, 0);
             statusRow.Children.Add(status);
             var repoTrim = repo.Trim();
-            var publishNow = Ui.BorderedButton(L10n.Tr("settings.publish.now"), () =>
+            var publishNow = Ui.AccentButton(L10n.Tr("settings.publish.now"), () =>
             {
                 Task.Run(() =>
                 {
@@ -517,22 +590,14 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             }, enabled: repoTrim.Length > 0 && !_services.Publish.Activity.IsBusy);
             Grid.SetColumn(publishNow, 1);
             statusRow.Children.Add(publishNow);
-            content.Children.Add(statusRow);
+            rows.Add(new Border
+            {
+                Child = statusRow,
+                Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+            });
         }
 
-        content.Children.Add(Ui.Text(L10n.Tr("settings.publish.note"), 10.5, null, Palette.Secondary, wrap: true));
-        return Chrome.Section(L10n.Tr("settings.section.publish"), content, padding: Metrics.RowInset);
-    }
-
-    private Control LabeledField(string label, string key, string placeholder)
-    {
-        var box = Ui.V(4);
-        box.Children.Add(Ui.Text(label, 11, null, Palette.Secondary));
-        var field = Ui.TextField(S.Str(key, ""), placeholder);
-        var text = field.Box;
-        text.LostFocus += (_, _) => S.Set(key, text.Text ?? "");
-        box.Children.Add(field.Root);
-        return box;
+        return GroupedSection(L10n.Tr("settings.section.publish"), rows);
     }
 
     private async void ChooseRepo()
@@ -569,73 +634,83 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     private Control FamilySection()
     {
         var enabled = S.Bool(SettingsKeys.FamilyReportEnabled, SettingsDefaults.FamilyReportEnabled);
-        var content = Ui.V(8);
-        content.Children.Add(CheckRow(L10n.Tr("settings.family.enable"), enabled,
-            value => Set(SettingsKeys.FamilyReportEnabled, value)));
+        var rows = new List<Control>
+        {
+            ToggleRow(L10n.Tr("settings.family.enable"),
+                enabled ? null : L10n.Tr("settings.family.off_note"), enabled,
+                value => Set(SettingsKeys.FamilyReportEnabled, value)),
+        };
 
         if (enabled)
         {
             var mode = S.Str(SettingsKeys.FamilyReportMode, SettingsDefaults.FamilyReportMode);
-            var modes = new List<string> { L10n.Tr("settings.family.mode.join"), L10n.Tr("settings.family.mode.manager") };
-            content.Children.Add(new SegmentedControl(modes, mode == "manager" ? 1 : 0, index =>
+            var modes = new List<string>
             {
-                Set(SettingsKeys.FamilyReportMode, index == 1 ? "manager" : "join");
-                Rebuild();
-            })
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-            });
+                L10n.Tr("settings.family.mode.join"), L10n.Tr("settings.family.mode.manager"),
+            };
+            rows.Add(RowControl(L10n.Tr("settings.family.mode"), null,
+                new SegmentedControl(modes, mode == "manager" ? 1 : 0, index =>
+                {
+                    Set(SettingsKeys.FamilyReportMode, index == 1 ? "manager" : "join");
+                    Rebuild();
+                }, stretch: false)
+                {
+                    MinWidth = Metrics.ControlMinWidth,
+                }));
 
             if (mode == "manager")
             {
-                var manager = Ui.V(8);
-                manager.Children.Add(Ui.Text(WindowsL10n.Tr("settings.family.manager.desc"), 11, null,
-                    Palette.Secondary, wrap: true));
-                manager.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.manager.view_guide"),
-                    () => ProjectActions.OpenUrl("https://github.com/mammut001/kanjo/blob/main/family-server/DEPLOY.md")));
-                manager.Margin = new Thickness(0, 4, 0, 4);
-                content.Children.Add(manager);
+                rows.Add(new Border
+                {
+                    Child = Ui.V(6).Also(box =>
+                    {
+                        box.Children.Add(Ui.Text(WindowsL10n.Tr("settings.family.manager.desc"), Type.CaptionSize,
+                            null, Palette.Secondary, wrap: true));
+                        box.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.manager.view_guide"),
+                            () => ProjectActions.OpenUrl(
+                                "https://github.com/mammut001/kanjo/blob/main/family-server/DEPLOY.md")));
+                    }),
+                    Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+                });
             }
             else
             {
-                content.Children.Add(LabeledField(L10n.Tr("settings.family.url"), SettingsKeys.FamilyReportUrl,
-                    "https://usage.example.com"));
-                content.Children.Add(TokenRow());
-                content.Children.Add(LabeledField(L10n.Tr("settings.family.member_label"),
-                    SettingsKeys.FamilyReportMemberLabel, L10n.Tr("settings.family.member_label_placeholder")));
-                content.Children.Add(ScopeSection());
-                content.Children.Add(FamilyStatusRow());
+                rows.Add(FieldRow(L10n.Tr("settings.family.url"), null, SettingsKeys.FamilyReportUrl,
+                    "https://usage.example.com", mono: false));
+                rows.Add(TokenRow());
+                rows.Add(FieldRow(L10n.Tr("settings.family.member_label"), null,
+                    SettingsKeys.FamilyReportMemberLabel, L10n.Tr("settings.family.member_label_placeholder"),
+                    mono: false));
+                rows.AddRange(ScopeRows());
+                rows.Add(FamilyStatusRow());
+                rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.family.note"), Type.CaptionSize, null,
+                    Palette.Secondary, wrap: true)));
             }
+        }
 
-            content.Children.Add(Ui.Text(L10n.Tr("settings.family.note"), 10.5, null, Palette.Secondary, wrap: true));
-        }
-        else
-        {
-            content.Children.Add(Ui.Text(L10n.Tr("settings.family.off_note"), 10.5, null, Palette.Secondary,
-                wrap: true));
-        }
-        return Chrome.Section(L10n.Tr("settings.section.family"), content, padding: Metrics.RowInset);
+        return GroupedSection(L10n.Tr("settings.section.family"), rows);
     }
 
     private Control TokenRow()
     {
-        var block = Ui.V(4);
-        block.Children.Add(Ui.Text(L10n.Tr("settings.family.token"), 11, null, Palette.Secondary));
-        var row = Ui.H(8);
+        var block = Ui.V(6);
+        block.Children.Add(Ui.Text(L10n.Tr("settings.family.token"), Type.CaptionSize, FontWeight.SemiBold,
+            Palette.Secondary));
         var hasToken = _services.Family.HasToken;
+        var row = Ui.H(8);
         row.Children.Add(Ui.Text(hasToken
             ? L10n.Tr("settings.family.token.configured")
-            : L10n.Tr("settings.family.token.not_configured"), 11, null,
+            : L10n.Tr("settings.family.token.not_configured"), Type.CaptionSize, null,
             hasToken ? Palette.Foreground : Palette.Secondary));
         if (hasToken)
         {
-            row.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.token.change"), () =>
+            row.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.change"), () =>
             {
                 _tokenInput = "";
                 _tokenPromptOpen = true;
                 Rebuild();
             }));
-            row.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.token.clear"), () =>
+            row.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.clear"), () =>
             {
                 _services.Family.ClearToken();
                 Rebuild();
@@ -643,7 +718,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         }
         else
         {
-            row.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.token.set"), () =>
+            row.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.set"), () =>
             {
                 _tokenInput = "";
                 _tokenPromptOpen = true;
@@ -655,35 +730,36 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         if (_tokenPromptOpen)
         {
             var prompt = Ui.V(8);
-            prompt.Children.Add(Ui.Text(L10n.Tr("settings.family.token.prompt_title"), 12, FontWeight.SemiBold));
-            prompt.Children.Add(Ui.Text(WindowsL10n.Tr("settings.family.token.prompt_message"), 10.5, null,
-                Palette.Secondary, wrap: true));
+            prompt.Children.Add(Ui.Text(L10n.Tr("settings.family.token.prompt_title"), Type.BodyStrongSize,
+                FontWeight.SemiBold));
+            prompt.Children.Add(Ui.Text(WindowsL10n.Tr("settings.family.token.prompt_message"), Type.CaptionSize,
+                null, Palette.Secondary, wrap: true));
             var input = new TextBox
             {
                 Text = _tokenInput,
                 Watermark = L10n.Tr("settings.family.token.placeholder"),
                 PasswordChar = '•',
-                FontSize = 11,
-                MinHeight = 24,
-                Padding = new Thickness(6, 2, 6, 2),
-                CornerRadius = new CornerRadius(6),
-                Background = Palette.CardBackground,
-                BorderBrush = Palette.CardBorder,
-                BorderThickness = new Thickness(0.5),
+                FontSize = Type.CaptionSize,
+                MinHeight = 32,
+                Padding = new Thickness(10, 5, 10, 5),
+                CornerRadius = new CornerRadius(4),
+                Background = Palette.ControlFill,
+                BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
+                BorderThickness = new Thickness(1),
             };
             input.TextChanged += (_, _) => _tokenInput = input.Text ?? "";
             prompt.Children.Add(input);
             var actions = Ui.H(8);
             var spacer = new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
             actions.Children.Add(spacer);
-            actions.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.token.cancel"), () =>
+            actions.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.cancel"), () =>
             {
                 _tokenInput = "";
                 _tokenPromptOpen = false;
                 Rebuild();
             }));
             var trimmed = _tokenInput.Trim();
-            actions.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.token.save"), () =>
+            actions.Children.Add(Ui.AccentButton(L10n.Tr("settings.family.token.save"), () =>
             {
                 if (trimmed.Length > 0) _services.Family.SetToken(trimmed);
                 _tokenInput = "";
@@ -695,15 +771,21 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             card.Margin = new Thickness(0, 4, 0, 0);
             block.Children.Add(card);
         }
-        return block;
+        return new Border
+        {
+            Child = block,
+            Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+        };
     }
 
-    private Control ScopeSection()
+    private IEnumerable<Control> ScopeRows()
     {
         var config = _services.Report?.Config.Family;
-        var block = Ui.V(6);
-        block.Children.Add(Ui.Text(L10n.TrL(null, "settings.family.scope.label",
-            FamilyScopeText.Make(config)), 11, null, Palette.Secondary, wrap: true));
+        var rows = new List<Control>
+        {
+            InfoRow(Ui.Text(L10n.TrL(null, "settings.family.scope.label", FamilyScopeText.Make(config)),
+                Type.CaptionSize, null, Palette.Secondary, wrap: true)),
+        };
 
         var agents = config?.Agents?.ToList() ?? ["antigravity"];
         var isAll = agents.Count > 0 && (agents[0] == "all" || agents.Contains("all"));
@@ -712,48 +794,50 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             L10n.Tr("settings.family.scope.agents_antigravity"),
             L10n.Tr("settings.family.scope.agents_all"),
         };
-        var agentsRow = Row(L10n.Tr("settings.family.scope.agents_choice"),
-            new DropdownControl(options[isAll ? 1 : 0], options, index =>
+        var picker = Picker.Make(options, isAll ? 1 : 0, index =>
+        {
+            RunConfig(() =>
             {
-                RunConfig(() =>
-                {
-                    if (index == 1) _services.Config.SetFamilyAgents("all");
-                    else _services.Config.SetFamilyAgents(null);
-                });
-            }, enabled: _services.CanEditSubscriptions));
-        if (!_services.CanEditSubscriptions) agentsRow.Opacity = 0.6;
-        block.Children.Add(agentsRow);
+                if (index == 1) _services.Config.SetFamilyAgents("all");
+                else _services.Config.SetFamilyAgents(null);
+            });
+        }, enabled: _services.CanEditSubscriptions);
+        rows.Add(RowControl(L10n.Tr("settings.family.scope.agents_choice"), null, picker));
 
-        var advanced = Ui.V(6);
-        var header = Ui.H(3);
-        header.Children.Add(Icons.Chevron(_familyAdvanced, 8, Palette.Secondary));
-        header.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.advanced"), 11));
-        block.Children.Add(new Clickable(header, () =>
+        var header = Ui.H(6);
+        header.Children.Add(Icons.Chevron(_familyAdvanced, 10, Palette.Secondary));
+        header.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.advanced"),
+            Type.CaptionSize, null, Palette.Link));
+        rows.Add(new Border
         {
-            _familyAdvanced = !_familyAdvanced;
-            Rebuild();
-        }, radius: 4)
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new Clickable(header, () =>
+            {
+                _familyAdvanced = !_familyAdvanced;
+                Rebuild();
+            }, radius: 4, hand: true)
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+            },
+            Padding = new Thickness(Metrics.RowInset, 2, Metrics.RowInset, 10),
         });
 
         if (_familyAdvanced)
         {
-            var dateRow = Ui.H(8);
+            var advanced = Ui.V(6);
             var since = config?.Since;
             var dateBox = new TextBox
             {
                 Text = since is { Length: >= 10 } ? since[..10] : "",
                 Watermark = "yyyy-MM-dd",
-                FontSize = 11,
-                MinHeight = 24,
-                Width = 110,
-                Padding = new Thickness(6, 2, 6, 2),
+                FontSize = Type.CaptionSize,
+                MinHeight = 32,
+                Width = 130,
+                Padding = new Thickness(10, 5, 10, 5),
                 FontFamily = Type.Mono,
-                CornerRadius = new CornerRadius(6),
-                Background = Palette.CardBackground,
-                BorderBrush = Palette.CardBorder,
-                BorderThickness = new Thickness(0.5),
+                CornerRadius = new CornerRadius(4),
+                Background = Palette.ControlFill,
+                BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
+                BorderThickness = new Thickness(1),
                 IsEnabled = _services.CanEditSubscriptions,
             };
             dateBox.LostFocus += (_, _) =>
@@ -762,24 +846,28 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
                 if (value == (since is { Length: >= 10 } ? since[..10] : "")) return;
                 RunConfig(() => _services.Config.SetFamilySince(value.Length == 0 ? null : value));
             };
+            var dateRow = Ui.H(8);
             dateRow.Children.Add(dateBox);
             if (!string.IsNullOrEmpty(since))
             {
-                dateRow.Children.Add(Ui.BorderedButton(L10n.Tr("settings.family.scope.clear_date"),
+                dateRow.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.scope.clear_date"),
                     () => RunConfig(() => _services.Config.SetFamilySince(null)),
                     enabled: _services.CanEditSubscriptions));
             }
             var dateBlock = Ui.V(4);
-            dateBlock.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.start_date"), 11, null,
-                Palette.Secondary));
+            dateBlock.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.start_date"), Type.CaptionSize,
+                FontWeight.SemiBold, Palette.Secondary));
             dateBlock.Children.Add(dateRow);
-            dateBlock.Margin = new Thickness(0, 4, 0, 0);
             advanced.Children.Add(dateBlock);
-            advanced.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.advanced_note"), 10.5, null,
+            advanced.Children.Add(Ui.Text(L10n.Tr("settings.family.scope.advanced_note"), Type.CaptionSize, null,
                 Palette.Secondary, wrap: true));
-            block.Children.Add(advanced);
+            rows.Add(new Border
+            {
+                Child = advanced,
+                Padding = new Thickness(Metrics.RowInset, 4, Metrics.RowInset, 12),
+            });
         }
-        return block;
+        return rows;
     }
 
     private Control FamilyStatusRow()
@@ -787,15 +875,16 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         var (text, kind) = _services.Family.StatusText();
         var color = kind switch
         {
-            FamilyReportStatusStateKind.NoNetwork => Palette.QuotaWarn,
+            FamilyReportStatusStateKind.NoNetwork => Palette.WarnInk,
             FamilyReportStatusStateKind.Failed => Palette.Bad,
             _ => Palette.Secondary,
         };
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var status = Ui.Text(text, 10.5, null, color, wrap: true);
+        var status = Ui.Text(text, Type.CaptionSize, null, color, wrap: true);
+        status.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(status, 0);
         row.Children.Add(status);
-        var reportNow = Ui.BorderedButton(L10n.Tr("settings.family.now"), () =>
+        var reportNow = Ui.AccentButton(L10n.Tr("settings.family.now"), () =>
         {
             Task.Run(() =>
             {
@@ -812,7 +901,11 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         }, enabled: _services.Family.CanReportNow);
         Grid.SetColumn(reportNow, 1);
         row.Children.Add(reportNow);
-        return row;
+        return new Border
+        {
+            Child = row,
+            Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
+        };
     }
 
     /// <summary>配置写入放后台（会起 CLI 进程），完成后重读报告。</summary>
@@ -838,54 +931,61 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     private Control ProjectsSection()
     {
         var hidden = ProjectPrefs.Parse(S.Str(SettingsKeys.HiddenProjects, ""));
-        var content = Ui.V(8);
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        row.Children.Add(Ui.Text(L10n.TrL(null, "settings.hidden_projects_count", hidden.Count), 12));
-        var unhide = Ui.BorderedButton(L10n.Tr("settings.unhide_all"), () =>
+        var unhide = Ui.StandardButton(L10n.Tr("settings.unhide_all"), () =>
         {
             Set(SettingsKeys.HiddenProjects, "");
         }, enabled: hidden.Count > 0);
-        Grid.SetColumn(unhide, 1);
-        row.Children.Add(unhide);
-        content.Children.Add(row);
-        content.Children.Add(Ui.Text(L10n.Tr("settings.projects_note"), 10.5, null, Palette.Secondary, wrap: true));
-        return Chrome.Section(L10n.Tr("settings.section.projects"), content, padding: Metrics.RowInset);
+        return GroupedSection(L10n.Tr("settings.section.projects"),
+        [
+            RowControl(L10n.TrL(null, "settings.hidden_projects_count", hidden.Count),
+                L10n.Tr("settings.projects_note"), unhide),
+        ]);
     }
 
     // MARK: - Quota reset
 
     private Control QuotaSection()
     {
-        var content = Ui.V(10);
+        var rows = new List<Control>();
         if (_services.Report is { } report)
         {
             var agents = SettingsAgentList.QuotaAgents(report);
             if (agents.Count == 0)
             {
-                content.Children.Add(Ui.Text(L10n.Tr("settings.no_reset_info"), 11, null, Palette.Tertiary));
+                rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.no_reset_info"), Type.CaptionSize, null,
+                    Palette.Secondary)));
             }
-            foreach (var agent in agents)
-            {
-                content.Children.Add(new QuotaResetRow(_services, agent, report));
-            }
+            // 每个 agent 一张独立卡片（Windows 11 设置页里一项一卡）。
+            foreach (var agent in agents) rows.Add(new QuotaResetRow(_services, agent, report));
         }
         else
         {
-            content.Children.Add(Ui.Text(L10n.Tr("settings.no_data_loaded"), 10.5, null, Palette.Secondary));
+            rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.no_data_loaded"), Type.CaptionSize, null,
+                Palette.Secondary)));
         }
-        content.Children.Add(Ui.Text(L10n.Tr("settings.quota_note"), 10.5, null, Palette.Secondary, wrap: true));
-        return Chrome.Section(L10n.Tr("settings.section.quota_reset"), content, padding: Metrics.RowInset);
+        rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.quota_note"), Type.CaptionSize, null, Palette.Secondary,
+            wrap: true)));
+        return GroupedSection(L10n.Tr("settings.section.quota_reset"), rows);
     }
 
     // MARK: - Subscriptions
 
     private Control SubscriptionsSection()
     {
-        var content = Ui.V(8);
+        var rows = new List<Control>();
         if (_services.Report is { } report)
         {
             var agents = SettingsAgentList.SubscriptionAgents(report, _editingAgent);
+            // 有订阅信息的直接列；没有的折叠在「Show N more」后面（29 个 agent 时页面才不会失控）。
+            var withInfo = new List<string>();
+            var withoutInfo = new List<string>();
             foreach (var agent in agents)
+            {
+                var has = report.Subscriptions?.ContainsKey(agent) == true || agent == _editingAgent;
+                (has ? withInfo : withoutInfo).Add(agent);
+            }
+
+            void AddRow(string agent)
             {
                 var label = report.AgentLabels().GetValueOrDefault(agent)
                             ?? AgentColors.DefaultLabels.GetValueOrDefault(agent, agent);
@@ -893,16 +993,53 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
                     report.Subscriptions?.TryGetValue(agent, out var sub) == true ? sub : null,
                     report.Currency, _editingAgent == agent);
                 _subscriptionRows[agent] = row;
-                content.Children.Add(row);
+                rows.Add(row);
+            }
+
+            foreach (var agent in withInfo) AddRow(agent);
+
+            if (withoutInfo.Count > 0)
+            {
+                if (_showAllSubscriptions)
+                {
+                    foreach (var agent in withoutInfo) AddRow(agent);
+                    rows.Add(MoreLink(L10n.Tr("common.show_fewer"), () =>
+                    {
+                        _showAllSubscriptions = false;
+                        Rebuild();
+                    }));
+                }
+                else
+                {
+                    rows.Add(MoreLink(
+                        L10n.TrL(null, "overview.subscription_value.show_more", withoutInfo.Count),
+                        () =>
+                        {
+                            _showAllSubscriptions = true;
+                            Rebuild();
+                        }));
+                }
             }
         }
         else
         {
-            content.Children.Add(Ui.Text(L10n.Tr("settings.no_data_loaded"), 10.5, null, Palette.Secondary));
+            rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.no_data_loaded"), Type.CaptionSize, null,
+                Palette.Secondary)));
         }
-        content.Children.Add(Ui.Text(L10n.Tr("settings.subscriptions_note"), 10.5, null, Palette.Secondary,
-            wrap: true));
-        return Chrome.Section(L10n.Tr("settings.section.subscriptions"), content, padding: Metrics.RowInset);
+        rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.subscriptions_note"), Type.CaptionSize, null,
+            Palette.Secondary, wrap: true)));
+        return GroupedSection(L10n.Tr("settings.section.subscriptions"), rows);
+    }
+
+    private static Control MoreLink(string text, Action onClick)
+    {
+        var link = Ui.LinkButton(text, onClick, Type.CaptionSize);
+        link.HorizontalAlignment = HorizontalAlignment.Left;
+        return new Border
+        {
+            Child = link,
+            Padding = new Thickness(Metrics.RowInset, 6, Metrics.RowInset, 8),
+        };
     }
 
     // MARK: - Apply
@@ -910,17 +1047,63 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
     private Control ApplySection()
     {
         var box = Ui.V(8);
-        var apply = Ui.ProminentButton(L10n.Tr("settings.apply_refresh"), () =>
+        var source = Ui.Text(L10n.TrL(null, "settings.current_source", _services.DescribeSource()),
+            Type.CaptionSize, null, Palette.Secondary, wrap: true);
+        box.Children.Add(source);
+
+        var apply = Ui.AccentButton(L10n.Tr("settings.apply_refresh"), () =>
         {
             _services.ApplySettings();
             _services.NotifyChanged();
         });
         apply.HorizontalAlignment = HorizontalAlignment.Right;
         box.Children.Add(apply);
-        var source = Ui.Text(L10n.TrL(null, "settings.current_source", _services.DescribeSource()), 10.5,
-            null, Palette.Secondary, wrap: true);
-        box.Children.Add(source);
-        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
+
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(2, 0, 2, 8),
+        };
+    }
+
+    // MARK: - 卡片的组织方式
+
+    /// <summary>一个分组：标题 + 一列卡片（每行一张卡片，行间 4px）。</summary>
+    private static Control Section(string title, IEnumerable<Control> rows) =>
+        GroupedSection(title, rows);
+
+    /// <summary>把一个分组的若干行做成「一列独立卡片」。</summary>
+    private static Control GroupedSection(string title, IEnumerable<Control> rows)
+    {
+        var column = new StackPanel { Orientation = Orientation.Vertical, Spacing = Metrics.CardGap };
+        foreach (var row in rows)
+        {
+            column.Children.Add(new Border
+            {
+                Child = row,
+                Background = Palette.CardBackground,
+                BorderBrush = Palette.CardBorder,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(Metrics.GroupRadius),
+                ClipToBounds = true,
+            });
+        }
+
+        var box = new StackPanel { Orientation = Orientation.Vertical };
+        var label = Ui.SectionTitle(title);
+        label.Margin = new Thickness(2, 0, 2, 8);
+        box.Children.Add(label);
+        box.Children.Add(column);
         return box;
+    }
+}
+
+/// <summary>让对象初始化的写法短一点（只在设置页内部用）。</summary>
+internal static class ControlExtensions
+{
+    public static T Also<T>(this T value, Action<T> action)
+    {
+        action(value);
+        return value;
     }
 }

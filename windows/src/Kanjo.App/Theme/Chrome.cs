@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Kanjo.Core;
@@ -9,7 +8,6 @@ namespace Kanjo.App;
 
 /// <summary>
 /// 按比例填充的细条（无底轨）：宽度 = 可用宽度 × <see cref="Fraction"/>，最小 3pt。
-/// 对应 Swift 里 `GeometryReader { Capsule().frame(width: geo.size.width * fraction) }`。
 /// 自绘（不依赖子元素的测量结果），离屏渲染也稳定。
 /// </summary>
 public sealed class FractionBar : Control
@@ -70,7 +68,8 @@ public sealed class QuotaBar : Control
     {
         var width = Bounds.Width <= 0 ? 200 : Bounds.Width;
         var radius = _height / 2;
-        context.DrawRectangle(new SolidColorBrush(Palette.ForegroundColor, 0.08), null,
+        // 底轨用卡片描边色（1.5:1 以上，能看见轨道本身）。
+        context.DrawRectangle(Palette.CardBorder, null,
             new RoundedRect(new Rect(0, 0, width, _height), radius));
         if (_fraction > 0)
         {
@@ -98,27 +97,46 @@ public sealed class Spinner : Viewbox
     }
 }
 
+/// <summary>
+/// 卡片与分组的骨架（Windows 11 设置页的版式）：
+/// 分组标题（BodyStrong 14、正文色、句首大写）在上，下面是若干张卡片，
+/// 卡片之间 4px、分组之间 24px。卡片 = 圆角 8 + 1px 描边 + 16px 内边距。
+/// </summary>
 public static class Chrome
 {
-    /// <summary>
-    /// 悬停卡外观：实底 + 细描边 + 柔和阴影 + 圆角 10（HoverCardChrome）。
-    /// 阴影用一层偏移的淡色圆角矩形画（Avalonia 的 BoxShadow 在离屏渲染下会吃掉子元素）。
-    /// </summary>
-    public static Control HoverCardChrome(Control content)
+    /// <summary>一张卡片：圆角 8、1px 描边、16px 内边距、白 / 深灰实底。</summary>
+    public static Border Card(Control content, double paddingH = Metrics.RowInset,
+        double paddingV = Metrics.CardPaddingV)
     {
-        var card = new Border
+        return new Border
         {
             Child = content,
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0),
-            CornerRadius = new CornerRadius(10),
             Background = Palette.CardBackground,
             BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Metrics.GroupRadius),
+            Padding = new Thickness(paddingH, paddingV, paddingH, paddingV),
         };
+    }
+
+    /// <summary>没有内边距的卡片（行自己带内边距，用来做整行可点 / 可悬停）。</summary>
+    public static Border CardBare(Control content) => new()
+    {
+        Child = content,
+        Background = Palette.CardBackground,
+        BorderBrush = Palette.CardBorder,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(Metrics.GroupRadius),
+        ClipToBounds = true,
+    };
+
+    /// <summary>悬停卡外观：实底 + 描边 + 阴影 + 圆角 8。</summary>
+    public static Control HoverCardChrome(Control content)
+    {
+        var card = Card(content, paddingH: 14, paddingV: 12);
         var shadow = new Border
         {
-            CornerRadius = new CornerRadius(11),
+            CornerRadius = new CornerRadius(Metrics.GroupRadius + 1),
             Background = new SolidColorBrush(Colors.Black, Palette.IsDark ? 0.32 : 0.14),
             Margin = new Thickness(1, 3, -1, -1),
             IsHitTestVisible = false,
@@ -129,37 +147,36 @@ public static class Chrome
         return stack;
     }
 
-    /// <summary>分组底色卡片（groupedBackground）：淡底 + 圆角 10，没有描边。</summary>
-    public static Border Group(Control content, double padding = 10) => new()
+    /// <summary>
+    /// 一个分组：标题 + 一张卡片。`gap` 是卡片间距（默认 4）。
+    /// </summary>
+    public static Control Section(string title, Control content, Control? trailing = null)
     {
-        Child = content,
-        Padding = new Thickness(padding),
-        CornerRadius = new CornerRadius(Metrics.GroupRadius),
-        Background = Palette.GroupFill,
-    };
-
-    /// <summary>一节的骨架：小号全大写标题（+ 可选右侧内容），下面是内容。`fill=false` 时不加分组底色。</summary>
-    public static Control Section(string title, Control content, bool fill = true, double padding = 10,
-        Control? trailing = null)
-    {
-        var box = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-        var header = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-        };
-        var titleBlock = Kanjo.App.Ui.SectionTitle(title);
-        Grid.SetColumn(titleBlock, 0);
-        header.Children.Add(titleBlock);
+        var titleRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var label = Ui.SectionTitle(title);
+        label.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(label, 0);
+        titleRow.Children.Add(label);
         if (trailing is not null)
         {
-            Grid.SetColumn(trailing, 2);
-            header.Children.Add(trailing);
+            trailing.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(trailing, 1);
+            titleRow.Children.Add(trailing);
         }
-        titleBlock.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
-        trailing?.Margin = new Thickness(0, 0, Metrics.RowInset, 0);
-        box.Children.Add(header);
-        var body = fill ? Group(content, padding) : content;
-        box.Children.Add(body);
+        titleRow.Margin = new Thickness(2, 0, 2, 8);
+
+        var box = new StackPanel { Orientation = Orientation.Vertical };
+        box.Children.Add(titleRow);
+        box.Children.Add(Card(content));
         return box;
+    }
+
+    /// <summary>兼容旧调用点（旧的 `fill` / `padding` 参数已无意义，一律画成卡片）。</summary>
+    public static Control LegacySection(string title, Control content, bool fill = true,
+        double padding = Metrics.RowInset, Control? trailing = null)
+    {
+        _ = fill;
+        _ = padding;
+        return Section(title, content, trailing);
     }
 }

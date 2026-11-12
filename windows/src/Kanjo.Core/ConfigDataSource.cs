@@ -20,7 +20,7 @@ public sealed class ConfigDataSource
         get { lock (_lock) return _cachedPlans; }
     }
 
-    /// <summary>读取各 agent 的已知档位；失败或空结果回退到内置表。结果缓存，只尝试一次。</summary>
+    /// <summary>读取各 agent 的已知档位；失败或空结果回退到内置表。结果缓存，只尝试一次。可能会起 CLI 进程。</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<KnownPlan>> KnownPlans()
     {
         lock (_lock)
@@ -40,6 +40,37 @@ public sealed class ConfigDataSource
         lock (_lock) _cachedPlans = plans;
         return plans;
     }
+
+    /// <summary>
+    /// 预热档位表：**不阻塞调用线程**。开设置页时用这个 —— 起 CLI 要几十到几百毫秒，
+    /// 放在 UI 线程上会让「打开设置」卡一下。已经有缓存在跑 / 跑过就什么都不做。
+    /// 完成后调用 <paramref name="done"/>（经 <see cref="CompletionDispatcher"/> 切回 UI 线程）。
+    /// </summary>
+    public void BeginLoadKnownPlans(Action? done = null)
+    {
+        lock (_lock)
+        {
+            if (_attempted) return;
+            _attempted = true; // 占位：避免并发重复起进程
+        }
+        Task.Run(() =>
+        {
+            var plans = KnownPlan.FallbackPlans;
+            try
+            {
+                plans = Runner().KnownPlans();
+            }
+            catch (Exception)
+            {
+                // 用内置表。
+            }
+            lock (_lock) _cachedPlans = plans;
+            if (done is not null) CompletionDispatcher(done);
+        });
+    }
+
+    /// <summary>后台完成后的回调切换（UI 注入；Core 不认识 Avalonia）。</summary>
+    public Action<Action> CompletionDispatcher { get; set; } = action => action();
 
     public void ResetCache()
     {

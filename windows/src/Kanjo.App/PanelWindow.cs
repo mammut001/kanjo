@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Platform;
+using Avalonia.Media;
 using Kanjo.App.Views;
 using Kanjo.Core;
 
@@ -8,10 +10,15 @@ namespace Kanjo.App;
 /// <summary>
 /// 面板窗口：无边框、不在任务栏显示、失焦自动隐藏。
 /// 托盘点击时把它放在托盘图标上方（屏幕右下角）。
+///
+/// 表面：Windows 11 有 Mica 就用 Mica（窗口背景透明，由系统画材质）；
+/// Windows 10 / Server 2022 没有 Mica，退回实色 #F3F3F3 / #202020（<see cref="Palette.BackgroundColor"/>）。
+/// 两种情况下内容都是卡片，视觉一致。
 /// </summary>
 public sealed class PanelWindow : Window
 {
     private readonly PanelView _panel;
+    private readonly Border _surface;
 
     public PanelWindow(AppServices services, bool taskbar = false, AppRoute? route = null)
     {
@@ -24,22 +31,26 @@ public sealed class PanelWindow : Window
         [
             WindowTransparencyLevel.Mica, WindowTransparencyLevel.Blur, WindowTransparencyLevel.None,
         ];
-        Background = Palette.PanelBackground;
+        // Mica 可用时这里会透出系统材质；不可用时它就是退回的实色。
+        Background = Brushes.Transparent;
+
         Width = PanelView.PanelWidth;
         Height = PanelView.PanelHeight;
 
         _panel = new PanelView(services, route ?? AppRoute.Overview);
-        Content = new Border
+        _surface = new Border
         {
-            CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(8),
             ClipToBounds = true,
+            // 没有 Mica 时（Windows 10 / Server）这一层就是底：实色 + 一圈描边，边界清楚。
             Background = Palette.PanelBackground,
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(1),
             Child = _panel,
         };
+        Content = _surface;
 
-        // 强调色按钮只在活动窗口里是蓝的（SwiftUI 的 borderedProminent 也是这样）：
-        // 面板弹出时算活动窗口，收起 / 失焦算非活动。不在激活状态变化时重建页面
-        // （那会丢掉设置页里正在输入的内容），只在弹出 / 收起时更新一次。
+        // 强调色按钮只在活动窗口里是蓝的：面板弹出时算活动窗口，收起 / 失焦算非活动。
         Deactivated += (_, _) =>
         {
             WindowActivation.SetActive(false);
@@ -62,6 +73,20 @@ public sealed class PanelWindow : Window
         _panel.Rebuild();
         if (ShowInTaskbar) return;
         PlaceAboveTray();
+        // Windows 11 的 flyout 手感：淡入 + 12px 上滑（「减少动画」时不动）。
+        Motion.AnimatePanelIn(_surface);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // Mica 真的套上了：把不透明的那层底去掉，让系统材质露出来。
+        if (change.Property == TopLevel.ActualTransparencyLevelProperty &&
+            ActualTransparencyLevel == WindowTransparencyLevel.Mica)
+        {
+            _surface.Background = Brushes.Transparent;
+            _surface.BorderThickness = new Thickness(0);
+        }
     }
 
     /// <summary>放在工作区右下角（托盘上方），像 macOS 从菜单栏弹出。</summary>

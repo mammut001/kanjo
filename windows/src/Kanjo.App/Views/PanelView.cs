@@ -38,7 +38,7 @@ public sealed class PanelView : Grid
         ClipToBounds = !snapshotMode;
         Background = Palette.PanelBackground;
 
-        _statusText = Ui.Text("", 11, null, Palette.Secondary);
+        _statusText = Ui.Text("", 12, null, Palette.Secondary);
         _statusText.VerticalAlignment = VerticalAlignment.Center;
 
         _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
@@ -92,10 +92,26 @@ public sealed class PanelView : Grid
 
     public void Navigate(AppRoute route)
     {
+        // 返回总览时恢复上次的滚动位置（Windows 11 的返回行为）；其它跳转从顶部开始。
+        if (route.Kind == AppRouteKind.Overview && _overviewOffset is { } offset && Route.Kind != AppRouteKind.Overview)
+        {
+            _restoreOverviewOffset = offset;
+        }
+        if (Route.Kind == AppRouteKind.Overview && _page is ScrollPage current) _overviewOffset = current.VerticalOffset;
+
         Route = route;
         _hover.Hide();
+        // 只有真的换页才播放过渡；同一页因为数据变化重建时不动（否则每次刷新都闪一下）。
+        _animateNextRebuild = true;
         Rebuild();
     }
+
+    /// <summary>下一次重建要不要播放页面过渡（只有导航时播放）。</summary>
+    private bool _animateNextRebuild;
+
+    /// <summary>总览页上次的滚动位置（返回时恢复）。</summary>
+    private double? _overviewOffset;
+    private double? _restoreOverviewOffset;
 
     public void Rebuild()
     {
@@ -108,9 +124,12 @@ public sealed class PanelView : Grid
         RebuildBanners();
         HoverLayer.PinnedId = Route.Anchor;
 
+        var animate = _animateNextRebuild;
+        _animateNextRebuild = false;
         var content = BuildContent();
         _contentHost.Child = null;
-        _contentHost.Child = content;
+        if (animate) Motion.SwapContent(_contentHost, content);
+        else _contentHost.Child = content;
 
         _refreshButton.Opacity = _services.IsLoading || _services.Disk.IsLoading ? 0.45 : 1;
         // 状态文字：正常运行时是真实时钟；--snapshot 时固定在报告时间（截图可复现，见 README）。
@@ -147,9 +166,15 @@ public sealed class PanelView : Grid
     private Control BuildContent()
     {
         var content = BuildPage();
-        _page = content as ISnapshotPage;
+        _page = content;
         // 截图模式：滚动页交出内部内容，按整页高度渲染（和 Mac 的 TALL 截图一致）。
         if (SnapshotMode && content is ISnapshotPage snapshotPage) return snapshotPage.SnapshotBody;
+        // 返回总览：等这一页布局完成后把滚动位置放回去（动画不会改变最终位置）。
+        if (content is ScrollPage page && _restoreOverviewOffset is { } restore)
+        {
+            _restoreOverviewOffset = null;
+            page.RestoreOffsetLater(restore);
+        }
         return content;
     }
 
@@ -195,7 +220,7 @@ public sealed class PanelView : Grid
     {
         var box = Ui.V(8);
         box.Margin = new Thickness(Metrics.PagePadding, 16, Metrics.PagePadding, 0);
-        box.Children.Add(Ui.Text(text, 12, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(text, 14, null, Palette.Secondary));
         box.Children.Add(Widgets.BackButton(L10n.Tr("menu.back_to_overview"),
             () => Navigate(AppRoute.Overview)));
         return box;
@@ -213,15 +238,15 @@ public sealed class PanelView : Grid
             list.Add(Widgets.StatusBlock(false,
             [
                 Ui.Text(L10n.TrL(null, "menu.schema_warning", report.SchemaVersion,
-                    Contract.SupportedSchemaVersion), 10.5, FontWeight.Medium, Palette.WarnInk, wrap: true),
+                    Contract.SupportedSchemaVersion), 12, FontWeight.Medium, Palette.WarnInk, wrap: true),
             ]));
         }
         if (_services.Report is not null && _services.Error is { } error)
         {
             list.Add(Widgets.StatusBlock(true,
             [
-                Ui.Text(L10n.Tr("menu.refresh_failed_banner"), 10.5, FontWeight.SemiBold, Palette.Bad),
-                Ui.Text(error, 10.5, null, Palette.Bad, wrap: true),
+                Ui.Text(L10n.Tr("menu.refresh_failed_banner"), 12, FontWeight.SemiBold, Palette.Bad),
+                Ui.Text(error, 12, null, Palette.Bad, wrap: true),
             ]));
         }
         if (list.Count == 0) return;
@@ -230,11 +255,12 @@ public sealed class PanelView : Grid
     }
 
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
+    /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边三个图标按钮（带 tooltip）。</summary>
     private Control BuildFooter()
     {
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
 
-        var left = Ui.H(2);
+        var left = Ui.H(4);
         left.Children.Add(_refreshButton);
         left.Children.Add(_statusText);
         left.VerticalAlignment = VerticalAlignment.Center;
@@ -250,19 +276,20 @@ public sealed class PanelView : Grid
         }
 
         bar.Children.Add(IconCell(
-            Icons.Disk(12, Route.Kind == AppRouteKind.Disk ? Palette.Accent : Palette.Secondary),
+            Icons.Disk(14, Route.Kind == AppRouteKind.Disk ? Palette.Link : Palette.Secondary),
             ToggleDisk, L10n.Tr("menu.disk"), Route.Kind == AppRouteKind.Disk, 2));
-        bar.Children.Add(IconCell(Icons.Gear(12, Palette.Secondary), ToggleSettings,
-            L10n.Tr("menu.settings"), false, 3));
-        bar.Children.Add(IconCell(Icons.Power(12, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
+        bar.Children.Add(IconCell(
+            Icons.Gear(14, Route.Kind == AppRouteKind.Settings ? Palette.Link : Palette.Secondary),
+            ToggleSettings, L10n.Tr("menu.settings"), Route.Kind == AppRouteKind.Settings, 3));
+        bar.Children.Add(IconCell(Icons.Power(14, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
 
         return new Border
         {
             Child = bar,
-            CornerRadius = new CornerRadius(12),
-            Background = Palette.GroupFill,
-            Padding = new Thickness(5, 1, 5, 1),
-            Margin = new Thickness(8, 4, 8, 8),
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = Palette.CardBackground,
+            Padding = new Thickness(10, 4, 8, 4),
         };
     }
 
@@ -327,5 +354,5 @@ public sealed class PanelView : Grid
         _hover.ShowRegistered(anchor);
     }
 
-    private ISnapshotPage? _page;
+    private object? _page;
 }

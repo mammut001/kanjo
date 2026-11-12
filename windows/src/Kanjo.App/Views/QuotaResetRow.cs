@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -10,6 +9,7 @@ namespace Kanjo.App.Views;
 /// <summary>
 /// 额度重置行（QuotaResetSettingsRow）：agent 色点 + 名称 + 来源；下一重置时刻与窗口起点；
 /// 星期 / 时刻下拉 + Apply / Reset。重置值通过 CLI 写入（`quota_windows.<agent>.weekly_reset`）。
+/// 下拉是 Fluent ComboBox，指针停在上面的滚轮滚页面而不是改值（见 <see cref="WheelPolicy"/>）。
 /// </summary>
 public sealed class QuotaResetRow : StackPanel
 {
@@ -47,81 +47,93 @@ public sealed class QuotaResetRow : StackPanel
     {
         Children.Clear();
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var left = Ui.H(5);
-        left.Children.Add(Ui.Dot(_agent, 6));
-        left.Children.Add(Ui.Text(label, 11.5, maxLines: 1));
+        var left = Ui.H(6);
+        left.Children.Add(Ui.Dot(_agent, 8));
+        left.Children.Add(Ui.Text(label, Type.BodySize, maxLines: 1));
         Grid.SetColumn(left, 0);
         header.Children.Add(left);
-        var source = Ui.Text(_quota?.Source ?? "none", 10, null,
-            _quota is null ? Palette.Tertiary : Palette.Secondary, mono: true);
+        var source = Ui.Text(_quota?.Source ?? "none", Type.CaptionSize, null,
+            _quota is null ? Palette.Secondary : Palette.Secondary, mono: true);
         source.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(source, 2);
         header.Children.Add(source);
-        Children.Add(header);
+        Children.Add(new Border
+        {
+            Child = header,
+            Padding = new Thickness(Metrics.RowInset, 10, Metrics.RowInset, 2),
+        });
 
         if (_quota is { } quota && ReportDates.ParseTimestamp(quota.WeeklyResetsAt) is { } reset)
         {
             var row = Ui.H(4);
-            row.Margin = new Thickness(11, 0, 0, 0);
-            row.Children.Add(Ui.Text(Stamp(reset, _timezone), 10.5, null, Palette.Foreground));
+            row.Children.Add(Ui.Text(Stamp(reset, _timezone), Type.CaptionSize, null, Palette.Foreground));
             if (RangeEngine.WindowStart(quota, DateTimeOffset.UtcNow, _timezone) is { } start)
             {
                 row.Children.Add(Ui.Text(
                     "· " + L10n.TrL(null, "settings.quota_window_since", Stamp(start, _timezone),
-                        quota.WeeklyWindowHours), 10, null, Palette.Secondary));
+                        quota.WeeklyWindowHours), Type.CaptionSize, null, Palette.Secondary));
             }
-            Children.Add(row);
+            Children.Add(new Border
+            {
+                Child = row,
+                Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 6),
+            });
         }
         else
         {
-            var none = Ui.Text(L10n.Tr("settings.no_reset_info"), 10.5, null, Palette.Tertiary);
-            none.Margin = new Thickness(11, 0, 0, 0);
-            Children.Add(none);
+            Children.Add(new Border
+            {
+                Child = Ui.Text(L10n.Tr("settings.no_reset_info"), Type.CaptionSize, null, Palette.Secondary),
+                Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 6),
+            });
         }
 
-        var controls = Ui.H(6);
-        controls.Margin = new Thickness(11, 0, 0, 0);
+        var controls = Ui.H(8);
         var weekdayLabels = Weekdays.Select(w => L10n.Tr(w.LabelKey)).ToList();
         var weekdayIndex = Array.FindIndex(Weekdays, w => w.Key == _weekday);
-        controls.Children.Add(new DropdownControl(weekdayLabels[Math.Max(weekdayIndex, 0)], weekdayLabels,
-            index =>
-            {
-                _weekday = Weekdays[index].Key;
-                Save($"{_weekday} {_time}");
-            }, enabled: CanEdit, width: 68));
+        controls.Children.Add(Picker.Make(weekdayLabels, Math.Max(weekdayIndex, 0), index =>
+        {
+            _weekday = Weekdays[index].Key;
+            Save($"{_weekday} {_time}");
+        }, enabled: CanEdit, minWidth: 96));
 
         var times = AvailableTimes;
         var timeIndex = times.IndexOf(_time);
-        controls.Children.Add(new DropdownControl(times[Math.Max(timeIndex, 0)], times, index =>
+        controls.Children.Add(Picker.Make(times, Math.Max(timeIndex, 0), index =>
         {
             _time = times[index];
             Save($"{_weekday} {_time}");
-        }, enabled: CanEdit, width: 64));
+        }, enabled: CanEdit, minWidth: 92));
 
-        controls.Children.Add(Ui.BorderedButton(L10n.Tr("common.apply"),
+        controls.Children.Add(Ui.StandardButton(L10n.Tr("common.apply"),
             () => Save($"{_weekday} {_time}"), enabled: CanEdit));
-        controls.Children.Add(Ui.BorderedButton(L10n.Tr("common.reset"),
+        controls.Children.Add(Ui.StandardButton(L10n.Tr("common.reset"),
             () => Save(null), enabled: CanEdit && _quota?.Source == "manual"));
         if (!CanEdit)
         {
-            controls.Opacity = 0.6;
             ToolTip.SetTip(controls, L10n.Tr("settings.renews_day_disabled_help"));
         }
-        Children.Add(controls);
+        Children.Add(new Border
+        {
+            Child = controls,
+            Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10),
+        });
 
         if (_saving)
         {
-            var saving = Ui.Text(L10n.Tr("settings.saving"), 10, null, Palette.Secondary);
-            saving.Margin = new Thickness(11, 0, 0, 0);
-            Children.Add(saving);
+            Children.Add(new Border
+            {
+                Child = Ui.Text(L10n.Tr("settings.saving"), Type.CaptionSize, null, Palette.Secondary),
+                Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 8),
+            });
         }
         if (_error is { } error)
         {
             var block = Widgets.StatusBlock(true,
             [
-                Ui.Text(error, 10.5, null, Palette.Bad, wrap: true),
+                Ui.Text(error, Type.CaptionSize, null, Palette.Bad, wrap: true),
             ]);
-            block.Margin = new Thickness(11, 0, 0, 0);
+            block.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10);
             Children.Add(block);
         }
     }
@@ -168,5 +180,5 @@ public sealed class QuotaResetRow : StackPanel
         }
         return $"{weekday}, {month} {local.Day} at {local:HH:mm}";
     }
-
 }
+

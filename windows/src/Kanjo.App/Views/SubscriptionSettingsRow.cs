@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -10,8 +9,10 @@ namespace Kanjo.App.Views;
 /// <summary>
 /// 订阅行（SubscriptionSettingsRow）：展示 / 空 / 编辑三种形态。
 /// 展示：档位 · 月费、Renews on day N 步进、Apply / Reset / Edit、来源、billing 链接。
-/// 编辑：档位菜单（来自 `config plans --json`）+ 自定义文本、月费、续费日、Apply / Cancel / Remove。
-/// 所有写入都走 CLI（ConfigDataSource），和 Mac 版逐条一致。
+/// 编辑：档位下拉（来自 `config plans --json`）+ 自定义文本、月费、续费日、Apply / Cancel / Remove。
+///
+/// 步进箭头是 32×32 的可点图标；指针停在上面时滚轮滚页面（<see cref="WheelPolicy"/> 会拦下来），
+/// 不会像以前那样「滚一下就悄悄改了续费日」。
 /// </summary>
 public sealed class SubscriptionSettingsRow : StackPanel
 {
@@ -52,8 +53,13 @@ public sealed class SubscriptionSettingsRow : StackPanel
         Orientation = Orientation.Vertical;
         Spacing = 4;
         Build(sub);
-        _services.Config.KnownPlans();
     }
+
+    /// <summary>
+    /// 档位表在后台预热完成后调用：重建这一行，让编辑表单用上真实的档位列表
+    /// （之前用的是内置兜底表）。不阻塞打开设置的那一帧。
+    /// </summary>
+    public void PlansLoaded() => Rebuild();
 
     private IReadOnlyList<KnownPlan>? LoadedPlans => _services.Config.CachedPlans?.GetValueOrDefault(_agent);
 
@@ -69,10 +75,20 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private void Build(Subscription? sub)
     {
         Children.Clear();
-        var header = Ui.H(5);
-        header.Children.Add(Ui.Dot(_agent, 6));
-        header.Children.Add(Ui.Text(_label, 11.5, maxLines: 1));
-        Children.Add(header);
+        var header = Ui.H(8);
+        header.Children.Add(Ui.Dot(_agent, 8));
+        header.Children.Add(Ui.Text(_label, Type.BodySize, FontWeight.SemiBold, maxLines: 1));
+        if (sub is not null)
+        {
+            header.Children.Add(Ui.Text(
+                $"{L10n.Tr("settings.subscriptions.price")}: {Fmt.PerMonth(sub.MonthlyPriceUsd, _currency)}",
+                Type.CaptionSize, null, Palette.Secondary, maxLines: 1));
+        }
+        Children.Add(new Border
+        {
+            Child = header,
+            Padding = new Thickness(Metrics.RowInset, 10, Metrics.RowInset, sub is null ? 2 : 4),
+        });
 
         if (_editing) Children.Add(EditingForm(sub));
         else if (sub is not null) Children.Add(DisplayForm(sub));
@@ -80,73 +96,71 @@ public sealed class SubscriptionSettingsRow : StackPanel
 
         if (_error is { } error)
         {
-            Children.Add(Widgets.StatusBlock(true,
+            var block = Widgets.StatusBlock(true,
             [
-                Ui.Text(error, 10.5, null, Palette.Bad, wrap: true),
-            ]));
+                Ui.Text(error, Type.CaptionSize, null, Palette.Bad, wrap: true),
+            ]);
+            block.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10);
+            Children.Add(block);
+        }
+        else
+        {
+            Children.Add(new Border { Height = 6 });
         }
     }
 
     private Control DisplayForm(Subscription sub)
     {
-        var box = Ui.V(4);
-        var plan = Ui.Text($"{sub.PlanLabel} · {Fmt.PerMonth(sub.MonthlyPriceUsd, _currency)}", 10, null,
-            Palette.Secondary);
-        plan.Margin = new Thickness(11, 0, 0, 0);
-        box.Children.Add(plan);
+        var box = Ui.V(8);
 
-        // Mac：label 里的「Renews on day N」是 primary 色，只有箭头（控件）在不能编辑时变淡。
-        var stepper = Stepper(CanEdit, "settings.renews_on_day", _day);
-        stepper.Margin = new Thickness(11, 0, 0, 0);
-        ToolTip.SetTip(stepper, CanEdit
-            ? L10n.Tr("settings.renews_day_help")
-            : L10n.Tr("settings.renews_day_disabled_help"));
-        box.Children.Add(stepper);
-
-        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
-        actions.Margin = new Thickness(11, 0, 0, 0);
-        var apply = Ui.BorderedButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
-        var reset = Ui.BorderedButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit);
-        var edit = Ui.BorderedButton(L10n.Tr("settings.edit"), () =>
+        var dayRow = Ui.H(8);
+        var stepper = Stepper(CanEdit);
+        dayRow.Children.Add(stepper);
+        var actions = Ui.H(8);
+        var apply = Ui.AccentButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
+        var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit);
+        var edit = Ui.StandardButton(L10n.Tr("settings.edit"), () =>
         {
             SyncInputs(sub);
             _editing = true;
             Rebuild();
         }, enabled: CanEdit);
-        reset.Margin = new Thickness(6, 0, 0, 0);
-        edit.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(apply, 1);
-        Grid.SetColumn(reset, 2);
-        Grid.SetColumn(edit, 3);
         actions.Children.Add(apply);
         actions.Children.Add(reset);
         actions.Children.Add(edit);
-        box.Children.Add(actions);
+        dayRow.Children.Add(actions);
+        ToolTip.SetTip(stepper, CanEdit
+            ? L10n.Tr("settings.renews_day_help")
+            : L10n.Tr("settings.renews_day_disabled_help"));
+        box.Children.Add(dayRow);
 
-        var source = Ui.Text(_saving ? L10n.Tr("settings.saving") : SubscriptionValue.AnchorSource(sub),
-            10, null, Palette.Secondary);
-        source.Margin = new Thickness(11, 0, 0, 0);
+        var source = Ui.Text(_saving
+                ? L10n.Tr("settings.saving")
+                : SubscriptionValue.AnchorSource(sub), Type.CaptionSize, null, Palette.Secondary);
         box.Children.Add(source);
 
         if (SubscriptionValue.BillingPage(_agent) is { } url)
         {
             var link = Ui.SmallLink(L10n.Tr("settings.open_billing_page"), () => ProjectActions.OpenUrl(url));
-            link.Margin = new Thickness(11, 0, 0, 0);
             box.Children.Add(link);
-            var hint = Ui.Text(L10n.Tr("settings.billing_page_hint"), 10, null, Palette.Secondary, wrap: true);
-            hint.Margin = new Thickness(11, 0, 0, 0);
-            box.Children.Add(hint);
+            box.Children.Add(Ui.Text(L10n.Tr("settings.billing_page_hint"), Type.CaptionSize, null,
+                Palette.Secondary, wrap: true));
         }
-        return box;
+
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10),
+        };
     }
 
     private Control EmptyForm()
     {
-        var box = Ui.V(4);
-        var row = Ui.H(8);
-        row.Margin = new Thickness(11, 0, 0, 0);
-        row.Children.Add(Ui.Text(L10n.Tr("settings.no_subscription_info"), 10, null, Palette.Tertiary));
-        row.Children.Add(Ui.BorderedButton(L10n.Tr("settings.add_subscription"), () =>
+        var box = Ui.V(8);
+        var row = Ui.H(10);
+        row.Children.Add(Ui.Text(L10n.Tr("settings.no_subscription_info"), Type.CaptionSize, null,
+            Palette.Secondary));
+        row.Children.Add(Ui.StandardButton(L10n.Tr("settings.add_subscription"), () =>
         {
             SyncInputs(null);
             _editing = true;
@@ -155,17 +169,18 @@ public sealed class SubscriptionSettingsRow : StackPanel
         box.Children.Add(row);
         if (SubscriptionValue.BillingPage(_agent) is { } url)
         {
-            var link = Ui.SmallLink(L10n.Tr("settings.open_billing_page"), () => ProjectActions.OpenUrl(url));
-            link.Margin = new Thickness(11, 0, 0, 0);
-            box.Children.Add(link);
+            box.Children.Add(Ui.SmallLink(L10n.Tr("settings.open_billing_page"), () => ProjectActions.OpenUrl(url)));
         }
-        return box;
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 10),
+        };
     }
 
     private Control EditingForm(Subscription? sub)
     {
-        var box = Ui.V(6);
-        box.Margin = new Thickness(11, 0, 0, 0);
+        var box = Ui.V(10);
 
         var plans = KnownPlans;
         if (plans.Count > 0)
@@ -173,17 +188,17 @@ public sealed class SubscriptionSettingsRow : StackPanel
             var options = plans.Select(p => SubscriptionPlanForm.MenuLabel(p, _currency)).ToList();
             options.Add(L10n.Tr("settings.plan_other"));
             var index = plans.ToList().FindIndex(p => p.Key == _planKey);
-            var dropdown = new DropdownControl(options[Math.Max(index, 0)], options, i =>
+            var picker = Ui.V(4);
+            picker.Children.Add(Ui.Text(L10n.Tr("settings.plan"), Type.CaptionSize, FontWeight.SemiBold,
+                Palette.Secondary));
+            picker.Children.Add(Picker.Make(options, Math.Max(index, 0), i =>
             {
                 _planKey = i < plans.Count ? plans[i].Key : SubscriptionPlanForm.OtherPlanTag;
                 if (_planKey != SubscriptionPlanForm.OtherPlanTag) _customPlan = "";
                 _price = SubscriptionPlanForm.PriceForSelection(_planKey, sub, plans);
                 Rebuild();
-            })
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-            };
-            box.Children.Add(dropdown);
+            }, minWidth: 220));
+            box.Children.Add(picker);
 
             if (_planKey == SubscriptionPlanForm.OtherPlanTag)
             {
@@ -195,63 +210,60 @@ public sealed class SubscriptionSettingsRow : StackPanel
             box.Children.Add(SmallField(L10n.Tr("settings.plan"), _customPlan, value => _customPlan = value));
         }
 
-        var priceRow = Ui.H(8);
-        // 价格框是等宽的（SwiftUI：`.font(.system(size: 11, design: .monospaced))`），占位符同样用等宽字体。
-        var price = Ui.TextField(_price, L10n.Tr("settings.monthly_price_usd"), mono: true, width: 85);
+        var priceBlock = Ui.V(4);
+        priceBlock.Children.Add(Ui.Text(L10n.Tr("settings.monthly_price_usd"), Type.CaptionSize,
+            FontWeight.SemiBold, Palette.Secondary));
+        var priceRow = Ui.H(10);
+        var price = Ui.TextField(_price, L10n.Tr("settings.monthly_price_usd"), mono: true, width: 110);
         var priceField = price.Box;
         priceField.TextChanged += (_, _) => _price = priceField.Text ?? "";
         ToolTip.SetTip(priceField, L10n.Tr("settings.monthly_price_usd"));
         priceRow.Children.Add(price.Root);
-        // 价格框后面是「Renews on day N」+ 步进箭头，顺序和 Mac 一样。
-        priceRow.Children.Add(Stepper(!_saving, "settings.renews_on_day", _day));
-        box.Children.Add(priceRow);
+        priceRow.Children.Add(Stepper(!_saving));
+        priceBlock.Children.Add(priceRow);
+        box.Children.Add(priceBlock);
 
-        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
-        // Mac：Apply 一直是 `.borderedProminent`（SettingsView.swift 的 editingForm），
-        // 只在 saving / loading 时整块 `.disabled` —— 禁用态的 borderedProminent 在浅色下
-        // 就是普通灰白按钮，所以这里禁用时退回 bordered 外观。
+        var actions = Ui.H(8);
         var applyEnabled = !_saving && !_services.IsLoading;
-        var applyButton = applyEnabled
-            ? Ui.ProminentButton(L10n.Tr("common.apply"), ApplyManual)
-            : Ui.BorderedButton(L10n.Tr("common.apply"), ApplyManual, enabled: false);
-        var cancelButton = Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
+        var applyButton = Ui.AccentButton(L10n.Tr("common.apply"), ApplyManual, enabled: applyEnabled);
+        var cancelButton = Ui.StandardButton(L10n.Tr("common.cancel"), () =>
         {
             _editing = false;
             _error = null;
             SyncInputs(Current);
             Rebuild();
         }, enabled: !_saving);
-        cancelButton.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(applyButton, 1);
-        Grid.SetColumn(cancelButton, 2);
         actions.Children.Add(applyButton);
         actions.Children.Add(cancelButton);
         if (sub is not null)
         {
-            var remove = Ui.BorderedButton(L10n.Tr("settings.remove_subscription"), RemoveManual, enabled: !_saving);
-            remove.Margin = new Thickness(6, 0, 0, 0);
-            Grid.SetColumn(remove, 3);
-            actions.Children.Add(remove);
+            actions.Children.Add(Ui.StandardButton(L10n.Tr("settings.remove_subscription"), RemoveManual,
+                enabled: !_saving));
         }
         box.Children.Add(actions);
         if (_saving) box.Opacity = 0.7;
-        return box;
+
+        return new Border
+        {
+            Child = box,
+            Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 12),
+        };
     }
 
     private Control SmallField(string label, string value, Action<string> onChange)
     {
-        var box = Ui.V(3);
-        box.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
+        var box = Ui.V(4);
+        box.Children.Add(Ui.Text(label, Type.CaptionSize, FontWeight.SemiBold, Palette.Secondary));
         var text = new TextBox
         {
             Text = value,
-            FontSize = 11,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.CardBackground,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
+            FontSize = Type.CaptionSize,
+            MinHeight = 32,
+            Padding = new Thickness(10, 5, 10, 5),
+            CornerRadius = new CornerRadius(4),
+            Background = Palette.ControlFill,
+            BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
+            BorderThickness = new Thickness(1),
         };
         text.TextChanged += (_, _) => onChange(text.Text ?? "");
         box.Children.Add(text);
@@ -259,27 +271,46 @@ public sealed class SubscriptionSettingsRow : StackPanel
     }
 
     /// <summary>
-    /// 步进控件（SwiftUI 的 `Stepper(label, value:in:)`）：label 里已经含数字（「Renews on day N」），
-    /// 右边只有上下两个小箭头，不额外画数值框。点箭头改 day 后整行重建。
+    /// 步进控件（SwiftUI 的 `Stepper`）：左边一行「Renews on day N」，右边两个 32×32 箭头。
+    /// 箭头是普通可点区域（不是 NumericUpDown），所以不会自己吞滚轮；滚轮由页面处理。
     /// </summary>
-    private Control Stepper(bool enabled, string labelKey, int day)
+    private Control Stepper(bool enabled)
     {
         var row = Ui.H(6);
-        row.Children.Add(Ui.Text(L10n.TrL(null, labelKey, day), 11));
-        var arrows = Ui.V(0);
-        arrows.Children.Add(new Clickable(Icons.ChevronUp(7, Palette.Secondary), () =>
+        row.Children.Add(Ui.Text(L10n.TrL(null, "settings.renews_on_day", _day), Type.CaptionSize, null,
+            enabled ? Palette.Foreground : Palette.Secondary));
+
+        var arrows = Ui.H(0);
+        Control ArrowGlyph(Control glyph)
+        {
+            glyph.HorizontalAlignment = HorizontalAlignment.Center;
+            glyph.VerticalAlignment = VerticalAlignment.Center;
+            return new Grid { Width = 26, Height = 22, Children = { glyph } };
+        }
+
+        var up = new Clickable(ArrowGlyph(Icons.ChevronUp(9, enabled ? Palette.Secondary : Palette.Disabled)), () =>
         {
             _day = _day >= 28 ? 1 : _day + 1;
             Rebuild();
-        }, radius: 2));
-        arrows.Children.Add(new Clickable(Icons.ChevronDown(7, Palette.Secondary), () =>
+        }, L10n.Tr("settings.renews_day_help"), radius: 4)
+        {
+            Width = 26,
+            Height = 22,
+        };
+        var down = new Clickable(ArrowGlyph(Icons.ChevronDown(9, enabled ? Palette.Secondary : Palette.Disabled)), () =>
         {
             _day = _day <= 1 ? 28 : _day - 1;
             Rebuild();
-        }, radius: 2));
+        }, L10n.Tr("settings.renews_day_help"), radius: 4)
+        {
+            Width = 26,
+            Height = 22,
+        };
+        arrows.Children.Add(up);
+        arrows.Children.Add(down);
         if (!enabled)
         {
-            arrows.Opacity = 0.55;
+            arrows.Opacity = 0.6;
             arrows.IsHitTestVisible = false;
         }
         row.Children.Add(arrows);

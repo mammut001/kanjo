@@ -15,51 +15,54 @@ public interface ISnapshotPage
 }
 
 /// <summary>
-/// 紧凑的分段控件（自绘胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
-/// 「Since reset」不可用时画成三级色、不可点；「Cycle」同理。
+/// 紧凑的分段控件（Fluent 胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
+/// 选中项是强调色填充 + 强调色上的文字；不可用的范围是禁用色文字、不可点。
 /// </summary>
 public sealed class RangePicker : Border
 {
     public RangePicker(string rangeRaw, TimeRange effective, bool resetAvailable, bool cycleAvailable,
         Action<string> onChange)
     {
-        Padding = new Thickness(1.5);
-        CornerRadius = new CornerRadius(12);
-        Background = new SolidColorBrush(Palette.ForegroundColor, 0.06);
-        HorizontalAlignment = HorizontalAlignment.Left;
+        Padding = new Thickness(3);
+        CornerRadius = new CornerRadius(10);
+        Background = Palette.GroupFill;
+        BorderBrush = Palette.CardBorder;
+        BorderThickness = new Thickness(1);
+        // 7 个胶囊在 360px 宽的面板里放不下一行，用流式折行（Windows 11 的 SelectorBar 窄窗行为）。
+        HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Center;
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var row = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var range in TimeRanges.All)
         {
             var selected = range == effective;
-            var label = Ui.Text(range.ShortLabel(), 9.5, selected ? FontWeight.SemiBold : FontWeight.Normal,
-                selected ? Palette.Foreground : Palette.Secondary);
+            var label = Ui.Text(range.ShortLabel(), 12, selected ? FontWeight.SemiBold : FontWeight.Normal,
+                selected ? Palette.ContrastOn(Palette.Accent) : Palette.Secondary);
             var chip = new Border
             {
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(4, 2.5, 4, 2.5),
-                Background = selected ? new SolidColorBrush(Palette.ForegroundColor, 0.13) : Brushes.Transparent,
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(9, 4, 9, 4),
+                Background = selected ? Palette.Accent : Brushes.Transparent,
                 Child = label,
-                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             };
 
             var unavailable = Unavailable(range, resetAvailable, cycleAvailable);
             if (unavailable is not null)
             {
-                label.Foreground = Palette.Tertiary;
+                label.Foreground = Palette.Disabled;
                 ToolTip.SetTip(chip, unavailable);
             }
             else
             {
                 ToolTip.SetTip(chip, range.LongLabel());
                 chip.PointerReleased += (_, _) => onChange(range.RawValue());
-                chip.PointerEntered += (_, _) => chip.Background = Palette.RowHover;
+                chip.PointerEntered += (_, _) =>
+                {
+                    if (!selected) chip.Background = Palette.RowHover;
+                };
                 chip.PointerExited += (_, _) =>
                 {
-                    chip.Background = selected
-                        ? new SolidColorBrush(Palette.ForegroundColor, 0.13)
-                        : Brushes.Transparent;
+                    if (!selected) chip.Background = Brushes.Transparent;
                 };
             }
             row.Children.Add(chip);
@@ -84,7 +87,7 @@ public sealed class RangeCaptionLine : StackPanel
         Spacing = 4;
         VerticalAlignment = VerticalAlignment.Center;
         Children.Add(Icons.Calendar(10, Palette.Secondary));
-        Children.Add(Ui.Text(caption.Text, 10.5, null, Palette.Secondary, wrap: true));
+        Children.Add(Ui.Text(caption.Text, 12, null, Palette.Secondary, wrap: true));
         if (!string.IsNullOrEmpty(caption.Help)) ToolTip.SetTip(this, caption.Help);
     }
 }
@@ -350,9 +353,11 @@ public sealed class MosaicView : Panel
 
     private static Control TileView(MosaicLayout.Tile tile, string currency, int index)
     {
-        var color = tile.AgentKey is { } agent
+        var baseColor = tile.AgentKey is { } agent
             ? Palette.AgentColor(agent)
             : ((ISolidColorBrush)Palette.Neutral).Color;
+        // 标签文字与色块一起决定：必要时把色块朝反方向微调一两个百分点，保证文字 ≥ 4.5:1。
+        var ink = Palette.TileInk(baseColor, out var color);
 
         var shape = new Border
         {
@@ -366,14 +371,14 @@ public sealed class MosaicView : Panel
             VerticalAlignment = VerticalAlignment.Top,
         };
 
-        var label = Label(tile, currency);
+        var label = Label(tile, currency, ink);
         if (label is not null) shape.Child = label;
 
         ToolTip.SetTip(shape, tile.Tooltip(currency));
         if (tile.Project is { } project)
         {
             var captured = project;
-            shape.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand);
+            // 色块可点，但光标仍是箭头（Windows 只在链接上用手型）。
             HoverLayer.Attach(shape, $"overview:tile:{index}",
                 () => HoverCards.AgentRows(captured.Name, null, captured.Cost, captured.Tokens.Total, currency,
                     HoverCardRowBuilder.AgentRows(captured.ByAgent.Select(a =>
@@ -385,8 +390,9 @@ public sealed class MosaicView : Panel
     /// <summary>
     /// 方块左上角的名字和金额。规则（绝不截断、不出现省略号）：
     /// 宽 ≥ 72 且高 ≥ 40：名字 + 金额；宽 ≥ 72 但高 &lt; 40：只画名字；更小：什么都不画。
+    /// 文字颜色按色块亮度逐块选（白或近黑），保证 ≥ 4.5:1 —— 旧的固定 92% 白在小方块上读不出来。
     /// </summary>
-    private static Control? Label(MosaicLayout.Tile tile, string currency)
+    private static Control? Label(MosaicLayout.Tile tile, string currency, Color inkColor)
     {
         var amount = Fmt.Money(tile.Cost, currency);
         var fit = MosaicLayout.FitLabel(
@@ -394,6 +400,8 @@ public sealed class MosaicView : Panel
             s => Type.MeasureWidth(s, 11, FontWeight.SemiBold),
             s => Type.MeasureWidth(s, 10, FontWeight.Normal));
         if (fit.Name is null) return null;
+
+        var ink = new SolidColorBrush(inkColor);
 
         var box = new StackPanel
         {
@@ -403,10 +411,10 @@ public sealed class MosaicView : Panel
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
         };
-        box.Children.Add(Ui.Text(fit.Name, 11, FontWeight.SemiBold, Palette.OnTile));
+        box.Children.Add(Ui.Text(fit.Name, 12, FontWeight.SemiBold, ink));
         if (fit.ShowAmount)
         {
-            box.Children.Add(Ui.Text(amount, 10, FontWeight.Normal, Palette.OnTile));
+            box.Children.Add(Ui.Text(amount, 12, FontWeight.Normal, ink));
         }
         return box;
     }

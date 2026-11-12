@@ -17,10 +17,10 @@ public static class DetailPage
     {
         var root = Ui.V(Spacing);
         var back = Widgets.BackButton(backTitle, onBack);
-        back.Margin = new Thickness(Metrics.BackInset, 0, 0, -6);
+        back.Margin = new Thickness(-2, 0, 0, 2);
         root.Children.Add(back);
         foreach (var section in sections) root.Children.Add(section);
-        root.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 10);
+        root.Margin = new Thickness(Metrics.PagePadding, 8, Metrics.PagePadding, 16);
         return root;
     }
 }
@@ -29,19 +29,8 @@ public static class DetailPage
 /// 项目详情（ProjectDetailView.swift）：头部、Tokens、By agent、By model、By day、By branch、
 /// Sessions、Locations。非 All 范围下 tokens 只显示总额，By model / By branch 标「All time」。
 /// </summary>
-public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
+public sealed class ProjectDetailPage : ScrollPage
 {
-    /// <summary>截图模式：交出内容本身（不含滚动容器），由面板按整页高度渲染。</summary>
-    public Control SnapshotBody
-    {
-        get
-        {
-            var content = Content as Control ?? new Panel();
-            Content = null;
-            return content;
-        }
-    }
-
     private readonly AppServices _services;
     private readonly Project _project;
     private readonly int _projectIndex;
@@ -50,7 +39,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
     private readonly bool _snapshot;
 
     public ProjectDetailPage(AppServices services, Project project, int index, string? anchor, Action onBack,
-        bool snapshot = false, bool openLocations = false)
+        bool snapshot = false, bool openLocations = false) : base(snapshot)
     {
         _services = services;
         _project = project;
@@ -60,11 +49,6 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         _snapshot = snapshot;
         _showLocations = openLocations;
 
-        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        VerticalScrollBarVisibility = snapshot
-            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
-            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
-        Background = Brushes.Transparent;
         Content = Build();
 
         if (snapshot && anchor is RouteAnchors.ProjectBottom or RouteAnchors.ProjectLocationsOpen)
@@ -72,7 +56,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 UpdateLayout();
-                Offset = new Vector(0, Math.Max(0, Extent.Height - Viewport.Height));
+                ScrollTo(Math.Max(0, Extent.Height - Viewport.Height));
             }, Avalonia.Threading.DispatcherPriority.Loaded);
         }
         else if (snapshot && anchor is not null && anchor.Contains(":hover:", StringComparison.Ordinal))
@@ -113,7 +97,8 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         var box = Ui.V(3);
 
         var titleRow = new WrapPanel { Orientation = Orientation.Horizontal };
-        var name = Ui.Text(_project.Name, 15, FontWeight.SemiBold, maxLines: 2);
+        var name = Ui.Text(_project.Name, Type.TitleSize, FontWeight.SemiBold, maxLines: 2,
+            family: Type.Display);
         name.Margin = new Thickness(0, 0, 6, 0);
         titleRow.Children.Add(name);
         if (_project.PathMissing)
@@ -155,7 +140,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
 
         var heat = Ui.V(3);
         heat.HorizontalAlignment = HorizontalAlignment.Right;
-        var heatTitle = Ui.Text(L10n.Tr("project.last_8_weeks"), 9.5, null, Palette.Secondary);
+        var heatTitle = Ui.Text(L10n.Tr("project.last_8_weeks"), 12, null, Palette.Secondary);
         heatTitle.TextAlignment = TextAlignment.Right;
         heat.Children.Add(heatTitle);
         var weeks = HeatStrip.Weekly(shown.ByDay, HeatEndDate(Report), RangeContext.FallbackAgent(_project),
@@ -172,7 +157,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             ? L10n.Tr("project.no_usage")
             : ShortDate.Range(shown.FirstActive, shown.LastActive);
         box.Children.Add(Ui.Text(
-            ProjectSubtitleText.Make(ctx.Range, shown.Sessions, usageText), 11, null, Palette.Secondary));
+            ProjectSubtitleText.Make(ctx.Range, shown.Sessions, usageText), 12, null, Palette.Secondary));
 
         if (ctx.CaptionResult is { } caption)
         {
@@ -185,7 +170,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         if (_project.Remote is { } r)
         {
             remote.Children.Add(Icons.Link(9, Palette.Secondary));
-            var text = Ui.Text(r, 10.5, null, Palette.Secondary, maxLines: 1);
+            var text = Ui.Text(r, 12, null, Palette.Secondary, maxLines: 1);
             text.TextTrimming = TextTrimming.CharacterEllipsis;
             remote.Children.Add(text);
             ToolTip.SetTip(remote, r);
@@ -193,13 +178,12 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         else
         {
             remote.Children.Add(Icons.Disk(9, Palette.Secondary));
-            remote.Children.Add(Ui.Text(L10n.Tr("project.local_repo"), 10.5, null, Palette.Secondary));
+            remote.Children.Add(Ui.Text(L10n.Tr("project.local_repo"), 12, null, Palette.Secondary));
         }
         remote.Margin = new Thickness(0, 8, 0, 0);
         box.Children.Add(remote);
 
-        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
-        return box;
+        return Chrome.Card(box, Metrics.RowInset, 14);
     }
 
     private static DateTimeOffset HeatEndDate(UsageReport report)
@@ -215,15 +199,15 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
     private Control TokensSection(FilteredProject filtered, bool isAll)
     {
         var tokens = filtered.Projected.Tokens;
-        var headerRight = Ui.Text(L10n.TrL(null, "project.tokens_total", Fmt.Tokens(tokens.Total)), 10.5, null,
+        var headerRight = Ui.Text(L10n.TrL(null, "project.tokens_total", Fmt.Tokens(tokens.Total)), 12, null,
             Palette.Secondary);
         headerRight.VerticalAlignment = VerticalAlignment.Center;
 
         if (!isAll)
         {
             var body = Ui.H(8);
-            body.Children.Add(Ui.Text(Fmt.Tokens(tokens.Total), 13, FontWeight.Medium, family: Type.Rounded));
-            var note = Ui.Text(L10n.Tr("project.breakdown_all_only"), 10.5, null, Palette.Secondary, wrap: true);
+            body.Children.Add(Ui.Text(Fmt.Tokens(tokens.Total), 15, FontWeight.Medium, family: Type.Rounded));
+            var note = Ui.Text(L10n.Tr("project.breakdown_all_only"), 12, null, Palette.Secondary, wrap: true);
             body.Children.Add(note);
             return Section(L10n.Tr("project.section.tokens"), body, headerRight);
         }
@@ -253,7 +237,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
     }
 
     private static Control Section(string title, Control content, Control? trailing = null) =>
-        Chrome.Section(title, content, fill: true, padding: Metrics.RowInset, trailing: trailing);
+        Chrome.LegacySection(title, content, trailing: trailing);
 
     private Control TokenCell(string label, long value, IBrush? color, string help, Tokens tokens)
     {
@@ -275,9 +259,9 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                 VerticalAlignment = VerticalAlignment.Center,
             });
         }
-        top.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
+        top.Children.Add(Ui.Text(label, 12, null, Palette.Secondary));
         box.Children.Add(top);
-        box.Children.Add(Ui.Text(Fmt.Tokens(value), 13, FontWeight.Medium, family: Type.Rounded));
+        box.Children.Add(Ui.Text(Fmt.Tokens(value), 15, FontWeight.Medium, family: Type.Rounded));
         ToolTip.SetTip(box, help + " · " + L10n.TrL(null, "overview.tokens_count", Fmt.Tokens(value)));
 
         var cardLabel = label;
@@ -306,15 +290,15 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                 VerticalAlignment = VerticalAlignment.Center,
             });
         }
-        left.Children.Add(Ui.Text(label, 12, FontWeight.SemiBold));
+        left.Children.Add(Ui.Text(label, 14, FontWeight.SemiBold));
         Grid.SetColumn(left, 0);
         top.Children.Add(left);
-        var count = Ui.Text(Fmt.Tokens(value), 12, FontWeight.SemiBold, family: Type.Rounded);
+        var count = Ui.Text(Fmt.Tokens(value), 14, FontWeight.SemiBold, family: Type.Rounded);
         count.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(count, 2);
         top.Children.Add(count);
         box.Children.Add(top);
-        box.Children.Add(Ui.Text(help, 10.5, null, Palette.Secondary, wrap: true));
+        box.Children.Add(Ui.Text(help, 12, null, Palette.Secondary, wrap: true));
         return box;
     }
 
@@ -348,7 +332,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         var content = Ui.V(10);
         if (shown.ByAgent.Count == 0)
         {
-            content.Children.Add(Ui.Text(L10n.Tr("project.no_usage_range"), 11, null, Palette.Secondary));
+            content.Children.Add(Ui.Text(L10n.Tr("project.no_usage_range"), 12, null, Palette.Secondary));
         }
         foreach (var agent in shown.ByAgent)
         {
@@ -397,15 +381,15 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         var left = Ui.H(5);
         left.Children.Add(Ui.Dot(share.Agent, 7));
-        left.Children.Add(Ui.Text(share.PlanLabel, 12, FontWeight.SemiBold));
+        left.Children.Add(Ui.Text(share.PlanLabel, 14, FontWeight.SemiBold));
         Grid.SetColumn(left, 0);
         top.Children.Add(left);
-        var value = Ui.Text(ShareText(share.Share), 11.5, FontWeight.SemiBold, family: Type.Rounded);
+        var value = Ui.Text(ShareText(share.Share), 13, FontWeight.SemiBold, family: Type.Rounded);
         value.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(value, 2);
         top.Children.Add(value);
         box.Children.Add(top);
-        box.Children.Add(Ui.Text(cycleText, 10.5, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(cycleText, 12, null, Palette.Secondary));
         return box;
     }
 
@@ -427,13 +411,13 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         top.Children.Add(left);
         if (!string.IsNullOrEmpty(detail))
         {
-            var detailText = Ui.Text(detail!, 10.5, null, Palette.Secondary);
+            var detailText = Ui.Text(detail!, 12, null, Palette.Secondary);
             detailText.TextAlignment = TextAlignment.Right;
             detailText.Margin = new Thickness(6, 0, 0, 0);
             Grid.SetColumn(detailText, 2);
             top.Children.Add(detailText);
         }
-        var amount = Ui.Text(value, 12, FontWeight.Medium, family: Type.Rounded);
+        var amount = Ui.Text(value, 14, FontWeight.Medium, family: Type.Rounded);
         amount.TextAlignment = TextAlignment.Right;
         amount.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(amount, 3);
@@ -454,11 +438,11 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         var row = 0;
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var headerModel = Ui.Text(L10n.Tr("project.model"), 10, null, Palette.Tertiary);
-        var headerTokens = Ui.Text(L10n.Tr("project.section.tokens"), 10, null, Palette.Tertiary);
+        var headerModel = Ui.Text(L10n.Tr("project.model"), 12, null, Palette.Tertiary);
+        var headerTokens = Ui.Text(L10n.Tr("project.section.tokens"), 12, null, Palette.Tertiary);
         headerTokens.TextAlignment = TextAlignment.Right;
         headerTokens.Margin = new Thickness(8, 0, 0, 0);
-        var headerCost = Ui.Text(L10n.Tr("project.cost"), 10, null, Palette.Tertiary);
+        var headerCost = Ui.Text(L10n.Tr("project.cost"), 12, null, Palette.Tertiary);
         headerCost.TextAlignment = TextAlignment.Right;
         headerCost.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetRow(headerModel, 0); Grid.SetColumn(headerModel, 0); grid.Children.Add(headerModel);
@@ -467,7 +451,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
 
         if (all.Count == 0)
         {
-            content.Children.Add(Ui.Text(L10n.Tr("overview.models.no_usage_range"), 11, null, Palette.Secondary));
+            content.Children.Add(Ui.Text(L10n.Tr("overview.models.no_usage_range"), 12, null, Palette.Secondary));
         }
         for (var j = 0; j < all.Count; j++)
         {
@@ -476,7 +460,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var left = Ui.H(5);
             left.Children.Add(Ui.Dot(model.Agent, 6));
-            var name = Ui.Text(model.Model, 11, family: Type.Mono, maxLines: 1);
+            var name = Ui.Text(model.Model, 12, family: Type.Mono, maxLines: 1);
             name.TextTrimming = TextTrimming.CharacterEllipsis;
             left.Children.Add(name);
             if (model.Estimated)
@@ -493,14 +477,14 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             HoverLayer.Attach(left, $"project:{_projectIndex}:hover:model:{j}",
                 () => HoverCards.Model(copy.Model, copy.Agent, copy.Cost, copy.Tokens, Currency));
 
-            var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 11, null, Palette.Secondary);
+            var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 12, null, Palette.Secondary);
             tokens.TextAlignment = TextAlignment.Right;
             tokens.Margin = new Thickness(8, 0, 0, 0);
             tokens.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(tokens, row); Grid.SetColumn(tokens, 1);
             grid.Children.Add(tokens);
 
-            var cost = Ui.Text(Fmt.Money(model.Cost, Currency), 11, FontWeight.Medium, family: Type.Rounded);
+            var cost = Ui.Text(Fmt.Money(model.Cost, Currency), 12, FontWeight.Medium, family: Type.Rounded);
             cost.TextAlignment = TextAlignment.Right;
             cost.Margin = new Thickness(8, 0, 0, 0);
             cost.VerticalAlignment = VerticalAlignment.Center;
@@ -554,18 +538,18 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         var content = Ui.V(6);
         if (all.Count == 0)
         {
-            content.Children.Add(Ui.Text(L10n.Tr("project.no_branch_info"), 11, null, Palette.Secondary));
+            content.Children.Add(Ui.Text(L10n.Tr("project.no_branch_info"), 12, null, Palette.Secondary));
             return Section(L10n.Tr("project.section.by_branch"), content,
                 isAll ? null : AllTimeBadge(L10n.Tr("project.noun.branches")));
         }
         var shown = _branchesExpanded ? all : all.Take(CollapsedLimit).ToList();
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var hBranch = Ui.Text(L10n.Tr("project.branch"), 10, null, Palette.Tertiary);
-        var hSessions = Ui.Text(Capitalize(L10n.Tr("project.noun.sessions")), 10, null, Palette.Tertiary);
+        var hBranch = Ui.Text(L10n.Tr("project.branch"), 12, null, Palette.Tertiary);
+        var hSessions = Ui.Text(Capitalize(L10n.Tr("project.noun.sessions")), 12, null, Palette.Tertiary);
         hSessions.TextAlignment = TextAlignment.Right;
         hSessions.Margin = new Thickness(8, 0, 0, 0);
-        var hCost = Ui.Text(L10n.Tr("project.cost"), 10, null, Palette.Tertiary);
+        var hCost = Ui.Text(L10n.Tr("project.cost"), 12, null, Palette.Tertiary);
         hCost.TextAlignment = TextAlignment.Right;
         hCost.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetRow(hBranch, 0); Grid.SetColumn(hBranch, 0); grid.Children.Add(hBranch);
@@ -579,7 +563,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             row++;
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var unknown = branch.Branch == "(unknown)";
-            var name = Ui.Text(unknown ? L10n.Tr("common.unknown") : branch.Branch, 11,
+            var name = Ui.Text(unknown ? L10n.Tr("common.unknown") : branch.Branch, 12,
                 null, unknown ? Palette.Secondary : Palette.Foreground, maxLines: 1, mono: true);
             name.TextTrimming = TextTrimming.CharacterEllipsis;
             name.Margin = new Thickness(0, 3, 0, 3);
@@ -604,15 +588,14 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                     branchTokens, Currency, rows, subtitle));
             ToolTip.SetTip(name, $"{branch.Branch} · {Fmt.CostAndTokens(branch.Cost, branchTokens, Currency)}");
 
-            var sessionText = Ui.Text(branch.Sessions.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                11, null, Palette.Secondary);
+            var sessionText = Ui.Text(branch.Sessions.ToString(System.Globalization.CultureInfo.InvariantCulture), 12, null, Palette.Secondary);
             sessionText.TextAlignment = TextAlignment.Right;
             sessionText.Margin = new Thickness(8, 0, 0, 0);
             sessionText.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(sessionText, row); Grid.SetColumn(sessionText, 1);
             grid.Children.Add(sessionText);
 
-            var cost = Ui.Text(Fmt.Money(branch.Cost, Currency), 11, FontWeight.Medium, family: Type.Rounded);
+            var cost = Ui.Text(Fmt.Money(branch.Cost, Currency), 12, FontWeight.Medium, family: Type.Rounded);
             cost.TextAlignment = TextAlignment.Right;
             cost.Margin = new Thickness(8, 0, 0, 0);
             cost.VerticalAlignment = VerticalAlignment.Center;
@@ -675,9 +658,8 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
 
         var box = Ui.V(6);
         box.Children.Add(Ui.SectionTitle(L10n.Tr("project.section.locations")));
-
         var captionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto") };
-        var caption = Ui.Text(LocationsCaption(primary.Count, temporary.Count), 10.5, null, Palette.Secondary);
+        var caption = Ui.Text(LocationsCaption(primary.Count, temporary.Count), 12, null, Palette.Secondary);
         Grid.SetColumn(caption, 0);
         captionRow.Children.Add(caption);
         if (_project.PathMissing)
@@ -692,13 +674,13 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         {
             var showRow = Ui.H(3);
             showRow.Children.Add(Ui.Text(_showLocations ? L10n.Tr("common.hide") : L10n.Tr("common.show"),
-                11, null, Palette.Accent));
-            showRow.Children.Add(Icons.Chevron(_showLocations, 8, Palette.Accent));
+                Type.CaptionSize, null, Palette.Link));
+            showRow.Children.Add(Icons.Chevron(_showLocations, 10, Palette.Link));
             var toggle = new Clickable(showRow, () =>
             {
                 _showLocations = !_showLocations;
                 _services.NotifyChanged();
-            }, radius: 4);
+            }, radius: 4, hand: true);
             Grid.SetColumn(toggle, 3);
             captionRow.Children.Add(toggle);
         }
@@ -708,8 +690,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         {
             box.Children.Add(PathsView(primary, temporary));
         }
-        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
-        return box;
+        return Chrome.Card(box, Metrics.RowInset, 12);
     }
 
     private Control PathsView(IReadOnlyList<string> primary, IReadOnlyList<string> temporary)
@@ -730,7 +711,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                 ? L10n.TrL(null, "project.locations.hide_temp.singular", temporary.Count)
                 : L10n.TrL(null, "project.locations.hide_temp.plural", temporary.Count))
             : noun;
-        toggleRow.Children.Add(Ui.Text(title, 10.5, null, Palette.Secondary));
+        toggleRow.Children.Add(Ui.Text(title, 12, null, Palette.Secondary));
         var toggle = new Clickable(toggleRow, () =>
         {
             _showTemporary = !_showTemporary;
