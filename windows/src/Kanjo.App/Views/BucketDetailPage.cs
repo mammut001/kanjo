@@ -74,8 +74,7 @@ public sealed class BucketDetailPage : ScrollViewer, ISnapshotPage
             10.5, null, Palette.Secondary, wrap: true);
         explanation.Margin = new Thickness(0, 8, 0, 0);
         header.Children.Add(explanation);
-        header.Margin = new Thickness(Metrics.RowInset - Metrics.PagePadding, 0,
-            Metrics.RowInset - Metrics.PagePadding, 0);
+        header.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
 
         var sessions = Chrome.Section(L10n.TrL(null, "project.section.sessions", bucket.SessionsDetail.Count),
             new SessionList(services, bucket.SessionsDetail, report.Config.DominantThreshold, currency),

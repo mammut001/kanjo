@@ -134,14 +134,11 @@ public sealed class HoverLayer : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var width = double.IsFinite(availableSize.Width) && availableSize.Width > 0
-            ? availableSize.Width
-            : Metrics.PanelWidth;
-        var height = double.IsFinite(availableSize.Height) && availableSize.Height > 0
-            ? availableSize.Height
-            : Metrics.PanelHeight;
+        // 悬停层跨满整个面板，但它不能影响父级 Grid 的 Auto 行高：否则内容比 620 矮时，
+        // 三行会被平均撑开（顶部多出 9~13pt 的空白）。这里只测量卡片，自身报 0 尺寸；
+        // 铺满由 Stretch 对齐在 Arrange 阶段完成（Bounds 仍是整块面板）。
         _card?.Measure(new Size(MaxCardWidth, MaxCardHeight));
-        return new Size(width, height);
+        return default;
     }
 
     protected override Size ArrangeOverride(Size finalSize)

@@ -59,6 +59,14 @@ public static class Palette
         ? Color.FromArgb(0x66, 0xF2, 0xF2, 0xF5)
         : Color.FromArgb(0x66, 0x1A, 0x1A, 0x1C));
 
+    /// <summary>
+    /// 比次要色更淡的一档（Mac 里 `Label` 放进 `.borderless` 按钮后的实际观感，
+    /// 比如会话列表头上的「? Attribution」）。
+    /// </summary>
+    public static IBrush Muted => new SolidColorBrush(IsDark
+        ? Color.FromArgb(0x4D, 0xF2, 0xF2, 0xF5)
+        : Color.FromArgb(0x44, 0x1A, 0x1A, 0x1C));
+
     /// <summary>面板根背景：Mac 的 .regularMaterial 浅色下约为 #F1F1F1。</summary>
     public static IBrush PanelBackground => new SolidColorBrush(IsDark
         ? Color.FromRgb(0x22, 0x22, 0x24)
@@ -147,6 +155,12 @@ public static class Metrics
     public const double PagePadding = 14;
     public const double SectionSpacing = 18;
     public const double RowInset = 10;
+
+    /// <summary>
+    /// 返回按钮的左缩进（Mac: DetailPage 里 `.padding(.leading, rowInset - 4)`）：
+    /// 再减 3 抵消自绘 chevron 在 12×12 几何里的左侧空白，让箭头墨迹落在 rowInset 上。
+    /// </summary>
+    public const double BackInset = RowInset - 7;
     public const double GroupRadius = 10;
 
     // 总览：列表行直接放在面板上（没有分组底色）。

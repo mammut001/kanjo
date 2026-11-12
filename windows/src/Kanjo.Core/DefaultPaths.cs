@@ -111,10 +111,10 @@ public static class DefaultPaths
         var args = arguments ?? Environment.GetCommandLineArgs();
         for (var i = 0; i < args.Count - 1; i++)
         {
-            if (args[i] == "--data") return ExpandTilde(args[i + 1]);
+            if (args[i] == "--data") return ResolvePath(args[i + 1]);
         }
         var env = environment ?? AppSettings.ReadEnvironment();
-        if (env.TryGetValue("KANJO_DATA", out var value) && value.Length > 0) return ExpandTilde(value);
+        if (env.TryGetValue("KANJO_DATA", out var value) && value.Length > 0) return ResolvePath(value);
         return null;
     }
 
@@ -149,6 +149,23 @@ public static class DefaultPaths
     /// <summary>`--flag value` 取参数（同 <see cref="FlagValue"/>）。</summary>
     public static string? Flag(string flag, IReadOnlyList<string>? arguments = null) =>
         FlagValue(flag, arguments);
+
+    /// <summary>
+    /// 覆盖路径解析成绝对路径（对应 Mac 的 URL(fileURLWithPath:relativeTo: currentDirectoryPath)）。
+    /// 设置页的警告卡要显示解析后的绝对路径，不能显示命令行里写的相对路径。
+    /// </summary>
+    public static string ResolvePath(string path)
+    {
+        var expanded = ExpandTilde(path);
+        try
+        {
+            return Path.GetFullPath(expanded);
+        }
+        catch (Exception)
+        {
+            return expanded;
+        }
+    }
 
     public static string ExpandTilde(string path)
     {

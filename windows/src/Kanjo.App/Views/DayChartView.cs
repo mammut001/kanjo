@@ -248,6 +248,18 @@ public sealed class DayChartView : Panel
                 var scaleMax = NiceMax(max);
                 var foreground = Palette.ForegroundColor;
 
+                var ticks = DateTicks(points);
+                var tickPositions = ticks.Select(d => XForDay(points, d)).ToList();
+
+                // 竖直网格线：和 Swift Charts 的 AxisGridLine 一样落在日期刻度上，用虚线。
+                var gridPen = new Pen(new SolidColorBrush(foreground, 0.06), 1,
+                    new DashStyle([2, 2], 0));
+                foreach (var x in tickPositions)
+                {
+                    context.DrawLine(gridPen, new Point(Math.Round(x) + 0.5, 0),
+                        new Point(Math.Round(x) + 0.5, plotHeight));
+                }
+
                 for (var i = 0; i < YTicks; i++)
                 {
                     var value = scaleMax * i / (YTicks - 1);
@@ -255,10 +267,12 @@ public sealed class DayChartView : Panel
                     var pen = new Pen(new SolidColorBrush(foreground, i == 0 ? 0.10 : 0.08), 1);
                     context.DrawLine(pen, new Point(YAxisWidth, Math.Round(y) + 0.5),
                         new Point(width, Math.Round(y) + 0.5));
-                    DrawText(context, AxisMoney(value), 9, YAxisWidth - 4, y - 6, rightAligned: true);
+                    // Mac 的 y 轴标签贴着卡片内容区左缘（左对齐），不右对齐到绘图区。
+                    DrawText(context, AxisMoney(value), 9, 0, y - 6, rightAligned: false);
                 }
 
-                var barWidth = Math.Max(2, Math.Min(6, _area.PlotWidth / Math.Max(points.Count, 1) * 0.6));
+                // Mac 的柱子在 360pt 面板里约 3pt 宽（Swift Charts 自动宽度），不要按天数拉伸。
+                const double barWidth = 3;
                 var active = _area._highlight;
                 foreach (var point in points)
                 {
@@ -279,18 +293,36 @@ public sealed class DayChartView : Panel
                     context.DrawLine(pen, new Point(x, 0), new Point(x, plotHeight));
                 }
 
-                DrawDayLabels(context, points, width, plotHeight);
+                // 日期标签画在刻度线左侧偏移一点，和 Swift Charts 的 centered: false 一致。
+                foreach (var day in ticks)
+                {
+                    var date = DateOnly.FromDayNumber(day);
+                    var label = Fmt.MonthDay(Time.AtDay(TimeZoneInfo.Utc, date), TimeZoneInfo.Utc, null);
+                    var x = XForDay(points, day);
+                    var textWidth = Type.MeasureWidth(label, 9);
+                    var clamped = Math.Min(Math.Max(x, 0), Math.Max(width - textWidth, 0));
+                    DrawText(context, label, 9, clamped + 2, plotHeight + 2, rightAligned: false);
+                }
             }
 
-            private void DrawDayLabels(DrawingContext context, List<DayPoint> points, double width,
-                double plotHeight)
+            private double XForDay(List<DayPoint> points, int day)
             {
-                if (points.Count == 0) return;
+                if (points.Count == 0) return 0;
+                var lo = points[0].Date.DayNumber - 1;
+                var hi = points[^1].Date.DayNumber + 1;
+                var span = Math.Max(hi - lo, 1);
+                return _area.PlotWidth == 0 ? 0 : (day - lo) / (double)span * _area.PlotWidth;
+            }
+
+            /// <summary>和 Swift Charts 的自动刻度类似：选一个「整周」步长，刻度对齐到周日，从右往左排。</summary>
+            private static List<int> DateTicks(List<DayPoint> points)
+            {
+                var ticks = new List<int>();
+                if (points.Count == 0) return ticks;
                 var lo = points[0].Date.DayNumber - 1;
                 var hi = points[^1].Date.DayNumber + 1;
                 var span = Math.Max(hi - lo, 1);
 
-                // 和 Swift Charts 的自动刻度类似：选一个「整周」步长，刻度对齐到周日，从右往左排。
                 int[] steps = [1, 2, 3, 7, 14, 28, 56];
                 var step = steps[^1];
                 foreach (var candidate in steps)
@@ -301,26 +333,15 @@ public sealed class DayChartView : Panel
                 var last = DateOnly.FromDayNumber(hi);
                 if (step % 7 == 0)
                 {
-                    // 对齐到周日（Swift Charts 的日期轴也是这样落在周末）。
                     var offset = ((int)last.DayOfWeek + 7) % 7;
                     last = last.AddDays(-offset);
                 }
-                var ticks = new List<int>();
                 for (var date = last; date.DayNumber > lo && ticks.Count < 6; date = date.AddDays(-step))
                 {
                     ticks.Add(date.DayNumber);
                 }
                 ticks.Reverse();
-
-                foreach (var day in ticks)
-                {
-                    var date = DateOnly.FromDayNumber(day);
-                    var label = Fmt.MonthDay(Time.AtDay(TimeZoneInfo.Utc, date), TimeZoneInfo.Utc, null);
-                    var x = YAxisWidth + (day - lo) / (double)span * _area.PlotWidth;
-                    var textWidth = Type.MeasureWidth(label, 9);
-                    var clamped = Math.Min(Math.Max(x, YAxisWidth), Math.Max(width - textWidth, YAxisWidth));
-                    DrawText(context, label, 9, clamped, plotHeight + 2, rightAligned: false);
-                }
+                return ticks;
             }
 
             private static void DrawText(DrawingContext context, string text, double size, double x, double y,

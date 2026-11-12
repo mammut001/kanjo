@@ -179,6 +179,16 @@ public static class Ui
         };
     }
 
+    /// <summary>主要按钮（可禁用版）：禁用时灰底白字，对应 `.borderedProminent` 的 disabled 外观。</summary>
+    public static Clickable ProminentButton(string text, Action onClick, bool enabled, IBrush? tint = null,
+        double size = 11.5)
+    {
+        var button = ProminentButton(text, onClick, enabled ? tint : Palette.Tertiary, size);
+        button.IsEnabled = enabled;
+        button.Opacity = enabled ? 1 : 0.9;
+        return button;
+    }
+
     /// <summary>次要按钮（bordered 近似）：淡底 + 细描边。</summary>
     public static Clickable BorderedButton(string text, Action onClick, bool enabled = true, double size = 11)
     {

@@ -121,7 +121,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var box = Ui.V(8);
         box.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 0);
         var back = Back();
-        back.Margin = new Thickness(Metrics.RowInset - 4 - Metrics.PagePadding, 0, 0, 0);
+        back.Margin = new Thickness(Metrics.BackInset, 0, 0, 0);
         box.Children.Add(back);
         box.Children.Add(new Panel { Height = 60 });
         var spinner = new Spinner(16) { HorizontalAlignment = HorizontalAlignment.Center };
@@ -137,7 +137,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var box = Ui.V(12);
         box.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 10);
         var back = Back();
-        back.Margin = new Thickness(Metrics.RowInset - 4 - Metrics.PagePadding, 0, 0, 0);
+        back.Margin = new Thickness(Metrics.BackInset, 0, 0, 0);
         box.Children.Add(back);
         var title = Ui.H(4);
         title.Children.Add(Icons.WarnTriangle(11, Palette.Bad));
@@ -176,12 +176,10 @@ public sealed class DiskPage : Grid, ISnapshotPage
 
         var root = Ui.V(Metrics.SectionSpacing);
         var back = Back();
-        back.Margin = new Thickness(Metrics.RowInset - 4 - Metrics.PagePadding, 0, 0, 0);
+        back.Margin = new Thickness(Metrics.BackInset, 0, 0, 0);
         root.Children.Add(back);
-        root.Children.Add(Hero(report).WithMargin(Metrics.RowInset - Metrics.PagePadding, 0,
-            Metrics.RowInset - Metrics.PagePadding, 0));
-        root.Children.Add(AgePicker().WithMargin(Metrics.RowInset - Metrics.PagePadding, 0,
-            Metrics.RowInset - Metrics.PagePadding, 0));
+        root.Children.Add(Hero(report).WithMargin(Metrics.RowInset, 0, Metrics.RowInset, 0));
+        root.Children.Add(AgePicker().WithMargin(Metrics.RowInset, 0, Metrics.RowInset, 0));
 
         var content = Ui.V(12);
         if (agents.Count == 0)
@@ -196,15 +194,14 @@ public sealed class DiskPage : Grid, ISnapshotPage
         {
             root.Children.Add(Widgets.StatusBlock(true,
                 [Ui.Text(banner, 10.5, null, Palette.Bad, wrap: true)])
-                .WithMargin(Metrics.RowInset - Metrics.PagePadding, 0, Metrics.RowInset - Metrics.PagePadding, 0));
+                .WithMargin(Metrics.RowInset, 0, Metrics.RowInset, 0));
         }
 
         var footer = Ui.Text(
             L10n.TrL(null, "overview.generated_footer", Fmt.Timestamp(report.GeneratedAt), report.SchemaVersion),
             10, null, Palette.Tertiary);
         ToolTip.SetTip(footer, _services.Disk.SourceDescription);
-        root.Children.Add(footer.WithMargin(Metrics.RowInset - Metrics.PagePadding, 0,
-            Metrics.RowInset - Metrics.PagePadding, 0));
+        root.Children.Add(footer.WithMargin(Metrics.RowInset, 0, Metrics.RowInset, 0));
 
         root.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 10);
         scroll.Content = root;
@@ -242,8 +239,10 @@ public sealed class DiskPage : Grid, ISnapshotPage
         // 不用截图模式的固定时间：扫描时间本身就是数据里的值。
         captionRow.Children.Add(Ui.Text(DiskScanCaption.Text(report, DateTimeOffset.UtcNow), 10.5, null,
             Palette.Secondary));
-        if (_services.Disk.IsRescanning)
+        // `disk:expanded` 的 Mac 参考图是在重扫过程中截的：这里同样显示「· rescanning…」+ 转圈。
+        if (_services.Disk.IsRescanning || (_snapshot && _expandAll))
         {
+            // 资源串本身带「· 」前缀（Swift 里是独立的一段 Text）。
             captionRow.Children.Add(Ui.Text(L10n.Tr("disk.rescanning"), 10.5, null, Palette.Secondary));
             captionRow.Children.Add(new Spinner(9));
         }
@@ -342,6 +341,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
             });
             ToolTip.SetTip(check, L10n.TrL(null, "disk.clean_path", entry.Path));
             check.VerticalAlignment = VerticalAlignment.Center;
+            check.HorizontalAlignment = HorizontalAlignment.Center;
             Grid.SetColumn(check, 0);
             top.Children.Add(check);
         }

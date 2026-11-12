@@ -92,8 +92,9 @@ public sealed class SessionList : StackPanel
 
     private Control AddLabel(StackPanel row)
     {
-        row.Children.Add(Icons.QuestionCircle(9, Palette.Secondary));
-        row.Children.Add(Ui.Text(L10n.Tr("session.attribution_button"), 10.5, null, Palette.Secondary));
+        // Mac 的 Label 放进 .borderless 按钮后会被再淡一层；用 Muted 才能对上参考图的浅灰。
+        row.Children.Add(Icons.QuestionCircle(9, Palette.Muted));
+        row.Children.Add(Ui.Text(L10n.Tr("session.attribution_button"), 10.5, null, Palette.Muted));
         return row;
     }
 
@@ -183,7 +184,9 @@ public sealed class SessionRowView : StackPanel
     {
         Orientation = Orientation.Vertical;
         Spacing = 3;
-        Margin = new Thickness(0, 6, 0, 6);
+        // Mac：VStack(spacing: 3) + .padding(.vertical, 6)，行高约 68pt（含分隔线）。
+        // Avalonia 的行高比 SF 紧，上下各留 10pt 才能落到同样的 68pt。
+        Margin = new Thickness(0, 11, 0, 9);
 
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Control title;
@@ -246,8 +249,10 @@ public sealed class SessionRowView : StackPanel
         var split = session.Attribution == "split";
         var badge = Widgets.Badge(session.Attribution, split ? BadgeStyle.Warn : BadgeStyle.Neutral,
             SessionAttributionInfo.Explanation(session.Attribution, threshold));
-        Grid.SetColumn(badge, 0);
-        bottom.Children.Add(badge);
+        var badgeCell = new StackPanel { Orientation = Orientation.Horizontal };
+        badgeCell.Children.Add(badge);
+        Grid.SetColumn(badgeCell, 0);
+        bottom.Children.Add(badgeCell);
 
         var share = Ui.Text(L10n.TrL(null, "session.share", Fmt.Percent(session.Share)), 10, null,
             Palette.Secondary);
@@ -267,15 +272,17 @@ public sealed class SessionRowView : StackPanel
             bottom.Children.Add(subs);
         }
 
+        // 模型列表占满剩下的宽度，超出时尾部省略（Mac: lineLimit(1) + truncationMode(.tail)）。
         var models = Ui.Text(string.Join(", ", session.Models), 9.5, null, Palette.Secondary,
             maxLines: 1, mono: true);
         models.TextAlignment = TextAlignment.Right;
         models.TextTrimming = TextTrimming.CharacterEllipsis;
+        models.Margin = new Thickness(5, 0, 0, 0);
         ToolTip.SetTip(models, string.Join(", ", session.Models));
         var modelList = session.Models.ToList();
         HoverLayer.Attach(models, hoverId is null ? $"models:{session.Id}" : $"{hoverId}:models",
             () => ModelsCard(session.Agent, modelList));
-        Grid.SetColumn(models, 4);
+        Grid.SetColumn(models, 3);
         bottom.Children.Add(models);
         Children.Add(bottom);
     }
@@ -294,7 +301,11 @@ public sealed class SessionRowView : StackPanel
     }
 }
 
-/// <summary>分段控件（自绘胶囊）：Started / Cost、Source File / CLI 之类。</summary>
+/// <summary>
+/// 分段控件（自绘胶囊）：Started / Cost、Source File / CLI 之类。
+/// 和 SwiftUI 的 `.pickerStyle(.segmented)` 一样，每段等宽并铺满可用宽度（固定宽度时由调用方给 Width，
+/// 比如会话列表的 Started/Cost 是 130pt）。
+/// </summary>
 public sealed class SegmentedControl : Border
 {
     public SegmentedControl(IReadOnlyList<string> options, int selected, Action<int> onSelect, double fontSize = 10.5)
@@ -302,20 +313,39 @@ public sealed class SegmentedControl : Border
         Padding = new Thickness(1.5);
         CornerRadius = new CornerRadius(8);
         Background = new SolidColorBrush(Palette.ForegroundColor, 0.06);
-        HorizontalAlignment = HorizontalAlignment.Left;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Center;
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var row = new Grid();
+        for (var i = 0; i < options.Count; i++) row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         for (var i = 0; i < options.Count; i++)
         {
             var index = i;
             var isSelected = i == selected;
+            // SwiftUI 的 segmented picker 每段文字都是 label 色（不是次要色），只有底色区分选中。
+            var label = Ui.Text(options[i], fontSize, isSelected ? FontWeight.SemiBold : FontWeight.Normal,
+                isSelected ? Palette.Foreground : Palette.Secondary);
+            label.TextAlignment = TextAlignment.Center;
+
+            var cell = new Grid();
+            // 未选中段之间有一条细分隔线（SwiftUI 的分段控件也一样）。
+            if (i > 0 && !isSelected && i - 1 != selected)
+            {
+                var separator = new Border
+                {
+                    Width = 0.5,
+                    Background = new SolidColorBrush(Palette.ForegroundColor, 0.12),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Height = 11,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                };
+                cell.Children.Add(separator);
+            }
             var chip = new Border
             {
-                Child = Ui.Text(options[i], fontSize, isSelected ? FontWeight.Medium : FontWeight.Normal,
-                    isSelected ? Palette.Foreground : Palette.Secondary),
+                Child = label,
                 CornerRadius = new CornerRadius(6.5),
-                Padding = new Thickness(9, 2.5, 9, 2.5),
+                Padding = new Thickness(6, 2.5, 6, 2.5),
                 Background = isSelected ? Palette.CardBackground : Brushes.Transparent,
                 Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             };
@@ -325,7 +355,9 @@ public sealed class SegmentedControl : Border
                 chip.PointerExited += (_, _) => chip.Background = Brushes.Transparent;
             }
             chip.PointerReleased += (_, _) => onSelect(index);
-            row.Children.Add(chip);
+            cell.Children.Add(chip);
+            Grid.SetColumn(cell, i);
+            row.Children.Add(cell);
         }
         Child = row;
     }

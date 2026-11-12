@@ -120,10 +120,10 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
         var header = Ui.V(8);
         var back = Widgets.BackButton(L10n.Tr("common.done"), _onBack);
-        back.Margin = new Thickness(-4, 0, 0, 0);
+        back.Margin = new Thickness(Metrics.BackInset - Metrics.RowInset, 0, 0, 0);
         header.Children.Add(back);
         header.Children.Add(Ui.Text(L10n.Tr("settings.title"), 15, FontWeight.SemiBold));
-        header.Margin = new Thickness(Metrics.RowInset - Metrics.PagePadding, 0, 0, 0);
+        header.Margin = new Thickness(Metrics.RowInset, 0, 0, 0);
         _root.Children.Add(header);
 
         if (_services.DataOverride is { } overridePath)
@@ -167,11 +167,14 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
     private static Control Row(string label, Control control)
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        // Mac：标签固定宽度，picker 铺满剩下的整行宽度（不是右对齐的小控件）。
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         var text = Ui.Text(label, 12);
         text.VerticalAlignment = VerticalAlignment.Center;
+        text.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(text, 0);
         grid.Children.Add(text);
+        control.HorizontalAlignment = HorizontalAlignment.Stretch;
         Grid.SetColumn(control, 1);
         grid.Children.Add(control);
         return grid;
@@ -206,7 +209,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
 
             var dirRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
             var dirField = Field(L10n.Tr("settings.working_directory"), SettingsKeys.CliWorkingDirectory,
-                DefaultPaths.ResolvedCliDirectory() ?? L10n.Tr("settings.inherit"));
+                DefaultPaths.ResolvedCliDirectory() ?? L10n.Tr("settings.inherit"), mono: true);
             Grid.SetColumn(dirField, 0);
             dirRow.Children.Add(dirField);
             var choose = Ui.BorderedButton(L10n.Tr("settings.choose"), ChooseDirectory);
@@ -283,8 +286,8 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
             : L10n.Tr("settings.cli_source.unavailable");
     }
 
-    /// <summary>带标签的文本框（label 在上，输入框在下；回车应用并刷新）。</summary>
-    private Control Field(string label, string key, string? placeholder, bool mono = false)
+    /// <summary>带标签的文本框（label 在上，输入框在下；回车应用并刷新）。Mac 这几个框都用等宽字体。</summary>
+    private Control Field(string label, string key, string? placeholder, bool mono = true)
     {
         var box = Ui.V(3);
         box.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
@@ -899,8 +902,7 @@ public sealed class SettingsPage : ScrollViewer, ISnapshotPage
         var source = Ui.Text(L10n.TrL(null, "settings.current_source", _services.DescribeSource()), 10.5,
             null, Palette.Secondary, wrap: true);
         box.Children.Add(source);
-        box.Margin = new Thickness(Metrics.RowInset - Metrics.PagePadding, 0,
-            Metrics.RowInset - Metrics.PagePadding, 0);
+        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
         return box;
     }
 }

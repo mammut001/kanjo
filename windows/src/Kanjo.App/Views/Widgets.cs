@@ -41,7 +41,8 @@ public static class Widgets
         return new Clickable(row, action, radius: 4)
         {
             HorizontalAlignment = HorizontalAlignment.Left,
-            Padding = new Thickness(2, 1, 4, 1),
+            // 和 Mac 一样让箭头贴着左缘（DetailPage 已经给了 rowInset - 4 的缩进）。
+            Padding = new Thickness(0, 1, 4, 1),
         };
     }
 
@@ -148,27 +149,30 @@ public enum BadgeStyle
     Bad,
 }
 
-/// <summary>自绘复选框（离屏渲染时不依赖控件模板）：选中时强调色方块 + 白色对勾。</summary>
+/// <summary>
+/// 自绘复选框（离屏渲染时不依赖控件模板）。Mac 参考图里是白底 + 灰描边 + 深色对勾
+/// （勾选框跟着文字大小约 13pt，不是 16pt），所以不用强调色填充。
+/// </summary>
 public sealed class CheckBoxControl : Border
 {
     public CheckBoxControl(bool isChecked, bool disabled, Action onToggle)
     {
-        Width = 16;
-        Height = 16;
-        CornerRadius = new CornerRadius(4);
+        Width = 13;
+        Height = 13;
+        CornerRadius = new CornerRadius(3);
         VerticalAlignment = VerticalAlignment.Center;
         HorizontalAlignment = HorizontalAlignment.Left;
-        Background = isChecked ? Palette.Accent : Brushes.Transparent;
-        BorderBrush = isChecked ? Palette.Accent : Palette.Tertiary;
+        Background = Palette.CardBackground;
+        BorderBrush = new SolidColorBrush(Palette.ForegroundColor, isChecked ? 0.42 : 0.26);
         BorderThickness = new Thickness(1);
         Opacity = disabled ? 0.5 : 1;
         if (isChecked)
         {
             Child = new Avalonia.Controls.Shapes.Path
             {
-                Data = Geometry.Parse("M3,6.4 L5.2,8.6 L9,4.6"),
-                Stroke = Brushes.White,
-                StrokeThickness = 1.4,
+                Data = Geometry.Parse("M2.6,5.4 L4.4,7.2 L7.4,3.9"),
+                Stroke = Palette.Foreground,
+                StrokeThickness = 1.3,
                 StrokeLineCap = PenLineCap.Round,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -191,7 +195,7 @@ public sealed class CheckBoxControl : Border
 public sealed class DropdownControl : Border
 {
     public DropdownControl(string? current, IReadOnlyList<string> options, Action<int> onSelect,
-        bool enabled = true, double width = double.NaN)
+        bool enabled = true, double width = double.NaN, bool stretch = false)
     {
         CornerRadius = new CornerRadius(6);
         Background = Palette.GroupFill;
@@ -199,7 +203,7 @@ public sealed class DropdownControl : Border
         BorderThickness = new Thickness(0.5);
         Padding = new Thickness(8, 3, 6, 3);
         if (!double.IsNaN(width)) Width = width;
-        HorizontalAlignment = HorizontalAlignment.Left;
+        HorizontalAlignment = stretch ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
         Opacity = enabled ? 1 : 0.55;
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };

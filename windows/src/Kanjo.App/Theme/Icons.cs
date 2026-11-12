@@ -178,7 +178,9 @@ public static class Icons
 
     /// <summary>arrow.triangle.branch：一条主干 + 分出去的一支。</summary>
     public static Control Branch(double size = 8, IBrush? brush = null) => Glyph(
-        "M3.2,2.4 L3.2,9.6 M3.2,6 L6.4,6 A1.8,1.8 0 0 0 8.2,4.2 L8.2,2.4",
+        // arrow.triangle.branch：一条主干向上分成两叉，两叉顶端各有一个箭头。
+        "M6,10.2 L6,5.9 M6,5.9 L3.2,3.1 M6,5.9 L8.8,3.1 " +
+        "M2,4.4 L3.2,3 L3.6,4.7 M10,4.4 L8.8,3 L8.4,4.7",
         size, brush, filled: false);
 
     /// <summary>questionmark.circle。</summary>

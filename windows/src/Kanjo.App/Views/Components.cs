@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Kanjo.Core;
 
 namespace Kanjo.App.Views;
@@ -25,7 +26,7 @@ public sealed class RangePicker : Border
         Padding = new Thickness(1.5);
         CornerRadius = new CornerRadius(12);
         Background = new SolidColorBrush(Palette.ForegroundColor, 0.06);
-        HorizontalAlignment = HorizontalAlignment.Right;
+        HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Center;
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };
@@ -144,49 +145,185 @@ public sealed class HeatStripView : StackPanel
     private static Control Cell(WeekCost week, int level, double width, double height, double radius,
         string currency, IReadOnlyDictionary<string, string> labels)
     {
-        var shape = new Border
-        {
-            Width = width,
-            Height = height,
-            CornerRadius = new CornerRadius(radius),
-            ClipToBounds = true,
-            Background = Palette.HeatEmpty,
-        };
-
         var segments = HeatStrip.Segments(week);
-        if (level > 0 && segments.Count > 0)
-        {
-            // 从下往上叠：每段高度 = 它和它上面各段的份额之和，顶端对齐。
-            // 互相覆盖而不是并排，避免小数高度在段间漏出缝。
-            var stack = new Panel { Width = width, Height = height, ClipToBounds = true };
-            var cumulative = new double[segments.Count];
-            var running = 0.0;
-            for (var i = 0; i < segments.Count; i++)
-            {
-                running += segments[i].Share;
-                cumulative[i] = running;
-            }
-            for (var i = segments.Count - 1; i >= 0; i--)
-            {
-                var h = i == segments.Count - 1 ? height : height * cumulative[i];
-                var band = new Rectangle
-                {
-                    Fill = Palette.Agent(segments[i].Agent),
-                    Width = width,
-                    Height = h,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top,
-                };
-                stack.Children.Add(band);
-            }
-            stack.Opacity = Opacities[Math.Clamp(level, 0, Opacities.Length - 1)];
-            shape.Child = stack;
-        }
+        var shape = new HeatStripCell(
+            level <= 0 || segments.Count == 0
+                ? null
+                : segments.Select(s => (Palette.AgentColor(s.Agent), s.Share)).ToList(),
+            Opacities[Math.Clamp(level, 0, Opacities.Length - 1)],
+            width, height, radius);
 
         ToolTip.SetTip(shape, TooltipBuilder.WeekTooltip(
             HeatStrip.WeekLabel(week.Start), week.Cost, week.Tokens, week.ByAgent, week.ByAgentTokens,
             labels, currency));
         return shape;
+    }
+}
+
+/// <summary>
+/// 热力条的一格：按 Swift 的 ZStack(alignment: .top) 叠色带 —— 第 i 段矩形高度 = 该段与上方各段份额之和，
+/// 从下往上画（后面的盖住前面的），整格最后裁成圆角并按档位透明度绘制。
+/// 直接自绘（而不是摆子控件）：Avalonia 的 Panel 里子矩形都铺在顶部，会互相覆盖出错误的颜色。
+/// </summary>
+public sealed class HeatStripCell : Control
+{
+    private readonly IReadOnlyList<(Color Color, double Share)>? _bands;
+    private readonly double _opacity;
+    private readonly double _radius;
+
+    public HeatStripCell(IReadOnlyList<(Color Color, double Share)>? bands, double opacity,
+        double width, double height, double radius)
+    {
+        _bands = bands;
+        _opacity = bands is null ? 1 : opacity;
+        _radius = radius;
+        Width = width;
+        Height = height;
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var width = Bounds.Width;
+        var height = Bounds.Height;
+        if (width <= 0 || height <= 0) return;
+
+        if (_bands is not { Count: > 0 } bands)
+        {
+            context.DrawRectangle(Palette.HeatEmpty, null,
+                new RoundedRect(new Rect(0, 0, width, height), _radius));
+            return;
+        }
+
+        // 份额换算成累计高度（第 i 段到顶部的距离），再从下往上把每段的可见区域填满。
+        // 颜色提前和面板底色混合（等价于 Swift 的 compositingGroup + opacity）：
+        // 自绘时逐块 PushOpacity 会和下面的色带叠加，颜色会明显变暗变脏。
+        var background = ((ISolidColorBrush)Palette.PanelBackground).Color;
+        var cumulative = 0.0;
+        var heights = new double[bands.Count];
+        for (var i = 0; i < bands.Count; i++)
+        {
+            cumulative += bands[i].Share;
+            heights[i] = i == bands.Count - 1 ? height : height * cumulative;
+        }
+        using (context.PushClip(new RoundedRect(new Rect(0, 0, width, height), _radius)))
+        {
+            for (var i = bands.Count - 1; i >= 0; i--)
+            {
+                var top = i > 0 ? heights[i - 1] : 0;
+                var bottom = heights[i];
+                var color = Blend(bands[i].Color, background, _opacity);
+                context.DrawRectangle(new SolidColorBrush(color), null,
+                    new Rect(0, top, width, Math.Max(bottom - top, 0.5)));
+            }
+        }
+    }
+
+    /// <summary>把颜色按不透明度压到底色上（和 Swift 的 group opacity 结果一致）。</summary>
+    private static Color Blend(Color color, Color background, double opacity)
+    {
+        byte Channel(byte fg, byte bg) =>
+            (byte)Math.Clamp(Math.Round(fg * opacity + bg * (1 - opacity)), 0, 255);
+        return Color.FromRgb(Channel(color.R, background.R), Channel(color.G, background.G),
+            Channel(color.B, background.B));
+    }
+}
+
+/// <summary>
+/// 单行、中部省略的文字（Swift 的 `truncationMode(.middle)`）。Avalonia 的 TextTrimming 只有尾部省略，
+/// 所以这里按可用宽度二分出「前缀…后缀」再自绘。
+/// </summary>
+public sealed class MiddleTruncatedText : Control
+{
+    private const string Ellipsis = "\u2026";
+
+    private readonly string _text;
+    private readonly double _size;
+    private readonly IBrush _foreground;
+    private readonly FontFamily _family;
+    private string? _fitted;
+    private double _fittedWidth = -1;
+
+    public MiddleTruncatedText(string text, double size, IBrush? foreground = null,
+        FontFamily? family = null, FontWeight? weight = null)
+    {
+        _text = text;
+        _size = size;
+        _foreground = foreground ?? Palette.Foreground;
+        _family = family ?? Type.Mono;
+        FontWeight = weight ?? FontWeight.Normal;
+    }
+
+    public FontWeight FontWeight { get; }
+
+    public TextDecorationCollection? TextDecorations { get; set; }
+
+    private double LineHeight => Math.Round(_size * 1.2, 1);
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var full = Type.MeasureWidth(_text, _size, FontWeight, _family);
+        var width = double.IsFinite(availableSize.Width) && availableSize.Width > 0
+            ? Math.Min(full, availableSize.Width)
+            : full;
+        return new Size(width, LineHeight);
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var width = Bounds.Width;
+        if (width <= 0 || _text.Length == 0) return;
+
+        if (_fitted is null || Math.Abs(_fittedWidth - width) > 0.5)
+        {
+            _fitted = Fit(width);
+            _fittedWidth = width;
+        }
+        if (_fitted.Length == 0) return;
+
+        var layout = new TextLayout(_fitted,
+            new Typeface(_family, FontStyle.Normal, FontWeight), _size, _foreground,
+            TextAlignment.Left, TextWrapping.NoWrap, TextTrimming.None,
+            maxWidth: double.PositiveInfinity, maxHeight: LineHeight);
+        using (context.PushTransform(Matrix.CreateTranslation(0,
+                   Math.Max((Bounds.Height - layout.Height) / 2, 0))))
+        {
+            layout.Draw(context, new Point(0, 0));
+            if (TextDecorations is { Count: > 0 })
+            {
+                var pen = new Pen(_foreground, Math.Max(_size / 14, 0.8));
+                context.DrawLine(pen, new Point(0, layout.Height * 0.62),
+                    new Point(layout.Width, layout.Height * 0.62));
+            }
+        }
+    }
+
+    /// <summary>能塞进 <paramref name="width"/> 的最长「前段…后段」。</summary>
+    private string Fit(double width)
+    {
+        double Measure(string s) => Type.MeasureWidth(s, _size, FontWeight, _family);
+        if (Measure(_text) <= width) return _text;
+
+        var best = Ellipsis;
+        // 二分保留的总字符数，再按 2:1 分给前段和后段（后缀更重要：路径尾部是文件名/目录名）。
+        var lo = 0;
+        var hi = _text.Length;
+        while (lo <= hi)
+        {
+            var keep = (lo + hi) / 2;
+            var head = Math.Max(keep - keep / 3, 0);
+            var tail = keep - head;
+            var candidate = _text[..head] + Ellipsis + _text[(_text.Length - tail)..];
+            if (Measure(candidate) <= width)
+            {
+                best = candidate;
+                lo = keep + 1;
+            }
+            else
+            {
+                hi = keep - 1;
+            }
+        }
+        return best;
     }
 }
 

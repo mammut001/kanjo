@@ -17,7 +17,7 @@ public static class DetailPage
     {
         var root = Ui.V(Spacing);
         var back = Widgets.BackButton(backTitle, onBack);
-        back.Margin = new Thickness(Metrics.RowInset - 4 - Metrics.PagePadding, 0, 0, -6);
+        back.Margin = new Thickness(Metrics.BackInset, 0, 0, -6);
         root.Children.Add(back);
         foreach (var section in sections) root.Children.Add(section);
         root.Margin = new Thickness(Metrics.PagePadding, 12, Metrics.PagePadding, 10);
@@ -198,7 +198,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         remote.Margin = new Thickness(0, 8, 0, 0);
         box.Children.Add(remote);
 
-        box.Margin = new Thickness(Metrics.RowInset - Metrics.PagePadding, 0, Metrics.RowInset - Metrics.PagePadding, 0);
+        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
         return box;
     }
 
@@ -485,6 +485,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                     L10n.Tr("project.estimated_help")));
             }
             left.Margin = new Thickness(0, 3, 0, 3);
+            left.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(left, row); Grid.SetColumn(left, 0);
             grid.Children.Add(left);
             var copy = model;
@@ -495,12 +496,14 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
             var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 11, null, Palette.Secondary);
             tokens.TextAlignment = TextAlignment.Right;
             tokens.Margin = new Thickness(8, 0, 0, 0);
+            tokens.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(tokens, row); Grid.SetColumn(tokens, 1);
             grid.Children.Add(tokens);
 
             var cost = Ui.Text(Fmt.Money(model.Cost, Currency), 11, FontWeight.Medium, family: Type.Rounded);
             cost.TextAlignment = TextAlignment.Right;
             cost.Margin = new Thickness(8, 0, 0, 0);
+            cost.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(cost, row); Grid.SetColumn(cost, 2);
             grid.Children.Add(cost);
             _ = hoverId;
@@ -580,6 +583,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                 null, unknown ? Palette.Secondary : Palette.Foreground, maxLines: 1, mono: true);
             name.TextTrimming = TextTrimming.CharacterEllipsis;
             name.Margin = new Thickness(0, 3, 0, 3);
+            name.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(name, row); Grid.SetColumn(name, 0);
             grid.Children.Add(name);
 
@@ -604,12 +608,14 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
                 11, null, Palette.Secondary);
             sessionText.TextAlignment = TextAlignment.Right;
             sessionText.Margin = new Thickness(8, 0, 0, 0);
+            sessionText.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(sessionText, row); Grid.SetColumn(sessionText, 1);
             grid.Children.Add(sessionText);
 
             var cost = Ui.Text(Fmt.Money(branch.Cost, Currency), 11, FontWeight.Medium, family: Type.Rounded);
             cost.TextAlignment = TextAlignment.Right;
             cost.Margin = new Thickness(8, 0, 0, 0);
+            cost.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(cost, row); Grid.SetColumn(cost, 2);
             grid.Children.Add(cost);
             HoverLayer.Attach(cost, $"project:{_projectIndex}:hover:branchcost:{j}",
@@ -702,7 +708,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
         {
             box.Children.Add(PathsView(primary, temporary));
         }
-        box.Margin = new Thickness(Metrics.RowInset - Metrics.PagePadding, 0, Metrics.RowInset - Metrics.PagePadding, 0);
+        box.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
         return box;
     }
 
@@ -748,8 +754,7 @@ public sealed class ProjectDetailPage : ScrollViewer, ISnapshotPage
 
     private Control PathRow(string path, double size)
     {
-        var text = Ui.Text(path, size, null, Palette.Secondary, maxLines: 1, mono: true);
-        text.TextTrimming = TextTrimming.CharacterEllipsis;
+        var text = new MiddleTruncatedText(path, size, Palette.Secondary);
         text.TextDecorations = _project.PathMissing ? TextDecorations.Strikethrough : null;
         ToolTip.SetTip(text, path);
         return text;

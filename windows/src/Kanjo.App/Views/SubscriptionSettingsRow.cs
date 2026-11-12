@@ -95,27 +95,33 @@ public sealed class SubscriptionSettingsRow : StackPanel
         plan.Margin = new Thickness(11, 0, 0, 0);
         box.Children.Add(plan);
 
-        var stepper = Ui.H(6);
+        // Mac 的 Stepper 只画 label + 一对箭头（数字就在 label 里），没有单独的数值框。
+        var stepper = Stepper(CanEdit, "settings.renews_on_day", _day);
         stepper.Margin = new Thickness(11, 0, 0, 0);
-        stepper.Children.Add(Ui.Text(L10n.TrL(null, "settings.renews_on_day", _day), 11));
-        stepper.Children.Add(Stepper(enabled: CanEdit));
         ToolTip.SetTip(stepper, CanEdit
             ? L10n.Tr("settings.renews_day_help")
             : L10n.Tr("settings.renews_day_disabled_help"));
         if (!CanEdit) stepper.Opacity = 0.6;
         box.Children.Add(stepper);
 
-        var actions = Ui.H(6);
+        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
         actions.Margin = new Thickness(11, 0, 0, 0);
-        actions.Children.Add(new Panel { HorizontalAlignment = HorizontalAlignment.Stretch });
-        actions.Children.Add(Ui.BorderedButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit));
-        actions.Children.Add(Ui.BorderedButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit));
-        actions.Children.Add(Ui.BorderedButton(L10n.Tr("settings.edit"), () =>
+        var apply = Ui.BorderedButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
+        var reset = Ui.BorderedButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit);
+        var edit = Ui.BorderedButton(L10n.Tr("settings.edit"), () =>
         {
             SyncInputs(sub);
             _editing = true;
             Rebuild();
-        }, enabled: CanEdit));
+        }, enabled: CanEdit);
+        reset.Margin = new Thickness(6, 0, 0, 0);
+        edit.Margin = new Thickness(6, 0, 0, 0);
+        Grid.SetColumn(apply, 1);
+        Grid.SetColumn(reset, 2);
+        Grid.SetColumn(edit, 3);
+        actions.Children.Add(apply);
+        actions.Children.Add(reset);
+        actions.Children.Add(edit);
         box.Children.Add(actions);
 
         var source = Ui.Text(_saving ? L10n.Tr("settings.saving") : SubscriptionValue.AnchorSource(sub),
@@ -208,23 +214,33 @@ public sealed class SubscriptionSettingsRow : StackPanel
         priceField.TextChanged += (_, _) => _price = priceField.Text ?? "";
         ToolTip.SetTip(priceField, L10n.Tr("settings.monthly_price_usd"));
         priceRow.Children.Add(priceField);
-        priceRow.Children.Add(Stepper(enabled: !_saving));
-        priceRow.Children.Add(new Panel { HorizontalAlignment = HorizontalAlignment.Stretch });
+        // 价格框后面是「Renews on day N」+ 步进箭头，顺序和 Mac 一样。
+        priceRow.Children.Add(Stepper(!_saving, "settings.renews_on_day", _day));
         box.Children.Add(priceRow);
 
-        var actions = Ui.H(6);
-        actions.Children.Add(new Panel { HorizontalAlignment = HorizontalAlignment.Stretch });
-        actions.Children.Add(Ui.ProminentButton(L10n.Tr("common.apply"), ApplyManual));
-        actions.Children.Add(Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
+        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
+        // Mac：Apply 是 borderedProminent，但禁用时看起来和普通 bordered 一样（快照里就是灰白）。
+        var applyButton = _saving
+            ? Ui.BorderedButton(L10n.Tr("common.apply"), ApplyManual, enabled: false)
+            : Ui.ProminentButton(L10n.Tr("common.apply"), ApplyManual);
+        var cancelButton = Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
         {
             _editing = false;
             _error = null;
             SyncInputs(Current);
             Rebuild();
-        }));
+        }, enabled: !_saving);
+        cancelButton.Margin = new Thickness(6, 0, 0, 0);
+        Grid.SetColumn(applyButton, 1);
+        Grid.SetColumn(cancelButton, 2);
+        actions.Children.Add(applyButton);
+        actions.Children.Add(cancelButton);
         if (sub is not null)
         {
-            actions.Children.Add(Ui.BorderedButton(L10n.Tr("settings.remove_subscription"), RemoveManual));
+            var remove = Ui.BorderedButton(L10n.Tr("settings.remove_subscription"), RemoveManual, enabled: !_saving);
+            remove.Margin = new Thickness(6, 0, 0, 0);
+            Grid.SetColumn(remove, 3);
+            actions.Children.Add(remove);
         }
         box.Children.Add(actions);
         if (_saving) box.Opacity = 0.7;
@@ -251,21 +267,14 @@ public sealed class SubscriptionSettingsRow : StackPanel
         return box;
     }
 
-    /// <summary>1–28 的步进（自绘：显示数字 + 上下两个小箭头）。</summary>
-    private Control Stepper(bool enabled)
+    /// <summary>
+    /// 步进控件（SwiftUI 的 `Stepper(label, value:in:)`）：label 里已经含数字（「Renews on day N」），
+    /// 右边只有上下两个小箭头，不额外画数值框。点箭头改 day 后整行重建。
+    /// </summary>
+    private Control Stepper(bool enabled, string labelKey, int day)
     {
-        var box = new Border
-        {
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.GroupFill,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
-            Padding = new Thickness(6, 1, 3, 1),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Opacity = enabled ? 1 : 0.55,
-        };
-        var row = Ui.H(4);
-        row.Children.Add(Ui.Text(_day.ToString(CultureInfo.InvariantCulture), 11));
+        var row = Ui.H(6);
+        row.Children.Add(Ui.Text(L10n.TrL(null, labelKey, day), 11));
         var arrows = Ui.V(0);
         arrows.Children.Add(new Clickable(Icons.ChevronUp(7, Palette.Secondary), () =>
         {
@@ -277,9 +286,13 @@ public sealed class SubscriptionSettingsRow : StackPanel
             _day = _day <= 1 ? 28 : _day - 1;
             Rebuild();
         }, radius: 2));
+        if (!enabled)
+        {
+            arrows.Opacity = 0.55;
+            arrows.IsHitTestVisible = false;
+        }
         row.Children.Add(arrows);
-        box.Child = row;
-        return box;
+        return row;
     }
 
     private void Rebuild()
