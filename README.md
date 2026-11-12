@@ -109,7 +109,13 @@ The full rules are in [ATTRIBUTION.md](ATTRIBUTION.md). The code implements them
 
 ### App
 
-Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest), open the DMG, drag `Kanjo.app` to Applications, then open the app. One universal build runs on both Apple silicon and Intel Macs (macOS 13 or later). Releases from v0.5.0 on are signed with a Developer ID and notarized by Apple, so they open without a Gatekeeper warning. Windows and Linux have no app yet. The CLI is included: no separate CLI installation is needed. Python 3.9+ via Apple’s Xcode Command Line Tools is required; the app offers to open Apple’s installer when the tools are missing. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask mammut001/kanjo/kanjo
+```
+
+Upgrade later with `brew upgrade --cask kanjo`. Or download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest), open the DMG, drag `Kanjo.app` to Applications, then open the app. One universal build runs on both Apple silicon and Intel Macs (macOS 13 or later). Releases from v0.5.0 on are signed with a Developer ID and notarized by Apple, so they open without a Gatekeeper warning. Windows and Linux have no app yet. The CLI is included: no separate CLI installation is needed. Python 3.9+ via Apple’s Xcode Command Line Tools is required; the app offers to open Apple’s installer when the tools are missing. It will ask once for access to the folders that hold your repos, because attribution reads `.git` files there.
 
 ### CLI only / use in a terminal
 
@@ -352,7 +358,13 @@ Antigravity 会话自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigr
 
 ### 安装
 
-从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，打开 DMG，把 `Kanjo.app` 拖进「应用程序」，再打开应用。同一个安装包同时支持 Apple 芯片和 Intel 芯片的 Mac（macOS 13 及以上）。从 v0.5.0 起，发布包使用 Developer ID 签名并经过 Apple 公证，打开时不会被系统拦截。Windows 和 Linux 暂无应用。CLI 已内置，无需另外安装。需要 Xcode Command Line Tools 提供的 Python 3.9+；缺少工具时，应用可打开 Apple 安装对话框。首次运行可能请求访问仓库文件夹。
+用 [Homebrew](https://brew.sh) 安装：
+
+```sh
+brew install --cask mammut001/kanjo/kanjo
+```
+
+以后用 `brew upgrade --cask kanjo` 升级。也可以从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，打开 DMG，把 `Kanjo.app` 拖进「应用程序」，再打开应用。同一个安装包同时支持 Apple 芯片和 Intel 芯片的 Mac（macOS 13 及以上）。从 v0.5.0 起，发布包使用 Developer ID 签名并经过 Apple 公证，打开时不会被系统拦截。Windows 和 Linux 暂无应用。CLI 已内置，无需另外安装。需要 Xcode Command Line Tools 提供的 Python 3.9+；缺少工具时，应用可打开 Apple 安装对话框。首次运行可能请求访问仓库文件夹。
 
 仅需 CLI／在终端中使用：
 
