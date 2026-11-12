@@ -61,10 +61,13 @@ class WindowsDirsTest(unittest.TestCase):
             self.assertEqual(winsupport.app_support_dir("Claude"), ntpath.join(APPDATA, "Claude"))
             self.assertEqual(winsupport.local_data_dir("muse"), ntpath.join(LOCALAPPDATA, "muse"))
         with mock.patch("kanjo.winsupport.is_windows", return_value=False):
+            # The macOS paths are built from "~/...", so the separator is the
+            # host's: os.path.join on the home directory spells them the same way.
+            home = os.path.expanduser("~")
             self.assertEqual(winsupport.app_support_dir("Claude"),
-                             os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Claude"))
+                             os.path.join(home, "Library", "Application Support", "Claude"))
             self.assertEqual(winsupport.local_data_dir("muse"),
-                             os.path.join(os.path.expanduser("~"), ".local", "share", "muse"))
+                             os.path.join(home, ".local", "share", "muse"))
 
     def test_posix_defaults_are_unchanged(self):
         with mock.patch("kanjo.winsupport.is_windows", return_value=False):
@@ -217,6 +220,8 @@ class WindowsSourceRootsTest(unittest.TestCase):
         # KANJO_DATA_DIR is set by the test harness; roots() returns [] then by design.
         with mock.patch("kanjo.winsupport.is_windows", return_value=False), \
              mock.patch.dict(os.environ, {}, clear=True):
+            # The macOS/Linux defaults are built from "~/...", so their separator
+            # is the host's: os.path.join spells them the same way everywhere.
             home = os.path.expanduser("~")
             self.assertEqual(claude.roots(), [os.path.join(home, ".claude", "projects")])
             self.assertEqual(opencode.roots(), [os.path.join(home, ".local", "share", "opencode")])
@@ -271,6 +276,8 @@ class WindowsTimezoneTest(unittest.TestCase):
 
 class WindowsUnsupportedAgentsTest(unittest.TestCase):
     def test_unsupported_list_is_empty_off_windows(self):
+        # The POSIX branch of this check: force it instead of reading the host.
+        with mock.patch("kanjo.winsupport.is_windows", return_value=False):
             self.assertEqual(winsupport.unsupported_agents(), {})
             self.assertTrue(winsupport.is_supported("grok_bot"))
 
@@ -492,11 +499,23 @@ class RecycleBinTest(unittest.TestCase):
 
     def test_posix_path_still_uses_the_trash(self):
         target = os.path.join(self.tmp, "trash-root")
+        # The entry-id folder name is incidental here (clean() rewrites ':' on
+        # Windows; a real Windows FS cannot create it at all), so a portable name
+        # keeps this a test of the POSIX branch on every host.
+        entry_dir = "claude-shell-snapshots"
         with mock.patch("kanjo.winsupport.is_windows", return_value=False):
-            dest = os.path.join(target, "kanjo-1", "claude:shell-snapshots", "shell-snapshots")
+            dest = os.path.join(target, "kanjo-1", entry_dir, "shell-snapshots")
             disk._relocate(self.shell, dest)
-        self.assertTrue(os.path.isdir(os.path.join(target, "kanjo-1", "claude:shell-snapshots")))
+        self.assertTrue(os.path.isdir(os.path.join(target, "kanjo-1", entry_dir)))
         self.assertFalse(os.path.exists(self.shell))
+
+    def test_trash_entry_id_is_a_legal_directory_name_on_windows(self):
+        with mock.patch("kanjo.winsupport.is_windows", return_value=False):
+            self.assertEqual(disk._trash_component("claude:shell-snapshots"), "claude:shell-snapshots")
+        with mock.patch("kanjo.winsupport.is_windows", return_value=True):
+            self.assertEqual(disk._trash_component("claude:shell-snapshots"), "claude-shell-snapshots")
+            self.assertEqual(disk._trash_component("codex worktrees"), "codex worktrees")
+            self.assertEqual(disk._trash_component("trailing. "), "trailing")
 
 
 class ClaudeCredentialTest(unittest.TestCase):
@@ -643,17 +662,23 @@ class WindowsScratchpadDecoderTest(unittest.TestCase):
             ScratchpadDecoder.encoded_part("/Users/alice/.claude/projects/-Users-alice-repo/x.jsonl"),
             "-Users-alice-repo")
 
-    @unittest.skipIf(os.name != "nt", "needs real Windows drive semantics")
     def test_decode_walks_from_the_drive_root(self):
+        """``C--Users-alice-proj`` decodes by walking down from ``C:\\``.
+
+        ``fs_root`` stands in for the root of the drive, so the Windows walk runs
+        on every host; ``decode`` must hand back the Windows spelling it walked.
+        """
+        from kanjo.identity import ScratchpadDecoder
         tmp = tempfile.mkdtemp(prefix="kanjo-win-scratch-")
         self.addCleanup(shutil.rmtree, tmp, True)
-        target = os.path.join(tmp, "my-proj")
-        os.makedirs(target)
-        from kanjo.identity import ScratchpadDecoder
-        encoded = tmp.replace(":", "").replace("\\", "-") + "-my-proj"
-        decoded = ScratchpadDecoder().decode(encoded)
-        self.assertIsNotNone(decoded)
-        self.assertEqual(decoded.lower(), target.lower())
+        # _fs("C:\\") is <tmp>/C, so the drive root is <tmp>/C on this host.
+        os.makedirs(os.path.join(tmp, "C", "Users", "alice", "my-proj"))
+        decoder = ScratchpadDecoder(fs_root=tmp)
+        self.assertEqual(decoder.decode("C--Users-alice-my-proj"), "C:\\Users\\alice\\my-proj")
+        self.assertIsNone(decoder.decode("C--Users-alice-missing"))
+        self.assertEqual(
+            ScratchpadDecoder.encoded_part("C:\\Users\\alice\\AppData\\Local\\Temp\\claude-501\\C--Users-alice-proj\\s"),
+            "C--Users-alice-proj")
 
 
 class WindowsQuotaCachePermissionsTest(unittest.TestCase):

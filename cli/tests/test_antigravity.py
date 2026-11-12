@@ -108,11 +108,13 @@ class AntigravitySourceTest(unittest.TestCase):
     def test_disk_default_roots_has_both_directories(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             agy_dirs = disk.default_roots()["antigravity_dirs"]
+            # The defaults are "~/..." literals, so the separator is the host's.
+            home = os.path.expanduser("~")
             expected = [
-                os.path.expanduser("~/.gemini/antigravity-cli/conversations"),
-                os.path.expanduser("~/.gemini/antigravity/conversations"),
-                os.path.expanduser("~/.gemini/antigravity-ide/conversations"),
-                os.path.expanduser("~/.gemini/gemini-cli/conversations"),
+                os.path.join(home, ".gemini", "antigravity-cli", "conversations"),
+                os.path.join(home, ".gemini", "antigravity", "conversations"),
+                os.path.join(home, ".gemini", "antigravity-ide", "conversations"),
+                os.path.join(home, ".gemini", "gemini-cli", "conversations"),
             ]
             self.assertEqual(agy_dirs, expected)
 

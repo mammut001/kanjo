@@ -12,19 +12,30 @@ public sealed class CliRunnerTests : KanjoTestCase
     private static string FakePython(params (string Args, int Exit, string Stdout, string Stderr)[] cases)
     {
         var dir = TempDir();
-        var casesPath = Path.Combine(dir, "cases.json");
-        File.WriteAllText(casesPath, System.Text.Json.JsonSerializer.Serialize(
-            cases.Select(c => new { args = c.Args, exit = c.Exit, stdout = c.Stdout, stderr = c.Stderr })));
 
         if (OperatingSystem.IsWindows())
         {
+            // One .cmd: the exact argument list (%*) selects the case, so all cases
+            // share one interpreter. Each case prints its own stdout and stderr and
+            // returns its own exit code; an empty stdout prints nothing at all (the
+            // empty-output test depends on that, and a bare `echo` would print
+            // "ECHO is on.").
             var cmd = Path.Combine(dir, "python.cmd");
-            File.WriteAllText(cmd, $"""
-                @echo off
-                findstr /C:"{cases[0].Args}" "%~dp0cases.json" >nul
-                echo {cases[0].Stdout}
-                exit /b {cases[0].Exit}
-                """);
+            var batch = new System.Text.StringBuilder();
+            // cmd.exe wants CRLF line endings; AppendLine would follow the host.
+            batch.Append("@echo off\r\n");
+            for (var i = 0; i < cases.Length; i++)
+            {
+                var c = cases[i];
+                batch.Append($"if not \"%*\"==\"{c.Args}\" goto :case{i + 1}\r\n");
+                if (c.Stdout.Length > 0) batch.Append($"echo {c.Stdout}\r\n");
+                if (c.Stderr.Length > 0) batch.Append($"echo {c.Stderr} 1>&2\r\n");
+                batch.Append($"exit /b {c.Exit}\r\n");
+                batch.Append($":case{i + 1}\r\n");
+            }
+            batch.Append("echo unknown-args 1>&2\r\n");
+            batch.Append("exit /b 9\r\n");
+            File.WriteAllText(cmd, batch.ToString());
             return cmd;
         }
 
@@ -133,7 +144,9 @@ public sealed class CliRunnerTests : KanjoTestCase
         if (OperatingSystem.IsWindows())
         {
             python = Path.Combine(dir, "python.cmd");
-            File.WriteAllText(python, "@echo off\r\necho %CD%|%PYTHONDONTWRITEBYTECODE%\r\n");
+            // A bare '|' in a batch file is the pipe operator: it would send the
+            // echoed directory into %PYTHONDONTWRITEBYTECODE% as a command.
+            File.WriteAllText(python, "@echo off\r\necho %CD%^|%PYTHONDONTWRITEBYTECODE%\r\n");
         }
         else
         {

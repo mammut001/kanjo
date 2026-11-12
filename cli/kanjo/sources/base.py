@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import posixpath
 import re
 import shutil
 import sqlite3
@@ -623,7 +624,7 @@ def absolutize(path, cwd: Optional[str], home: Optional[str] = None) -> Optional
         if winsupport.is_windows_path(cwd):
             # Node tools write relative paths with either separator.
             return winsupport.normpath(winsupport.join(cwd, *[x for x in re.split(r"[\\/]+", p) if x]))
-        p = os.path.join(cwd, p)
+        p = posixpath.join(cwd, *[x for x in p.split("/") if x])
     return winsupport.normpath(p)
 
 
@@ -741,6 +742,9 @@ def sqlite_uri_path(path: str) -> str:
     if winsupport.is_windows_path(path):
         from urllib.parse import quote
         return "/" + quote(path.replace("\\", "/"), safe="/:")
+    if path.startswith("/"):
+        # A POSIX path stays POSIX even on a Windows host (logs from another machine).
+        return posixpath.normpath(path)
     return os.path.abspath(path)
 
 
@@ -759,13 +763,23 @@ def open_sqlite_ro(path: str):
     direct_conn = None
     try:
         c = sqlite3.connect(f"file:{abs_path}?mode=ro", uri=True, timeout=1)
-        c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        try:
+            c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        except sqlite3.Error:
+            # A connection that fails its probe still holds the file open; on
+            # Windows that blocks the caller's cleanup (WinError 32).
+            c.close()
+            raise
         direct_conn = c
     except sqlite3.Error:
         if not wal_exists:
             try:
                 c = sqlite3.connect(f"file:{abs_path}?mode=ro&immutable=1", uri=True, timeout=1)
-                c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+                try:
+                    c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+                except sqlite3.Error:
+                    c.close()
+                    raise
                 direct_conn = c
             except sqlite3.Error:
                 pass

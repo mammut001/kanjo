@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ntpath
 import os
+import posixpath
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -77,6 +78,31 @@ def _is_subpath(p: str, prefix: str) -> bool:
     if c == pre:
         return True
     return c.startswith(pre + "\\") or c.startswith(pre + "/")
+
+
+def _rel_under(path: str, root: str) -> Optional[str]:
+    """``path`` relative to ``root`` when it is inside it, else ``None``.
+
+    Separators of the path's own flavour are used: ``/`` for POSIX paths (also on
+    a Windows host) and ``\\`` for Windows paths, so a slice never leaves a mixed
+    spelling behind.
+    """
+    if not path or not root:
+        return None
+    base = root.rstrip("\\/")
+    if not winsupport.is_subpath(path, base):
+        return None
+    rel = path[len(base):]
+    if _is_win_path(base):
+        return rel.lstrip("\\/")
+    return rel[1:] if rel.startswith("/") else rel
+
+
+def _join_rel(root: str, rel: str) -> str:
+    """``root`` + relative ``rel`` with the separator rules of ``root``."""
+    if not rel:
+        return root
+    return winsupport.join(root, *[p for p in re.split(r"[\\/]+", rel) if p])
 
 
 def _same_path(p: str, prefix: str) -> bool:
@@ -334,7 +360,16 @@ class Resolver:
             return os.path.realpath(path)
         real = os.path.realpath(self.fs_root + path)
         root = os.path.realpath(self.fs_root)
-        return real[len(root):] or "/" if real.startswith(root) else winsupport.normpath(path)
+        if not real.startswith(root):
+            return winsupport.normpath(path)
+        if winsupport.is_windows_path(path):
+            # ``fs_root`` stands in for "/" and only ever holds POSIX log paths, so a
+            # Windows path has no filesystem meaning here: keep its own spelling.
+            return winsupport.normpath(path)
+        # ``realpath`` answers in the host's spelling. A POSIX log path must stay
+        # POSIX -- on Windows the slice would otherwise yield "\Users\alice\...",
+        # which is neither absolute nor comparable with the logged path.
+        return real[len(root):].replace(os.sep, "/") or "/"
 
     def _exists_cached(self, path: str) -> bool:
         if path not in self._exists:
@@ -393,7 +428,7 @@ class Resolver:
         sig = None
         dumped = None
         if result is not None:
-            dotgit = os.path.join(result.root, ".git")
+            dotgit = winsupport.join(result.root, ".git")
             stat_path = self._fs(dotgit)
             if self.repo_cache is not None and stat_path in self.repo_cache._stat_sig_cache:
                 sig = self.repo_cache._stat_sig_cache[stat_path]
@@ -442,13 +477,15 @@ class Resolver:
         win = _is_win_path(root) or _is_win_path(dotgit)
 
         def j(path: str, *parts: str) -> str:
-            return winsupport.join(path, *parts) if win else os.path.join(path, *parts)
+            # Rules of the path's own flavour, also when this runs on Windows with
+            # POSIX paths from another machine (os.path.join would mix separators).
+            return winsupport.join(path, *parts)
 
         def d(path: str) -> str:
-            return winsupport.dirname(path) if win else os.path.dirname(path)
+            return winsupport.dirname(path)
 
         def b(path: str) -> str:
-            return winsupport.basename(path) if win else os.path.basename(path)
+            return winsupport.basename(path)
 
         def norm(path: str) -> str:
             return _canon_win(path) if _is_win_path(path) else winsupport.normpath(path)
@@ -501,7 +538,7 @@ class Resolver:
         parent directory up). The outer repo's own ``outer`` is filled in the
         same way, so a chain of remote-less repos ends at the first one with a
         remote or at the outermost one."""
-        parent = os.path.dirname(info.main_root)
+        parent = winsupport.dirname(info.main_root)
         if parent == info.main_root:
             return None
         outer = self._repo_for_path(parent, True)
@@ -532,7 +569,7 @@ class Resolver:
         if remote:
             pid, name, rem = remote, _remote_display_name(info.remote_url) or remote, remote
         else:
-            pid, name, rem = info.main_root, os.path.basename(info.main_root) or info.main_root, None
+            pid, name, rem = info.main_root, _path_basename(info.main_root) or info.main_root, None
         project = self._get_project(pid, name, rem, [info.root, info.main_root])
         self._register_worktrees(info, project.id)
         return project
@@ -567,7 +604,7 @@ class Resolver:
         if info.common_dir in self._seen_common:
             return
         self._seen_common.add(info.common_dir)
-        wt_root = os.path.join(info.common_dir, "worktrees")
+        wt_root = winsupport.join(info.common_dir, "worktrees")
         try:
             names = os.listdir(self._fs(wt_root))
         except OSError:
@@ -575,7 +612,7 @@ class Resolver:
         added = []
         for name in names:
             try:
-                with open(self._fs(os.path.join(wt_root, name, "gitdir")), "r", encoding="utf-8") as handle:
+                with open(self._fs(winsupport.join(wt_root, name, "gitdir")), "r", encoding="utf-8") as handle:
                     target = handle.read().strip()
             except OSError:
                 continue
@@ -957,12 +994,11 @@ class Resolver:
                     tps = get_session_tool_paths(s)
                     falls_under = False
                     for r in bproj.local_paths:
-                        r_prefix = r.rstrip("/") + "/"
-                        if any(c and (c == r or c.startswith(r_prefix)) for c in s_cwds):
+                        if any(c and _rel_under(c, r) is not None for c in s_cwds):
                             falls_under = True
                             break
                         for clean_tp in tps:
-                            if clean_tp == r or clean_tp.startswith(r_prefix):
+                            if _rel_under(clean_tp, r) is not None:
                                 falls_under = True
                                 break
                     if falls_under:
@@ -970,11 +1006,10 @@ class Resolver:
                             bproj_relevant_sigs[s.id] = lazy_sigs[s.id]
                         for clean_tp in tps:
                             for r in bproj.local_paths:
-                                r_prefix = r.rstrip("/") + "/"
-                                if clean_tp.startswith(r_prefix):
-                                    rel = clean_tp[len(r_prefix):]
-                                    first_comp = rel.split("/", 1)[0]
-                                    if "/" in rel and first_comp not in (".git", "node_modules"):
+                                rel = _rel_under(clean_tp, r)
+                                if rel:
+                                    first_comp = re.split(r"[\\/]", rel, 1)[0]
+                                    if re.search(r"[\\/]", rel) and first_comp not in (".git", "node_modules"):
                                         distinct_rels.add(rel)
 
                 # 2. From on-disk files in bproj roots
@@ -1005,7 +1040,7 @@ class Resolver:
                 for pid, roots in known_projects.items():
                     count = 0
                     for rel in distinct_rels:
-                        if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                        if any(self._exists_cached(_join_rel(root, rel)) for root in roots):
                             count += 1
                     if count > 0:
                         matches[pid] = count
@@ -1080,10 +1115,9 @@ class Resolver:
                         continue
 
             # Gather sessions whose normalized cwd == d or inside d + "/"
-            d_slash = d + "/"
             d_sessions = []
             for norm_cwd, slist in sessions_by_norm_cwd.items():
-                if norm_cwd == d or norm_cwd.startswith(d_slash):
+                if _rel_under(norm_cwd, d) is not None:
                     d_sessions.extend(slist)
 
             d_relevant_sigs: Dict[str, str] = {}
@@ -1095,17 +1129,17 @@ class Resolver:
             distinct_rels = set()
             for s in d_sessions:
                 for norm_tp in get_session_tool_paths(s):
-                    if norm_tp.startswith(d_slash):
-                        rel = norm_tp[len(d_slash):]
-                        first_comp = rel.split("/", 1)[0]
-                        if "/" in rel and first_comp not in (".git", "node_modules"):
+                    rel = _rel_under(norm_tp, d)
+                    if rel:
+                        first_comp = re.split(r"[\\/]", rel, 1)[0]
+                        if re.search(r"[\\/]", rel) and first_comp not in (".git", "node_modules"):
                             distinct_rels.add(rel)
 
             matches: Dict[str, int] = {}
             for pid, roots in known_projects.items():
                 count = 0
                 for rel in distinct_rels:
-                    if any(self._exists_cached(os.path.join(root, rel)) for root in roots):
+                    if any(self._exists_cached(_join_rel(root, rel)) for root in roots):
                         count += 1
                 if count > 0:
                     matches[pid] = count
@@ -1114,10 +1148,10 @@ class Resolver:
             if matches:
                 max_count = max(matches.values())
                 top_pids = sorted([pid for pid, cnt in matches.items() if cnt == max_count])
-                d_parent = os.path.dirname(d)
+                d_parent = winsupport.dirname(d)
                 best_pid = max(
                     top_pids,
-                    key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                    key=lambda pid: 1 if any(winsupport.dirname(r) == d_parent for r in known_projects[pid]) else 0,
                 )
 
             # Signal B: parent session / tool_paths cross-reference
@@ -1127,7 +1161,7 @@ class Resolver:
                 for parent_s, parent_pid, tps in get_parent_sessions_info():
                     matched = False
                     for norm_tp in tps:
-                        if norm_tp == d or norm_tp.startswith(d_slash):
+                        if _rel_under(norm_tp, d) is not None:
                             parent_refs[parent_pid] += 1
                             matched = True
                     if matched:
@@ -1135,10 +1169,10 @@ class Resolver:
                 if parent_refs:
                     max_refs = max(parent_refs.values())
                     top_parent_pids = sorted([pid for pid, cnt in parent_refs.items() if cnt == max_refs])
-                    d_parent = os.path.dirname(d)
+                    d_parent = winsupport.dirname(d)
                     best_pid = max(
                         top_parent_pids,
-                        key=lambda pid: 1 if any(os.path.dirname(r) == d_parent for r in known_projects[pid]) else 0,
+                        key=lambda pid: 1 if any(winsupport.dirname(r) == d_parent for r in known_projects[pid]) else 0,
                     )
                     for parent_s, p_pid in matching_parents:
                         if p_pid == best_pid and hasattr(parent_s, "id"):
@@ -1291,7 +1325,9 @@ class ScratchpadDecoder:
             enc = _encode_component(name)
             if not enc:
                 continue
-            full = os.path.join(base, name)
+            # The decoded path is POSIX whatever the host: join with "/" so a
+            # Windows run cannot turn "/Users/alice" into "/Users\alice".
+            full = posixpath.join(base, name)
             if rest == enc:
                 if os.path.isdir(self.fs_root + full):
                     return full

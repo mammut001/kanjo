@@ -367,11 +367,19 @@ public sealed class DecodingTests : KanjoTestCase
     [Fact]
     public void TestDataOverrideArgument()
     {
-        Assert.Equal("/tmp/a.json", DefaultPaths.DataOverride(
+        // ResolvePath makes the value absolute with the host's rules, so the
+        // expectation is the host's spelling of the same path ("/" is a rooted
+        // path on Windows too: it resolves against the current drive).
+        Assert.Equal(Path.GetFullPath("/tmp/a.json"), DefaultPaths.DataOverride(
             ["x", "--data", "/tmp/a.json"], new Dictionary<string, string>()));
-        Assert.Equal("/tmp/b.json", DefaultPaths.DataOverride(
+        Assert.Equal(Path.GetFullPath("/tmp/b.json"), DefaultPaths.DataOverride(
             ["x"], new Dictionary<string, string> { ["KANJO_DATA"] = "/tmp/b.json" }));
         Assert.Null(DefaultPaths.DataOverride(["x"], new Dictionary<string, string>()));
+
+        // Absolute Windows paths are the normal case there and come back unchanged.
+        var windowsAbsolute = Path.Combine(Path.GetTempPath(), "kanjo-data");
+        Assert.Equal(windowsAbsolute, DefaultPaths.DataOverride(
+            ["x", "--data", windowsAbsolute], new Dictionary<string, string>()));
     }
 
     [Fact]

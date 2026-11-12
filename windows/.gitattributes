@@ -1,0 +1,12 @@
+# C# raw string literals keep the source's line endings verbatim (C# 11 does not
+# normalize them), and the code builds text with explicit "\n". A CRLF checkout on
+# the Windows runners would therefore turn every multi-line expected value into
+# "\r\n" and every layout assertion would fail. Store and check out LF so a run is
+# the same on Windows and on the macOS/Linux hosts.
+*.cs    text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.sln   text eol=lf
+*.xaml  text eol=lf
+*.ps1   text eol=lf

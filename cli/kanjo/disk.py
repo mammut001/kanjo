@@ -126,6 +126,24 @@ def _default_scratch() -> str:
     return "/tmp/claude-%s" % uid
 
 
+# Characters that have no legal spelling in a Windows file name; ':' is the one
+# that shows up in entry ids (``claude:shell-snapshots``).
+_ILLEGAL_WIN_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _trash_component(name: str) -> str:
+    """One path component of the Trash destination, legal on this platform.
+
+    Entry ids contain ``:``, which Windows reserves for drive letters, so a pinned
+    Trash folder (``--trash-dir`` / ``KANJO_TRASH_DIR``) could not be created there.
+    POSIX names are returned exactly as before.
+    """
+    if not winsupport.is_windows():
+        return name
+    safe = _ILLEGAL_WIN_NAME.sub("-", name).strip(" .")
+    return safe or "-"
+
+
 def default_roots() -> dict:
     """Directories ``kanjo disk`` scans. Parser overrides relocate the whole tool root.
 
@@ -150,12 +168,14 @@ def default_roots() -> dict:
         """
         explicit = os.environ.get(env_name)
         if explicit:
-            return os.path.expanduser(explicit)
+            return winsupport.expanduser(explicit)
         if os.environ.get("KANJO_DATA_DIR"):
             return None
         if win:
-            return windows_default
-        return os.path.expanduser(mac_default)
+            # The Windows defaults are written "~/.tool" like the macOS ones; they
+            # must be expanded or every scan below looks at a literal "~" folder.
+            return winsupport.expanduser(windows_default) if windows_default else None
+        return winsupport.expanduser(mac_default)
 
     opencode_default = (winsupport.join(winsupport.user_profile() or "", ".local", "share", "opencode")
                         if win else "~/.local/share/opencode")
@@ -165,7 +185,7 @@ def default_roots() -> dict:
     musecode_default = winsupport.local_data_dir("muse") if win else "~/.local/share/muse"
     return {
         "claude_projects": env_dirs("KANJO_CLAUDE_DIR", ["~/.claude/projects"]),
-        "scratch": os.path.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or _default_scratch()),
+        "scratch": winsupport.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or _default_scratch()),
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
             "~/.gemini/antigravity-cli/conversations",
@@ -176,23 +196,23 @@ def default_roots() -> dict:
         "grok": _dir("KANJO_GROK_DIR", "~/.grok", "~/.grok"),
         "qwen": _dir("KANJO_QWEN_DIR", "~/.qwen", "~/.qwen"),
         "commandcode": _dir("KANJO_COMMANDCODE_DIR", "~/.commandcode", "~/.commandcode"),
-        "claude_app": os.path.expanduser(
+        "claude_app": winsupport.expanduser(
             os.environ.get("KANJO_CLAUDE_APP_CACHE") or claude_app_default),
         "minimax": _dir("KANJO_MINIMAX_DIR", "~/.minimax", "~/.minimax"),
         "opencode": _dir("KANJO_OPENCODE_DIR", "~/.local/share/opencode", opencode_default),
         "copilot": _dir("KANJO_COPILOT_DIR", "~/.copilot", "~/.copilot"),
-        "pi": os.path.expanduser(os.environ["KANJO_PI_DIR"]) if os.environ.get("KANJO_PI_DIR") else (
-            os.path.expanduser(os.environ["PI_CODING_AGENT_DIR"]) if os.environ.get("PI_CODING_AGENT_DIR") else (
-                os.path.expanduser(os.environ["PI_CODING_AGENT_SESSION_DIR"]) if os.environ.get("PI_CODING_AGENT_SESSION_DIR") else (
-                    None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.pi")
+        "pi": winsupport.expanduser(os.environ["KANJO_PI_DIR"]) if os.environ.get("KANJO_PI_DIR") else (
+            winsupport.expanduser(os.environ["PI_CODING_AGENT_DIR"]) if os.environ.get("PI_CODING_AGENT_DIR") else (
+                winsupport.expanduser(os.environ["PI_CODING_AGENT_SESSION_DIR"]) if os.environ.get("PI_CODING_AGENT_SESSION_DIR") else (
+                    None if os.environ.get("KANJO_DATA_DIR") else winsupport.expanduser("~/.pi")
                 )
             )
         ),
         "workbuddy": _dir("KANJO_WORKBUDDY_DIR", "~/.workbuddy", "~/.workbuddy"),
         "workbuddy_ai": _dir("KANJO_WORKBUDDY_AI_DIR", "~/.workbuddy-ai", "~/.workbuddy-ai"),
-        "qwenwork": os.path.expanduser(os.environ["KANJO_QWENWORK_DIR"]) if os.environ.get("KANJO_QWENWORK_DIR") else (
-            os.path.expanduser(os.environ["TOKEI_QWENWORK_HOME"]) if os.environ.get("TOKEI_QWENWORK_HOME") else (
-                None if os.environ.get("KANJO_DATA_DIR") else os.path.expanduser("~/.qwenworkcn")
+        "qwenwork": winsupport.expanduser(os.environ["KANJO_QWENWORK_DIR"]) if os.environ.get("KANJO_QWENWORK_DIR") else (
+            winsupport.expanduser(os.environ["TOKEI_QWENWORK_HOME"]) if os.environ.get("TOKEI_QWENWORK_HOME") else (
+                None if os.environ.get("KANJO_DATA_DIR") else winsupport.expanduser("~/.qwenworkcn")
             )
         ),
         "grok_bot": _dir("KANJO_GROK_BOT_DIR", "~/Library/Application Support/Grok Bot"),
@@ -1104,6 +1124,10 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
         """Trash destination, or None when the Recycle Bin is the target."""
         if recycle_bin:
             return None
+        # The first component is the entry id ("claude:shell-snapshots"), which
+        # Windows cannot use as a directory name.
+        if parts:
+            parts = (_trash_component(parts[0]),) + tuple(parts[1:])
         return os.path.join(trash_root, *parts)
 
     if days is None:
@@ -1242,7 +1266,7 @@ def _refused(path: str) -> bool:
 def _parents(paths: List[str]) -> List[str]:
     found = []
     for path in paths:
-        parent = os.path.dirname(os.path.normpath(path))
+        parent = winsupport.dirname(winsupport.normpath(path))
         if parent and parent not in found:
             found.append(parent)
     return found

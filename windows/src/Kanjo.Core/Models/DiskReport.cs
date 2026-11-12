@@ -236,6 +236,22 @@ public static class CleanPlan
         return bytes is { } b ? $"{count} {noun} · {Fmt.Bytes(b)}" : $"{count} {noun}";
     }
 
-    private static bool Owns(DiskEntry entry, string path) =>
-        path == entry.Path || path.StartsWith(entry.Path + "/", StringComparison.Ordinal);
+    private static bool Owns(DiskEntry entry, string path)
+    {
+        if (path == entry.Path) return true;
+        // POSIX reports list "<entry.Path>/<file>"; on Windows disk clean reports the
+        // same tree with "\", so both separators count and the drive letter is folded.
+        var comparison = IsWindowsPath(entry.Path) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var separator in IsWindowsPath(entry.Path) ? new[] { '\\', '/' } : ['/'])
+        {
+            var prefix = entry.Path.TrimEnd('/', '\\') + separator;
+            if (path.Length > prefix.Length && path.StartsWith(prefix, comparison)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>"C:\..." or "\\server\share": a path whose separator is "\".</summary>
+    private static bool IsWindowsPath(string path) =>
+        path.StartsWith(@"\\", StringComparison.Ordinal)
+        || (path.Length >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/'));
 }

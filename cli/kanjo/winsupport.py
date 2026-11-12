@@ -127,7 +127,7 @@ def app_support_dir(name: str) -> str:
     """
     if is_windows():
         return join(app_data() or "", name)
-    return os.path.expanduser(os.path.join("~/Library/Application Support", name))
+    return os.path.expanduser(os.path.join("~", "Library", "Application Support", name))
 
 
 def local_data_dir(name: str) -> str:
@@ -139,7 +139,7 @@ def local_data_dir(name: str) -> str:
     """
     if is_windows():
         return join(local_app_data() or "", name)
-    return os.path.expanduser(os.path.join("~/.local/share", name))
+    return os.path.expanduser(os.path.join("~", ".local", "share", name))
 
 
 def config_dir(name: str) -> str:
@@ -150,7 +150,7 @@ def config_dir(name: str) -> str:
     """
     if is_windows():
         return join(app_data() or "", name)
-    return os.path.expanduser(os.path.join("~/.config", name))
+    return os.path.expanduser(os.path.join("~", ".config", name))
 
 
 # Kanjo's own directories. ``KANJO_CONFIG_DIR`` / ``KANJO_DATA_DIR`` / ``KANJO_CACHE_DIR``
@@ -164,7 +164,7 @@ def kanjo_data_dir() -> str:
     """``%LOCALAPPDATA%\\kanjo\\data`` on Windows, ``~/.local/share/kanjo`` elsewhere."""
     if is_windows():
         return join(local_app_data() or "", "kanjo", "data")
-    return os.path.expanduser(os.path.join("~/.local/share/kanjo"))
+    return os.path.expanduser(os.path.join("~", ".local", "share", "kanjo"))
 
 
 def kanjo_cache_dir() -> str:
@@ -186,9 +186,27 @@ def expanduser(path: str) -> str:
     keeps the Windows branches testable from another OS (where ``~`` would resolve
     to the machine running the tests instead) and normalizes the separators of the
     remainder, so ``~/.claude/projects`` becomes ``C:\\Users\\a\\.claude\\projects``.
+
+    Off Windows the result is exactly ``os.path.expanduser``'s, except on a Windows
+    host, where ``ntpath.expanduser("~/.claude")`` keeps the forward slashes of the
+    literal: one spelling of the separator is forced there so ``~/.claude/projects``
+    and ``os.path.join("~", ".claude", "projects")`` agree.
     """
     if not is_windows():
-        return os.path.expanduser(path)
+        expanded = os.path.expanduser(path)
+        if os.sep == "/":
+            return expanded
+        # Windows host running the POSIX branch (tests, or logs from another
+        # machine): expanduser keeps the literal's forward slashes, so
+        # "~/.claude/projects" and os.path.join("~", ".claude", "projects")
+        # would be two spellings of one directory. Give it a single spelling.
+        if is_windows_path(expanded):
+            return ntpath.normpath(expanded.replace("/", "\\"))
+        if expanded == "~" or expanded.startswith(("~/", "~\\")):
+            # No USERPROFILE (cleared env): the "~" stays literal, keep its tail.
+            parts = [p for p in re.split(r"[\\/]+", expanded[2:]) if p]
+            return os.path.join("~", *parts) if parts else "~"
+        return expanded
     if path == "~":
         return user_profile() or path
     if path.startswith(("~/", "~\\")):

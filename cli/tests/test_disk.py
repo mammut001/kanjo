@@ -675,9 +675,20 @@ def sequential_measure(root, now):
 
 
 def set_tree_mtime(path, ts):
+    """Pin the mtime of ``path`` and everything under it.
+
+    ``follow_symlinks=False`` is unavailable on Windows (``os.utime`` raises
+    NotImplementedError there), and the tests never pin a symlink's own mtime, so
+    the plain call is used where the flag is unsupported.
+    """
     for dirpath, dirnames, filenames in os.walk(path):
         for name in filenames + dirnames:
-            os.utime(os.path.join(dirpath, name), (ts, ts), follow_symlinks=False)
+            entry = os.path.join(dirpath, name)
+            try:
+                os.utime(entry, (ts, ts), follow_symlinks=False)
+            except NotImplementedError:
+                if not os.path.islink(entry):
+                    os.utime(entry, (ts, ts))
     os.utime(path, (ts, ts))
 
 

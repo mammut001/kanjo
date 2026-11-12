@@ -237,35 +237,61 @@ public sealed class DiskTests : KanjoTestCase
         var whole = new CleanResult(
             ["/Users/alice/.codex/sessions", "/Users/alice/Library/Caches/claude-cli"], 7_000_000_000,
             [new CleanSkip("claude:scratch", "active")]);
+        // The expected value is checked line by line: a multi-line raw string literal
+        // keeps the source file's line endings, and a CRLF checkout would otherwise
+        // compare "\r\n" against the "\n" the plan is built with.
         Assert.Equal(
-            """
-            Codex CLI · sessions
-            /Users/alice/.codex/sessions
-            1 path · 4.6 GB
-
-            Claude Code · cache
-            /Users/alice/Library/Caches/claude-cli
-            1 path · 2.4 GB
-
-            Total 2 paths · 7 GB
-
-            Skipped
-            claude:scratch — active
-            """,
+            Lines(
+                "Codex CLI · sessions",
+                "/Users/alice/.codex/sessions",
+                "1 path · 4.6 GB",
+                "",
+                "Claude Code · cache",
+                "/Users/alice/Library/Caches/claude-cli",
+                "1 path · 2.4 GB",
+                "",
+                "Total 2 paths · 7 GB",
+                "",
+                "Skipped",
+                "claude:scratch — active"),
             CleanPlan.Text(report, whole));
 
         var files = new CleanResult(
             ["/Users/alice/.codex/sessions/a.jsonl", "/Users/alice/.codex/sessions/b.jsonl"], 1000, []);
         Assert.Equal(
-            """
-            Codex CLI · sessions
-            /Users/alice/.codex/sessions/a.jsonl
-            /Users/alice/.codex/sessions/b.jsonl
-            2 paths
-
-            Total 2 paths · 1 KB
-            """,
+            Lines(
+                "Codex CLI · sessions",
+                "/Users/alice/.codex/sessions/a.jsonl",
+                "/Users/alice/.codex/sessions/b.jsonl",
+                "2 paths",
+                "",
+                "Total 2 paths · 1 KB"),
             CleanPlan.Text(report, files));
+    }
+
+    /// <summary>多行期望值：显式用 "\n" 拼接，不依赖源文件的换行符。</summary>
+    private static string Lines(params string[] lines) => string.Join("\n", lines);
+
+    [Fact]
+    public void TestCleanPlanGroupsWindowsPathsUnderTheirEntry()
+    {
+        // `kanjo disk clean --older-than` on Windows lists files with "\": they must
+        // still group under the entry whose path they sit in (the Mac behaviour with
+        // "/" is covered by TestCleanPlanText).
+        const string json = """
+        {"schema_version":1,"generated_at":"2026-10-25T10:00:00Z","total_bytes":10,"reclaimable_bytes":10,
+         "agents":[{"agent":"claude","label":"Claude Code","bytes":10,"entries":[
+           {"id":"claude:debug","kind":"cache","path":"C:\\Users\\alice\\.claude\\debug","bytes":10,"files":1,
+            "oldest":"2026-06-30","newest":"2026-10-25","deletable":"always","blocked":[]}]}]}
+        """;
+        var report = DiskDecoder.Decode(json);
+        var result = new CleanResult([@"C:\Users\alice\.claude\debug\a.log"], 10, []);
+        var groups = CleanPlan.Groups(report, result.Moved);
+        Assert.Single(groups);
+        Assert.Equal("claude:debug", groups[0].EntryId);
+        // A file outside the entry stays in the catch-all group instead.
+        var outside = CleanPlan.Groups(report, [@"C:\Users\alice\elsewhere\b.log"]);
+        Assert.Equal(string.Empty, outside[0].EntryId);
     }
 
     [Fact]

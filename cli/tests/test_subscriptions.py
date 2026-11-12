@@ -464,13 +464,20 @@ class SubscriptionTest(unittest.TestCase):
 
     def test_cycle_uses_report_timezone(self):
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 10}}}).subscriptions
+        now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
+        # UTC needs no tz database, so this half of the check runs everywhere.
+        utc = self.collect(manual, now=now, tz="UTC")["claude"]
+        self.assertEqual(utc["cycle_start"], "2026-03-10T00:00:00Z")
+
+    @unittest.skipUnless(has_tz_database("Asia/Shanghai", "America/Montreal"),
+                         "needs the IANA tz database (tzdata on Windows)")
+    def test_cycle_uses_report_timezone_with_named_zones(self):
+        manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 10}}}).subscriptions
         # 2026-04-09 17:00 UTC is 2026-04-10 01:00 in Shanghai, so the 10th has started
         now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
         shanghai = self.collect(manual, now=now, tz="Asia/Shanghai")["claude"]
         self.assertEqual(shanghai["cycle_start"], "2026-04-09T16:00:00Z")
         self.assertEqual(shanghai["cycle_end"], "2026-05-09T16:00:00Z")
-        utc = self.collect(manual, now=now, tz="UTC")["claude"]
-        self.assertEqual(utc["cycle_start"], "2026-03-10T00:00:00Z")
         # Montreal is UTC-4 in October and UTC-5 in November, so the two midnights differ
         manual = config.from_dict({"subscriptions": {"claude": {"plan": "pro", "anchor_day": 25}}}).subscriptions
         now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
