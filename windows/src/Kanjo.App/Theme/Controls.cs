@@ -36,13 +36,17 @@ public sealed class InfoBar : Border
         BorderBrush = stroke;
         BorderThickness = new Thickness(1);
         CornerRadius = new CornerRadius(Metrics.GroupRadius);
+        // 横向不伸出去：正文在卡片里折行，而不是把卡片撑出窗口。
+        ClipToBounds = true;
 
         var body = Ui.V(2);
         if (!string.IsNullOrEmpty(title))
         {
-            body.Children.Add(Ui.Text(title!, Type.BodyStrongSize, FontWeight.SemiBold, ink));
+            body.Children.Add(Ui.Text(title!, Type.BodyStrongSize, FontWeight.SemiBold, ink, wrap: true));
         }
         var text = Ui.Text(message, Type.CaptionSize, null, ink, wrap: true);
+        // 消息里有文件路径这种长串无空格文本：`Wrap` 会在放不下时按字符断开（旧版就是这样折的）。
+        text.TextWrapping = TextWrapping.Wrap;
         body.Children.Add(text);
         if (action is not null)
         {
@@ -68,14 +72,15 @@ public sealed class InfoBar : Border
             Margin = new Thickness(0, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
         };
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
+        // 关键的 `*` 列宽：让正文有确定的可用宽度去折行，而不是按内容想多宽就多宽。
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         Grid.SetColumn(stripe, 0);
         row.Children.Add(stripe);
         Grid.SetColumn(grid, 1);
         row.Children.Add(grid);
 
         Child = row;
-        Padding = new Thickness(12, 12, 14, 12);
+        Padding = new Thickness(12, 12, 12, 12);
     }
 }
 

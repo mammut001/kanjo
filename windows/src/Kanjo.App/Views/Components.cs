@@ -15,8 +15,12 @@ public interface ISnapshotPage
 }
 
 /// <summary>
-/// 紧凑的分段控件（Fluent 胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
+/// 范围选择器（Fluent 胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
 /// 选中项是强调色填充 + 强调色上的文字；不可用的范围是禁用色文字、不可点。
+///
+/// 360px 的面板里 7 个胶囊一行放不下，硬挤会把「Cycle」切成「Cy」。
+/// 所以这里做成**横向滚动的单行**：不显示滚动条（`ScrollBarVisibility.Hidden`），
+/// 滚轮 / 触摸板 / 拖动都能挪，每个胶囊都不会被折行或截断。
 /// </summary>
 public sealed class RangePicker : Border
 {
@@ -28,22 +32,25 @@ public sealed class RangePicker : Border
         Background = Palette.GroupFill;
         BorderBrush = Palette.CardBorder;
         BorderThickness = new Thickness(1);
-        // 7 个胶囊在 360px 宽的面板里放不下一行，用流式折行（Windows 11 的 SelectorBar 窄窗行为）。
         HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Center;
 
-        var row = new WrapPanel { Orientation = Orientation.Horizontal };
+        // 7 个英文胶囊（All/Today/7d/30d/Last week/Since reset/Cycle）在 310px 的可用宽度里
+        // 放不下（需要约 314px），所以做成**横向可滚动**的单行：不画滚动条，
+        // 每个胶囊保持自然宽度、绝不折行、绝不切词，最后那个可以滚出来。
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var range in TimeRanges.All)
         {
             var selected = range == effective;
-            var label = Ui.Text(range.ShortLabel(), 12, selected ? FontWeight.SemiBold : FontWeight.Normal,
-                selected ? Palette.ContrastOn(Palette.Accent) : Palette.Secondary);
+            var label = Ui.Text(range.ShortLabel(), 11, selected ? FontWeight.SemiBold : FontWeight.Normal,
+                selected ? Palette.ContrastOn(Palette.Accent) : Palette.Secondary, maxLines: 1);
             var chip = new Border
             {
                 CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(9, 4, 9, 4),
+                Padding = new Thickness(5, 4, 5, 4),
                 Background = selected ? Palette.Accent : Brushes.Transparent,
                 Child = label,
+                VerticalAlignment = VerticalAlignment.Center,
             };
 
             var unavailable = Unavailable(range, resetAvailable, cycleAvailable);
@@ -67,8 +74,62 @@ public sealed class RangePicker : Border
             }
             row.Children.Add(chip);
         }
-        Child = row;
+
+        // ScrollViewer 明确 Stretch + 左对齐内容：视口跟父级宽度走（不按内容撑宽），
+        // 内容更宽时出现横向滚动（滚动条隐藏，滚轮 / 触摸板 / 拖动都能挪）。
+        var scroller = new ScrollViewer
+        {
+            Content = row,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            IsScrollChainingEnabled = false,
+            MinWidth = 0,
+        };
+
+        // 视口右缘的淡出：内容还有没滚出来的部分时，最后一个胶囊是「渐隐」而不是
+        // 「被切掉半个词」。这是横向滚动的标准提示，也满足「不能切在词中间」。
+        var fade = new Border
+        {
+            Width = 18,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            IsHitTestVisible = false,
+            IsVisible = false,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(0, 247, 247, 247), 0),
+                    new GradientStop(Palette.GroupFillColor, 1),
+                },
+            },
+        };
+        void UpdateFade()
+        {
+            var more = Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            fade.IsVisible = more > 0.5 && scroller.Offset.X < more - 0.5;
+        }
+        scroller.ScrollChanged += (_, _) => UpdateFade();
+        scroller.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty)
+                UpdateFade();
+        };
+
+        Child = new Panel { Children = { scroller, fade } };
+        MinHeight = 34;
     }
+
+    /// <summary>测试 / 调试用：胶囊那一行的横向滚动条（内容放不下时可滚到最后一个）。</summary>
+    public ScrollViewer? PillsScroller => (Child as Panel)?.Children.OfType<ScrollViewer>().FirstOrDefault();
 
     private static string? Unavailable(TimeRange r, bool resetAvailable, bool cycleAvailable)
     {

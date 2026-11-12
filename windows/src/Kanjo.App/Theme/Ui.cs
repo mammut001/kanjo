@@ -207,9 +207,9 @@ public static class Ui
     /// 「Apply / Reset 几乎看不见」就是它）。这里直接画一个静态的禁用外观，对比度由 Palette 保证。
     /// </summary>
     public static Control StandardButton(string text, Action onClick, bool enabled = true,
-        double size = Type.BodySize)
+        double size = Type.BodySize, bool compact = false)
     {
-        if (!enabled) return DisabledButton(text, size);
+        if (!enabled) return DisabledButton(text, size, compact);
 
         var button = new Button
         {
@@ -222,7 +222,8 @@ public static class Ui
             BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(14, 6, 14, 6),
+            // compact 用于「一行里塞三个按钮」的场景（订阅行的 Apply / Reset / Edit）。
+            Padding = compact ? new Thickness(10, 6, 10, 6) : new Thickness(14, 6, 14, 6),
             MinHeight = 32,
         };
         button.Click += (_, _) => onClick();
@@ -230,7 +231,7 @@ public static class Ui
     }
 
     /// <summary>禁用按钮的静态外观（浅底 + 3:1 以上的灰字与灰描边，不可点）。</summary>
-    public static Border DisabledButton(string text, double size = Type.BodySize)
+    public static Border DisabledButton(string text, double size = Type.BodySize, bool compact = false)
     {
         var label = Text(text, size, null, Palette.Disabled);
         label.TextAlignment = TextAlignment.Center;
@@ -242,7 +243,7 @@ public static class Ui
             BorderBrush = Palette.DisabledStroke,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(14, 6, 14, 6),
+            Padding = compact ? new Thickness(10, 6, 10, 6) : new Thickness(14, 6, 14, 6),
             MinHeight = 32,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,

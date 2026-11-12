@@ -52,8 +52,7 @@ public sealed class QuotaResetRow : StackPanel
         left.Children.Add(Ui.Text(label, Type.BodySize, maxLines: 1));
         Grid.SetColumn(left, 0);
         header.Children.Add(left);
-        var source = Ui.Text(_quota?.Source ?? "none", Type.CaptionSize, null,
-            _quota is null ? Palette.Secondary : Palette.Secondary, mono: true);
+        var source = Ui.Text(_quota?.Source ?? "none", Type.CaptionSize, null, Palette.Secondary, mono: true);
         source.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(source, 2);
         header.Children.Add(source);
@@ -65,17 +64,31 @@ public sealed class QuotaResetRow : StackPanel
 
         if (_quota is { } quota && ReportDates.ParseTimestamp(quota.WeeklyResetsAt) is { } reset)
         {
-            var row = Ui.H(4);
-            row.Children.Add(Ui.Text(Stamp(reset, _timezone), Type.CaptionSize, null, Palette.Foreground));
+            // 日期行可能很长（「Fri, Oct 30 at 16:40 · window since …」），必须能折行，
+            // 否则会画出卡片右边界。
+            var line = new TextBlock
+            {
+                FontSize = Type.CaptionSize,
+                FontFamily = Type.Font,
+                LineHeight = Math.Round(Type.CaptionSize * 1.35, 1),
+                TextWrapping = TextWrapping.Wrap,
+            };
+            line.Inlines!.Add(new Avalonia.Controls.Documents.Run(Stamp(reset, _timezone))
+            {
+                Foreground = Palette.Foreground,
+            });
             if (RangeEngine.WindowStart(quota, DateTimeOffset.UtcNow, _timezone) is { } start)
             {
-                row.Children.Add(Ui.Text(
-                    "· " + L10n.TrL(null, "settings.quota_window_since", Stamp(start, _timezone),
-                        quota.WeeklyWindowHours), Type.CaptionSize, null, Palette.Secondary));
+                line.Inlines.Add(new Avalonia.Controls.Documents.Run(
+                    " · " + L10n.TrL(null, "settings.quota_window_since", Stamp(start, _timezone),
+                        quota.WeeklyWindowHours))
+                {
+                    Foreground = Palette.Secondary,
+                });
             }
             Children.Add(new Border
             {
-                Child = row,
+                Child = line,
                 Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 6),
             });
         }
@@ -88,10 +101,12 @@ public sealed class QuotaResetRow : StackPanel
             });
         }
 
-        var controls = Ui.H(8);
+        // 控件放第二行（和 Mac 一致：日期在上、控件在下），按钮右对齐单独一行。
+        // 360px 里「星期 + 时刻 + Apply + Reset」一行放不下，"Reset" 会被切掉。
+        var pickers = Ui.H(8);
         var weekdayLabels = Weekdays.Select(w => L10n.Tr(w.LabelKey)).ToList();
         var weekdayIndex = Array.FindIndex(Weekdays, w => w.Key == _weekday);
-        controls.Children.Add(Picker.Make(weekdayLabels, Math.Max(weekdayIndex, 0), index =>
+        pickers.Children.Add(Picker.Make(weekdayLabels, Math.Max(weekdayIndex, 0), index =>
         {
             _weekday = Weekdays[index].Key;
             Save($"{_weekday} {_time}");
@@ -99,17 +114,27 @@ public sealed class QuotaResetRow : StackPanel
 
         var times = AvailableTimes;
         var timeIndex = times.IndexOf(_time);
-        controls.Children.Add(Picker.Make(times, Math.Max(timeIndex, 0), index =>
+        pickers.Children.Add(Picker.Make(times, Math.Max(timeIndex, 0), index =>
         {
             _time = times[index];
             Save($"{_weekday} {_time}");
         }, enabled: CanEdit, minWidth: 92));
 
-        controls.Children.Add(Ui.StandardButton(L10n.Tr("common.apply"),
+        var buttons = Ui.H(8);
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        buttons.Children.Add(Ui.StandardButton(L10n.Tr("common.apply"),
             () => Save($"{_weekday} {_time}"), enabled: CanEdit));
-        controls.Children.Add(Ui.StandardButton(L10n.Tr("common.reset"),
+        buttons.Children.Add(Ui.StandardButton(L10n.Tr("common.reset"),
             () => Save(null), enabled: CanEdit && _quota?.Source == "manual"));
-        if (!CanEdit)
+
+        var controls = Ui.V(8);
+        controls.Children.Add(pickers);
+        // 按钮右对齐，占满整行宽度，不会被右边的卡片边缘切掉。
+        var buttonRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(buttons, 1);
+        buttonRow.Children.Add(buttons);
+        controls.Children.Add(buttonRow);
+        if (!CanEdit && _services.CanEditSubscriptions == false)
         {
             ToolTip.SetTip(controls, L10n.Tr("settings.renews_day_disabled_help"));
         }

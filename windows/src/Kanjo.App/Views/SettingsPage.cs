@@ -191,10 +191,10 @@ public sealed class SettingsPage : ScrollPage
         control.VerticalAlignment = VerticalAlignment.Center;
 
         // 一行可用宽度：面板宽 - 页面留白 - 卡片描边 - 卡片内边距。
-        const double available = Metrics.PanelWidth - Metrics.PagePadding * 2 - 2 - Metrics.RowInset * 2;
+        const double available = Metrics.RowContentWidth;
         // 控件自己想要的宽度：开关这类窄控件给 0（和标题同排），下拉 / 输入给 200。
         var controlWidth = control.MinWidth > 0 ? control.MinWidth : 0;
-        const double minLabelWidth = 150;
+        const double minLabelWidth = 130;
         var fitsBeside = controlWidth == 0 || controlWidth + minLabelWidth + 14 <= available;
 
         Control body;

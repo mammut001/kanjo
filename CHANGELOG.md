@@ -8,6 +8,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Windows: nothing is clipped at the card edge any more.** The page margin and the card padding were adding up
+  to a 32px double inset inside a 360px panel, so the regenerated snapshots had content squeezed against the
+  right edge. The horizontal rhythm is now 12px page margin + 12px card padding (`Metrics.RowContentWidth`),
+  and anything that does not fit moves to its own line instead of overflowing: the "Total cost ⓘ" label sits
+  above a horizontally scrollable, single-line range-pill bar (no scrollbar, right-edge fade, so "Cycle" is
+  never cut mid-word — same on the project page, which no longer wraps the pills onto two lines), overview
+  project subtitles truncate before the 8-week heat strip, the `--data` InfoBar wraps its path inside the card,
+  and the quota-reset and subscription rows keep their controls on a right-aligned second line. The treemap card
+  bleeds to the panel edges so its tiles regain the width they need for labels.
 - **Windows: the Settings page scrolls.** Scrollable pages derived from `ScrollViewer` (Settings, Overview,
   project / bucket detail, disk) were styling themselves under their own type name, so Avalonia never applied
   the Fluent `ScrollViewer` control theme: no `ScrollContentPresenter` was created and `Extent` stayed 0, which
@@ -20,7 +29,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Windows: Fluent (Windows 11) redesign.** Surfaces, cards, type ramp and every colour token now follow
   WinUI: Mica when the OS has it and a solid `#F3F3F3` / `#202020` fallback otherwise, 8px cards with a 1px
-  stroke and 16px padding (4px between cards in a group, 24px between groups), Segoe UI Variable with the
+  stroke and 12px padding (4px between cards in a group, 24px between groups), Segoe UI Variable with the
   28 / 20 / 14 / 14 / 12 ramp, sentence-case BodyStrong section headers instead of grey ALL-CAPS, the Windows
   accent colour (`AccentColor1`) for links and the primary button, Fluent ToggleSwitch / ComboBox / SelectorBar
   pills, and an InfoBar for the `--data` warning. Text colours are solid rather than alpha-on-grey: primary

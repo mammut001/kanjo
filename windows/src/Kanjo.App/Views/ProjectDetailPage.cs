@@ -96,7 +96,13 @@ public sealed class ProjectDetailPage : ScrollPage
         var shown = filtered.Projected;
         var box = Ui.V(3);
 
-        var titleRow = new WrapPanel { Orientation = Orientation.Horizontal };
+        var titleRow = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            // 用 Stretch 而不是按内容收缩：下面的胶囊条靠父级宽度铺满，
+            // 如果这一行按内容收缩，整个 StackPanel 的"自然宽度"就会偏窄。
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
         var name = Ui.Text(_project.Name, Type.TitleSize, FontWeight.SemiBold, maxLines: 2,
             family: Type.Display);
         name.Margin = new Thickness(0, 0, 6, 0);

@@ -122,7 +122,15 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
 
 - 窗口优先用 **Mica**（`PanelWindow` 里 `TransparencyLevelHint`）；Windows 10 / Server 2022 没有 Mica 时
   退回上面那层实色，再配 1px 描边，所以两种环境下都是「卡片浮在底色上」。
-- 卡片：圆角 8、1px 描边、左右 16 内边距；同一分组里卡片之间 4px，分组之间 24px。
+- **横向空间只有两层**：页面左右留白 12（`Metrics.PagePadding`）+ 卡片左右内边距 12（`Metrics.RowInset`），
+  一行的可用宽度就是 `Metrics.RowContentWidth`（332）。面板只有 360，再厚一层就会把内容挤两次 ——
+  review 里的「Cycle 被切成 Cy」「Edit 被切掉」都是这么来的。卡片：圆角 8、1px 描边；
+  同一分组里卡片之间 4px，分组之间 24px。唯一的例外是总览的马赛克卡片，它贴到面板边缘（出血），
+  这样色块才有足够宽度显示标签。
+- 放不下的整行控件**换行而不是溢出**：额度重置行（日期一行、控件一行、Apply / Reset 右对齐一行）
+  和订阅行的三个按钮都是右对齐的独立一行。
+- 总览 header 的范围胶囊是**横向可滚动的单行**（不画滚动条，右缘有渐隐提示还有更多），
+  7 个胶囊永远不折行、不切词；"Total cost" 标签独占一行。
 - 设置页照 Windows 11「设置」的版式：分组标题（BodyStrong）在上，下面一卡一项（左边标题 + 一行说明，
   右边右对齐的控件，最小宽 200）。面板只有 360px，放不下「标题 + 200px 控件」时控件落到下一行（和 Win11 窄窗一致）。
 

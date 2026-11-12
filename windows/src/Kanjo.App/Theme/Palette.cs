@@ -96,10 +96,19 @@ public static class Palette
     public static IBrush RowPressed => new SolidColorBrush(Hex(0xE6E6E6, 0x3B3B3B));
 
     /// <summary>卡片内再分组的淡底（比如订阅行之间），只在卡片内部使用。</summary>
-    public static IBrush GroupFill => new SolidColorBrush(Hex(0xF7F7F7, 0x323232));
+    public static Color GroupFillColor => Hex(0xF7F7F7, 0x323232);
+
+    public static IBrush GroupFill => new SolidColorBrush(GroupFillColor);
 
     /// <summary>控件底（TextBox / ComboBox 未聚焦时）：比卡片略深，能在白卡上看出输入区。</summary>
     public static IBrush ControlFill => new SolidColorBrush(Hex(0xFBFBFB, 0x303030));
+
+    /// <summary>
+    /// 输入控件的「表面」：Fluent 主题给 ComboBox / TextBox 用的启用态底色
+    /// （light 纯白 / dark #1A1A1A）。禁用态要用**同一个底**，只把字变淡 ——
+    /// 否则深色下禁用控件比启用的还亮（#303030 vs #1A1A1A），看起来像另一套控件。
+    /// </summary>
+    public static Color ControlSurfaceColor => Hex(0xFFFFFF, 0x1A1A1A);
 
     /// <summary>悬停卡 / 弹出层的阴影（离屏渲染下用偏移的半透明圆角矩形模拟）。</summary>
     public static BoxShadows CardShadow => IsDark
@@ -367,14 +376,17 @@ public static class Palette
 /// </summary>
 public static class Metrics
 {
-    /// <summary>页面左右留白（卡片贴到面板边缘留 14，和窗口圆角对齐）。</summary>
-    public const double PagePadding = 14;
+    /// <summary>
+    /// 页面左右留白（12）。卡片再各自有 12 的内边距，所以内容距窗口边缘 24 ——
+    /// 360px 的面板里再宽就会出现「内容被两侧内缩两次」的挤压。
+    /// </summary>
+    public const double PagePadding = 12;
 
     /// <summary>分组之间（24px）。</summary>
     public const double SectionSpacing = 24;
 
-    /// <summary>卡片内的左右内边距（16px）。</summary>
-    public const double RowInset = 16;
+    /// <summary>卡片内的左右内边距（12px）。</summary>
+    public const double RowInset = 12;
 
     /// <summary>返回按钮的左缩进（抵消自绘 chevron 的空白）。</summary>
     public const double BackInset = RowInset - 13;
@@ -394,9 +406,12 @@ public static class Metrics
     /// <summary>右侧控件的固定最小宽度（任务要求 200）。</summary>
     public const double ControlMinWidth = 200;
 
+    /// <summary>一行内容可用的宽度：面板宽 − 两侧页面留白 − 卡片描边 − 卡片左右内边距。</summary>
+    public const double RowContentWidth = PanelWidth - PagePadding * 2 - 2 - RowInset * 2;
+
     // 总览的扁平列表（保留旧名字，值改成卡片的节奏）。
     public const double FlatPagePadding = 8;
-    public const double ListInset = 16;
+    public const double ListInset = 12;
     public const double RowRadius = 6;
 
     /// <summary>总览文字区块的左右留白。</summary>

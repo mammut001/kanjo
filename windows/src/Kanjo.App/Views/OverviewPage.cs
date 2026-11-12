@@ -189,10 +189,10 @@ public sealed class OverviewPage : ScrollPage
                 _services.NotifyChanged();
             });
 
-        var titleRow = Ui.Columns(
-            (title, new GridLength(1, GridUnitType.Star)),
-            (picker, GridLength.Auto));
-        box.Children.Add(titleRow);
+        // 标签独占一行，胶囊单独一行横向滚动：360px 里 7 个胶囊不可能一行放下，
+        // 挤在一起会把「Cycle」切掉。
+        box.Children.Add(title);
+        box.Children.Add(picker);
 
         box.Children.Add(Widgets.HeroAmount(Fmt.Money(filtered.Cost, report.Currency), 36));
 
@@ -210,13 +210,31 @@ public sealed class OverviewPage : ScrollPage
         return box;
     }
 
-    /// <summary>马赛克卡片：白卡 + 圆角，色块本身贴着卡片内侧。</summary>
+    /// <summary>
+    /// 马赛克卡片：唯一一个横向铺满面板的卡片（左右不留页面留白，也没有内边距）。
+    ///
+    /// 任务原话是「bleed to the card edges (no inner padding around the treemap) so it gets its
+    /// old width back」—— 旧版宽度是 360 − 3 = 357。如果这张卡也缩进 12px，可用宽度只有 334，
+    /// HabitGarden 就掉到 <see cref="MosaicLayout"/> 的 72px 标签门槛以下（实测 348 是分界点）。
+    /// 所以它作为「出血」元素贴到面板边缘：内容 358px，四个方块都恢复标签，且不越过窗口边缘。
+    /// </summary>
     private Control MosaicCard(UsageReport report, IReadOnlyList<Project> visible)
     {
-        var width = Metrics.PanelWidth - Metrics.PagePadding * 2 - Metrics.RowInset * 2;
+        var width = Metrics.PanelWidth - 2;
         var host = new Panel { Height = MosaicLayout.DefaultHeight };
         host.Children.Add(new MosaicView(visible, width, report.Currency, report.AgentLabels()));
-        return Chrome.Card(host, Metrics.RowInset, Metrics.RowInset);
+        return new Border
+        {
+            Child = host,
+            Background = Palette.CardBackground,
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Metrics.GroupRadius),
+            ClipToBounds = true,
+            Padding = new Thickness(0),
+            // 抵消父级 StackPanel 的页面左右留白，贴到面板边缘。
+            Margin = new Thickness(-Metrics.PagePadding, 0, -Metrics.PagePadding, 0),
+        };
     }
 
     // MARK: - 订阅价值
@@ -543,12 +561,17 @@ public sealed class OverviewPage : ScrollPage
                 Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive))
             : L10n.TrL(null, "overview.row.subtitle.plural", project.Sessions,
                 Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive));
-        var subtitle = Ui.Text(sessions, 12, null, Palette.Secondary);
+        var subtitle = Ui.Text(sessions, 12, null, Palette.Secondary, maxLines: 1);
+        // 必须在热力条之前截断：不然「active Oct 23」会画到 8 周热力条下面（TextBlock 默认不裁剪）。
+        subtitle.TextTrimming = TextTrimming.CharacterEllipsis;
+        subtitle.ClipToBounds = true;
+        subtitle.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(subtitle, L10n.TrL(null, "overview.row.last_active", Fmt.Day(project.LastActive)));
 
         var weeks = HeatStrip.Weekly(project.ByDay, heatEnd, RangeContext.FallbackAgent(project),
             HeatStrip.DefaultWeeks, timezone);
         var strip = new HeatStripView(weeks, currency, labels, idPrefix: $"overview:hover:heat:{index}");
+        strip.Margin = new Thickness(8, 0, 0, 0);
 
         // 悬停时出现的置顶 / 隐藏按钮（放在热力条左边）。
         var actions = Ui.H(0);

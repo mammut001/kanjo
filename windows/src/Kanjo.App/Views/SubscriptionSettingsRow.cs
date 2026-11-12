@@ -113,26 +113,33 @@ public sealed class SubscriptionSettingsRow : StackPanel
     {
         var box = Ui.V(8);
 
-        var dayRow = Ui.H(8);
         var stepper = Stepper(CanEdit);
-        dayRow.Children.Add(stepper);
+        ToolTip.SetTip(stepper, CanEdit
+            ? L10n.Tr("settings.renews_day_help")
+            : L10n.Tr("settings.renews_day_disabled_help"));
+        box.Children.Add(stepper);
+
+        // 三个按钮（Apply / Reset / Edit）右对齐。
+        // 用 Grid 的 `*,Auto` 列来右推，而不是靠 HorizontalAlignment.Right ——
+        // 后者会让 StackPanel 先按内容定宽、再溢出可用宽度。
+        // 左右 12px 内边距**只由外层 Border 提供一次**：这里再包一层 Padding 会变成 24，
+        // 按钮就会比同一行的文字窄进半格（review 里「右侧留白不均」的来源）。
         var actions = Ui.H(8);
         var apply = Ui.AccentButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
-        var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit);
+        var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit, compact: true);
         var edit = Ui.StandardButton(L10n.Tr("settings.edit"), () =>
         {
             SyncInputs(sub);
             _editing = true;
             Rebuild();
-        }, enabled: CanEdit);
+        }, enabled: CanEdit, compact: true);
         actions.Children.Add(apply);
         actions.Children.Add(reset);
         actions.Children.Add(edit);
-        dayRow.Children.Add(actions);
-        ToolTip.SetTip(stepper, CanEdit
-            ? L10n.Tr("settings.renews_day_help")
-            : L10n.Tr("settings.renews_day_disabled_help"));
-        box.Children.Add(dayRow);
+        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(actions, 1);
+        actionRow.Children.Add(actions);
+        box.Children.Add(actionRow);
 
         var source = Ui.Text(_saving
                 ? L10n.Tr("settings.saving")
@@ -157,16 +164,20 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private Control EmptyForm()
     {
         var box = Ui.V(8);
-        var row = Ui.H(10);
-        row.Children.Add(Ui.Text(L10n.Tr("settings.no_subscription_info"), Type.CaptionSize, null,
-            Palette.Secondary));
-        row.Children.Add(Ui.StandardButton(L10n.Tr("settings.add_subscription"), () =>
+        // 说明和按钮不再挤在同一行（360px 里 "No subscription info" + "Add subscription"
+        // 会超出卡片）：说明一行、按钮右对齐一行，和 Mac 的窄窗表现一致。
+        box.Children.Add(Ui.Text(L10n.Tr("settings.no_subscription_info"), Type.CaptionSize, null,
+            Palette.Secondary, wrap: true));
+        var addButton = Ui.StandardButton(L10n.Tr("settings.add_subscription"), () =>
         {
             SyncInputs(null);
             _editing = true;
             Rebuild();
-        }, enabled: CanEdit));
-        box.Children.Add(row);
+        }, enabled: CanEdit);
+        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(addButton, 1);
+        actionRow.Children.Add(addButton);
+        box.Children.Add(actionRow);
         if (SubscriptionValue.BillingPage(_agent) is { } url)
         {
             box.Children.Add(Ui.SmallLink(L10n.Tr("settings.open_billing_page"), () => ProjectActions.OpenUrl(url)));
@@ -240,7 +251,11 @@ public sealed class SubscriptionSettingsRow : StackPanel
             actions.Children.Add(Ui.StandardButton(L10n.Tr("settings.remove_subscription"), RemoveManual,
                 enabled: !_saving));
         }
-        box.Children.Add(actions);
+        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(actions, 1);
+        // box 由外层 Border 统一提供左右内边距，这里不要再加一层（否则 12+12 双内缩）。
+        actionRow.Children.Add(actions);
+        box.Children.Add(actionRow);
         if (_saving) box.Opacity = 0.7;
 
         return new Border
