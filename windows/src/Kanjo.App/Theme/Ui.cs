@@ -8,22 +8,31 @@ using Kanjo.Core;
 
 namespace Kanjo.App;
 
-/// <summary>字体与字号档位（对应 Mac 的 SF Pro / Windows 的 Segoe UI Variable）。</summary>
+/// <summary>
+/// 字号档位（Windows 11 的 type ramp）：Title 28 / Subtitle 20 / BodyStrong 14 / Body 14 / Caption 12。
+/// 字体在 Windows 上是 Segoe UI Variable（回退 Segoe UI），macOS 上（开发 / 截图）用系统字体。
+/// </summary>
 public static class Type
 {
-    /// <summary>Windows 用 Segoe UI Variable（回退 Segoe UI）；macOS 开发时用系统字体。</summary>
     public static FontFamily Font { get; } = OperatingSystem.IsWindows()
         ? new FontFamily("Segoe UI Variable Text, Segoe UI, Segoe UI Variable, sans-serif")
-        : new FontFamily("-apple-system, Helvetica Neue, Segoe UI, sans-serif");
+        : new FontFamily("-apple-system, Segoe UI, Helvetica Neue, sans-serif");
 
     public static FontFamily Display { get; } = OperatingSystem.IsWindows()
         ? new FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif")
-        : new FontFamily("-apple-system, Helvetica Neue, sans-serif");
+        : new FontFamily("-apple-system, Segoe UI, Helvetica Neue, sans-serif");
 
     public static FontFamily Mono { get; } =
         new(OperatingSystem.IsWindows()
             ? "Cascadia Mono, Consolas, monospace"
-            : "SF Mono, Menlo, monospace");
+            : "SF Mono, Menlo, Consolas, monospace");
+
+    // 档位常量：视图里只写 Role，不写数字。
+    public const double TitleSize = 28;
+    public const double SubtitleSize = 20;
+    public const double BodyStrongSize = 14;
+    public const double BodySize = 14;
+    public const double CaptionSize = 12;
 
     /// <summary>测量文本宽度（mosaic 的「绝不截断」规则用）。</summary>
     public static double MeasureWidth(string text, double fontSize, FontWeight weight = FontWeight.Normal,
@@ -39,7 +48,7 @@ public static class Type
         return Math.Ceiling(layout.WidthIncludingTrailingWhitespace);
     }
 
-    /// <summary>大号金额用圆体（Mac: .rounded）。Avalonia 无圆体，用 Display 字体近似。</summary>
+    /// <summary>大号金额用 Display 字体（Windows 11 的数字标题感）。</summary>
     public static FontFamily Rounded => Display;
 }
 
@@ -48,7 +57,7 @@ public static class Ui
 {
     public static TextBlock Text(
         string text,
-        double size = 12,
+        double size = Type.BodySize,
         FontWeight? weight = null,
         IBrush? foreground = null,
         bool wrap = false,
@@ -64,26 +73,35 @@ public static class Ui
             FontWeight = weight ?? FontWeight.Normal,
             Foreground = foreground ?? Palette.Foreground,
             TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            // Mac 的行高比 Avalonia 默认紧一些，收紧一点才能对齐参考图的节奏。
-            LineHeight = Math.Round(size * 1.2, 1),
+            // Segoe UI Variable 的行高比默认紧一点，收紧到 1.35 倍才像 Windows 11。
+            LineHeight = Math.Round(size * 1.35, 1),
         };
         if (maxLines > 0) block.MaxLines = maxLines;
         return block;
     }
 
-    public static TextBlock Secondary(string text, double size = 10.5, int maxLines = 1) =>
+    /// <summary>页面标题（Title 28 semibold）。</summary>
+    public static TextBlock Title(string text, double size = Type.TitleSize) =>
+        Text(text, size, FontWeight.SemiBold, family: Type.Display);
+
+    /// <summary>次级标题（Subtitle 20 semibold）。</summary>
+    public static TextBlock Subtitle(string text) =>
+        Text(text, Type.SubtitleSize, FontWeight.SemiBold, family: Type.Display);
+
+    /// <summary>分组标题（BodyStrong 14 semibold、正文色、句首大写）——替代旧的全大写灰标题。</summary>
+    public static TextBlock SectionTitle(string text) =>
+        Text(text, Type.BodyStrongSize, FontWeight.SemiBold);
+
+    /// <summary>次要文字（Caption 12）。</summary>
+    public static TextBlock Secondary(string text, double size = Type.CaptionSize, int maxLines = 1) =>
         Text(text, size, null, Palette.Secondary, maxLines: maxLines);
 
-    /// <summary>小号全大写标题（SectionTitle：10pt semibold，tracking 0.5）。</summary>
-    public static TextBlock SectionTitle(string text)
-    {
-        var block = Text(text.ToUpperInvariant(), 10, FontWeight.SemiBold, Palette.Secondary);
-        block.LetterSpacing = 0.5;
-        return block;
-    }
+    /// <summary>说明 / 脚注（Caption 12、三级色，可折行）。</summary>
+    public static TextBlock Caption(string text, int maxLines = 0) =>
+        Text(text, Type.CaptionSize, null, Palette.Tertiary, wrap: maxLines == 0, maxLines: maxLines);
 
     /// <summary>色点。</summary>
-    public static Avalonia.Controls.Shapes.Ellipse Dot(string agent, double size = 6) => new()
+    public static Avalonia.Controls.Shapes.Ellipse Dot(string agent, double size = 8) => new()
     {
         Width = size,
         Height = size,
@@ -98,25 +116,21 @@ public static class Ui
         ClipToBounds = true,
     };
 
-    public static Control Hairline(double leading = 0, double trailing = 0)
+    /// <summary>1px 分割线（卡片描边色，看得见）。</summary>
+    public static Control Hairline(double leading = 0, double trailing = 0) => new Border
     {
-        var line = new Border
-        {
-            Height = 1,
-            Background = Palette.Separator,
-            Margin = new Thickness(leading, 0, trailing, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-        return line;
-    }
+        Height = 1,
+        Background = Palette.Separator,
+        Margin = new Thickness(leading, 0, trailing, 0),
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+    };
 
-    /// <summary>
-    /// 可点文字（RowIconButton / 文字按钮）：无底，强调色，悬停变淡底。
-    /// </summary>
-    public static Clickable LinkButton(string text, Action onClick, double size = 10.5, IBrush? foreground = null) =>
+    /// <summary>可点文字（链接）：强调色 + 手型光标（只有链接给手型）。</summary>
+    public static Clickable LinkButton(string text, Action onClick, double size = Type.BodySize,
+        IBrush? foreground = null) =>
         Clickable.Link(text, onClick, size, foreground);
 
-    /// <summary>图标按钮（26×26，无底，悬停出现圆形淡底）。</summary>
+    /// <summary>图标按钮（32×32，悬停出现圆角淡底）。</summary>
     public static Clickable IconButton(Control glyph, Action onClick, string? tip = null, bool active = false) =>
         Clickable.Icon(glyph, onClick, tip, active);
 
@@ -126,7 +140,7 @@ public static class Ui
     public static Grid Columns(params (Control? Content, GridLength Width)[] cells)
     {
         var grid = new Grid();
-        foreach (var (content, width) in cells)
+        foreach (var (_, width) in cells)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition(width));
         }
@@ -158,76 +172,117 @@ public static class Ui
     public static Control Spacer() => new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
 
     /// <summary>
-    /// 主要按钮（borderedProminent 近似）：强调色底、白字。Avalonia 的 Button 依赖模板，
-    /// 离屏渲染时模板不实例化 → 用自绘的 Clickable 保证截图里也能看到。
-    /// SwiftUI 的 borderedProminent 只在窗口是活动窗口时画强调色，非活动窗口里就是普通灰白按钮；
-    /// 这里按 <see cref="WindowActivation"/> 复刻同一条规则（截图 = 非活动窗口）。
+    /// 主按钮：Fluent 的 Accent Button（强调色底 + 强调色上的正文色）。
+    /// 用真正的 <see cref="Button"/>，WinUI 主题自带悬停 / 按下三态；
+    /// 禁用态换成静态的灰按钮（Fluent 的禁用强调按钮几乎看不见）。
     /// </summary>
-    public static Clickable ProminentButton(string text, Action onClick, IBrush? tint = null, double size = 11.5)
+    public static Control AccentButton(string text, Action onClick, bool enabled = true,
+        double size = Type.BodySize)
     {
-        if (!WindowActivation.IsActive) return BorderedButton(text, onClick, enabled: true, size: size);
-        var label = Text(text, size, FontWeight.SemiBold, Brushes.White);
-        label.TextAlignment = TextAlignment.Center;
-        var body = new Border
+        if (!enabled) return DisabledButton(text, size);
+        var button = new Button
         {
-            Child = label,
-            Background = tint ?? Palette.Accent,
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 4, 10, 4),
+            Content = text,
+            FontSize = size,
+            FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            // WinUI 的强调按钮：背景 / 前景 / 边框都由主题的 accent 资源决定，
+            // 这里显式绑定我们的强调色，保证系统强调色 / 深色主题下都对。
+            Background = Palette.Accent,
+            Foreground = Palette.OnAccent,
+            BorderBrush = Palette.Accent,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(16, 6, 16, 6),
+            MinHeight = 32,
         };
-        return new Clickable(body, onClick, radius: 6, hoverFill: false)
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-    }
-
-    /// <summary>主要按钮（可禁用版）：禁用时灰底白字，对应 `.borderedProminent` 的 disabled 外观。</summary>
-    public static Clickable ProminentButton(string text, Action onClick, bool enabled, IBrush? tint = null,
-        double size = 11.5)
-    {
-        if (!WindowActivation.IsActive) return BorderedButton(text, onClick, enabled, size);
-        var button = ProminentButton(text, onClick, enabled ? tint : Palette.Tertiary, size);
-        button.IsEnabled = enabled;
-        button.Opacity = enabled ? 1 : 0.9;
+        button.Click += (_, _) => onClick();
         return button;
     }
 
-    /// <summary>次要按钮（bordered 近似）：淡底 + 细描边。</summary>
-    public static Clickable BorderedButton(string text, Action onClick, bool enabled = true, double size = 11)
+    /// <summary>
+    /// 标准按钮：Fluent 的 Standard Button（浅底 + 1px 描边）。
+    /// 禁用态不用 Fluent 模板自己的样子：那是 #CCCCCC 底 + 75% 透明字（约 2.7:1，用户报的
+    /// 「Apply / Reset 几乎看不见」就是它）。这里直接画一个静态的禁用外观，对比度由 Palette 保证。
+    /// </summary>
+    public static Control StandardButton(string text, Action onClick, bool enabled = true,
+        double size = Type.BodySize, bool compact = false)
     {
-        var label = Text(text, size, FontWeight.Normal, enabled ? Palette.Foreground : Palette.Tertiary);
-        label.TextAlignment = TextAlignment.Center;
-        var body = new Border
+        if (!enabled) return DisabledButton(text, size, compact);
+
+        var button = new Button
         {
-            Child = label,
-            Background = Palette.GroupFill,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(9, 3, 9, 3),
+            Content = text,
+            FontSize = size,
             HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Palette.ControlFill,
+            Foreground = Palette.Foreground,
+            BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            // compact 用于「一行里塞三个按钮」的场景（订阅行的 Apply / Reset / Edit）。
+            Padding = compact ? new Thickness(10, 6, 10, 6) : new Thickness(14, 6, 14, 6),
+            MinHeight = 32,
         };
-        var button = new Clickable(body, onClick, radius: 6, hoverFill: enabled)
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = enabled,
-            Opacity = enabled ? 1 : 0.55,
-        };
+        button.Click += (_, _) => onClick();
         return button;
     }
 
-    /// <summary>行内小号文字按钮（强调色，10.5pt）。</summary>
+    /// <summary>禁用按钮的静态外观（浅底 + 3:1 以上的灰字与灰描边，不可点）。</summary>
+    public static Border DisabledButton(string text, double size = Type.BodySize, bool compact = false)
+    {
+        var label = Text(text, size, null, Palette.Disabled);
+        label.TextAlignment = TextAlignment.Center;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        return new Border
+        {
+            Child = label,
+            Background = Palette.DisabledFill,
+            BorderBrush = Palette.DisabledStroke,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = compact ? new Thickness(10, 6, 10, 6) : new Thickness(14, 6, 14, 6),
+            MinHeight = 32,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsEnabled = false,
+        };
+    }
+
+    /// <summary>兼容旧调用点：主要按钮。</summary>
+    public static Control ProminentButton(string text, Action onClick, double size = Type.BodySize) =>
+        AccentButton(text, onClick, size: size);
+
+    public static Control ProminentButton(string text, Action onClick, bool enabled, IBrush? tint = null,
+        double size = Type.BodySize)
+    {
+        if (!enabled) return DisabledButton(text, size);
+        if (tint is null) return AccentButton(text, onClick, size: size);
+        var button = (Button)AccentButton(text, onClick, size: size);
+        button.Background = tint;
+        button.BorderBrush = tint;
+        button.Foreground = Palette.ContrastOn(tint);
+        return button;
+    }
+
+    /// <summary>兼容旧调用点：次要按钮。</summary>
+    public static Control BorderedButton(string text, Action onClick, bool enabled = true,
+        double size = Type.BodySize) => StandardButton(text, onClick, enabled, size);
+
+    /// <summary>行内小号文字按钮（链接着色，11pt ≈ Caption）。</summary>
     public static Clickable SmallLink(string text, Action onClick, bool enabled = true) =>
-        new(Text(text, 10.5, null, enabled ? Palette.Accent : Palette.Tertiary), onClick, radius: 4,
-            hoverFill: enabled);
+        new(Text(text, 11, null, enabled ? Palette.Link : Palette.Disabled), onClick, radius: 4,
+            hoverFill: enabled, hand: enabled);
 
-    /// <summary>输入框 + 输入框里的占位符（占位符用和正文一样的字体）。</summary>
+    /// <summary>输入框 + 输入框本身（Fluent TextBox，占位符走 Watermark）。</summary>
     public sealed record TextInput(TextBox Box, Grid Root);
 
     /// <summary>
-    /// 圆角输入框（Mac 的 `.roundedBorder`）。占位符自己画：Avalonia 的 `Watermark` 是模板里的另一个
-    /// TextBlock，字体不跟随 TextBox，等宽输入框的占位符会和正文对不上（Mac 上是同一个字体）。
+    /// Fluent 输入框（WinUI 的 TextBox）：圆角 4、1px 描边。
+    /// 占位符自己画：主题自带的 Watermark 用的是极淡的 tertiary 色（白卡上约 1.9:1，用户报了
+    /// 「占位符看不见」），这里换成 Palette.Secondary 的实色，对比度 6.6:1。
     /// </summary>
     public static TextInput TextField(string? text, string? placeholder, bool mono = false,
         double? width = null, bool password = false)
@@ -235,33 +290,30 @@ public static class Ui
         var box = new TextBox
         {
             Text = text ?? "",
-            FontSize = 11,
-            MinHeight = 24,
-            Padding = new Thickness(6, 2, 6, 2),
+            FontSize = Type.CaptionSize,
+            MinHeight = 32,
+            Padding = new Thickness(10, 5, 10, 5),
             FontFamily = mono ? Type.Mono : Type.Font,
-            CornerRadius = new CornerRadius(6),
-            Background = Palette.CardBackground,
-            BorderBrush = Palette.CardBorder,
-            BorderThickness = new Thickness(0.5),
+            CornerRadius = new CornerRadius(4),
+            Background = Palette.ControlFill,
+            BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         if (password) box.PasswordChar = '•';
         if (width is { } w) box.Width = w;
+
         var root = new Grid();
+        root.Children.Add(box);
+        if (string.IsNullOrEmpty(placeholder)) return new TextInput(box, root);
 
-        if (string.IsNullOrEmpty(placeholder))
-        {
-            root.Children.Add(box);
-            return new TextInput(box, root);
-        }
-
-        var hint = Text(placeholder, 11, null, Palette.Tertiary, maxLines: 1, mono: mono);
-        // 左缘和 TextBox 里的正文对齐（Fluent 模板自己还有一点内边距）。
-        hint.Margin = new Thickness(6, 0, 9, 0);
+        var hint = Text(placeholder, Type.CaptionSize, null, Palette.Secondary, maxLines: 1, mono: mono);
+        // 左缘和 TextBox 里的正文对齐（10 内边距 + 1 描边）。
+        hint.Margin = new Thickness(11, 0, 11, 0);
         hint.VerticalAlignment = VerticalAlignment.Center;
         hint.IsHitTestVisible = false;
         hint.IsVisible = string.IsNullOrEmpty(box.Text);
         box.TextChanged += (_, _) => hint.IsVisible = string.IsNullOrEmpty(box.Text);
-        root.Children.Add(box);
         root.Children.Add(hint);
         return new TextInput(box, root);
     }

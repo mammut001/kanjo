@@ -28,7 +28,7 @@ public sealed class DropTarget
         _normal = border.Background ?? Brushes.Transparent;
         border.PointerEntered += (_, _) =>
         {
-            if (_dragging && _source != _id) border.Background = new SolidColorBrush(Palette.AccentColor, 0.12);
+            if (_dragging && _source != _id) border.Background = new SolidColorBrush(Palette.AccentFillColor, 0.18);
         };
         border.PointerExited += (_, _) =>
         {

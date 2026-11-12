@@ -1,16 +1,17 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Layout;
 using Avalonia.Media;
-using Kanjo.Core;
+using Avalonia.Styling;
 
 namespace Kanjo.App;
 
 /// <summary>
-/// 可点区域：Border + 指针事件。不用 <see cref="Button"/>，因为它依赖控件模板，
-/// 在离屏（headless 截图）渲染、没有 TopLevel 的情况下模板不会被实例化 → 整块看不见。
-/// 悬停时给一层很淡的底色，和 Mac 的 .plain / IconButtonStyle 观感一致。
+/// 可点区域：Border + 指针事件（不用 <see cref="Button"/>，因为行本身要自由排版）。
+/// 悬停 / 按下各给一层很淡的中性填充，用 90ms 的过渡（≤100ms，Windows 11 的手感）。
+/// 光标默认是箭头 —— Windows 只在链接上用小手，列表行 / 按钮都是普通箭头。
 /// </summary>
 public sealed class Clickable : Border
 {
@@ -19,15 +20,34 @@ public sealed class Clickable : Border
     private bool _hovered;
     private bool _pressed;
 
-    public Clickable(Control content, Action onClick, string? tip = null, double radius = 6, bool hoverFill = true)
+    public Clickable(Control content, Action onClick, string? tip = null, double radius = 6, bool hoverFill = true,
+        bool hand = false)
     {
         _onClick = onClick;
         _hoverFill = hoverFill;
         Child = content;
         CornerRadius = new CornerRadius(radius);
         Background = Brushes.Transparent;
-        Cursor = new Cursor(StandardCursorType.Hand);
+        Cursor = hand
+            ? new Cursor(StandardCursorType.Hand)
+            : new Cursor(StandardCursorType.Arrow);
         if (!string.IsNullOrEmpty(tip)) ToolTip.SetTip(this, tip);
+
+        // 过渡只作用在 Background 上：90ms 的线性淡入，和 WinUI 的悬停一致。
+        // 截图 / headless 测试（Motion.Snapshot）不挂过渡：那里没有渲染循环，过渡时钟拿不到
+        // MediaContext 会在别的线程上报 "Call from invalid thread"。
+        if (!Motion.Snapshot)
+        {
+            Transitions = new Transitions
+            {
+                new BrushTransition
+                {
+                    Property = BackgroundProperty,
+                    Duration = TimeSpan.FromMilliseconds(Metrics.StateTransitionMilliseconds),
+                    Easing = new LinearEasing(),
+                },
+            };
+        }
 
         PointerEntered += (_, _) =>
         {
@@ -42,6 +62,7 @@ public sealed class Clickable : Border
         };
         PointerPressed += (_, e) =>
         {
+            if (!IsEnabled) return;
             _pressed = true;
             UpdateBackground();
             e.Handled = true;
@@ -51,39 +72,43 @@ public sealed class Clickable : Border
             var wasPressed = _pressed;
             _pressed = false;
             UpdateBackground();
-            if (!wasPressed) return;
+            if (!wasPressed || !IsEnabled) return;
             e.Handled = true;
             _onClick();
         };
     }
 
-    private void UpdateBackground() =>
-        Background = _hoverFill && (_hovered || _pressed) ? Palette.RowHover : Brushes.Transparent;
+    private void UpdateBackground()
+    {
+        if (!_hoverFill) return;
+        Background = _pressed ? Palette.RowPressed : _hovered ? Palette.RowHover : Brushes.Transparent;
+    }
 
-    /// <summary>文字按钮（强调色，无底）。</summary>
-    public static Clickable Link(string text, Action onClick, double size = 10.5, IBrush? foreground = null) =>
-        new(Ui.Text(text, size, null, foreground ?? Palette.Accent), onClick, radius: 4);
+    /// <summary>文字链接（强调色 + 手型光标）。</summary>
+    public static Clickable Link(string text, Action onClick, double size = Type.BodySize,
+        IBrush? foreground = null) =>
+        new(Ui.Text(text, size, null, foreground ?? Palette.Link), onClick, radius: 4, hand: true);
 
-    /// <summary>图标按钮（26×26，悬停出现圆形淡底）。</summary>
+    /// <summary>图标按钮（32×32，悬停出现圆角淡底）。</summary>
     public static Clickable Icon(Control glyph, Action onClick, string? tip = null, bool active = false)
     {
         var inner = new Border
         {
-            Width = 26,
-            Height = 26,
-            CornerRadius = new CornerRadius(13),
-            Background = active ? Palette.RowHover : Brushes.Transparent,
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(6),
+            Background = active ? Palette.AccentSubtle : Brushes.Transparent,
             Child = new Panel
             {
-                Width = 26,
-                Height = 26,
+                Width = 32,
+                Height = 32,
                 Children = { glyph },
             },
         };
-        glyph.HorizontalAlignment = HorizontalAlignment.Center;
-        glyph.VerticalAlignment = VerticalAlignment.Center;
+        glyph.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        glyph.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
 
-        // 悬停高亮由外层 Clickable 负责（铺满 26×26 的圆角）。
-        return new Clickable(inner, onClick, tip, radius: 13);
+        // 悬停高亮由外层 Clickable 负责（铺满 32×32 的圆角）。
+        return new Clickable(inner, onClick, tip, radius: 6);
     }
 }

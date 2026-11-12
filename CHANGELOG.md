@@ -6,6 +6,68 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Windows: an Appearance setting.** Settings has a new Appearance card right below Language with
+  **Dark** (the new default on Windows), **Light** and **System** (follow Windows). The label and the three
+  choices are localised like the rest of the app. The choice is stored in the same settings file as Language
+  (`appearance`; a missing value means Dark) and applies live — no restart — by switching
+  `Application.RequestedThemeVariant`; **System** maps to `ThemeVariant.Default`. Every palette brush and
+  colour token is re-resolved on the switch, including the ones pages read from code (panel background,
+  window surface, card and control fills), so nothing keeps a light colour in the dark theme or the other way
+  round. The macOS app is unchanged and still follows the system appearance. `--snapshot` still renders both
+  themes explicitly (`--snapshot-appearance light|dark`), and there is a new dark Settings snapshot showing
+  the card. Four new tests cover the Dark default, the settings round-trip, the System mapping and the live
+  theme-variant change.
+
+### Fixed
+
+- **Windows: settings controls no longer look disabled when they are not.** The day and time ComboBoxes in the
+  quota-reset rows painted their selected value ("Fri", "16:40") in the disabled grey, so an untouched row read
+  as unavailable; the selected text now uses the primary text colour whenever the control is enabled. Apply and
+  Reset still look disabled until something changes, which is correct.
+- **Windows: the subscription Edit button looks enabled.** It was styled with the disabled foreground even
+  though it is always usable (it only opens the local edit form; Apply, Cancel and Remove inside the form are
+  what the CLI actually gates). It now uses the normal enabled button style, matching the macOS
+  `SubscriptionSettingsRow` rules.
+- **Windows: a readable renewal-day stepper.** The renewal day used a bare numeric input whose two arrows were
+  drawn as 10px glyphs beside each other. It is now a pair of 30×30 stepper buttons with a solid control surface,
+  a 1px stroke and a thickened chevron, with the disabled colours kept for out-of-range values; both themes were
+  checked in the regenerated snapshots.
+
+- **Windows: nothing is clipped at the card edge any more.** The page margin and the card padding were adding up
+  to a 32px double inset inside a 360px panel, so the regenerated snapshots had content squeezed against the
+  right edge. The horizontal rhythm is now 12px page margin + 12px card padding (`Metrics.RowContentWidth`),
+  and anything that does not fit moves to its own line instead of overflowing: the "Total cost ⓘ" label sits
+  above a horizontally scrollable, single-line range-pill bar (no scrollbar, right-edge fade, so "Cycle" is
+  never cut mid-word — same on the project page, which no longer wraps the pills onto two lines), overview
+  project subtitles truncate before the 8-week heat strip, the `--data` InfoBar wraps its path inside the card,
+  and the quota-reset and subscription rows keep their controls on a right-aligned second line. The treemap card
+  bleeds to the panel edges so its tiles regain the width they need for labels.
+- **Windows: the Settings page scrolls.** Scrollable pages derived from `ScrollViewer` (Settings, Overview,
+  project / bucket detail, disk) were styling themselves under their own type name, so Avalonia never applied
+  the Fluent `ScrollViewer` control theme: no `ScrollContentPresenter` was created and `Extent` stayed 0, which
+  made the wheel, the scrollbar thumb and touch panning do nothing. They now share a `ScrollPage` base that
+  restores the base style key. The mouse wheel over a closed ComboBox, a NumericUpDown or a single-line TextBox
+  now scrolls the page instead of changing its value (an open ComboBox drop-down still scrolls its own list, and
+  a nested scroller still wins until it reaches its edge).
+
+### Changed
+
+- **Windows: Fluent (Windows 11) redesign.** Surfaces, cards, type ramp and every colour token now follow
+  WinUI: Mica when the OS has it and a solid `#F3F3F3` / `#202020` fallback otherwise, 8px cards with a 1px
+  stroke and 12px padding (4px between cards in a group, 24px between groups), Segoe UI Variable with the
+  28 / 20 / 14 / 14 / 12 ramp, sentence-case BodyStrong section headers instead of grey ALL-CAPS, the Windows
+  accent colour (`AccentColor1`) for links and the primary button, Fluent ToggleSwitch / ComboBox / SelectorBar
+  pills, and an InfoBar for the `--data` warning. Text colours are solid rather than alpha-on-grey: primary
+  ≥ 12:1, secondary and captions ≥ 4.5:1, disabled text and strokes ≥ 3:1 against the surface they sit on
+  (`ContrastTests` asserts every pair in light and dark). Text on the treemap picks white or near-black per tile.
+- **Windows: smoother navigation.** Pages cross-fade with an 8px slide over 150 ms, the tray panel fades and
+  slides up over the same 150 ms, hover and press states run at 90 ms, and going back to the overview restores
+  its scroll position. All motion is skipped when the system animation setting is off or under `--snapshot`.
+  Opening Settings no longer blocks the UI thread on the CLI plan list (it loads in the background), and agents
+  without subscription info sit behind a "Show N more" link.
+
 ## [0.5.2] - 2026-11-12
 
 ### Added

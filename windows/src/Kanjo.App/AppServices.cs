@@ -58,7 +58,11 @@ public sealed class AppServices
         SnapshotMode = arguments.Contains("--snapshot") ||
                        arguments.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal));
 
-        Config = new ConfigDataSource(BuildRunner);
+        Config = new ConfigDataSource(BuildRunner)
+        {
+            // 后台回调切回 UI 线程（设置页预热档位表用）。
+            CompletionDispatcher = DispatchAction,
+        };
         Disk = new DiskStore(MakeDiskSource,
             DiskDataOverride is null ? new DiskReportCache(cacheDirectory) : null);
         Disk.Changed += NotifyChanged;

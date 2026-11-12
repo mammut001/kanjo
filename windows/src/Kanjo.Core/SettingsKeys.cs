@@ -4,6 +4,12 @@ namespace Kanjo.Core;
 public static class SettingsKeys
 {
     public const string AppLanguage = "appLanguage";
+
+    /// <summary>
+    /// 明暗外观（dark / light / system）。**Windows 专有键**：macOS 版不读它，永远跟随系统。
+    /// 同一个 settings.json 里多一个字段对 Mac 无害（它只读自己认识的 key）。
+    /// </summary>
+    public const string Appearance = "appearance";
     public const string SourceKind = "sourceKind";
     public const string FilePath = "filePath";
     public const string CliCommand = "cliCommand";
@@ -44,6 +50,9 @@ public static class SettingsKeys
 public static class SettingsDefaults
 {
     public const string AppLanguage = "system";
+
+    /// <summary>Windows 默认深色（用户偏好；Mac 版仍跟随系统）。</summary>
+    public const string Appearance = "dark";
     public const string FilePath = "";
     public const string CliWorkingDirectory = "";
     public const int RefreshMinutes = 30;
@@ -155,9 +164,7 @@ public enum AppLanguage
     En,
     ZhHans,
     Fr,
-}
-
-public static class AppLanguages
+}public static class AppLanguages
 {
     public static AppLanguage? Parse(string? raw) => raw switch
     {
@@ -167,7 +174,6 @@ public static class AppLanguages
         "fr" => AppLanguage.Fr,
         _ => null,
     };
-
     public static string RawValue(this AppLanguage l) => l switch
     {
         AppLanguage.System => "system",
@@ -187,4 +193,47 @@ public static class AppLanguages
 
     public static IReadOnlyList<AppLanguage> All { get; } =
         [AppLanguage.System, AppLanguage.En, AppLanguage.ZhHans, AppLanguage.Fr];
+}
+
+/// <summary>
+/// 明暗外观。**只有 Windows 版用**：macOS 版不读这个键，永远跟随系统。
+/// Dark 是默认值（用户偏好深色）。
+/// </summary>
+public enum AppearanceChoice
+{
+    Dark,
+    Light,
+    System,
+}
+
+public static class AppearanceChoices
+{
+    public static AppearanceChoice? Parse(string? raw) => raw switch
+    {
+        "dark" => AppearanceChoice.Dark,
+        "light" => AppearanceChoice.Light,
+        "system" => AppearanceChoice.System,
+        _ => null,
+    };
+
+    public static string RawValue(this AppearanceChoice a) => a switch
+    {
+        AppearanceChoice.Light => "light",
+        AppearanceChoice.System => "system",
+        _ => "dark",
+    };
+
+    /// <summary>设置值规范化：缺省 / 无法识别都按 Dark（新装默认深色）。</summary>
+    public static string Normalize(string? raw) =>
+        Parse(raw) is { } parsed ? parsed.RawValue() : SettingsDefaults.Appearance;
+
+    public static string Label(this AppearanceChoice a) => WindowsL10n.Tr(a switch
+    {
+        AppearanceChoice.Light => "settings.appearance.light",
+        AppearanceChoice.System => "settings.appearance.system",
+        _ => "settings.appearance.dark",
+    });
+
+    public static IReadOnlyList<AppearanceChoice> All { get; } =
+        [AppearanceChoice.Dark, AppearanceChoice.Light, AppearanceChoice.System];
 }

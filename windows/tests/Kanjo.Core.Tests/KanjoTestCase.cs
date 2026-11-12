@@ -1,4 +1,7 @@
 using System.Globalization;
+using Avalonia;
+using Avalonia.Headless;
+using Kanjo.App;
 using Xunit;
 
 namespace Kanjo.Core.Tests;
@@ -18,6 +21,43 @@ public abstract class KanjoTestCase : IDisposable
     }
 
     protected AppSettings Settings { get; }
+
+    /// <summary>
+    /// 共享的 headless 会话（进程级只建一次）。
+    /// 必须显式指定 <see cref="HeadlessApplication"/>：默认的 Application 没有装 FluentTheme，
+    /// ToggleSwitch / ComboBox 这些模板控件会缺模板部件（KeyNotFoundException: PART_MovingKnobs）。
+    /// </summary>
+    private static HeadlessUnitTestSession? _session;
+
+    private static readonly object SessionLock = new();
+
+    private static HeadlessUnitTestSession Session
+    {
+        get
+        {
+            lock (SessionLock)
+            {
+                return _session ??= HeadlessUnitTestSession.StartNew(typeof(HeadlessApplication));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 在 Avalonia 的 UI 线程上跑一段 UI 断言。
+    ///
+    /// 一旦进程里建立过 headless 会话，在测试线程上 new 任何 Avalonia 对象都会抛
+    /// "Call from invalid thread"，所以所有涉及控件的测试都必须走这里。
+    /// </summary>
+    protected static void OnUi(Action body)
+    {
+        AppSetup.ConfigureHeadless("light");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        Session.Dispatch(() =>
+        {
+            body();
+            return true;
+        }, cts.Token).GetAwaiter().GetResult();
+    }
 
     protected static string FixturePath => DefaultPaths.SampleFixture;
 

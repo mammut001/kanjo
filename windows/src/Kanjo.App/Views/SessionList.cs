@@ -57,12 +57,13 @@ public sealed class SessionList : StackPanel
                 _sort = index == 0 ? SortKey.Started : SortKey.Cost;
                 _showAll = false;
                 Rebuild();
-            })
+            }, stretch: false)
         {
-            Width = 130,
+            Width = 160,
         };
         Grid.SetColumn(segmented, 0);
         row.Children.Add(segmented);
+        row.Margin = new Thickness(0, 0, 0, 4);
 
         var direction = new Clickable(
             Icons.SortArrow(_descending, 9, Palette.Secondary),
@@ -92,9 +93,8 @@ public sealed class SessionList : StackPanel
 
     private Control AddLabel(StackPanel row)
     {
-        // Mac 的 Label 放进 .borderless 按钮后会被再淡一层；用 Muted 才能对上参考图的浅灰。
-        row.Children.Add(Icons.QuestionCircle(9, Palette.Muted));
-        row.Children.Add(Ui.Text(L10n.Tr("session.attribution_button"), 10.5, null, Palette.Muted));
+        row.Children.Add(Icons.QuestionCircle(11, Palette.Tertiary));
+        row.Children.Add(Ui.Text(L10n.Tr("session.attribution_button"), Type.CaptionSize, null, Palette.Tertiary));
         return row;
     }
 
@@ -107,12 +107,12 @@ public sealed class SessionList : StackPanel
             return;
         }
         var body = Ui.V(8);
-        body.Children.Add(Ui.Text(L10n.Tr("session.attribution_popover_title"), 12, FontWeight.SemiBold));
+        body.Children.Add(Ui.Text(L10n.Tr("session.attribution_popover_title"), 14, FontWeight.SemiBold));
         foreach (var value in SessionAttributionInfo.AllKnown)
         {
             var item = Ui.V(1);
-            item.Children.Add(Ui.Text(value, 11, FontWeight.SemiBold, family: Type.Mono));
-            var explanation = Ui.Text(SessionAttributionInfo.Explanation(value, _threshold), 11, null,
+            item.Children.Add(Ui.Text(value, 12, FontWeight.SemiBold, family: Type.Mono));
+            var explanation = Ui.Text(SessionAttributionInfo.Explanation(value, _threshold), 12, null,
                 Palette.Secondary, wrap: true);
             explanation.MaxWidth = 276;
             item.Children.Add(explanation);
@@ -149,7 +149,7 @@ public sealed class SessionList : StackPanel
         _list.Children.Clear();
         if (_sessions.Count == 0)
         {
-            _list.Children.Add(Ui.Text(L10n.Tr("session.empty"), 11, null, Palette.Secondary));
+            _list.Children.Add(Ui.Text(L10n.Tr("session.empty"), 12, null, Palette.Secondary));
             return;
         }
         var sorted = Sorted();
@@ -192,18 +192,18 @@ public sealed class SessionRowView : StackPanel
         Control title;
         if (!string.IsNullOrEmpty(session.Title))
         {
-            title = Ui.Text(session.Title!, 12, maxLines: 2);
+            title = Ui.Text(session.Title!, 14, maxLines: 2);
         }
         else
         {
-            var untitled = Ui.Text(L10n.Tr("session.untitled"), 12, null, Palette.Secondary);
+            var untitled = Ui.Text(L10n.Tr("session.untitled"), 14, null, Palette.Secondary);
             untitled.FontStyle = FontStyle.Italic;
             title = untitled;
         }
         ToolTip.SetTip(title, session.Title ?? L10n.Tr("session.untitled"));
         Grid.SetColumn(title, 0);
         top.Children.Add(title);
-        var cost = Ui.Text(Fmt.Money(session.Cost, currency), 12, FontWeight.Medium, family: Type.Rounded);
+        var cost = Ui.Text(Fmt.Money(session.Cost, currency), 14, FontWeight.Medium, family: Type.Rounded);
         cost.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(cost, 1);
         top.Children.Add(cost);
@@ -213,14 +213,14 @@ public sealed class SessionRowView : StackPanel
         {
             var agentLine = Ui.H(5);
             agentLine.Children.Add(Ui.Dot(session.Agent, 6));
-            agentLine.Children.Add(Ui.Text(session.Label, 10.5, null, Palette.Secondary));
-            agentLine.Children.Add(Ui.Text("·", 10.5, null, Palette.Secondary));
-            agentLine.Children.Add(Ui.Text(Fmt.Timestamp(session.Started), 10.5, null, Palette.Secondary));
+            agentLine.Children.Add(Ui.Text(session.Label, 12, null, Palette.Secondary));
+            agentLine.Children.Add(Ui.Text("·", 12, null, Palette.Secondary));
+            agentLine.Children.Add(Ui.Text(Fmt.Timestamp(session.Started), 12, null, Palette.Secondary));
             if (!string.IsNullOrEmpty(session.Branch))
             {
-                agentLine.Children.Add(Ui.Text("·", 10.5, null, Palette.Secondary));
+                agentLine.Children.Add(Ui.Text("·", 12, null, Palette.Secondary));
                 agentLine.Children.Add(Icons.Branch(8, Palette.Secondary));
-                var branch = Ui.Text(session.Branch!, 10.5, null, Palette.Secondary, maxLines: 1);
+                var branch = Ui.Text(session.Branch!, 12, null, Palette.Secondary, maxLines: 1);
                 branch.TextTrimming = TextTrimming.CharacterEllipsis;
                 agentLine.Children.Add(branch);
             }
@@ -254,7 +254,7 @@ public sealed class SessionRowView : StackPanel
         Grid.SetColumn(badgeCell, 0);
         bottom.Children.Add(badgeCell);
 
-        var share = Ui.Text(L10n.TrL(null, "session.share", Fmt.Percent(session.Share)), 10, null,
+        var share = Ui.Text(L10n.TrL(null, "session.share", Fmt.Percent(session.Share)), 12, null,
             Palette.Secondary);
         share.Margin = new Thickness(5, 0, 0, 0);
         ToolTip.SetTip(share, L10n.Tr("session.share_help"));
@@ -273,7 +273,7 @@ public sealed class SessionRowView : StackPanel
         }
 
         // 模型列表占满剩下的宽度，超出时尾部省略（Mac: lineLimit(1) + truncationMode(.tail)）。
-        var models = Ui.Text(string.Join(", ", session.Models), 9.5, null, Palette.Secondary,
+        var models = Ui.Text(string.Join(", ", session.Models), 12, null, Palette.Secondary,
             maxLines: 1, mono: true);
         models.TextAlignment = TextAlignment.Right;
         models.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -292,73 +292,11 @@ public sealed class SessionRowView : StackPanel
         var box = Ui.V(6);
         var head = Ui.H(5);
         head.Children.Add(Ui.Dot(agent, 7));
-        head.Children.Add(Ui.Text(L10n.Tr("project.noun.models"), 12, FontWeight.SemiBold));
+        head.Children.Add(Ui.Text(L10n.Tr("project.noun.models"), 14, FontWeight.SemiBold));
         box.Children.Add(head);
         var list = Ui.V(3);
-        foreach (var model in models) list.Children.Add(Ui.Text(model, 11, null, family: Type.Mono));
+        foreach (var model in models) list.Children.Add(Ui.Text(model, 12, null, family: Type.Mono));
         box.Children.Add(list);
         return box;
-    }
-}
-
-/// <summary>
-/// 分段控件（自绘胶囊）：Started / Cost、Source File / CLI 之类。
-/// 和 SwiftUI 的 `.pickerStyle(.segmented)` 一样，每段等宽并铺满可用宽度（固定宽度时由调用方给 Width，
-/// 比如会话列表的 Started/Cost 是 130pt）。
-/// </summary>
-public sealed class SegmentedControl : Border
-{
-    public SegmentedControl(IReadOnlyList<string> options, int selected, Action<int> onSelect, double fontSize = 10.5)
-    {
-        Padding = new Thickness(1.5);
-        CornerRadius = new CornerRadius(8);
-        Background = new SolidColorBrush(Palette.ForegroundColor, 0.06);
-        HorizontalAlignment = HorizontalAlignment.Stretch;
-        VerticalAlignment = VerticalAlignment.Center;
-
-        var row = new Grid();
-        for (var i = 0; i < options.Count; i++) row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-        for (var i = 0; i < options.Count; i++)
-        {
-            var index = i;
-            var isSelected = i == selected;
-            // SwiftUI 的 segmented picker 每段文字都是 label 色（不是次要色），只有底色区分选中。
-            var label = Ui.Text(options[i], fontSize, isSelected ? FontWeight.SemiBold : FontWeight.Normal,
-                isSelected ? Palette.Foreground : Palette.Secondary);
-            label.TextAlignment = TextAlignment.Center;
-
-            var cell = new Grid();
-            // 未选中段之间有一条细分隔线（SwiftUI 的分段控件也一样）。
-            if (i > 0 && !isSelected && i - 1 != selected)
-            {
-                var separator = new Border
-                {
-                    Width = 0.5,
-                    Background = new SolidColorBrush(Palette.ForegroundColor, 0.12),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Height = 11,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                };
-                cell.Children.Add(separator);
-            }
-            var chip = new Border
-            {
-                Child = label,
-                CornerRadius = new CornerRadius(6.5),
-                Padding = new Thickness(6, 2.5, 6, 2.5),
-                Background = isSelected ? Palette.CardBackground : Brushes.Transparent,
-                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-            };
-            if (!isSelected)
-            {
-                chip.PointerEntered += (_, _) => chip.Background = Palette.RowHover;
-                chip.PointerExited += (_, _) => chip.Background = Brushes.Transparent;
-            }
-            chip.PointerReleased += (_, _) => onSelect(index);
-            cell.Children.Add(chip);
-            Grid.SetColumn(cell, i);
-            row.Children.Add(cell);
-        }
-        Child = row;
     }
 }

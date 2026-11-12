@@ -30,6 +30,9 @@ public static class SnapshotRunner
 
             var services = AppServices.Create(Environment.GetCommandLineArgs());
             services.LoadQuietly();
+            // 外观：`--snapshot-appearance light|dark` 是显式覆盖，否则用设置（缺省 Dark）。
+            // 必须在建界面之前定好，否则代码里取色的画笔会停在上一套。
+            Appearance.Apply(services.Settings);
             // 截图可复现：相对日期与订阅账期倒计时都按报告时间算，而不是墙钟。
             ShortDate.ReferenceNow = services.Now;
 
@@ -40,25 +43,32 @@ public static class SnapshotRunner
 
             // 快照按整页渲染（不裁剪滚动区域），这样截图能看到完整页面。
             var panel = new PanelView(services, resolved, snapshotMode: true);
-            var contentHeight = MeasureHeight(panel, Metrics.PanelWidth);
 
+            // 必须先挂到窗口（TopLevel）再测量：ToggleSwitch / ComboBox 这类模板控件只有在窗口里
+            // 才会套用 ControlTheme，脱离窗口直接 Measure 会抛 KeyNotFoundException（缺模板部件）。
             var host = new Border
             {
                 Width = Metrics.PanelWidth,
-                Height = contentHeight,
                 Background = Palette.PanelBackground,
                 Child = panel,
             };
-            // 必须挂在窗口（TopLevel）下：TextBox / Button 等模板控件只有这样才能套用
-            // ControlTheme，否则它们在离屏渲染里是空白的。
             var window = new Window
             {
                 SystemDecorations = SystemDecorations.None,
                 Width = Metrics.PanelWidth,
-                Height = contentHeight,
+                Height = Metrics.PanelHeight,
                 Content = host,
             };
             window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // 挂上窗口之后才知道整页多高。
+            host.Measure(new Size(Metrics.PanelWidth, double.PositiveInfinity));
+            var contentHeight = MeasureHeight(panel, Metrics.PanelWidth);
+            window.Height = contentHeight;
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
             Layout();
 
             // 固定悬停卡要等布局完成后才定位，再来一轮完整布局。
@@ -71,6 +81,7 @@ public static class SnapshotRunner
 
             void Layout()
             {
+                host.Height = contentHeight;
                 host.Measure(new Size(Metrics.PanelWidth, contentHeight));
                 host.Arrange(new Rect(0, 0, Metrics.PanelWidth, contentHeight));
                 window.UpdateLayout();
@@ -97,6 +108,8 @@ public static class SnapshotRunner
             L10n.ResourcesRoot = previousRoot;
             ShortDate.ReferenceNow = null;
             HoverLayer.PinnedId = null;
+            // 进程内只出一次图；清掉显式覆盖，免得影响同一进程里的其它渲染。
+            Appearance.Override = null;
         }
     }
 
@@ -133,7 +146,7 @@ public static class SnapshotRunner
         var desired = panel.DesiredSize.Height;
         if (!double.IsFinite(desired) || desired <= 0) return Metrics.PanelHeight;
         // 内容比 620 矮时仍按 620 出图（面板固定大小），更高则完整展开。
-        return Math.Max(Metrics.PanelHeight, Math.Min(desired, 6000));
+        return Math.Max(Metrics.PanelHeight, Math.Min(desired, 8000));
     }
 
     public static AppRoute ParseRoute(string? raw, UsageReport? report = null) =>

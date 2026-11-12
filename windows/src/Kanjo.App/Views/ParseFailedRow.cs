@@ -44,9 +44,9 @@ public sealed class ParseFailedRow : StackPanel
         var count = bucket.Sessions == 1
             ? L10n.TrL(null, "overview.count.session.singular", bucket.Sessions)
             : L10n.TrL(null, "overview.count.session.plural", bucket.Sessions);
-        var sessions = Ui.Text(count, 10.5, null, Palette.Secondary);
+        var sessions = Ui.Text(count, 12, null, Palette.Secondary);
         sessions.TextAlignment = TextAlignment.Right;
-        var dash = Ui.Text("—", 12, FontWeight.Medium, Palette.Secondary);
+        var dash = Ui.Text("—", 14, FontWeight.Medium, Palette.Secondary);
         dash.TextAlignment = TextAlignment.Right;
         dash.MinWidth = 52;
         ToolTip.SetTip(dash, L10n.Tr("overview.parse_failed_help"));
@@ -58,7 +58,7 @@ public sealed class ParseFailedRow : StackPanel
 
         var body = Ui.V(2);
         body.Children.Add(header);
-        body.Children.Add(Ui.Text(L10n.Tr("overview.parse_failed_desc"), 10, null, Palette.Secondary,
+        body.Children.Add(Ui.Text(L10n.Tr("overview.parse_failed_desc"), 12, null, Palette.Secondary,
             wrap: true, maxLines: 2));
         body.Margin = new Thickness(Metrics.ContentInset, 7, Metrics.ContentInset, 7);
 
@@ -71,7 +71,7 @@ public sealed class ParseFailedRow : StackPanel
         fileList.Margin = new Thickness(Metrics.ContentInset, 0, Metrics.ContentInset, 8);
         foreach (var file in bucket.Files)
         {
-            fileList.Children.Add(Ui.Text(file, 9.5, null, Palette.Secondary, wrap: true, mono: true));
+            fileList.Children.Add(Ui.Text(file, 12, null, Palette.Secondary, wrap: true, mono: true));
         }
         _files.Children.Add(fileList);
         Children.Add(_files);

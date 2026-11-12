@@ -47,7 +47,7 @@ public sealed class DayChartView : Panel
             .ToList();
 
         var box = Ui.V(6);
-        _summaryText = Ui.Text("", 10.5);
+        _summaryText = Ui.Text("", 12);
         box.Children.Add(_summaryText);
         _area = new BarArea(_points, color, this) { Height = ChartHeight };
         box.Children.Add(_area);

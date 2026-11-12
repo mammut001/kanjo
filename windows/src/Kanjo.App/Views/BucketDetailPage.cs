@@ -11,37 +11,20 @@ namespace Kanjo.App.Views;
 /// 桶详情（ProjectDetailView.swift 里的 BucketDetailView）：Unattributed / Excluded。
 /// 桶没有 by_day，范围下按会话 started 过滤，金额是这些会话之和。
 /// </summary>
-public sealed class BucketDetailPage : ScrollViewer, ISnapshotPage
+public sealed class BucketDetailPage : ScrollPage
 {
-    /// <summary>截图模式：交出内容本身（不含滚动容器），由面板按整页高度渲染。</summary>
-    public Control SnapshotBody
-    {
-        get
-        {
-            var content = Content as Control ?? new Panel();
-            Content = null;
-            return content;
-        }
-    }
-
     public BucketDetailPage(AppServices services, string kind, UsageReport report, Action onBack,
-        bool snapshot = false)
+        bool snapshot = false) : base(snapshot)
     {
-        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        VerticalScrollBarVisibility = snapshot
-            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
-            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
-        Background = Brushes.Transparent;
-
         var ctx = new RangeContext(report, services.Settings.GetString(SettingsKeys.TimeRange), services.Now);
         var raw = kind == "excluded" ? report.Buckets.Excluded : report.Buckets.Unattributed;
         var bucket = RangeEngine.Filter(raw, ctx.Spec);
         var currency = report.Currency;
 
-        var header = Ui.V(3);
+        var header = Ui.V(4);
         header.Children.Add(Ui.Text(
             kind == "excluded" ? L10n.Tr("overview.excluded") : L10n.Tr("overview.unattributed"),
-            15, FontWeight.SemiBold));
+            Type.TitleSize, FontWeight.SemiBold, family: Type.Display));
 
         var amountRow = Ui.H(4);
         amountRow.Children.Add(Widgets.HeroAmount(Fmt.Money(bucket.Cost, currency), 30));
@@ -57,8 +40,7 @@ public sealed class BucketDetailPage : ScrollViewer, ISnapshotPage
         var usageText = bucket.FirstActive is null
             ? L10n.Tr("project.no_usage")
             : ShortDate.Range(bucket.FirstActive, bucket.LastActive);
-        header.Children.Add(Ui.Text(ProjectSubtitleText.Make(ctx.Range, bucket.Sessions, usageText),
-            11, null, Palette.Secondary));
+        header.Children.Add(Ui.Text(ProjectSubtitleText.Make(ctx.Range, bucket.Sessions, usageText), 12, null, Palette.Secondary));
 
         if (ctx.Caption is { } caption)
         {
@@ -70,17 +52,16 @@ public sealed class BucketDetailPage : ScrollViewer, ISnapshotPage
 
         var explanation = Ui.Text(
             SessionAttributionInfo.Explanation(kind == "excluded" ? "excluded" : "none",
-                report.Config.DominantThreshold),
-            10.5, null, Palette.Secondary, wrap: true);
+                report.Config.DominantThreshold), 12, null, Palette.Secondary, wrap: true);
         explanation.Margin = new Thickness(0, 8, 0, 0);
         header.Children.Add(explanation);
-        header.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 0);
+        var headerCard = Chrome.Card(header, Metrics.RowInset, 14);
 
-        var sessions = Chrome.Section(L10n.TrL(null, "project.section.sessions", bucket.SessionsDetail.Count),
-            new SessionList(services, bucket.SessionsDetail, report.Config.DominantThreshold, currency),
-            padding: Metrics.RowInset);
+        var sessions = Chrome.LegacySection(L10n.TrL(null, "project.section.sessions",
+                bucket.SessionsDetail.Count),
+            new SessionList(services, bucket.SessionsDetail, report.Config.DominantThreshold, currency));
 
-        Content = DetailPage.Build(L10n.Tr("disk.navigation.overview"), onBack, [header, sessions]);
+        Content = DetailPage.Build(L10n.Tr("disk.navigation.overview"), onBack, [headerCard, sessions]);
     }
 }
 
@@ -107,7 +88,7 @@ public sealed class LoadingPage : Grid
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         box.Children.Add(spinner);
-        var loading = Ui.Text(L10n.Tr("common.loading"), 11, FontWeight.Medium, Palette.Secondary);
+        var loading = Ui.Text(L10n.Tr("common.loading"), 12, FontWeight.Medium, Palette.Secondary);
         loading.TextAlignment = TextAlignment.Center;
         box.Children.Add(loading);
 
@@ -115,10 +96,10 @@ public sealed class LoadingPage : Grid
         if (FirstScanHint.ShouldShow(false, elapsed))
         {
             var hint = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-            var explanation = Ui.Text(FirstScanHint.Explanation(), 11, null, Palette.Secondary, wrap: true);
+            var explanation = Ui.Text(FirstScanHint.Explanation(), 12, null, Palette.Secondary, wrap: true);
             explanation.TextAlignment = TextAlignment.Center;
             hint.Children.Add(explanation);
-            var seconds = Ui.Text(FirstScanHint.ElapsedText(elapsed), 10.5, null, Palette.Secondary);
+            var seconds = Ui.Text(FirstScanHint.ElapsedText(elapsed), 12, null, Palette.Secondary);
             seconds.TextAlignment = TextAlignment.Center;
             hint.Children.Add(seconds);
             hint.Margin = new Thickness(28, 0, 28, 0);

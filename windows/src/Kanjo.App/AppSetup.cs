@@ -17,28 +17,32 @@ public static class AppSetup
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         }
+        // 截图模式一律不做动画（可复现）。
+        Motion.Snapshot = true;
         ApplyAppearance(appearance);
+        Palette.ApplyPlatformAccent();
         L10n.Store ??= AppSettings.InMemory();
         L10n.ResetCache();
     }
 
+    /// <summary>
+    /// 设定当前外观。`dark` / `light` 是**显式覆盖**（截图脚本、单测），优先于设置且不写设置；
+    /// 传 null / 无法识别的值时清掉覆盖，改为跟随设置（缺省 Dark）。
+    ///
+    /// 主题变体、色板、禁用态资源三者的同步都在 <see cref="Theme.Appearance"/> 里做。
+    /// </summary>
     public static void ApplyAppearance(string? appearance)
     {
-        if (Application.Current is not { } app) return;
-        if (appearance is "dark")
+        if (AppearanceChoices.Parse(appearance) is { } explicitChoice)
         {
-            app.RequestedThemeVariant = ThemeVariant.Dark;
-            Palette.IsDark = true;
+            Appearance.Override = explicitChoice;
+            Appearance.Force(explicitChoice);
+            return;
         }
-        else if (appearance is "light")
-        {
-            app.RequestedThemeVariant = ThemeVariant.Light;
-            Palette.IsDark = false;
-        }
-        else
-        {
-            Palette.IsDark = app.ActualThemeVariant == ThemeVariant.Dark;
-        }
+        // 没有显式外观：跟随设置。此时 Application 可能还没有（更别说设置），先按默认 Dark 起，
+        // 等 AppServices 建好之后 SnapshotRunner / KanjoApplication 会再 Apply(settings) 一次。
+        Appearance.Override = null;
+        Appearance.Force(AppearanceChoice.Dark);
     }
 }
 
@@ -49,12 +53,7 @@ public sealed class HeadlessApplication : Application
     {
         Styles.Add(new Avalonia.Themes.Fluent.FluentTheme());
         RequestedThemeVariant = ThemeVariant.Default;
-        Styles.Add(new Style(x => x.OfType<Avalonia.Controls.TextBlock>())
-        {
-            Setters =
-            {
-                new Setter(Avalonia.Controls.TextBlock.FontFamilyProperty, Type.Font),
-            },
-        });
+        // 和真实应用共用同一份控件样式（否则快照里的禁用态 / 圆角和真机对不上）。
+        AppStyles.Install(this);
     }
 }

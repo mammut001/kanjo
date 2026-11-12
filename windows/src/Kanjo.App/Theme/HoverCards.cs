@@ -15,7 +15,7 @@ public static class HoverCards
     /// <summary>纯文本卡片（PlainHoverCard）。</summary>
     public static Control Plain(string text)
     {
-        var block = Ui.Text(text, 11, null, Palette.Secondary, wrap: true, maxLines: 0);
+        var block = Ui.Text(text, Type.CaptionSize, null, Palette.Secondary, wrap: true, maxLines: 0);
         block.MaxWidth = HoverLayer.MaxCardWidth - 24;
         return block;
     }
@@ -37,12 +37,12 @@ public static class HoverCards
         {
             left.Children.Add(Ui.Dot(dotAgent, 7));
         }
-        left.Children.Add(Ui.Text(title, 12, FontWeight.SemiBold, family: mono ? Type.Mono : null));
+        left.Children.Add(Ui.Text(title, 14, FontWeight.SemiBold, family: mono ? Type.Mono : null));
         Grid.SetColumn(left, 0);
         row.Children.Add(left);
         if (!string.IsNullOrEmpty(money))
         {
-            var value = Ui.Text(money!, 12, FontWeight.SemiBold, family: Type.Rounded);
+            var value = Ui.Text(money!, 14, FontWeight.SemiBold, family: Type.Rounded);
             value.TextAlignment = TextAlignment.Right;
             Grid.SetColumn(value, 2);
             row.Children.Add(value);
@@ -53,8 +53,8 @@ public static class HoverCards
     private static Control SubtitleLine(string? tokensText, string? subtitle, bool indented)
     {
         var line = Ui.H(6);
-        if (!string.IsNullOrEmpty(tokensText)) line.Children.Add(Ui.Text(tokensText!, 10, null, Palette.Secondary));
-        if (!string.IsNullOrEmpty(subtitle)) line.Children.Add(Ui.Text(subtitle!, 10, null, Palette.Secondary));
+        if (!string.IsNullOrEmpty(tokensText)) line.Children.Add(Ui.Text(tokensText!, 12, null, Palette.Secondary));
+        if (!string.IsNullOrEmpty(subtitle)) line.Children.Add(Ui.Text(subtitle!, 12, null, Palette.Secondary));
         if (indented) line.Margin = new Thickness(13, 0, 0, 0);
         return line;
     }
@@ -70,12 +70,12 @@ public static class HoverCards
         {
             Width = 6, Height = 6, Fill = color, VerticalAlignment = VerticalAlignment.Center,
         });
-        left.Children.Add(Ui.Text(label, 11, maxLines: 1));
+        left.Children.Add(Ui.Text(label, 12, maxLines: 1));
         Grid.SetColumn(left, 0);
         row.Children.Add(left);
         if (cost > 0 || showZero)
         {
-            var money = Ui.Text(Fmt.Money(cost, currency), 11, FontWeight.Medium, family: Type.Rounded);
+            var money = Ui.Text(Fmt.Money(cost, currency), 12, FontWeight.Medium, family: Type.Rounded);
             money.TextAlignment = TextAlignment.Right;
             money.Margin = new Thickness(8, 0, 0, 0);
             Grid.SetColumn(money, 2);
@@ -83,7 +83,7 @@ public static class HoverCards
         }
         if (tokens > 0)
         {
-            var count = Ui.Text(L10n.TrL(null, "overview.tokens_count", Fmt.Tokens(tokens)), 10, null,
+            var count = Ui.Text(L10n.TrL(null, "overview.tokens_count", Fmt.Tokens(tokens)), 12, null,
                 Palette.Secondary);
             count.TextAlignment = TextAlignment.Right;
             count.MinWidth = 62;
@@ -124,7 +124,7 @@ public static class HoverCards
             }
             if (rows.Count > 6)
             {
-                list.Children.Add(Ui.Text($"+{rows.Count - 6}", 10, null, Palette.Tertiary));
+                list.Children.Add(Ui.Text($"+{rows.Count - 6}", 12, null, Palette.Tertiary));
             }
             content.Children.Add(list);
         }
@@ -173,15 +173,15 @@ public static class HoverCards
         {
             Width = 6, Height = 6, Fill = TokenColor(id), VerticalAlignment = VerticalAlignment.Center,
         });
-        left.Children.Add(Ui.Text(L10n.Tr(labelKey), 11, maxLines: 1));
+        left.Children.Add(Ui.Text(L10n.Tr(labelKey), 12, maxLines: 1));
         Grid.SetColumn(left, 0);
         row.Children.Add(left);
-        var value = Ui.Text(Fmt.Tokens(count), 10.5, FontWeight.Medium, family: Type.Rounded);
+        var value = Ui.Text(Fmt.Tokens(count), 12, FontWeight.Medium, family: Type.Rounded);
         value.TextAlignment = TextAlignment.Right;
         value.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(value, 2);
         row.Children.Add(value);
-        var percent = Ui.Text(Fmt.Percent(fraction), 10, null, Palette.Secondary);
+        var percent = Ui.Text(Fmt.Percent(fraction), 12, null, Palette.Secondary);
         percent.TextAlignment = TextAlignment.Right;
         percent.MinWidth = 42;
         percent.Margin = new Thickness(6, 0, 0, 0);
@@ -200,7 +200,7 @@ public static class HoverCards
         head.Children.Add(Header(L10n.Tr("project.section.tokens"), null, null, Fmt.Tokens(tokens.Total)));
         if (tokens.Thinking > 0)
         {
-            head.Children.Add(Ui.Text(L10n.Tr("project.token.thinking") + ": " + Fmt.Tokens(tokens.Thinking), 10,
+            head.Children.Add(Ui.Text(L10n.Tr("project.token.thinking") + ": " + Fmt.Tokens(tokens.Thinking), 12,
                 null, Palette.Secondary));
         }
         content.Children.Add(head);
@@ -221,9 +221,8 @@ public static class HoverCards
         {
             var box = Ui.V(4);
             var line = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            line.Children.Add(Ui.Text(row.Title, 11, FontWeight.Medium));
-            var pct = Ui.Text(row.Percent is { } p ? ((int)Math.Round(p, MidpointRounding.AwayFromZero)) + "%" : "—",
-                11.5, FontWeight.SemiBold, row.Percent is null ? Palette.Tertiary : Palette.Foreground,
+            line.Children.Add(Ui.Text(row.Title, 12, FontWeight.Medium));
+            var pct = Ui.Text(row.Percent is { } p ? ((int)Math.Round(p, MidpointRounding.AwayFromZero)) + "%" : "—", 12, FontWeight.SemiBold, row.Percent is null ? Palette.Tertiary : Palette.Foreground,
                 family: Type.Rounded);
             pct.TextAlignment = TextAlignment.Right;
             pct.Margin = new Thickness(8, 0, 0, 0);
@@ -240,7 +239,7 @@ public static class HoverCards
                     _ => Palette.Agent(agent),
                 };
             box.Children.Add(new QuotaBar((row.Percent ?? 0) / 100, color, 4));
-            var detail = Ui.Text(row.Detail, 10, null, Palette.Secondary);
+            var detail = Ui.Text(row.Detail, 12, null, Palette.Secondary);
             detail.TextWrapping = TextWrapping.NoWrap;
             box.Children.Add(detail);
             content.Children.Add(box);
@@ -270,15 +269,15 @@ public static class HoverCards
         var help = row.Multiplier is { } multiple
             ? L10n.TrL(null, "overview.sub_help_multiplier", row.PlanLabel, price, usage, Fmt.Multiple(multiple))
             : L10n.TrL(null, "overview.sub_help_unknown", row.PlanLabel, usage);
-        content.Children.Add(Ui.Text(help, 10.5, null, Palette.Secondary, wrap: true));
+        content.Children.Add(Ui.Text(help, 12, null, Palette.Secondary, wrap: true));
         return content;
     }
 
     private static Control KeyValue(string label, string value)
     {
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        row.Children.Add(Ui.Text(label, 10.5, null, Palette.Secondary));
-        var v = Ui.Text(value, 10.5, family: Type.Rounded);
+        row.Children.Add(Ui.Text(label, 12, null, Palette.Secondary));
+        var v = Ui.Text(value, 12, family: Type.Rounded);
         v.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(v, 1);
         row.Children.Add(v);

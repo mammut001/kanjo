@@ -86,12 +86,52 @@ public static class WindowsL10n
             ["zh-Hans"] = "重启以更新",
             ["fr"] = "Redémarrer pour mettre à jour",
         },
+        // 外观（Windows 专有；Mac 版跟随系统，没有这一节）。
+        ["settings.section.appearance"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Appearance",
+            ["zh-Hans"] = "外观",
+            ["fr"] = "Apparence",
+        },
+        ["settings.appearance"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "App appearance",
+            ["zh-Hans"] = "应用外观",
+            ["fr"] = "Apparence de l'application",
+        },
+        ["settings.appearance.note"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Applies to this Windows app only. The Mac app follows the system setting.",
+            ["zh-Hans"] = "只影响 Windows 版；Mac 版跟随系统设置。",
+            ["fr"] = "S'applique à l'application Windows uniquement. L'app Mac suit le réglage système.",
+        },
+        ["settings.appearance.dark"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Dark",
+            ["zh-Hans"] = "深色",
+            ["fr"] = "Sombre",
+        },
+        ["settings.appearance.light"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Light",
+            ["zh-Hans"] = "浅色",
+            ["fr"] = "Clair",
+        },
+        ["settings.appearance.system"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Use system setting",
+            ["zh-Hans"] = "跟随系统",
+            ["fr"] = "Suivre le système",
+        },
     };
 
     /// <summary>取覆盖文案；没有覆盖的 key 回退到 Mac 字符串表。</summary>
-    public static string Tr(string key, params object?[] args)
+    public static string Tr(string key, params object?[] args) => TrL(null, key, args);
+
+    /// <summary>取覆盖文案（显式指定语言，测试 / 截图用）。</summary>
+    public static string TrL(string? language, string key, params object?[] args)
     {
-        var lang = L10n.CurrentLanguage;
+        var lang = language ?? L10n.CurrentLanguage;
         if (Overrides.TryGetValue(key, out var table))
         {
             var format = table.TryGetValue(lang, out var localized)
@@ -99,7 +139,7 @@ public static class WindowsL10n
                 : table.GetValueOrDefault(L10n.DefaultLanguage, key);
             return args.Length == 0 ? format : L10n.Format(format, args);
         }
-        return L10n.Tr(key, args);
+        return L10n.TrL(language, key, args);
     }
 
     /// <summary>某个 key 是否有 Windows 覆盖（测试用）。</summary>

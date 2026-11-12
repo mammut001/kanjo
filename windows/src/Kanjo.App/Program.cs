@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Kanjo.Core;
@@ -104,19 +106,8 @@ public sealed class KanjoApplication : Application
     {
         Styles.Add(new FluentTheme());
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
-
-        Styles.Add(new Style(x => x.OfType<TextBlock>())
-        {
-            Setters =
-            {
-                new Setter(TextBlock.FontFamilyProperty, Type.Font),
-                new Setter(TextBlock.ForegroundProperty, Palette.Foreground),
-            },
-        });
-        Styles.Add(new Style(x => x.OfType<Window>())
-        {
-            Setters = { new Setter(Avalonia.Controls.Window.BackgroundProperty, Palette.PanelBackground) },
-        });
+        // 控件样式和 headless（截图 / 单测）共用一份，避免两条路径长得不一样。
+        AppStyles.Install(this);
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -132,7 +123,8 @@ public sealed class KanjoApplication : Application
         var services = _services;
         L10n.Store = services.Settings;
         L10n.ResetCache();
-        Palette.IsDark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
+        // 外观：设置里的值（缺省 Dark）—— 在窗口建出来之前就定好，首帧就是正确颜色。
+        Appearance.Apply(services.Settings);
         desktop.Exit += (_, _) => DisposeServices();
 
         if (args.Contains("--window"))

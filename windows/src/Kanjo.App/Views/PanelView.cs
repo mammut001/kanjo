@@ -17,10 +17,12 @@ public sealed class PanelView : Grid
 
     private readonly AppServices _services;
     private readonly Border _contentHost;
-    private readonly Clickable _refreshButton;
-    private readonly TextBlock _statusText;
+    // 底栏里的两个控件随外观重建（图标的取色是构造时的），所以不是 readonly。
+    private Clickable _refreshButton = null!;
+    private TextBlock _statusText = null!;
     private readonly StackPanel _banners;
     private readonly HoverLayer _hover = new();
+    private Border? _footer;
 
     public AppRoute Route { get; private set; }
 
@@ -38,20 +40,6 @@ public sealed class PanelView : Grid
         ClipToBounds = !snapshotMode;
         Background = Palette.PanelBackground;
 
-        _statusText = Ui.Text("", 11, null, Palette.Secondary);
-        _statusText.VerticalAlignment = VerticalAlignment.Center;
-
-        _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
-        {
-            // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
-            Task.Run(() =>
-            {
-                if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
-                else _services.RequestUserRefresh();
-                _services.NotifyChanged();
-            });
-        }, L10n.Tr("menu.refresh_now"));
-
         _banners = Ui.V(6);
         _banners.Margin = new Thickness(10, 10, 10, 2);
         _banners.IsVisible = false;
@@ -66,9 +54,9 @@ public sealed class PanelView : Grid
         Grid.SetRow(_contentHost, 1);
         Children.Add(_contentHost);
 
-        var footer = BuildFooter();
-        Grid.SetRow(footer, 2);
-        Children.Add(footer);
+        _footer = BuildFooter();
+        Grid.SetRow(_footer, 2);
+        Children.Add(_footer);
 
         Grid.SetRow(_hover, 0);
         Grid.SetRowSpan(_hover, 3);
@@ -76,8 +64,38 @@ public sealed class PanelView : Grid
         HoverLayer.Current = _hover;
 
         _services.NavigateRequested += Navigate;
+        // 换外观：代码里所有画笔都是构造时取值的（卡片底 / 文字 / 描边 / 禁用态），
+        // 所以这里把整块面板重建一次，而不是指望它们自己跟着变。
+        // 弱引用订阅：面板会被丢弃重建，静态事件不能让旧面板活着。
+        Appearance.Watch(this, p => p.OnAppearanceChanged());
+        DetachedFromVisualTree += (_, _) => Appearance.Unwatch(this);
         Rebuild();
         _services.Changed += OnChanged;
+    }
+
+    /// <summary>外观切换后重建外壳 + 页面（色板已由 <see cref="Appearance"/> 切好）。</summary>
+    internal void OnAppearanceChanged()
+    {
+        void Apply()
+        {
+            Background = Palette.PanelBackground;
+
+            // 底栏自己的背景 / 描边 / 图标颜色也是构造时取的，跟着换一份。
+            // 重建后要保证悬停层仍在最上面（它跨三行画悬停卡）。
+            if (_footer is not null) Children.Remove(_footer);
+            Children.Remove(_hover);
+            _footer = BuildFooter();
+            Grid.SetRow(_footer, 2);
+            Children.Add(_footer);
+            Children.Add(_hover);
+
+            // 内容区里的页面同样是构造时取色，整页重建一次。
+            _hover.Hide();
+            Rebuild();
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+        else Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
     }
 
     private void OnChanged()
@@ -92,10 +110,26 @@ public sealed class PanelView : Grid
 
     public void Navigate(AppRoute route)
     {
+        // 返回总览时恢复上次的滚动位置（Windows 11 的返回行为）；其它跳转从顶部开始。
+        if (route.Kind == AppRouteKind.Overview && _overviewOffset is { } offset && Route.Kind != AppRouteKind.Overview)
+        {
+            _restoreOverviewOffset = offset;
+        }
+        if (Route.Kind == AppRouteKind.Overview && _page is ScrollPage current) _overviewOffset = current.VerticalOffset;
+
         Route = route;
         _hover.Hide();
+        // 只有真的换页才播放过渡；同一页因为数据变化重建时不动（否则每次刷新都闪一下）。
+        _animateNextRebuild = true;
         Rebuild();
     }
+
+    /// <summary>下一次重建要不要播放页面过渡（只有导航时播放）。</summary>
+    private bool _animateNextRebuild;
+
+    /// <summary>总览页上次的滚动位置（返回时恢复）。</summary>
+    private double? _overviewOffset;
+    private double? _restoreOverviewOffset;
 
     public void Rebuild()
     {
@@ -108,9 +142,12 @@ public sealed class PanelView : Grid
         RebuildBanners();
         HoverLayer.PinnedId = Route.Anchor;
 
+        var animate = _animateNextRebuild;
+        _animateNextRebuild = false;
         var content = BuildContent();
         _contentHost.Child = null;
-        _contentHost.Child = content;
+        if (animate) Motion.SwapContent(_contentHost, content);
+        else _contentHost.Child = content;
 
         _refreshButton.Opacity = _services.IsLoading || _services.Disk.IsLoading ? 0.45 : 1;
         // 状态文字：正常运行时是真实时钟；--snapshot 时固定在报告时间（截图可复现，见 README）。
@@ -147,9 +184,15 @@ public sealed class PanelView : Grid
     private Control BuildContent()
     {
         var content = BuildPage();
-        _page = content as ISnapshotPage;
+        _page = content;
         // 截图模式：滚动页交出内部内容，按整页高度渲染（和 Mac 的 TALL 截图一致）。
         if (SnapshotMode && content is ISnapshotPage snapshotPage) return snapshotPage.SnapshotBody;
+        // 返回总览：等这一页布局完成后把滚动位置放回去（动画不会改变最终位置）。
+        if (content is ScrollPage page && _restoreOverviewOffset is { } restore)
+        {
+            _restoreOverviewOffset = null;
+            page.RestoreOffsetLater(restore);
+        }
         return content;
     }
 
@@ -195,7 +238,7 @@ public sealed class PanelView : Grid
     {
         var box = Ui.V(8);
         box.Margin = new Thickness(Metrics.PagePadding, 16, Metrics.PagePadding, 0);
-        box.Children.Add(Ui.Text(text, 12, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(text, 14, null, Palette.Secondary));
         box.Children.Add(Widgets.BackButton(L10n.Tr("menu.back_to_overview"),
             () => Navigate(AppRoute.Overview)));
         return box;
@@ -213,15 +256,15 @@ public sealed class PanelView : Grid
             list.Add(Widgets.StatusBlock(false,
             [
                 Ui.Text(L10n.TrL(null, "menu.schema_warning", report.SchemaVersion,
-                    Contract.SupportedSchemaVersion), 10.5, FontWeight.Medium, Palette.WarnInk, wrap: true),
+                    Contract.SupportedSchemaVersion), 12, FontWeight.Medium, Palette.WarnInk, wrap: true),
             ]));
         }
         if (_services.Report is not null && _services.Error is { } error)
         {
             list.Add(Widgets.StatusBlock(true,
             [
-                Ui.Text(L10n.Tr("menu.refresh_failed_banner"), 10.5, FontWeight.SemiBold, Palette.Bad),
-                Ui.Text(error, 10.5, null, Palette.Bad, wrap: true),
+                Ui.Text(L10n.Tr("menu.refresh_failed_banner"), 12, FontWeight.SemiBold, Palette.Bad),
+                Ui.Text(error, 12, null, Palette.Bad, wrap: true),
             ]));
         }
         if (list.Count == 0) return;
@@ -230,11 +273,26 @@ public sealed class PanelView : Grid
     }
 
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
-    private Control BuildFooter()
+    /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边三个图标按钮（带 tooltip）。</summary>
+    private Border BuildFooter()
     {
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
 
-        var left = Ui.H(2);
+        // 底栏的图标 / 文字都按当前外观取色，所以每次构建都重新造（外观切换时会重建底栏）。
+        _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
+        {
+            // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
+            Task.Run(() =>
+            {
+                if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
+                else _services.RequestUserRefresh();
+                _services.NotifyChanged();
+            });
+        }, L10n.Tr("menu.refresh_now"));
+        _statusText = Ui.Text("", 12, null, Palette.Secondary);
+        _statusText.VerticalAlignment = VerticalAlignment.Center;
+
+        var left = Ui.H(4);
         left.Children.Add(_refreshButton);
         left.Children.Add(_statusText);
         left.VerticalAlignment = VerticalAlignment.Center;
@@ -250,19 +308,20 @@ public sealed class PanelView : Grid
         }
 
         bar.Children.Add(IconCell(
-            Icons.Disk(12, Route.Kind == AppRouteKind.Disk ? Palette.Accent : Palette.Secondary),
+            Icons.Disk(14, Route.Kind == AppRouteKind.Disk ? Palette.Link : Palette.Secondary),
             ToggleDisk, L10n.Tr("menu.disk"), Route.Kind == AppRouteKind.Disk, 2));
-        bar.Children.Add(IconCell(Icons.Gear(12, Palette.Secondary), ToggleSettings,
-            L10n.Tr("menu.settings"), false, 3));
-        bar.Children.Add(IconCell(Icons.Power(12, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
+        bar.Children.Add(IconCell(
+            Icons.Gear(14, Route.Kind == AppRouteKind.Settings ? Palette.Link : Palette.Secondary),
+            ToggleSettings, L10n.Tr("menu.settings"), Route.Kind == AppRouteKind.Settings, 3));
+        bar.Children.Add(IconCell(Icons.Power(14, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
 
         return new Border
         {
             Child = bar,
-            CornerRadius = new CornerRadius(12),
-            Background = Palette.GroupFill,
-            Padding = new Thickness(5, 1, 5, 1),
-            Margin = new Thickness(8, 4, 8, 8),
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = Palette.CardBackground,
+            Padding = new Thickness(10, 4, 8, 4),
         };
     }
 
@@ -327,5 +386,5 @@ public sealed class PanelView : Grid
         _hover.ShowRegistered(anchor);
     }
 
-    private ISnapshotPage? _page;
+    private object? _page;
 }

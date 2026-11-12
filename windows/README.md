@@ -103,9 +103,80 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
 可滚动的页面按整页高度渲染（和 Mac 的 TALL 截图一致）。面板会挂进一个不显示的 `Window`（TopLevel）再截：
 `TextBox`、`Button` 这类模板控件只有在 TopLevel 下才会套用 ControlTheme，否则截出来是空白的。
 
+**两种外观：** `--snapshot-appearance light|dark` 显式指定本次截图的主题，优先于设置里的 Appearance
+（截图不读也不写用户的选择），所以同一套脚本每次都能同时出浅色和深色图。
+
 **相对日期与「现在」：** 正常运行（托盘 / `--window`）时「现在」就是真实时钟，和 Mac 一致
 （「active yesterday」「renews in 2 days」都跟着当天走）。只有 `--snapshot` 会把「现在」固定在报告的
 `generated_at`，这样同一份数据每次截出的图逐像素一致。
+
+## 设计（Design）
+
+界面按 **Windows 11（Fluent / WinUI）** 的规范来做，而不是照搬 Mac 版的外观。所有颜色与间距常量
+都集中在 `Theme/Palette.cs`，视图里不出现裸 16 进制。
+
+### 表面与版式
+
+| | 浅色 | 深色 |
+|---|---|---|
+| 窗口 / 页面底色（没有 Mica 时的实底） | `#F3F3F3` | `#202020` |
+| 卡片底 | `#FFFFFF` | `#2B2B2B` |
+| 卡片描边 / 分割线 | `#CFCFCF` | `#4C4C4C` |
+
+- 窗口优先用 **Mica**（`PanelWindow` 里 `TransparencyLevelHint`）；Windows 10 / Server 2022 没有 Mica 时
+  退回上面那层实色，再配 1px 描边，所以两种环境下都是「卡片浮在底色上」。
+- **横向空间只有两层**：页面左右留白 12（`Metrics.PagePadding`）+ 卡片左右内边距 12（`Metrics.RowInset`），
+  一行的可用宽度就是 `Metrics.RowContentWidth`（332）。面板只有 360，再厚一层就会把内容挤两次 ——
+  review 里的「Cycle 被切成 Cy」「Edit 被切掉」都是这么来的。卡片：圆角 8、1px 描边；
+  同一分组里卡片之间 4px，分组之间 24px。唯一的例外是总览的马赛克卡片，它贴到面板边缘（出血），
+  这样色块才有足够宽度显示标签。
+- 放不下的整行控件**换行而不是溢出**：额度重置行（日期一行、控件一行、Apply / Reset 右对齐一行）
+  和订阅行的三个按钮都是右对齐的独立一行。
+- 总览 header 的范围胶囊是**横向可滚动的单行**（不画滚动条，右缘有渐隐提示还有更多），
+  7 个胶囊永远不折行、不切词；"Total cost" 标签独占一行。
+- 设置页照 Windows 11「设置」的版式：分组标题（BodyStrong）在上，下面一卡一项（左边标题 + 一行说明，
+  右边右对齐的控件，最小宽 200）。面板只有 360px，放不下「标题 + 200px 控件」时控件落到下一行（和 Win11 窄窗一致）。
+
+### 字号（`Type`）
+
+Title 28 semibold（页面标题、大额数字）/ Subtitle 20 / BodyStrong 14 semibold（分组标题）/
+Body 14 / Caption 12。Windows 上用 Segoe UI Variable（回退 Segoe UI）。
+
+### 对比度（WCAG 2.1）
+
+`tests/.../ContrastTests.cs` 把下面每一对都算一遍并在明 / 暗两种外观下断言：
+
+| 用途 | 浅色 | 深色 | 门槛 | 实测（卡片 / 背景） |
+|---|---|---|---|---|
+| primary 文字 | `#1A1A1A` | `#FFFFFF` | ≥ 12:1 | 17.4 / 15.7（dark 14.2 / 16.3） |
+| secondary 文字 | `#5D5D5D` | `#C8C8C8` | ≥ 4.5:1 | 6.6 / 5.9（dark 8.5 / 9.7） |
+| tertiary / caption | `#616161` | `#BFBFBF` | ≥ 4.5:1 | 6.2 / 5.6（dark 7.7 / 8.9） |
+| disabled 文字与描边 | `#8A8A8A` | `#8A8A8A` | ≥ 3:1 | 3.4 / 3.1（dark 4.1 / 4.7） |
+| 卡片描边 / 分割线 | `#CFCFCF` | `#4C4C4C` | ≥ 1.5:1 | 1.56（dark 1.65） |
+| 强调色上的文字 | 白 | 近黑 | ≥ 4.5:1 | 6.3（dark 10.6） |
+
+- 强调色取系统色（`PlatformSettings.GetColorValues().AccentColor1`），拿不到时用 `#005FB8` / `#60CDFF`。
+  系统色可能太浅（比如黄色）或刚好卡在 4.49:1，所以链接色与按钮底色会在保证 ≥ 4.5:1 的前提下
+  朝安全方向微调（`Palette.LinkColor` / `AccentFillColor`）。
+- **不用 alpha 叠在灰底上**：旧版用 `Foreground × 0.26` 叠出「次要色」，实际只有 1.9:1 —— 这就是
+  用户报的「禁用按钮和占位符几乎看不见」。现在全部是实色，禁用控件也不再套 Fluent 模板的
+  `#CCCCCC` 底（那配灰字只有 2.7:1），而是自绘一个 3:1 以上的静态禁用外观。
+- agent 色保持不变（它们要跨 Mac / iOS / Windows 识别）；马赛克色块上的文字按块亮度选白或近黑，
+  必要时把色块朝反方向微调最多 4%，保证 ≥ 4.5:1（`Palette.TileInk`）。
+
+## 滚动与动效
+
+- 所有可滚动页面继承 `ScrollPage`（`Theme/ScrollPage.cs`），它只是 `ScrollViewer` 加两件事：
+  - 覆写 `StyleKeyOverride` 指回 `ScrollViewer`。**这是「设置页滚不动」的真正原因**：Avalonia 用样式键
+    决定套哪个 ControlTheme，`OverviewPage : ScrollViewer` 的子类样式键是子类自己，于是 Fluent 主题里
+    的 `ScrollViewer` 模板（含 `ScrollContentPresenter` 与滚动条）根本没套上 —— `Extent` 恒为 0，
+    滚轮、拖滚动条、触摸板全都无效。
+  - 在隧道路由里按 `WheelPolicy` 决定滚轮归谁：指针停在收起的 ComboBox / NumericUpDown / 单行 TextBox 上
+    时滚页面、绝不改值（Windows 11 设置页的行为）；展开的下拉列表自己滚；嵌套滚动区到边界后链给外层。
+- 触摸板 / 触摸屏开启 `IsScrollInertiaEnabled`，滚动条用 Fluent 的自动隐藏悬浮样式（悬停展开）。
+- 页面切换 ≈150ms 淡入 + 8px 上滑；面板从托盘弹出同样 150ms（`Theme/Motion.cs`）。
+  系统关掉动画（`UISettings.AnimationsEnabled`）或 `--snapshot` 时一律不做动画。
+  返回总览会恢复上次的滚动位置。
 
 ## 设置与数据位置
 
@@ -124,6 +195,11 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
 - **右键菜单是「Show in Explorer」**（Mac 是 Finder），终端优先 Windows Terminal（`wt -d <path>`），
   没有就用 `powershell -NoExit -Command Set-Location`。
 - **iCloud sync 一节只显示标题 + 「Mac only」说明**，没有开关（Windows 版不做手机快照上传）。
+- **外观是 Windows 专有设置，默认深色。** 设置页 Language 下面的 Appearance 卡可选 Dark（默认）/
+  Light / System（跟随 Windows）。值存在同一个 `settings.json` 的 `appearance` 键（缺省 = Dark），
+  改了立即生效：切 `Application.RequestedThemeVariant`（System → `ThemeVariant.Default`），
+  同时重新解析代码里取色的所有画笔与 token（`Theme/Appearance.cs`）。Mac 版没有这个设置，
+  仍按系统外观走；`--snapshot-appearance light|dark` 依然可以显式截两种主题。
 - **CLI 命令不走 shell**：直接起 `python` 子进程（Mac 走 `/bin/zsh -l -c`），所以设置里的
   「Runs as a subprocess…」文案不同。
 - **强调色按钮跟随窗口激活状态**：SwiftUI 的 `.borderedProminent` 只在活动窗口里是蓝的；
