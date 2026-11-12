@@ -37,6 +37,50 @@ def _error(message: str) -> int:
     return 1
 
 
+def _git(repo: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", repo] + list(args),
+                          capture_output=True, text=True, encoding="utf-8", check=False)
+
+
+def _git_error(res: subprocess.CompletedProcess) -> str:
+    return res.stderr.strip() or res.stdout.strip()
+
+
+def _unpushed_commits(repo: str, branch: str) -> int:
+    """Commits on HEAD that origin/<branch> does not have, e.g. left by an earlier failed push."""
+    res = _git(repo, "rev-list", "--count", "origin/%s..HEAD" % branch)
+    if res.returncode != 0:
+        return 0
+    try:
+        return int(res.stdout.strip() or "0")
+    except ValueError:
+        return 0
+
+
+def _push(repo: str, branch: str) -> Optional[str]:
+    """Push HEAD to origin/<branch>, rebasing once if the remote moved. Returns an error or None."""
+    if _git(repo, "push", "origin", branch).returncode == 0:
+        return None
+    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
+    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
+    if rebase_res.returncode != 0:
+        return "git pull --rebase failed: %s" % _git_error(rebase_res)
+    retry_res = _git(repo, "push", "origin", branch)
+    if retry_res.returncode != 0:
+        return "git push retry failed: %s" % _git_error(retry_res)
+    return None
+
+
+def _head(repo: str) -> str:
+    return _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+def _week_key(doc: dict) -> str:
+    if doc.get("weeks"):
+        return doc["weeks"][-1]["period"]
+    return doc.get("all_time", {}).get("period", "all")
+
+
 def cmd_publish_usage(args) -> int:
     repo = os.path.abspath(args.repo)
     file_rel = args.file
@@ -95,6 +139,15 @@ def cmd_publish_usage(args) -> int:
         ex_cmp = {k: v for k, v in existing_doc.items() if k != "generated_at"}
         new_cmp = {k: v for k, v in doc.items() if k != "generated_at"}
         if ex_cmp == new_cmp:
+            # The data is already committed, but an earlier push may have failed: push it now,
+            # otherwise the commit would sit on this machine until the numbers change again.
+            if not dry_run and _unpushed_commits(repo, branch) > 0:
+                err = _push(repo, branch)
+                if err:
+                    return _error(err)
+                print(json.dumps({"status": "pushed", "commit": _head(repo), "file": file_rel,
+                                  "period": _week_key(doc), "pending": True}))
+                return 0
             print(json.dumps({"status": "unchanged"}))
             return 0
 
@@ -112,10 +165,7 @@ def cmd_publish_usage(args) -> int:
         f.write(payload)
 
     # 5. git -C PATH add -- <file> && commit -m "..." -- <file>
-    if doc.get("weeks"):
-        week_key = doc["weeks"][-1]["period"]
-    else:
-        week_key = doc.get("all_time", {}).get("period", "all")
+    week_key = _week_key(doc)
 
     res = subprocess.run(["git", "-C", repo, "add", "--", file_rel],
                          capture_output=True, text=True, encoding="utf-8", check=False)
@@ -130,29 +180,11 @@ def cmd_publish_usage(args) -> int:
         err = res.stderr.strip() or res.stdout.strip()
         return _error("git commit failed: %s" % err)
 
-    res = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
-    commit_sha = res.stdout.strip()
-
     # 6. git -C PATH push origin <branch> with 1 retry
-    res = subprocess.run(["git", "-C", repo, "push", "origin", branch],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
-    if res.returncode != 0:
-        rebase_res = subprocess.run(["git", "-C", repo, "pull", "--rebase", "origin", branch],
-                                    capture_output=True, text=True, encoding="utf-8", check=False)
-        if rebase_res.returncode != 0:
-            err = rebase_res.stderr.strip() or rebase_res.stdout.strip()
-            return _error("git pull --rebase failed: %s" % err)
-
-        retry_res = subprocess.run(["git", "-C", repo, "push", "origin", branch],
-                                   capture_output=True, text=True, encoding="utf-8", check=False)
-        if retry_res.returncode != 0:
-            err = retry_res.stderr.strip() or retry_res.stdout.strip()
-            return _error("git push retry failed: %s" % err)
-
-        res = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
-                             capture_output=True, text=True, encoding="utf-8", check=False)
-        commit_sha = res.stdout.strip()
+    err = _push(repo, branch)
+    if err:
+        return _error(err)
+    commit_sha = _head(repo)
 
     # 7. Output success JSON
     output = {

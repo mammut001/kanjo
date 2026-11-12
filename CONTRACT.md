@@ -394,7 +394,8 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
   "cost_usd": 0.0,
   "by_provider": [ { "provider": "anthropic", "label": "Anthropic", "tokens": Tokens, "cost_usd": 0.0, "models": [ { "model": "claude-opus-5.5", "tokens_total": 0, "cost_usd": 0.0 } ] } ],  // 按 tokens.total 降序，models 为该 provider 下 tokens_total 前 5
   "by_agent":    [ { "agent": "claude", "label": "Claude Code", "tokens_total": 0, "cost_usd": 0.0 } ],  // 按 tokens_total 降序
-  "top_models":  [ { "model": "claude-opus-5.5", "provider": "anthropic", "tokens_total": 0, "cost_usd": 0.0 } ]  // 前 8 个，按 tokens_total 降序
+  "top_models":  [ { "model": "claude-opus-5.5", "provider": "anthropic", "tokens_total": 0, "cost_usd": 0.0 } ],  // 前 8 个，按 tokens_total 降序
+  "models_used": ["claude-opus-5.5", "gpt-5.5"]  // 该时间段用过的全部模型名，升序；统计不同模型数用它，top_models 有截断
 }
 ```
 
@@ -408,6 +409,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 2. 所有 `months` 加起来等于 `all_time`（tokens 精确相等，cost 误差不超过 0.01）。
 3. 按比例拆分的会话（`split`）在公开汇总里只按原值算一次，不能重复计入。公开汇总不看归属，只看消息本身。
 4. 每个 provider 的 `models` 中 `tokens_total` 之和不超过该 provider 的 `tokens.total`。
+5. `models_used` 恰好是该时间段 `by_model` 统计到的全部模型，`top_models` 中的模型都在其中。
 
 ## 13. 家庭用量汇总 (`kanjo export --family-report`)
 

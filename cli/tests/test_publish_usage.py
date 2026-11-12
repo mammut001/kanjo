@@ -206,6 +206,81 @@ class PublishUsageTest(unittest.TestCase):
         # Check that remote_edit.txt was pulled in
         self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "remote_edit.txt")))
 
+    def _head(self, repo):
+        return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def _set_push_rejected(self, rejected):
+        hook = os.path.join(self.bare_remote, "hooks", "pre-receive")
+        if rejected:
+            with open(hook, "w", encoding="utf-8") as f:
+                f.write("#!/bin/sh\necho rejected >&2\nexit 1\n")
+            os.chmod(hook, 0o755)
+        elif os.path.exists(hook):
+            os.remove(hook)
+
+    def test_commit_left_by_failed_push_is_pushed_on_next_run(self):
+        self._set_push_rejected(True)
+        code1, out1, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertNotEqual(code1, 0)
+        self.assertEqual(json.loads(out1.strip())["status"], "error")
+        local_sha = self._head(self.work_repo)
+        self.assertNotEqual(local_sha, self._head(self.bare_remote))
+
+        # Same data, push works again: the pending commit must reach the remote.
+        self._set_push_rejected(False)
+        code2, out2, err2 = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code2, 0, err2)
+        res2 = json.loads(out2.strip())
+        self.assertEqual(res2["status"], "pushed")
+        self.assertTrue(res2["pending"])
+        self.assertEqual(res2["commit"], local_sha)
+        self.assertEqual(self._head(self.bare_remote), local_sha)
+
+        # Nothing left to push: a plain no-op.
+        code3, out3, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code3, 0)
+        self.assertEqual(json.loads(out3.strip())["status"], "unchanged")
+
+    def test_push_retry_rebases_with_unrelated_uncommitted_changes(self):
+        # Another clone pushes right before our first push, so that push is rejected and
+        # the retry has to rebase while README.md has an unrelated unstaged edit.
+        second_clone = os.path.join(self.tmp, "clone2")
+        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"],
+                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
+                       check=True, capture_output=True)
+
+        with open(os.path.join(self.work_repo, "README.md"), "a", encoding="utf-8") as f:
+            f.write("local unstaged edit\n")
+
+        from kanjo import publish
+        real_git = publish._git
+        state = {"moved": False}
+
+        def git_moving_remote_before_first_push(repo, *args):
+            if args[:1] == ("push",) and not state["moved"]:
+                state["moved"] = True
+                with open(os.path.join(second_clone, "remote_edit.txt"), "w", encoding="utf-8") as f:
+                    f.write("edit on origin\n")
+                subprocess.run(["git", "-C", second_clone, "add", "remote_edit.txt"],
+                               check=True, capture_output=True)
+                subprocess.run(["git", "-C", second_clone, "commit", "-m", "remote update"],
+                               check=True, capture_output=True)
+                subprocess.run(["git", "-C", second_clone, "push", "origin", "main"],
+                               check=True, capture_output=True)
+            return real_git(repo, *args)
+
+        with mock.patch.object(publish, "_git", side_effect=git_moving_remote_before_first_push):
+            code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(json.loads(out.strip())["status"], "pushed")
+        self.assertEqual(self._head(self.work_repo), self._head(self.bare_remote))
+        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "remote_edit.txt")))
+        with open(os.path.join(self.work_repo, "README.md"), encoding="utf-8") as f:
+            self.assertIn("local unstaged edit", f.read())
+
 
 if __name__ == "__main__":
     unittest.main()

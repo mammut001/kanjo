@@ -142,7 +142,7 @@ kanjo export --public-summary  # public high-level summary JSON
 Kanjo can periodically summarize your AI token usage and publish it to a website or resume git repository:
 
 - **Disabled by default**: This feature is entirely optional and opt-in.
-- **Privacy-safe**: Only publishes aggregate token numbers, API-equivalent costs, and breakdowns by provider, agent, and top models across all-time, monthly, and weekly periods. It **never** includes project names, git remotes, file paths, branch names, session IDs, conversation titles, or account emails.
+- **Privacy-safe**: Only publishes aggregate token numbers, API-equivalent costs, breakdowns by provider, agent, and top models, and the names of the models used, across all-time, monthly, and weekly periods. It **never** includes project names, git remotes, file paths, branch names, session IDs, conversation titles, or account emails.
 - **Automated**: The menu bar app can publish on a daily, weekly, or monthly schedule, or on demand via Settings.
 - **CLI usage**:
   ```bash
