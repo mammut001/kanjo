@@ -157,6 +157,57 @@ public static class Ui
 
     public static Control Spacer() => new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
 
+    /// <summary>
+    /// 主要按钮（borderedProminent 近似）：强调色底、白字。Avalonia 的 Button 依赖模板，
+    /// 离屏渲染时模板不实例化 → 用自绘的 Clickable 保证截图里也能看到。
+    /// </summary>
+    public static Clickable ProminentButton(string text, Action onClick, IBrush? tint = null, double size = 11.5)
+    {
+        var label = Text(text, size, FontWeight.SemiBold, Brushes.White);
+        label.TextAlignment = TextAlignment.Center;
+        var body = new Border
+        {
+            Child = label,
+            Background = tint ?? Palette.Accent,
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 4, 10, 4),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        return new Clickable(body, onClick, radius: 6, hoverFill: false)
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+    }
+
+    /// <summary>次要按钮（bordered 近似）：淡底 + 细描边。</summary>
+    public static Clickable BorderedButton(string text, Action onClick, bool enabled = true, double size = 11)
+    {
+        var label = Text(text, size, FontWeight.Normal, enabled ? Palette.Foreground : Palette.Tertiary);
+        label.TextAlignment = TextAlignment.Center;
+        var body = new Border
+        {
+            Child = label,
+            Background = Palette.GroupFill,
+            BorderBrush = Palette.CardBorder,
+            BorderThickness = new Thickness(0.5),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(9, 3, 9, 3),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        var button = new Clickable(body, onClick, radius: 6, hoverFill: enabled)
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            IsEnabled = enabled,
+            Opacity = enabled ? 1 : 0.55,
+        };
+        return button;
+    }
+
+    /// <summary>行内小号文字按钮（强调色，10.5pt）。</summary>
+    public static Clickable SmallLink(string text, Action onClick, bool enabled = true) =>
+        new(Text(text, 10.5, null, enabled ? Palette.Accent : Palette.Tertiary), onClick, radius: 4,
+            hoverFill: enabled);
+
     /// <summary>带 margin 的包装（省一次局部变量）。</summary>
     public static T WithMargin<T>(this T control, double left, double top, double right, double bottom)
         where T : Control

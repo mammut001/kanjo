@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Kanjo.App.Views;
+using Kanjo.Core;
 
 namespace Kanjo.App;
 
@@ -12,7 +13,7 @@ public sealed class PanelWindow : Window
 {
     private readonly PanelView _panel;
 
-    public PanelWindow(AppServices services, bool taskbar = false, Route route = Route.Overview)
+    public PanelWindow(AppServices services, bool taskbar = false, AppRoute? route = null)
     {
         SystemDecorations = SystemDecorations.None;
         CanResize = false;
@@ -27,7 +28,7 @@ public sealed class PanelWindow : Window
         Width = PanelView.PanelWidth;
         Height = PanelView.PanelHeight;
 
-        _panel = new PanelView(services, route);
+        _panel = new PanelView(services, route ?? AppRoute.Overview);
         Content = new Border
         {
             CornerRadius = new CornerRadius(12),
@@ -40,6 +41,12 @@ public sealed class PanelWindow : Window
         Deactivated += (_, _) =>
         {
             if (!taskbar) Hide();
+        };
+
+        ProjectActions.ClipboardWriter = text => Clipboard?.SetTextAsync(text);
+        KeyDown += (_, e) =>
+        {
+            if (_panel.FindDiskPage()?.HandleKey(e.Key) == true) e.Handled = true;
         };
     }
 

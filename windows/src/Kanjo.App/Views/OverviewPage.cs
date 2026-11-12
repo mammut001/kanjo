@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Kanjo.Core;
@@ -7,52 +9,101 @@ using Kanjo.Core;
 namespace Kanjo.App.Views;
 
 /// <summary>
-/// 总览页（批次 1 完整实现，几何与 Mac 参考截图对齐）：
-/// HERO（总额 + 范围分段控件 + 摘要 + 范围说明）→ 订阅价值卡 → 马赛克 → 项目列表 →
-/// 按模型 → 不在项目里 → 对账 + 页脚。
+/// 总览页：HERO（总额 + 范围分段控件 + 摘要 + 范围说明）→ 订阅价值卡 → 马赛克 → 项目列表 →
+/// 按模型 → 不在项目里 → 对账 + 页脚。几何与 Mac 参考截图对齐。
 /// 所有「左内容 + 右对齐数值」的行都用 Grid 的 `*,Auto` 列，和 SwiftUI 的 Spacer 等价。
 /// </summary>
-public sealed class OverviewView : ScrollViewer
+public sealed class OverviewPage : ScrollViewer, ISnapshotPage
 {
-    private readonly AppServices _services;
+    /// <summary>截图模式：交出内容本身（不含滚动容器），由面板按整页高度渲染。</summary>
+    public Control SnapshotBody
+    {
+        get
+        {
+            var content = Content as Control ?? new Panel();
+            Content = null;
+            return content;
+        }
+    }
 
-    public OverviewView(AppServices services)
+    private readonly AppServices _services;
+    private readonly string? _anchor;
+    private readonly bool _snapshot;
+    private bool _showHidden;
+    private bool _showAllModels;
+
+    public OverviewPage(AppServices services, string? anchor, bool snapshot)
     {
         _services = services;
-        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        _anchor = anchor;
+        _snapshot = snapshot;
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        VerticalScrollBarVisibility = snapshot ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
         Background = Brushes.Transparent;
-        Content = Build();
+        Content = _services.Report is null ? ErrorOrLoading() : LoadedContent();
+        if (snapshot)
+        {
+            Content = _services.Report is null ? ErrorOrLoading() : BuildStatic();
+        }
     }
 
     /// <summary>页面内容本身（不含滚动容器）：截图 / 面板快照模式直接用。</summary>
-    public static Control BuildContent(AppServices services)
+    public static Control BuildContent(AppServices services, string? anchor = null)
     {
-        var view = new OverviewView(services);
-        var content = view.Content as Control ?? new Panel();
-        view.Content = null;
+        var page = new OverviewPage(services, anchor, snapshot: true);
+        var content = page.Content as Control ?? new Panel();
+        page.Content = null;
         return content;
     }
 
-    private Control Build()
+    private UsageReport Report => _services.Report!;
+
+    private const double TextListSpacing = 14;
+
+    private const double ContentInset = Metrics.ContentInset;
+
+    private Control LoadedContent()
     {
-        var root = Ui.V(Metrics.SectionSpacing);
-
-        if (_services.Report is not { } report)
-        {
-            root.Children.Add(ErrorOrLoading());
-            root.Margin = new Thickness(Metrics.ContentInset, 16, Metrics.ContentInset, 10);
-            return root;
-        }
-
-        var ctx = new RangeContext(report, _services.Settings.GetString(SettingsKeys.TimeRange));
+        var ctx = new RangeContext(Report, _services.Settings.GetString(SettingsKeys.TimeRange), _services.Now);
         var filtered = ctx.Filtered();
         var pinned = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.PinnedProjects, ""));
         var hidden = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.HiddenProjects, ""));
         var arranged = ArrangeProjects(filtered, ctx.IsAll, pinned, hidden);
 
+        var root = BuildStatic(ctx, filtered, arranged);
+        if (_anchor == RouteAnchors.OverviewBottom)
+        {
+            // 路由要求滚到底部：等布局完成后滚。
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                UpdateLayout();
+                var extent = Extent.Height;
+                var viewport = Viewport.Height;
+                Offset = new Vector(0, Math.Max(0, extent - viewport));
+            }, Avalonia.Threading.DispatcherPriority.Loaded);
+        }
+        return root;
+    }
+
+    /// <summary>页面内容，供快照模式复用。</summary>
+    private Control BuildStatic()
+    {
+        var ctx = new RangeContext(Report, _services.Settings.GetString(SettingsKeys.TimeRange), _services.Now);
+        var filtered = ctx.Filtered();
+        var pinned = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.PinnedProjects, ""));
+        var hidden = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.HiddenProjects, ""));
+        var arranged = ArrangeProjects(filtered, ctx.IsAll, pinned, hidden);
+        return BuildStatic(ctx, filtered, arranged);
+    }
+
+    private Control BuildStatic(RangeContext ctx, FilteredReport filtered, Lists arranged)
+    {
+        var report = Report;
+        var root = Ui.V(Metrics.SectionSpacing);
+
         var heroBlock = Ui.V(TextListSpacing);
-        heroBlock.Children.Add(Hero(report, ctx, filtered, arranged.Visible, arranged.Hidden.Count).WithMargin(ContentInset, 0));
+        heroBlock.Children.Add(Hero(report, ctx, filtered, arranged.Visible, arranged.Hidden.Count)
+            .WithMargin(ContentInset, 0));
         if (report.Subscriptions is { Count: > 0 })
         {
             heroBlock.Children.Add(SubscriptionValueCard(report));
@@ -79,15 +130,10 @@ public sealed class OverviewView : ScrollViewer
         return root;
     }
 
-    /// <summary>Swift 的 `VStack(spacing: 14)`：hero 与订阅卡之间。</summary>
-    private const double TextListSpacing = 14;
-
-    private const double ContentInset = Metrics.ContentInset;
-
     private Control ErrorOrLoading()
     {
         var box = Ui.V(10);
-        box.Margin = new Thickness(0, 28, 0, 0);
+        box.Margin = new Thickness(ContentInset, 28, ContentInset, 0);
         if (_services.Error is { } error)
         {
             box.Children.Add(Ui.Text(L10n.Tr("menu.error_title"), 14, FontWeight.SemiBold, Palette.Bad));
@@ -101,6 +147,17 @@ public sealed class OverviewView : ScrollViewer
             box.Children.Add(Ui.Text(
                 L10n.TrL(null, "settings.current_source", _services.DescribeSource()),
                 10.5, null, Palette.Secondary, wrap: true));
+            var actions = Ui.H(8);
+            actions.Children.Add(Ui.ProminentButton(L10n.Tr("common.retry"), () =>
+            {
+                Task.Run(() =>
+                {
+                    _services.Refresh();
+                    _services.NotifyChanged();
+                });
+            }));
+            actions.Children.Add(Ui.BorderedButton(L10n.Tr("menu.open_settings"), () => _services.RequestNavigate(AppRoute.Settings)));
+            box.Children.Add(actions);
             box.Children.Add(Ui.Text(L10n.Tr("menu.expected_export_json"), 10.5, null, Palette.Secondary, wrap: true));
             return box;
         }
@@ -129,9 +186,7 @@ public sealed class OverviewView : ScrollViewer
         var box = Ui.V(3);
 
         var title = Ui.H(4);
-        var titleText = Ui.Text(L10n.Tr("overview.total_cost"), 11, null, Palette.Secondary);
-        // Mac 的这一行是 11pt 文本 + 11pt 图标，行高按 11 算，不要被 34pt 金额撑开。
-        title.Children.Add(titleText);
+        title.Children.Add(Ui.Text(L10n.Tr("overview.total_cost"), 11, null, Palette.Secondary));
         if (report.CostNoteDisplayText is { } note)
         {
             title.Children.Add(Icons.InfoCircle(11, Palette.Secondary));
@@ -146,15 +201,11 @@ public sealed class OverviewView : ScrollViewer
                 _services.NotifyChanged();
             });
 
-        // 「Total cost」靠左，范围分段控件靠右（Swift: Spacer(minLength: 4)）。
         box.Children.Add(Ui.Columns(
             (title, new GridLength(1, GridUnitType.Star)),
             (picker, GridLength.Auto)));
 
-        // 大号金额：34pt semibold，圆体 + 等宽数字。
-        var amount = Ui.Text(Fmt.Money(filtered.Cost, report.Currency), 34, FontWeight.SemiBold,
-            family: Type.Rounded);
-        box.Children.Add(amount);
+        box.Children.Add(Widgets.HeroAmount(Fmt.Money(filtered.Cost, report.Currency), 34));
 
         var rangeText = filtered.FirstActive is null && !ctx.IsAll
             ? L10n.Tr("overview.no_usage")
@@ -186,24 +237,26 @@ public sealed class OverviewView : ScrollViewer
         var order = SubscriptionOrder.Parse(_services.Settings.Str(SettingsKeys.SubscriptionOrder, ""));
         var ordered = SubscriptionOrder.Apply(order, rows);
 
-        var expanded = _services.SubscriptionCardExpanded;
+        var pinnedAgent = RouteAnchors.QuotaAgent(_anchor);
+        var autoExpand = pinnedAgent is not null && ordered.Any(r => r.Agent == pinnedAgent);
+        var expanded = _services.SubscriptionCardExpanded || autoExpand;
         var visible = SubscriptionOrder.Visible(ordered, expanded, limit: 3);
 
         var section = Ui.V(0);
         section.Children.Add(SectionHeader(L10n.Tr("overview.section.subscription_value")));
-        // Mac 的 PanelSection(flat:) 在标题和第一行之间还有一点点间距。
         section.Children.Add(new Panel { Height = 1 });
 
         for (var i = 0; i < visible.Count; i++)
         {
-            if (i > 0) section.Children.Add(Ui.Hairline(ContentInset, ContentInset));
-            section.Children.Add(SubscriptionLine(report, visible[i]).WithMargin(ContentInset, 4.5));
+            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
+            var line = SubscriptionLine(report, visible[i]).WithMargin(ContentInset, 4.5);
+            MakeReorderable(line, visible[i].Agent, ordered.Select(r => r.Agent).ToList());
+            section.Children.Add(line);
         }
 
-        // "Show N more" / "Show less"（Mac: overview.subscription_value.show_more / show_less）
         if (ordered.Count > 3)
         {
-            section.Children.Add(Ui.Hairline(ContentInset, ContentInset));
+            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
             var label = expanded
                 ? L10n.Tr("overview.subscription_value.show_less")
                 : L10n.TrL(null, "overview.subscription_value.show_more", ordered.Count - 3);
@@ -215,11 +268,10 @@ public sealed class OverviewView : ScrollViewer
             section.Children.Add(toggle.WithMargin(ContentInset, 6, ContentInset, 6));
         }
 
-        section.Children.Add(Ui.Text(L10n.Tr("overview.subscription_value.explanation"), 10.5, null,
-                Palette.Tertiary, wrap: true)
-            .WithMargin(ContentInset, 3, ContentInset, 6));
+        var explanation = Ui.Text(L10n.Tr("overview.subscription_value.explanation"), 10.5, null,
+            Palette.Tertiary, wrap: true);
+        section.Children.Add(explanation.WithMargin(ContentInset, 3, ContentInset, 6));
 
-        // 续费日提醒：「Renewal days not set for … · Set now」+「×」关闭。
         if (RenewalNudgeLine(report) is { } nudge) section.Children.Add(nudge);
         return section;
     }
@@ -250,7 +302,10 @@ public sealed class OverviewView : ScrollViewer
             Foreground = Palette.Accent,
         });
 
-        var setNow = new Clickable(text, () => _services.RequestNavigate(Route.Settings), radius: 4)
+        var setNow = new Clickable(text, () => _services.RequestNavigate(AppRoute.Settings with
+            {
+                Anchor = SubscriptionSettingsRoute.Anchor(pending[0]),
+            }), radius: 4)
         {
             HorizontalAlignment = HorizontalAlignment.Left,
         };
@@ -270,8 +325,46 @@ public sealed class OverviewView : ScrollViewer
         return row;
     }
 
+    /// <summary>
+    /// 订阅行拖拽排序（Mac 的 .draggable / .dropDestination）：按住行拖到另一行上，交换顺序并存进设置。
+    /// 拖拽目标高亮；放下后写 `subscriptionOrder`。
+    /// </summary>
+    private void MakeReorderable(Control row, string agent, IReadOnlyList<string> order)
+    {
+        if (row is not Border border) return;
+        var target = new DropTarget(border, agent);
+        border.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) target.BeginDrag(e);
+        };
+        target.Dropped += source =>
+        {
+            if (source == agent) return;
+            var moved = SubscriptionOrder.Move(source, agent, order);
+            _services.Settings.Set(SettingsKeys.SubscriptionOrder, SubscriptionOrder.Serialize(moved));
+            _services.NotifyChanged();
+        };
+    }
+
+    /// <summary>订阅行的额度卡 / 说明卡（悬停 0.35 秒后浮出）。</summary>
+    private void AttachSubscriptionHover(Control anchor, UsageReport report, SubscriptionRow row)
+    {
+        if (report.QuotaWindows?.TryGetValue(row.Agent, out var window) == true)
+        {
+            var quota = SubscriptionValue.QuotaRows(window, RangeEngine.TimezoneOf(report), _services.Now);
+            if (quota.Count > 0)
+            {
+                HoverLayer.Attach(anchor, $"overview:quota:{row.Agent}",
+                    () => HoverCards.Quota(row.Agent, row.PlanLabel, quota));
+                return;
+            }
+        }
+        HoverLayer.Attach(anchor, $"overview:sub:{row.Agent}",
+            () => HoverCards.Subscription(row, report.Currency));
+    }
+
     /// <summary>一行：色点 + 名称 + 月费 …… 用量 + 「·」+ 倍数（右侧两列）。</summary>
-    private Control SubscriptionLine(UsageReport report, SubscriptionRow row, DateTimeOffset? now = null)
+    private Control SubscriptionLine(UsageReport report, SubscriptionRow row)
     {
         var box = Ui.V(2);
 
@@ -280,14 +373,15 @@ public sealed class OverviewView : ScrollViewer
         var plan = Ui.Text(row.PlanLabel, 12);
         plan.VerticalAlignment = VerticalAlignment.Center;
         left.Children.Add(plan);
-        left.Children.Add(Ui.Text($"· {Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency)}", 11, null, Palette.Secondary));
+        left.Children.Add(Ui.Text($"· {Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency)}", 11, null,
+            Palette.Secondary));
         if (row.ExtraUsageEnabled)
         {
-            left.Children.Add(Badge(L10n.Tr("overview.extra_usage_on"), warn: true,
+            left.Children.Add(Widgets.Badge(L10n.Tr("overview.extra_usage_on"), BadgeStyle.Warn,
                 L10n.Tr("overview.extra_usage_help")));
         }
 
-        var amount = Ui.Text(Fmt.Money(row.Usage, report.Currency), 12, FontWeight.Medium);
+        var amount = Ui.Text(Fmt.Money(row.Usage, report.Currency), 12, FontWeight.Medium, family: Type.Rounded);
         amount.TextAlignment = TextAlignment.Right;
         var dot = Ui.Text("·", 11, null, Palette.Tertiary);
         var multiple = Ui.Text(Fmt.Multiple(row.Multiplier), 11.5, FontWeight.Medium, Palette.Secondary);
@@ -301,12 +395,14 @@ public sealed class OverviewView : ScrollViewer
             (multiple, GridLength.Auto));
         box.Children.Add(top);
 
+        // 额度卡（有 quota_windows 才挂）：悬停 0.35 秒后浮出。
+        AttachSubscriptionHover(top, report, row);
+
         if (report.Subscriptions is { } subs && subs.TryGetValue(row.Agent, out var sub))
         {
             var timezone = RangeEngine.TimezoneOf(report);
-            var caption = Fmt.CycleCaption(sub, timezone, now ?? _services.Now);
+            var caption = Fmt.CycleCaption(sub, timezone, _services.Now);
             var captionText = Ui.Text(caption, 10, null, Palette.Secondary, wrap: true)
-
                 .WithMargin(11, 0, 0, 0);
             if (SubscriptionValue.NeedsRenewalDay(sub)) ToolTip.SetTip(captionText, SubscriptionValue.AssumedDayHelp);
             else ToolTip.SetTip(captionText, Fmt.CycleDates(sub, timezone));
@@ -325,7 +421,8 @@ public sealed class OverviewView : ScrollViewer
         var legend = LegendAgents(filtered);
         if (legend.Count > 0)
         {
-            section.Children.Add(Legend(legend, report.Currency).WithMargin(ContentInset, 2, ContentInset - 8, 6));
+            section.Children.Add(Widgets.Legend(legend, report.Currency)
+                .WithMargin(ContentInset, 2, ContentInset - 8, 6));
         }
 
         if (lists.Visible.Count == 0)
@@ -335,7 +432,7 @@ public sealed class OverviewView : ScrollViewer
                 : lists.Idle > 0
                     ? L10n.Tr("overview.projects.no_usage_range")
                     : L10n.Tr("overview.projects.all_hidden");
-            section.Children.Add(Ui.Text(text, 11, null, Palette.Secondary).WithMargin(ContentInset, 8));
+            section.Children.Add(Ui.Text(text, 11, null, Palette.Secondary).WithMargin(ContentInset, 8, 0, 8));
         }
 
         var heatEnd = HeatEndDate(report);
@@ -345,14 +442,14 @@ public sealed class OverviewView : ScrollViewer
 
         for (var i = 0; i < lists.Visible.Count; i++)
         {
-            if (i > 0) section.Children.Add(Ui.Hairline(ContentInset, ContentInset));
+            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
             section.Children.Add(ProjectRow(lists.Visible[i], report.Currency, heatEnd, timezone, labels,
-                pinned.Contains(lists.Visible[i].Id)));
+                pinned.Contains(lists.Visible[i].Id), i));
         }
 
         if (lists.Hidden.Count > 0)
         {
-            if (lists.Visible.Count > 0) section.Children.Add(Ui.Hairline(ContentInset, ContentInset));
+            if (lists.Visible.Count > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
             section.Children.Add(HiddenFooter(report, lists.Hidden));
         }
         if (!ctx.IsAll && lists.Idle > 0)
@@ -361,12 +458,13 @@ public sealed class OverviewView : ScrollViewer
                 lists.Idle == 1
                     ? L10n.TrL(null, "overview.projects.idle.singular", lists.Idle)
                     : L10n.TrL(null, "overview.projects.idle.plural", lists.Idle),
-                10.5, null, Palette.Tertiary).WithMargin(ContentInset, 6));
+                10.5, null, Palette.Tertiary).WithMargin(ContentInset, 6, 0, 6));
         }
         return section;
     }
 
-    private static IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> LegendAgents(FilteredReport filtered)
+    private static IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> LegendAgents(
+        FilteredReport filtered)
     {
         var cost = new Dictionary<string, double>(StringComparer.Ordinal);
         var tokens = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -389,46 +487,29 @@ public sealed class OverviewView : ScrollViewer
             .ToList();
     }
 
-    /// <summary>agent 图例：色点 + 名称，流式折行，按花费降序。</summary>
-    private static Control Legend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items,
-        string currency)
-    {
-        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
-        foreach (var (agent, label, cost, tokens) in items)
-        {
-            var chip = Ui.H(4);
-            chip.Margin = new Thickness(0, 0, 9, 3);
-            chip.Children.Add(Ui.Dot(agent));
-            chip.Children.Add(Ui.Text(label, 10, null, Palette.Secondary));
-            ToolTip.SetTip(chip, TooltipBuilder.AgentLine(label, cost, tokens, currency));
-            wrap.Children.Add(chip);
-        }
-        return wrap;
-    }
-
     /// <summary>热力条的结束日期：generated_at → totals.last_active → now。</summary>
-    private DateTimeOffset HeatEndDate(UsageReport report)
+    private static DateTimeOffset HeatEndDate(UsageReport report)
     {
         var timezone = RangeEngine.TimezoneOf(report);
         if (ReportDates.ParseTimestamp(report.GeneratedAt) is { } generated) return generated;
         if (ReportDates.ParseDay(report.Totals.LastActive) is { } day) return Time.AtDay(timezone, day);
-        return _services.Now;
+        return DateTimeOffset.UtcNow;
     }
 
     /// <summary>
     /// 项目行，两行：名称 + agent 色点 + local / path missing 标签 …… 金额（右上）；
-    /// sessions · tokens · 最近活跃 …… 8 周热力条（右下）。悬停整行高亮。
+    /// sessions · tokens · 最近活跃 …… 8 周热力条（右下）。悬停整行高亮并显示置顶 / 隐藏按钮，
+    /// 右键菜单有更多动作。
     /// </summary>
     private Control ProjectRow(Project project, string currency, DateTimeOffset heatEnd, TimeZoneInfo timezone,
-        IReadOnlyDictionary<string, string> labels, bool pinned)
+        IReadOnlyDictionary<string, string> labels, bool pinned, int index)
     {
         var row = new Border
         {
             Padding = new Thickness(ContentInset, Metrics.RowPadV, ContentInset, Metrics.RowPadV),
             CornerRadius = new CornerRadius(Metrics.RowRadius),
             Background = Brushes.Transparent,
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-            Margin = new Thickness(0, 0, 0, 0),
+            Cursor = new Cursor(StandardCursorType.Hand),
         };
         ToolTip.SetTip(row, project.Id);
 
@@ -441,25 +522,16 @@ public sealed class OverviewView : ScrollViewer
             ToolTip.SetTip(topLeft.Children[^1], L10n.Tr("overview.badge.pinned"));
         }
         topLeft.Children.Add(Ui.Text(project.Name, 12.5, FontWeight.Medium));
-        var used = project.ByAgent
-            .Where(a => a.Sessions > 0 || a.Cost > 0 || a.Tokens.Total > 0)
-            .OrderByDescending(a => a.Cost)
-            .ToList();
-        if (used.Count > 0)
-        {
-            var dots = Ui.H(3);
-            foreach (var agent in used.Take(3)) dots.Children.Add(Ui.Dot(agent.Agent));
-            ToolTip.SetTip(dots, string.Join("\n", TooltipBuilder.AgentLines(used, currency)));
-            topLeft.Children.Add(dots);
-        }
+        var dots = Widgets.AgentDots(project.ByAgent, currency, 6, $"overview:hover:dots:{index}");
+        topLeft.Children.Add(dots);
         if (project.PathMissing)
         {
-            topLeft.Children.Add(Badge(L10n.Tr("overview.badge.path_missing"), warn: true,
+            topLeft.Children.Add(Widgets.Badge(L10n.Tr("overview.badge.path_missing"), BadgeStyle.Warn,
                 L10n.Tr("overview.badge.path_missing_help")));
         }
         if (project.Remote is null)
         {
-            topLeft.Children.Add(Badge(L10n.Tr("overview.badge.local"), warn: false,
+            topLeft.Children.Add(Widgets.Badge(L10n.Tr("overview.badge.local"), BadgeStyle.Neutral,
                 L10n.Tr("overview.badge.local_help")));
         }
 
@@ -476,46 +548,159 @@ public sealed class OverviewView : ScrollViewer
         var subtitle = Ui.Text(sessions, 10.5, null, Palette.Secondary);
         ToolTip.SetTip(subtitle, L10n.TrL(null, "overview.row.last_active", Fmt.Day(project.LastActive)));
 
-        var weeks = HeatStrip.Weekly(project.ByDay, heatEnd,
-            DominantAgent.Of(project.ByAgent)?.Agent ?? project.ByAgent.FirstOrDefault()?.Agent ?? "unknown",
+        var weeks = HeatStrip.Weekly(project.ByDay, heatEnd, RangeContext.FallbackAgent(project),
             HeatStrip.DefaultWeeks, timezone);
-        var strip = new HeatStripView(weeks, currency, labels);
+        var strip = new HeatStripView(weeks, currency, labels, idPrefix: $"overview:hover:heat:{index}");
+
+        // 悬停时出现的置顶 / 隐藏按钮（放在热力条左边）。
+        var actions = Ui.H(0);
+        actions.Children.Add(RowIconButton(pinned ? Icons.Pin(10, Palette.Pin) : Icons.Pin(10, Palette.Secondary),
+            pinned ? L10n.Tr("overview.action.unpin") : L10n.Tr("overview.action.pin"),
+            () => TogglePin(project.Id)));
+        actions.Children.Add(RowIconButton(Icons.EyeSlash(10, Palette.Secondary),
+            L10n.Tr("overview.action.hide"), () => Hide(project.Id)));
+        actions.IsVisible = false;
+        actions.VerticalAlignment = VerticalAlignment.Center;
 
         var bottom = Ui.Columns(
             (subtitle, new GridLength(1, GridUnitType.Star)),
+            (actions, GridLength.Auto),
             (strip, GridLength.Auto));
         box.Children.Add(bottom);
 
         row.Child = box;
-        row.PointerEntered += (_, _) => row.Background = Palette.RowHover;
-        row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
+        row.PointerEntered += (_, _) =>
+        {
+            row.Background = Palette.RowHover;
+            actions.IsVisible = true;
+        };
+        row.PointerExited += (_, _) =>
+        {
+            row.Background = Brushes.Transparent;
+            actions.IsVisible = false;
+        };
+        row.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+            {
+                _services.RequestNavigate(AppRoute.Project(project.Id, index));
+            }
+        };
+        row.ContextMenu = ProjectContextMenu(project, pinned, hidden: false,
+            () => TogglePin(project.Id), () => Hide(project.Id));
         return row;
     }
 
-    private static Control Badge(string text, bool warn, string? help)
+    private static Control RowIconButton(Control glyph, string help, Action action)
     {
-        var badge = new Border
+        var inner = new Border
         {
-            Child = Ui.Text(text, 9, FontWeight.Medium, warn ? Palette.WarnInk : Palette.Secondary),
-            Background = warn ? Palette.WarnFill : Palette.GroupFill,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(5, 1, 5, 1),
-            VerticalAlignment = VerticalAlignment.Center,
+            Width = 20,
+            Height = 18,
+            CornerRadius = new CornerRadius(4),
+            Child = new Panel { Children = { glyph } },
         };
-        if (!string.IsNullOrEmpty(help)) ToolTip.SetTip(badge, help);
-        return badge;
+        glyph.HorizontalAlignment = HorizontalAlignment.Center;
+        glyph.VerticalAlignment = VerticalAlignment.Center;
+        var button = new Clickable(inner, action, help, radius: 4);
+        button.VerticalAlignment = VerticalAlignment.Center;
+        return button;
     }
 
+    /// <summary>右键菜单：Pin/Unpin、Hide/Unhide、Open in Terminal、Show in Finder、Copy path、Copy remote。</summary>
+    private static ContextMenu ProjectContextMenu(Project project, bool pinned, bool hidden,
+        Action onTogglePin, Action onToggleHidden)
+    {
+        var menu = new ContextMenu();
+        var items = new List<Control>();
+
+        MenuItem Item(string header, Action action, bool enabled = true)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            item.Click += (_, _) => action();
+            return item;
+        }
+
+        var existing = ProjectActions.ExistingPath(project);
+        var path = ProjectActions.DisplayPath(project);
+        if (!hidden) items.Add(Item(pinned ? L10n.Tr("context.unpin") : L10n.Tr("context.pin"), onTogglePin));
+        items.Add(Item(hidden ? L10n.Tr("context.unhide") : L10n.Tr("context.hide"), onToggleHidden));
+        items.Add(new Separator());
+        items.Add(Item(L10n.Tr("context.open_in_terminal"),
+            () => { if (existing is not null) ProjectActions.OpenInTerminal(existing); }, existing is not null));
+        items.Add(Item(L10n.Tr("context.show_in_explorer"),
+            () => { if (existing is not null) ProjectActions.ShowInExplorer(existing); }, existing is not null));
+        items.Add(new Separator());
+        items.Add(Item(L10n.Tr("context.copy_path"),
+            () => { if (path is not null) ProjectActions.Copy(path); }, path is not null));
+        items.Add(Item(L10n.Tr("context.copy_remote"),
+            () => { if (project.Remote is { } remote) ProjectActions.Copy(remote); }, project.Remote is not null));
+        menu.ItemsSource = items;
+        return menu;
+    }
+
+    private void TogglePin(string id)
+    {
+        var raw = _services.Settings.Str(SettingsKeys.PinnedProjects, "");
+        _services.Settings.Set(SettingsKeys.PinnedProjects, ProjectPrefs.Toggle(id, raw));
+        _services.NotifyChanged();
+    }
+
+    private void Hide(string id)
+    {
+        var raw = _services.Settings.Str(SettingsKeys.HiddenProjects, "");
+        _services.Settings.Set(SettingsKeys.HiddenProjects, ProjectPrefs.Toggle(id, raw));
+        _services.NotifyChanged();
+    }
+
+    private void Unhide(string id)
+    {
+        var set = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.HiddenProjects, ""));
+        set.Remove(id);
+        _services.Settings.Set(SettingsKeys.HiddenProjects, ProjectPrefs.Serialize(set));
+        _services.NotifyChanged();
+    }
+
+    /// <summary>「N hidden · $X · Show」；展开后在下面列出隐藏的项目，每行可取消隐藏。</summary>
     private Control HiddenFooter(UsageReport report, IReadOnlyList<Project> hidden)
     {
+        var box = Ui.V(0);
         var cost = hidden.Sum(p => p.Cost);
         var row = Ui.H(4);
-        row.Margin = new Thickness(ContentInset, 8, ContentInset, 8);
+        row.Children.Add(Icons.EyeSlash(9, Palette.Secondary));
         row.Children.Add(Ui.Text(
             L10n.TrL(null, "overview.hidden_footer", hidden.Count, Fmt.Money(cost, report.Currency)),
             10.5, null, Palette.Secondary));
+        row.Children.Add(Ui.LinkButton(_showHidden ? L10n.Tr("common.hide") : L10n.Tr("common.show"), () =>
+        {
+            _showHidden = !_showHidden;
+            _services.NotifyChanged();
+        }, 10.5));
+        row.Margin = new Thickness(ContentInset, 8, ContentInset, 8);
         ToolTip.SetTip(row, string.Join("\n", hidden.Select(p => p.Name)));
-        return row;
+        box.Children.Add(row);
+
+        if (_showHidden)
+        {
+            for (var i = 0; i < hidden.Count; i++)
+            {
+                var project = hidden[i];
+                if (i > 0) box.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
+                var hiddenRow = Ui.H(6);
+                hiddenRow.Margin = new Thickness(ContentInset, 5, ContentInset - 4, 5);
+                var name = Ui.Text(project.Name, 11.5, null, Palette.Secondary, maxLines: 1);
+                hiddenRow.Children.Add(name);
+                var spacer = new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
+                hiddenRow.Children.Add(spacer);
+                hiddenRow.Children.Add(Ui.Text(Fmt.Money(project.Cost, report.Currency), 11.5, null,
+                    Palette.Secondary, family: Type.Rounded));
+                hiddenRow.Children.Add(RowIconButton(Icons.Eye(10, Palette.Secondary),
+                    L10n.Tr("overview.action.unhide"), () => Unhide(project.Id)));
+                ToolTip.SetTip(hiddenRow, project.Id);
+                box.Children.Add(hiddenRow);
+            }
+        }
+        return box;
     }
 
     // MARK: - 按模型
@@ -528,36 +713,45 @@ public sealed class OverviewView : ScrollViewer
         if (models.Count == 0)
         {
             section.Children.Add(Ui.Text(L10n.Tr("overview.models.no_usage_range"), 11, null, Palette.Secondary)
-                .WithMargin(ContentInset, 8));
+                .WithMargin(ContentInset, 8, 0, 8));
             return section;
         }
 
-        foreach (var model in models.Take(8))
+        var shown = _showAllModels ? models : models.Take(8).ToList();
+        for (var i = 0; i < shown.Count; i++)
         {
-            section.Children.Add(ModelRow(model, report.Currency));
+            if (i > 0) section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
+            section.Children.Add(ModelRow(shown[i], report.Currency, i));
         }
         if (models.Count > 8)
         {
-            section.Children.Add(Ui.LinkButton(
-                L10n.TrL(null, "overview.models.more", models.Count - 8),
-                () => _services.ModelsExpanded = !_services.ModelsExpanded)
-                .WithMargin(ContentInset, 6));
+            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
+            var label = _showAllModels
+                ? L10n.Tr("common.show_fewer")
+                : L10n.TrL(null, "overview.models.more", models.Count - 8);
+            section.Children.Add(Ui.LinkButton(label, () =>
+            {
+                _showAllModels = !_showAllModels;
+                _services.NotifyChanged();
+            }, 10.5).WithMargin(ContentInset, 6, ContentInset, 6));
         }
         return section;
     }
 
     /// <summary>模型行：色点 + 模型名 + [estimated] …… tokens + 金额（右侧相邻，间距 6）。</summary>
-    private static Control ModelRow(ModelCost model, string currency)
+    private static Control ModelRow(ModelCost model, string currency, int index)
     {
         var left = Ui.H(6);
         left.Children.Add(Ui.Dot(model.Agent));
-        left.Children.Add(Ui.Text(model.Model, 11.5, null, Palette.Foreground, mono: true));
+        var name = Ui.Text(model.Model, 11.5, family: Type.Mono, maxLines: 1);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        left.Children.Add(name);
         if (model.Estimated)
         {
-            left.Children.Add(Badge(L10n.Tr("project.estimated"), warn: true, L10n.Tr("project.estimated_help")));
+            left.Children.Add(Widgets.Badge(L10n.Tr("project.estimated"), BadgeStyle.Warn,
+                L10n.Tr("project.estimated_help")));
         }
 
-        // Mac：Spacer(minLength: 8) 之后 tokens 与 cost 紧挨着，间距 6。
         var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 11, FontWeight.Medium);
         tokens.TextAlignment = TextAlignment.Right;
         var cost = Ui.Text(Fmt.Money(model.Cost, currency), 10.5, null, Palette.Secondary)
@@ -569,7 +763,13 @@ public sealed class OverviewView : ScrollViewer
             (tokens, GridLength.Auto),
             (cost, GridLength.Auto));
         row.Margin = new Thickness(ContentInset, 6, ContentInset, 6);
-        ToolTip.SetTip(row, TooltipBuilder.ModelTooltip(model.Model, model.Agent, model.Cost, model.Tokens.Total, currency));
+        var copy = model;
+        var id = index;
+        HoverLayer.Attach(row, $"overview:hover:model:{index}",
+            () => HoverCards.Model(copy.Model, copy.Agent, copy.Cost, copy.Tokens, currency));
+        ToolTip.SetTip(row, TooltipBuilder.ModelTooltip(model.Model, model.Agent, model.Cost,
+            model.Tokens.Total, currency));
+        _ = id;
         return row;
     }
 
@@ -581,19 +781,27 @@ public sealed class OverviewView : ScrollViewer
         section.Children.Add(SectionHeader(L10n.Tr("overview.section.not_in_project")));
 
         section.Children.Add(BucketRow(L10n.Tr("overview.unattributed"), L10n.Tr("overview.unattributed_desc"),
-            filtered.Unattributed.Sessions, Fmt.Money(filtered.Unattributed.Cost, report.Currency)));
+            filtered.Unattributed.Sessions, Fmt.Money(filtered.Unattributed.Cost, report.Currency),
+            filtered.Unattributed.SessionsDetail.Count == 0
+                ? null
+                : () => _services.RequestNavigate(AppRoute.BucketDetail("unattributed"))));
+        section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
         section.Children.Add(BucketRow(L10n.Tr("overview.excluded"), L10n.Tr("overview.excluded_desc"),
-            filtered.Excluded.Sessions, Fmt.Money(filtered.Excluded.Cost, report.Currency)));
+            filtered.Excluded.Sessions, Fmt.Money(filtered.Excluded.Cost, report.Currency),
+            filtered.Excluded.SessionsDetail.Count == 0
+                ? null
+                : () => _services.RequestNavigate(AppRoute.BucketDetail("excluded"))));
 
         if (report.Buckets.ParseFailed.Sessions > 0)
         {
+            section.Children.Add(Widgets.RowDivider(ContentInset, ContentInset));
             section.Children.Add(new ParseFailedRow(report.Buckets.ParseFailed));
         }
         return section;
     }
 
     /// <summary>桶行：名称 …… sessions + 金额（右对齐）。</summary>
-    private static Control BucketRow(string name, string desc, int sessions, string value)
+    private static Control BucketRow(string name, string desc, int sessions, string value, Action? action)
     {
         var box = Ui.V(2);
         box.Margin = new Thickness(ContentInset, 7, ContentInset, 7);
@@ -604,7 +812,7 @@ public sealed class OverviewView : ScrollViewer
         var sessionsText = Ui.Text(count, 10.5, null, Palette.Secondary);
         sessionsText.TextAlignment = TextAlignment.Right;
 
-        var valueText = Ui.Text(value, 12, FontWeight.Medium);
+        var valueText = Ui.Text(value, 12, FontWeight.Medium, family: Type.Rounded);
         valueText.TextAlignment = TextAlignment.Right;
         valueText.MinWidth = 52;
 
@@ -613,7 +821,12 @@ public sealed class OverviewView : ScrollViewer
             (sessionsText, GridLength.Auto),
             (valueText.WithMargin(8, 0, 0, 0), GridLength.Auto)));
         box.Children.Add(Ui.Text(desc, 10, null, Palette.Secondary, wrap: true, maxLines: 2));
-        return box;
+
+        if (action is null) return box;
+        var clickable = new Clickable(box, action, L10n.Tr("overview.show_these_sessions"),
+            Metrics.RowRadius);
+        clickable.Padding = new Thickness(0);
+        return clickable;
     }
 
     // MARK: - 对账
@@ -625,15 +838,14 @@ public sealed class OverviewView : ScrollViewer
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
-            // Mac：ReconciliationView 直接在 .padding(.horizontal, listInset) 里，
-            // 外层已经给了 ContentInset，这里不能再加，否则整行会缩进。
             Margin = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         if (rec.Ok)
         {
             line.Children.Add(Icons.CheckCircle(10, Palette.Good));
-            line.Children.Add(Ui.Text(L10n.TrL(null, "overview.reconciled", Fmt.Money(rec.Cost.Reported, report.Currency)),
+            line.Children.Add(Ui.Text(
+                L10n.TrL(null, "overview.reconciled", Fmt.Money(rec.Cost.Reported, report.Currency)),
                 10.5, null, Palette.Good));
             ToolTip.SetTip(line, L10n.Tr("reconcile.contract_invariant"));
             return line;

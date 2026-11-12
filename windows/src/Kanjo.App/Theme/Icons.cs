@@ -120,6 +120,11 @@ public static class Icons
         "M0.8,6 C3,2.6 9,2.6 11.2,6 C9,9.4 3,9.4 0.8,6 Z M1,10.5 L11,1.5",
         size, brush, filled: false);
 
+    /// <summary>eye。</summary>
+    public static Control Eye(double size = 10, IBrush? brush = null) => Glyph(
+        "M0.8,6 C3,2.6 9,2.6 11.2,6 C9,9.4 3,9.4 0.8,6 Z M6,4.2 A1.8,1.8 0 1 0 6,7.8 A1.8,1.8 0 1 0 6,4.2 Z",
+        size, brush, filled: false);
+
     /// <summary>chevron.right / chevron.down（ParseFailedRow 用）。</summary>
     public static Control Chevron(bool down, double size = 7, IBrush? brush = null) => Glyph(
         down ? "M1.5,3.5 L4.5,6.5 L7.5,3.5" : "M3.5,1.5 L6.5,4.5 L3.5,7.5",
@@ -164,6 +169,39 @@ public static class Icons
     /// <summary>chevron.left。</summary>
     public static Control ChevronLeft(double size = 11, IBrush? brush = null) => Glyph(
         "M7.5,1.5 L4,6 L7.5,10.5", size, brush, filled: false);
+
+    /// <summary>link：两个斜扣。</summary>
+    public static Control Link(double size = 9, IBrush? brush = null) => Glyph(
+        "M4.9,7.1 L7.1,4.9 M5.6,3.2 L6.9,1.9 A1.9,1.9 0 0 1 9.6,4.6 L8.3,5.9 " +
+        "M6.4,8.8 L5.1,10.1 A1.9,1.9 0 0 1 2.4,7.4 L3.7,6.1",
+        size, brush, filled: false);
+
+    /// <summary>arrow.triangle.branch：一条主干 + 分出去的一支。</summary>
+    public static Control Branch(double size = 8, IBrush? brush = null) => Glyph(
+        "M3.2,2.4 L3.2,9.6 M3.2,6 L6.4,6 A1.8,1.8 0 0 0 8.2,4.2 L8.2,2.4",
+        size, brush, filled: false);
+
+    /// <summary>questionmark.circle。</summary>
+    public static Control QuestionCircle(double size = 9, IBrush? brush = null) => Glyph(
+        "M6,0.9 A5.1,5.1 0 1 0 6,11.1 A5.1,5.1 0 1 0 6,0.9 Z " +
+        "M4.6,4.6 A1.45,1.45 0 1 1 6.6,5.9 C6.2,6.1 6,6.4 6,6.9 M6,8.4 L6,8.5",
+        size, brush, filled: false);
+
+    /// <summary>arrow.down / arrow.up（排序方向）。</summary>
+    public static Control SortArrow(bool down, double size = 9, IBrush? brush = null) => Glyph(
+        down ? "M6,2.2 L6,9.8 M3.2,7 L6,9.8 L8.8,7" : "M6,9.8 L6,2.2 M3.2,5 L6,2.2 L8.8,5",
+        size, brush, filled: false);
+
+    /// <summary>chevron.up.chevron.down（下拉菜单的小箭头）。</summary>
+    public static Control ChevronDownUp(double size = 8, IBrush? brush = null) => Glyph(
+        "M3.2,4.6 L6,1.8 L8.8,4.6 M3.2,7.4 L6,10.2 L8.8,7.4", size, brush, filled: false);
+
+    /// <summary>chevron.down / chevron.up（步进器的小箭头）。</summary>
+    public static Control ChevronUp(double size = 7, IBrush? brush = null) => Glyph(
+        "M1.5,6.5 L4.5,3.5 L7.5,6.5", size, brush, filled: false);
+
+    public static Control ChevronDown(double size = 7, IBrush? brush = null) => Glyph(
+        "M1.5,3.5 L4.5,6.5 L7.5,3.5", size, brush, filled: false);
 
     /// <summary>状态小点（托盘状态 / 圆点）。</summary>
     public static Control StatusDot(IBrush brush, double size = 6) => new Ellipse

@@ -135,6 +135,9 @@ public sealed class CliRunner
 {
     public const string DefaultModule = "kanjo";
 
+    /// <summary>设置里命令留空时用的默认导出命令（Windows 上是 py -3）。</summary>
+    public const string DefaultCliCommand = "py -3 -m kanjo export";
+
     public string? PythonExecutable { get; init; }
     public IReadOnlyList<string> PythonPrefixArguments { get; init; } = [];
     public string? WorkingDirectory { get; init; }
@@ -297,4 +300,55 @@ public sealed class CliRunner
     public void ConfigSet(string key, string value) => RunChecked(["config", "set", key, value], "config output");
 
     public void ConfigUnset(string key) => RunChecked(["config", "unset", key], "config output");
+
+    /// <summary>运行 `kanjo &lt;args...&gt;`，可以临时覆盖超时并附加环境变量。</summary>
+    public CliResult RunDetailed(IReadOnlyList<string> arguments, string emptyWhat, TimeSpan? timeout = null,
+        IReadOnlyDictionary<string, string>? extraEnvironment = null)
+    {
+        var python = PythonExecutable is null ? ResolvePython() : (PythonExecutable, PythonPrefixArguments);
+        if (python is not { } py)
+        {
+            throw DataSourceError.LaunchFailed("Python not found: bundle <appdir>\\python\\python.exe, or install Python 3.");
+        }
+        var cwd = ResolveCliDirectory(WorkingDirectory);
+        if (cwd is null)
+        {
+            throw DataSourceError.LaunchFailed(
+                "Kanjo CLI directory not found: bundle <appdir>\\cli, repo cli/, or %LOCALAPPDATA%\\KanjoFamily\\cli.");
+        }
+        var env = new Dictionary<string, string>(Environment, StringComparer.Ordinal);
+        if (extraEnvironment is not null)
+        {
+            foreach (var (key, value) in extraEnvironment) env[key] = value;
+        }
+        var limit = timeout ?? Timeout;
+        var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
+        var result = ProcessRunner.Run(py.Item1, fullArgs, cwd, limit, env);
+        var display = "python -m kanjo " + string.Join(" ", arguments);
+        if (result.TimedOut) throw DataSourceError.CommandTimedOut(display, (int)limit.TotalSeconds);
+        if (result.ExitCode != 0) throw DataSourceError.CommandFailed(display, result.ExitCode, result.Stderr);
+        if (result.Stdout.Length == 0) throw DataSourceError.EmptyInput(emptyWhat);
+        return result;
+    }
+
+    /// <summary>`kanjo publish-usage --repo … [--file …] [--branch …]`（超时 120 秒）。</summary>
+    public string PublishUsage(string repo, string? file, string? branch)
+    {
+        var args = new List<string> { "publish-usage", "--repo", repo.Trim() };
+        if (!string.IsNullOrWhiteSpace(file)) args.AddRange(["--file", file.Trim()]);
+        if (!string.IsNullOrWhiteSpace(branch)) args.AddRange(["--branch", branch.Trim()]);
+        return RunDetailed(args, "publish output", TimeSpan.FromSeconds(120)).Stdout;
+    }
+
+    /// <summary>`kanjo report-family --url … [--member-label …]`（超时 45 秒），令牌只走环境变量。</summary>
+    public string ReportFamily(string url, string? memberLabel, string token)
+    {
+        var args = new List<string> { "report-family", "--url", url.Trim() };
+        if (!string.IsNullOrWhiteSpace(memberLabel)) args.AddRange(["--member-label", memberLabel.Trim()]);
+        var env = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["KANJO_FAMILY_TOKEN"] = token.Trim(),
+        };
+        return RunDetailed(args, "family report output", TimeSpan.FromSeconds(45), env).Stdout;
+    }
 }

@@ -7,6 +7,87 @@ using Kanjo.Core;
 
 namespace Kanjo.App.Views;
 
+/// <summary>截图模式：页面交出内部内容（不含滚动容器），由面板按整页高度渲染。</summary>
+public interface ISnapshotPage
+{
+    Control SnapshotBody { get; }
+}
+
+/// <summary>
+/// 紧凑的分段控件（自绘胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
+/// 「Since reset」不可用时画成三级色、不可点；「Cycle」同理。
+/// </summary>
+public sealed class RangePicker : Border
+{
+    public RangePicker(string rangeRaw, TimeRange effective, bool resetAvailable, bool cycleAvailable,
+        Action<string> onChange)
+    {
+        Padding = new Thickness(1.5);
+        CornerRadius = new CornerRadius(12);
+        Background = new SolidColorBrush(Palette.ForegroundColor, 0.06);
+        HorizontalAlignment = HorizontalAlignment.Right;
+        VerticalAlignment = VerticalAlignment.Center;
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var range in TimeRanges.All)
+        {
+            var selected = range == effective;
+            var label = Ui.Text(range.ShortLabel(), 9.5, selected ? FontWeight.SemiBold : FontWeight.Normal,
+                selected ? Palette.Foreground : Palette.Secondary);
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(4, 2.5, 4, 2.5),
+                Background = selected ? new SolidColorBrush(Palette.ForegroundColor, 0.13) : Brushes.Transparent,
+                Child = label,
+                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            };
+
+            var unavailable = Unavailable(range, resetAvailable, cycleAvailable);
+            if (unavailable is not null)
+            {
+                label.Foreground = Palette.Tertiary;
+                ToolTip.SetTip(chip, unavailable);
+            }
+            else
+            {
+                ToolTip.SetTip(chip, range.LongLabel());
+                chip.PointerReleased += (_, _) => onChange(range.RawValue());
+                chip.PointerEntered += (_, _) => chip.Background = Palette.RowHover;
+                chip.PointerExited += (_, _) =>
+                {
+                    chip.Background = selected
+                        ? new SolidColorBrush(Palette.ForegroundColor, 0.13)
+                        : Brushes.Transparent;
+                };
+            }
+            row.Children.Add(chip);
+        }
+        Child = row;
+    }
+
+    private static string? Unavailable(TimeRange r, bool resetAvailable, bool cycleAvailable)
+    {
+        if (r == TimeRange.SinceReset && !resetAvailable) return L10n.Tr("timerange.tooltip.no_reset_info");
+        if (r == TimeRange.BillingCycle && !cycleAvailable) return L10n.Tr("timerange.tooltip.no_subscription_info");
+        return null;
+    }
+}
+
+/// <summary>范围说明行：caption 字号、次要色、可折行。</summary>
+public sealed class RangeCaptionLine : StackPanel
+{
+    public RangeCaptionLine(RangeCaptionResult caption)
+    {
+        Orientation = Orientation.Horizontal;
+        Spacing = 4;
+        VerticalAlignment = VerticalAlignment.Center;
+        Children.Add(Icons.Calendar(10, Palette.Secondary));
+        Children.Add(Ui.Text(caption.Text, 10.5, null, Palette.Secondary, wrap: true));
+        if (!string.IsNullOrEmpty(caption.Help)) ToolTip.SetTip(this, caption.Help);
+    }
+}
+
 /// <summary>
 /// 8 周燃烧热力条：每格一周（周一到周日）。
 /// 每格按那周各 agent 的 cost 份额纵向分成最多 3 段色带（上到下按 cost 降序，份额 &lt; 10% 的并进最大那段），
@@ -28,7 +109,8 @@ public sealed class HeatStripView : StackPanel
         double cellWidth = DefaultCellWidth,
         double cellHeight = DefaultCellHeight,
         double radius = 2,
-        double spacing = DefaultSpacing)
+        double spacing = DefaultSpacing,
+        string? idPrefix = null)
     {
         Orientation = Orientation.Horizontal;
         Spacing = spacing;
@@ -39,8 +121,19 @@ public sealed class HeatStripView : StackPanel
         var peak = weeks.Count == 0 ? 0 : weeks.Max(w => w.Cost);
         for (var i = 0; i < weeks.Count; i++)
         {
-            Children.Add(Cell(weeks[i], HeatStrip.Level(weeks[i].Cost, peak), cellWidth, cellHeight, radius,
-                currency, labels));
+            var cell = Cell(weeks[i], HeatStrip.Level(weeks[i].Cost, peak), cellWidth, cellHeight, radius,
+                currency, labels);
+            if (idPrefix is not null)
+            {
+                var week = weeks[i];
+                var copy = labels;
+                HoverLayer.Attach(cell, $"{idPrefix}:{i}",
+                    () => HoverCards.AgentRows(HeatStrip.WeekLabel(week.Start), null, week.Cost, week.Tokens,
+                        currency, HoverCardRowBuilder.AgentRows(week.RankedWithTokens.Select(t =>
+                            (t.Agent, copy.GetValueOrDefault(t.Agent) ?? AgentColors.Label(t.Agent), t.Cost,
+                                t.Tokens)))));
+            }
+            Children.Add(cell);
         }
     }
 
@@ -109,14 +202,16 @@ public sealed class MosaicView : Panel
         Width = width;
         Height = MosaicLayout.DefaultHeight;
         ClipToBounds = false;
+        _ = agentLabels;
 
-        foreach (var tile in MosaicLayout.Build(projects, width))
+        var tiles = MosaicLayout.Build(projects, width);
+        for (var i = 0; i < tiles.Count; i++)
         {
-            Children.Add(TileView(tile, currency));
+            Children.Add(TileView(tiles[i], currency, i));
         }
     }
 
-    private static Control TileView(MosaicLayout.Tile tile, string currency)
+    private static Control TileView(MosaicLayout.Tile tile, string currency, int index)
     {
         var color = tile.AgentKey is { } agent
             ? Palette.AgentColor(agent)
@@ -138,6 +233,15 @@ public sealed class MosaicView : Panel
         if (label is not null) shape.Child = label;
 
         ToolTip.SetTip(shape, tile.Tooltip(currency));
+        if (tile.Project is { } project)
+        {
+            var captured = project;
+            shape.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand);
+            HoverLayer.Attach(shape, $"overview:tile:{index}",
+                () => HoverCards.AgentRows(captured.Name, null, captured.Cost, captured.Tokens.Total, currency,
+                    HoverCardRowBuilder.AgentRows(captured.ByAgent.Select(a =>
+                        (a.Agent, a.Label, a.Cost, a.Tokens.Total)))));
+        }
         return shape;
     }
 
@@ -151,7 +255,6 @@ public sealed class MosaicView : Panel
         var fit = MosaicLayout.FitLabel(
             tile.Names, amount, tile.Rect.Width, tile.Rect.Height,
             s => Type.MeasureWidth(s, 11, FontWeight.SemiBold),
-            // Mac：金额用 monospacedDigit 的系统字体（比例字体 + 等宽数字），不是等宽字体。
             s => Type.MeasureWidth(s, 10, FontWeight.Normal));
         if (fit.Name is null) return null;
 

@@ -312,18 +312,18 @@ public static class FamilyReportStatus
             FamilyReportStatusStateKind.MissingToken => L10n.TrL(lang, "settings.family.status.missing_token"),
             FamilyReportStatusStateKind.Failed => L10n.TrL(lang, "settings.family.status.failed", state.Error ?? ""),
             FamilyReportStatusStateKind.LastReported =>
-                L10n.TrL(lang, "settings.family.status.last_reported", Relative(state.Date!.Value, now ?? DateTimeOffset.UtcNow, lang)),
+                L10n.TrL(lang, "settings.family.status.last_reported", RelativeText(state.Date!.Value, now ?? DateTimeOffset.UtcNow, lang)),
             _ => L10n.TrL(lang, "settings.family.status.never"),
         };
     }
 
     /// <summary>相对时间（"5 minutes ago"），近似 Swift 的 RelativeDateTimeFormatter(.full)。</summary>
-    private static string Relative(DateTimeOffset date, DateTimeOffset now, string lang)
+    public static string RelativeText(DateTimeOffset date, DateTimeOffset now, string? language)
     {
+        var lang = language ?? L10n.CurrentLanguage;
         var delta = now - date;
         var future = delta < TimeSpan.Zero;
         var span = future ? -delta : delta;
-        var culture = Fmt.CultureFor(lang);
         if (span.TotalSeconds < 60)
         {
             return lang.StartsWith("zh", StringComparison.Ordinal) ? (future ? "片刻后" : "刚刚")

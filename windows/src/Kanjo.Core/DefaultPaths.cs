@@ -55,8 +55,7 @@ public static class DefaultPaths
     }
 
     /// <summary>仓库里和 ui/ 并排的 cli/ 目录（仅 Debug）。</summary>
-    public static string? RepoCliDirectory =>
-        RepoRoot is { } root ? Path.Combine(root, "cli") : null;
+    public static string? RepoCliDirectory =>        RepoRoot is { } root ? Path.Combine(root, "cli") : null;
 
     /// <summary>随包附带的内置 CLI（`&lt;appdir&gt;\cli`）。</summary>
     public static string? BundledCliDirectory
@@ -141,6 +140,15 @@ public static class DefaultPaths
         }
         return null;
     }
+
+    /// <summary>设置里的命令留空时用的默认导出命令：Windows 是 `py -3 -m kanjo export`，开发（macOS）是 `python3 -m kanjo export`。</summary>
+    public static string DefaultCliCommand => OperatingSystem.IsWindows()
+        ? "py -3 -m kanjo export"
+        : "python3 -m kanjo export";
+
+    /// <summary>`--flag value` 取参数（同 <see cref="FlagValue"/>）。</summary>
+    public static string? Flag(string flag, IReadOnlyList<string>? arguments = null) =>
+        FlagValue(flag, arguments);
 
     public static string ExpandTilde(string path)
     {

@@ -40,6 +40,9 @@ C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 | `SettingsStoreTests.cs` | JSON 设置文件的读写、类型容错、suite 隔离、时间戳 |
 | `CliRunnerTests.cs` | 进程直连（不经 shell）、参数 / 工作目录 / 环境变量、stdin 关闭、超时杀进程、空输出、CLI 目录与 Python 查找顺序 |
 | `TrayTooltipTests.cs` | Windows 托盘 tooltip（`Kanjo · $3,057 · 30d`）与状态 |
+| `DevRouteTests.cs` | `--route` 解析（含需要报告才能解析的取值、索引越界、订阅编辑路由、悬停锚点） |
+| `DiskSelectionTests.cs` | 磁盘可选条目、选择集与失效条目、清理计划分组（整条目 vs 子路径、最深的条目优先、报告顺序、Other 分组）、`DiskReportState` 状态机、Older than 档位与 caption、扫描时间文案、`DiskStore` 文件源拒绝清理 |
+| `SettingsValidationTests.cs` | 订阅编辑表单校验与字段计算（计划必填 / 价格必填 / 非法价格 / 已知档位用标价 / 覆盖价 / 自定义档位 / 续费日越界）、菜单标题、选择回填、`config` 参数顺序、agent 列表顺序、家庭范围文案、额度重置取值、Windows 专属文案覆盖（三语）、凭据存储假实现与 `ReportActivity` |
 
 ## 跳过的 Mac 专属用例
 
@@ -58,6 +61,6 @@ C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 | `SnapshotRecordTests.testDeviceIDIsStableAndPersisted` | 依赖 UserDefaults suite；设备 ID 属于批次 3 的云端同步。 |
 | `SnapshotRecordTests.testMobileSnapshotDecodesWithoutFullExportFields` | **未跳过**：等价用例是 `DecodingTests.TestSlimMobileSessionsDecode` + `TestMissingSubscriptionsDecodesAsNil`（手机快照的字段缺失语义已在解码层覆盖）。 |
 | `SnapshotRecordTests.testSplitPayload*`（4 条） | CloudKit 分片上传，Windows 不做 iCloud。 |
-| `FamilyTokenKeychain`（`MockFamilyTokenStorage` 那部分） | macOS Keychain；Windows 版用凭据管理器（批次 3），这一批不涉及。`FamilyReportScheduleTests.testTokenStorageMock` 因此跳过。 |
+| `FamilyTokenKeychain`（`MockFamilyTokenStorage` 那部分） | macOS Keychain；Windows 版用凭据管理器（`WindowsCredentialFamilyTokenStorage`，非 Windows 开发运行退回内存实现）。等价的假实现用例是 `SettingsValidationTests.TestInMemoryTokenStorage` / `TestCredentialStorageFallsBackOffWindows`。 |
 
 `KanjoTestCase.swift` 没有测试用例；对应的是 `KanjoTestCase.cs`（每个测试强制英文 + 隔离内存设置）。

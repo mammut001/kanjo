@@ -26,7 +26,7 @@ public sealed class TrayController : IDisposable
         _menu = new NativeMenu();
         _menu.Items.Add(MenuItem(L10n.Tr("menu.back_to_overview"), () => ShowPanel()));
         _menu.Items.Add(MenuItem(L10n.Tr("menu.refresh_now"), () => RefreshNow()));
-        _menu.Items.Add(MenuItem(L10n.Tr("menu.settings"), () => ShowPanel(Route.Settings)));
+        _menu.Items.Add(MenuItem(L10n.Tr("menu.settings"), () => ShowPanel(AppRoute.Settings)));
         _menu.Items.Add(new NativeMenuItemSeparator());
         _menu.Items.Add(MenuItem(L10n.Tr("menu.quit"), Quit));
 
@@ -72,11 +72,11 @@ public sealed class TrayController : IDisposable
         ShowPanel();
     }
 
-    private void ShowPanel(Route route = Route.Overview)
+    private void ShowPanel(AppRoute? route = null)
     {
         if (_panel is null)
         {
-            _panel = new PanelWindow(_services);
+            _panel = new PanelWindow(_services, route: route);
             _panel.Show();
             return;
         }

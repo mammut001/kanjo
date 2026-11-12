@@ -36,6 +36,16 @@ public static class Palette
 
     // MARK: - 文字与底色
 
+    public static IBrush ForegroundBrush => Foreground;
+
+    /// <summary>前景色的原始 Color（自绘图表要按 alpha 调淡）。</summary>
+    public static Color ForegroundColor => ((ISolidColorBrush)Foreground).Color;
+
+    /// <summary>强调色（链接 / 可点文字 / 拖拽高亮）。</summary>
+    public static Color AccentColor => IsDark
+        ? Color.FromRgb(0x6F, 0xA8, 0xFF)
+        : Color.FromRgb(0x1F, 0x6F, 0xEB);
+
     /// <summary>系统语义前景色（Mac 是 .primary）。</summary>
     public static IBrush Foreground => IsDark
         ? new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF5))
@@ -62,6 +72,27 @@ public static class Palette
     public static IBrush RowHover => new SolidColorBrush(IsDark
         ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)
         : Color.FromArgb(0x0F, 0x00, 0x00, 0x00));
+
+    /// <summary>行上的小按钮按下态（RowIconButton 的 hover 底色）。</summary>
+    public static IBrush RowPressed => new SolidColorBrush(IsDark
+        ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)
+        : Color.FromArgb(0x14, 0x00, 0x00, 0x00));
+
+    /// <summary>悬停卡 / 弹出层的底色（实底，不透明，免得透出后面的内容）。</summary>
+    public static IBrush CardBackground => new SolidColorBrush(IsDark
+        ? Color.FromRgb(0x2C, 0x2C, 0x2F)
+        : Color.FromRgb(0xFB, 0xFB, 0xFC));
+
+    public static IBrush CardBorder => new SolidColorBrush(IsDark
+        ? Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)
+        : Color.FromArgb(0x1A, 0x00, 0x00, 0x00));
+
+    public static BoxShadows CardShadow => IsDark
+        ? BoxShadows.Parse("0 4 10 0 #40000000")
+        : BoxShadows.Parse("0 4 10 0 #29000000");
+
+    /// <summary>弹出层背后的遮罩（清理确认 / 计划卡）。</summary>
+    public static IBrush Scrim => new SolidColorBrush(Colors.Black, 0.28);
 
     public static IBrush Separator => new SolidColorBrush(IsDark
         ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)

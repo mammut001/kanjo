@@ -95,12 +95,16 @@ public sealed class KanjoApplication : Application
 
         if (args.Contains("--window"))
         {
-            desktop.MainWindow = new PanelWindow(services, taskbar: true)
+            // 开发预览：可以带 --route 直接打开某一页（和 Mac 的 --window --route 一致）。
+            var rawRoute = DefaultPaths.FlagValue("--route", args);
+            var route = DevRoutes.Resolve(rawRoute, services.Report) ?? AppRoute.Overview;
+            desktop.MainWindow = new PanelWindow(services, taskbar: true, route: route)
             {
                 Title = "Kanjo",
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
             };
             desktop.MainWindow.Show();
+            ShortDate.ReferenceNow = null;
         }
         else
         {
