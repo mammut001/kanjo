@@ -6,6 +6,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-12
+
+### Added
+
+- **Distinct model count in the public summary.** Each period of `kanjo export --public-summary` now lists every model used (`models_used`), so a website can show how many models you used. `top_models` stays capped at 8.
+- **App Store preparation for the iOS app.** Encryption export compliance is declared in the build settings, and `ios/APP_STORE.md` holds the submission checklist, store text, privacy answers and review notes.
+
+### Fixed
+
+- **Publishing retries a failed push.** If a publish committed but the push failed (for example a git credentials problem), the next run reported "unchanged" and the commit stayed on the Mac until the numbers changed. It now pushes the pending commit. The push retry also works when the website repository has other uncommitted changes.
+
 ## [0.5.1] - 2026-11-12
 
 ### Added
