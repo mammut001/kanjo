@@ -546,7 +546,7 @@ public sealed class OverviewView : ScrollViewer
         return section;
     }
 
-    /// <summary>模型行：色点 + 模型名 + [estimated] …… tokens + 金额（右侧两列）。</summary>
+    /// <summary>模型行：色点 + 模型名 + [estimated] …… tokens + 金额（右侧相邻，间距 6）。</summary>
     private static Control ModelRow(ModelCost model, string currency)
     {
         var left = Ui.H(6);
@@ -557,16 +557,17 @@ public sealed class OverviewView : ScrollViewer
             left.Children.Add(Badge(L10n.Tr("project.estimated"), warn: true, L10n.Tr("project.estimated_help")));
         }
 
+        // Mac：Spacer(minLength: 8) 之后 tokens 与 cost 紧挨着，间距 6。
         var tokens = Ui.Text(Fmt.Tokens(model.Tokens.Total), 11, FontWeight.Medium);
         tokens.TextAlignment = TextAlignment.Right;
-        var cost = Ui.Text(Fmt.Money(model.Cost, currency), 10.5, null, Palette.Secondary);
+        var cost = Ui.Text(Fmt.Money(model.Cost, currency), 10.5, null, Palette.Secondary)
+            .WithMargin(6, 0, 0, 0);
         cost.TextAlignment = TextAlignment.Right;
-        cost.MinWidth = 56;
 
         var row = Ui.Columns(
             (left, new GridLength(1, GridUnitType.Star)),
             (tokens, GridLength.Auto),
-            (cost.WithMargin(8, 0, 0, 0), GridLength.Auto));
+            (cost, GridLength.Auto));
         row.Margin = new Thickness(ContentInset, 6, ContentInset, 6);
         ToolTip.SetTip(row, TooltipBuilder.ModelTooltip(model.Model, model.Agent, model.Cost, model.Tokens.Total, currency));
         return row;
@@ -624,7 +625,9 @@ public sealed class OverviewView : ScrollViewer
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
-            Margin = new Thickness(ContentInset, 0, ContentInset, 0),
+            // Mac：ReconciliationView 直接在 .padding(.horizontal, listInset) 里，
+            // 外层已经给了 ContentInset，这里不能再加，否则整行会缩进。
+            Margin = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         if (rec.Ok)

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -57,17 +59,50 @@ public static class Icons
         "M9.6,4.1 A4.3,4.3 0 1 1 6,1.7 M6,1.7 L6,-0.4 M6,1.7 L8,1.7",
         size, brush, filled: false);
 
-    /// <summary>internaldrive：圆角矩形 + 一条缝。</summary>
+    /// <summary>internaldrive：略带梯形的驱动器外壳 + 一条槽线 + 底部散热小格。</summary>
     public static Control Disk(double size = 12, IBrush? brush = null) => Glyph(
-        "M1.6,4.2 L10.4,4.2 L10.4,9.4 L1.6,9.4 Z M1.6,4.2 L3.1,1.9 L8.9,1.9 L10.4,4.2 M7.4,7 L9.2,7",
+        "M2.4,1.9 L9.6,1.9 A1.25,1.25 0 0 1 10.85,3.15 L10.85,8.85 A1.25,1.25 0 0 1 9.6,10.1 " +
+        "L2.4,10.1 A1.25,1.25 0 0 1 1.15,8.85 L1.15,3.15 A1.25,1.25 0 0 1 2.4,1.9 Z " +
+        "M1.15,7.15 L10.85,7.15 " +
+        "M3.5,8.6 L3.5,8.65 M4.7,8.6 L4.7,8.65 M5.9,8.6 L5.9,8.65 M7.1,8.6 L7.1,8.65 M8.3,8.6 L8.3,8.65",
         size, brush, filled: false);
 
-    /// <summary>gearshape（简化：外圈齿 + 中孔）。</summary>
+    /// <summary>gearshape：8 齿齿轮（齿尖与齿根都带圆角）+ 中心孔。</summary>
     public static Control Gear(double size = 12, IBrush? brush = null) => Glyph(
-        "M6,3.6 A2.4,2.4 0 1 0 6,8.4 A2.4,2.4 0 1 0 6,3.6 Z " +
-        "M6,0.9 L6,2.1 M6,9.9 L6,11.1 M0.9,6 L2.1,6 M9.9,6 L11.1,6 " +
-        "M2.4,2.4 L3.2,3.2 M8.8,8.8 L9.6,9.6 M9.6,2.4 L8.8,3.2 M3.2,8.8 L2.4,9.6",
-        size, brush, filled: false);
+        GearPath(8, 4.55, 5.55, 1.75), size, brush, filled: false);
+
+    /// <summary>生成 n 齿齿轮的轮廓（外半径 ro、齿根半径 ri、中心孔 rHole），坐标在 12×12 空间里。</summary>
+    private static string GearPath(int teeth, double rootRadius, double outerRadius, double holeRadius)
+    {
+        const double cx = 6, cy = 6;
+        var sb = new StringBuilder();
+        var step = 2 * Math.PI / teeth;
+        // 每个齿占一个 step：0.22 齿顶、0.22 齿根、其余过渡。
+        var topHalf = step * 0.20;
+        var rootHalf = step * 0.24;
+        for (var i = 0; i < teeth; i++)
+        {
+            var center = i * step - Math.PI / 2;
+            Append(sb, center - topHalf, outerRadius, first: i == 0 && sb.Length == 0);
+            Append(sb, center + topHalf, outerRadius);
+            Append(sb, center + step / 2 - rootHalf, rootRadius);
+            Append(sb, center + step / 2 + rootHalf, rootRadius);
+        }
+        sb.Append(" Z ");
+        // 中心孔（反向绕，形成孔洞）。
+        sb.Append($"M{cx - holeRadius:0.###},{cy:0.###} A{holeRadius:0.###},{holeRadius:0.###} 0 1 0 " +
+                  $"{cx + holeRadius:0.###},{cy:0.###} A{holeRadius:0.###},{holeRadius:0.###} 0 1 0 " +
+                  $"{cx - holeRadius:0.###},{cy:0.###} Z");
+        return sb.ToString();
+
+        void Append(StringBuilder b, double angle, double r, bool first = false)
+        {
+            var x = cx + r * Math.Cos(angle);
+            var y = cy + r * Math.Sin(angle);
+            if (first) b.Append($"M{x:0.###},{y:0.###} ");
+            else b.Append($"L{x:0.###},{y:0.###} ");
+        }
+    }
 
     /// <summary>power。</summary>
     public static Control Power(double size = 12, IBrush? brush = null) => Glyph(

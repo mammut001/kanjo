@@ -48,6 +48,9 @@ public sealed class PanelView : Grid
         Background = Palette.PanelBackground;
 
         _statusText = Ui.Text("", 11, null, Palette.Secondary);
+        // HStack 里 TextBlock 默认会被拉满 26 高的图标行高，文字就会顶到上边缘；
+        // 显式垂直居中，才能和刷新图标对齐。
+        _statusText.VerticalAlignment = VerticalAlignment.Center;
 
         _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
         {
@@ -126,22 +129,36 @@ public sealed class PanelView : Grid
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
     private Control BuildFooter()
     {
-        var bar = Ui.H(2);
-        bar.Margin = new Thickness(5, 3, 5, 3);
-        bar.Children.Add(_refreshButton);
-        bar.Children.Add(_statusText);
-        bar.Children.Add(Ui.Spacer());
-        bar.Children.Add(Ui.IconButton(Icons.Disk(12, Palette.Secondary), () => Navigate(Route.Disk),
-            L10n.Tr("menu.disk"), active: Route == Route.Disk));
-        bar.Children.Add(Ui.IconButton(Icons.Gear(12, Palette.Secondary), () => Navigate(Route.Settings),
-            L10n.Tr("menu.settings"), active: Route == Route.Settings));
-        bar.Children.Add(Ui.IconButton(Icons.Power(12, Palette.Secondary), Quit, L10n.Tr("menu.quit")));
+        // HStack(spacing: 2)：左 ⟳ + 状态，Spacer 把三个图标顶到最右边。
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
+
+        var left = Ui.H(2);
+        left.Children.Add(_refreshButton);
+        left.Children.Add(_statusText);
+        left.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(left, 0);
+        bar.Children.Add(left);
+
+        Control IconCell(Control glyph, Action onClick, string tip, bool active, int column)
+        {
+            var button = Ui.IconButton(glyph, onClick, tip, active);
+            button.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(button, column);
+            return button;
+        }
+
+        bar.Children.Add(IconCell(Icons.Disk(12, Palette.Secondary), () => Navigate(Route.Disk),
+            L10n.Tr("menu.disk"), Route == Route.Disk, 2));
+        bar.Children.Add(IconCell(Icons.Gear(12, Palette.Secondary), () => Navigate(Route.Settings),
+            L10n.Tr("menu.settings"), Route == Route.Settings, 3));
+        bar.Children.Add(IconCell(Icons.Power(12, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
 
         return new Border
         {
             Child = bar,
             CornerRadius = new CornerRadius(12),
             Background = Palette.GroupFill,
+            Padding = new Thickness(5, 1, 5, 1),
             Margin = new Thickness(8, 4, 8, 8),
         };
     }

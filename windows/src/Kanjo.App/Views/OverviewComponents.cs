@@ -151,7 +151,8 @@ public sealed class MosaicView : Panel
         var fit = MosaicLayout.FitLabel(
             tile.Names, amount, tile.Rect.Width, tile.Rect.Height,
             s => Type.MeasureWidth(s, 11, FontWeight.SemiBold),
-            s => Type.MeasureWidth(s, 10, FontWeight.Normal, Type.Mono));
+            // Mac：金额用 monospacedDigit 的系统字体（比例字体 + 等宽数字），不是等宽字体。
+            s => Type.MeasureWidth(s, 10, FontWeight.Normal));
         if (fit.Name is null) return null;
 
         var box = new StackPanel
@@ -165,7 +166,7 @@ public sealed class MosaicView : Panel
         box.Children.Add(Ui.Text(fit.Name, 11, FontWeight.SemiBold, Palette.OnTile));
         if (fit.ShowAmount)
         {
-            box.Children.Add(Ui.Text(amount, 10, FontWeight.Normal, Palette.OnTile, mono: true));
+            box.Children.Add(Ui.Text(amount, 10, FontWeight.Normal, Palette.OnTile));
         }
         return box;
     }
