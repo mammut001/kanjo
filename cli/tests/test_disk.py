@@ -534,6 +534,31 @@ class DiskTest(unittest.TestCase):
         self.assertIs(expired["cached"], False)
         self.assertNotEqual(expired["scanned_at"], fresh["scanned_at"])
 
+    def test_mtime_tolerance_is_windows_only(self):
+        """The coarse-clock tolerance exists for Windows; POSIX stays exact.
+
+        A root whose mtime sits a few milliseconds past the scan boundary (a clock
+        tick, not an edit) is accepted on Windows and rejected everywhere else.
+        """
+        self.write(os.path.join(self.shell, "f"))
+        self.write(os.path.join(self.logs, "f"))
+        now = time.time()
+        self.report(now)
+        later = now + 0.02
+        os.utime(self.shell, (later, later))
+
+        with mock.patch("kanjo.winsupport.is_windows", return_value=False):
+            self.assertEqual(disk_cache._sig_tolerance(), 0.0)
+            self.assertIs(disk.report(roots=self.roots, now=now + 10)["cached"], False)
+        with mock.patch("kanjo.winsupport.is_windows", return_value=True):
+            self.assertEqual(disk_cache._sig_tolerance(), 0.05)
+            self.assertIs(disk.report(roots=self.roots, now=now + 10)["cached"], True)
+
+        # A real edit past the tolerance still invalidates on Windows.
+        os.utime(self.shell, (now + 1, now + 1))
+        with mock.patch("kanjo.winsupport.is_windows", return_value=True):
+            self.assertIs(disk.report(roots=self.roots, now=now + 2)["cached"], False)
+
     def test_cli_rescan_and_zero_max_age_ignore_cache(self):
         self.write(os.path.join(self.shell, "f"))
         for flags, expected in (((), False), ((), True), (("--rescan",), False),
