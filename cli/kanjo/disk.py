@@ -1161,12 +1161,19 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
             except OSError:
                 if not winsupport.is_windows():
                     raise
-                # A file held open by a running agent: report that file, keep going.
-                locked.append({"id": path, "reason": "move_failed"})
+                # A file held open by a running agent: keep going and move the rest
+                # of the entry. POSIX gives up on the whole entry instead (the raise
+                # above reaches clean()).
+                locked.append(path)
                 continue
         moved.append(path)
         freed += nbytes
-    return moved, freed, None, file_skips + locked
+    if locked:
+        # ``skipped[].id`` is an entry id (CONTRACT.md section 10), and the POSIX
+        # branch reports this same row when a move fails, so the shape does not
+        # depend on the platform. The files themselves are not part of the JSON.
+        file_skips.append({"id": entry["id"], "reason": "move_failed"})
+    return moved, freed, None, file_skips
 
 
 def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):

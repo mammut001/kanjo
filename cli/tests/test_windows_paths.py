@@ -442,11 +442,9 @@ class RecycleBinTest(unittest.TestCase):
         now = time.time()
         os.utime(old, (now - 10 * 86400, now - 10 * 86400))
         os.utime(new, (now - 6 * 86400, now - 6 * 86400))
-        locked_dir = os.path.join(self.tmp, "keep")
-        os.makedirs(locked_dir, exist_ok=True)
         backend = FakeRecycleBackend(fail_for=[])
         # A per-file clean on Windows goes through _relocate one file at a time;
-        # the first failure is reported for that file and the rest still move.
+        # the locked file is reported and the rest still move.
         calls = []
         real_relocate = disk._relocate
 
@@ -462,7 +460,8 @@ class RecycleBinTest(unittest.TestCase):
             result = disk.clean(["claude:debug"], roots=self.roots, yes=True, older_than_days=5,
                                 now=now, ledger=ledger.Ledger(directory=self.data))
         self.assertTrue(os.path.exists(old))
-        self.assertIn({"id": old, "reason": "move_failed"}, result["skipped"])
+        # skipped ids are entry ids, exactly as on POSIX (CONTRACT.md section 10).
+        self.assertEqual(result["skipped"], [{"id": "claude:debug", "reason": "move_failed"}])
         self.assertEqual(set(calls), {old, new})
         self.assertEqual(result["moved"], [new])
 

@@ -580,13 +580,39 @@ class SubscriptionTest(unittest.TestCase):
             claude = doc["subscriptions"]["claude"]
             self.assertEqual(claude["plan"], "max_5x")
             self.assertEqual(claude["source"], "detected")
-            self.assertEqual(claude["cycle_start"], "2026-04-09T16:00:00Z")
-            self.assertEqual(claude["cycle_end"], "2026-05-09T16:00:00Z")
+            # The anchored cycle's exact instants depend on the named zone (see
+            # test_export_subscriptions_use_the_named_zone); without tzdata it falls
+            # back to the host offset. The shape holds either way.
+            self.assertEqual(claude["cycle_source"], "subscription_date")
+            self.assertEqual(claude["anchor_day"], 10)
+            self.assertRegex(claude["cycle_start"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+            self.assertRegex(claude["cycle_end"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+            self.assertLess(claude["cycle_start"], claude["cycle_end"])
+            # The rolling 30-day window ends at "now", so it needs no zone data.
             codex = doc["subscriptions"]["codex"]
             self.assertEqual(codex["plan"], "plus")
             self.assertEqual(codex["cycle_start"], "2026-03-10T17:00:00Z")
             self.assertEqual(codex["cycle_end"], "2026-04-09T17:00:00Z")
             self.assertNotIn("antigravity", doc["subscriptions"])
+        finally:
+            fs.cleanup()
+
+    @unittest.skipUnless(has_tz_database("Asia/Shanghai"),
+                         "needs the IANA tz database (tzdata on Windows)")
+    def test_export_subscriptions_use_the_named_zone(self):
+        fs = standard_fs()
+        try:
+            now = datetime(2026, 4, 9, 17, tzinfo=timezone.utc)
+            self.write_claude(created="2026-01-10T08:00:00Z")
+            self.write_codex(plan="plus", fetched=now.timestamp())
+            env = {"KANJO_CLAUDE_CONFIG": self.claude_path, "KANJO_TOKEI_DIR": self.dir, "TZ": "Asia/Shanghai"}
+            with mock.patch.dict(os.environ, env):
+                doc = build_export(dirs=FIXTURE_DIRS, fs_root=fs.root, home=ALICE, now=now, tokei_dir=self.dir)
+            # 2026-04-09 17:00 UTC is 2026-04-10 01:00 in Shanghai, so the anchored
+            # cycle starts at the 10th's midnight there: 16:00Z the day before.
+            claude = doc["subscriptions"]["claude"]
+            self.assertEqual(claude["cycle_start"], "2026-04-09T16:00:00Z")
+            self.assertEqual(claude["cycle_end"], "2026-05-09T16:00:00Z")
         finally:
             fs.cleanup()
 
