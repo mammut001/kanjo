@@ -78,6 +78,19 @@ public static class Appearance
     private static void Set(AppearanceChoice choice)
     {
         Current = choice;
+
+        // 只有 UI 线程能动 Application（RequestedThemeVariant 和 Resources 都有线程校验）。
+        // **而且必须等到 UI 线程再去取 Application.Current**：headless 单测里每一次 Dispatch
+        // 都是一个新建的 Application，而测试线程上 AvaloniaLocator 还能看到上一轮那个——
+        // 它已经拆掉了，但它创建的窗口未必关了。往那个 Application 写全局资源就是往那些
+        // 正在拆除的窗口广播「资源变了」，遍历子节点时表被改掉 → CI 上偶发的
+        // ArgumentOutOfRangeException（AvaloniaList.get_Item ← NotifyChildResourcesChanged）。
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => Set(choice));
+            return;
+        }
+
         var app = Application.Current;
         if (app is null)
         {
@@ -88,25 +101,28 @@ public static class Appearance
             return;
         }
 
-        void ApplyNow()
+        var variant = choice switch
         {
-            app.RequestedThemeVariant = choice switch
-            {
-                AppearanceChoice.Dark => ThemeVariant.Dark,
-                AppearanceChoice.Light => ThemeVariant.Light,
-                // 跟随 Windows：Application 的 Default 会解析成系统的浅 / 深。
-                _ => ThemeVariant.Default,
-            };
-            Palette.IsDark = IsDark(choice, app);
-            // 禁用态资源是按色板取值的画笔，换外观后必须重写（否则深色下禁用下拉是浅色底）。
-            AppStyles.RefreshPaletteResources(app);
-            Changed?.Invoke();
-            NotifyPanels();
-        }
+            AppearanceChoice.Dark => ThemeVariant.Dark,
+            AppearanceChoice.Light => ThemeVariant.Light,
+            // 跟随 Windows：Application 的 Default 会解析成系统的浅 / 深。
+            _ => ThemeVariant.Default,
+        };
+        var dark = IsDark(choice, app);
+        var variantChanged = app.RequestedThemeVariant != variant;
 
-        // Application.RequestedThemeVariant 有线程校验（见 AppSetup.ApplyAppearance 的注释）。
-        if (Dispatcher.UIThread.CheckAccess()) ApplyNow();
-        else Dispatcher.UIThread.Post(ApplyNow);
+        // 色板先切：下面重写的资源画笔是按它取值的。
+        Palette.IsDark = dark;
+
+        // 顺序很关键：**先**写全局资源、**再**换主题变体。
+        // 反过来的话，资源变化是在树已经因为变体切换重新解析资源的中途发生的，重入面更大。
+        // RefreshPaletteResources 自己会跳过「同一套色板已经写过」的情况，
+        // 所以同一外观重复设置不会再翻一遍整棵树。
+        AppStyles.RefreshPaletteResources(app);
+        if (variantChanged) app.RequestedThemeVariant = variant;
+
+        Changed?.Invoke();
+        NotifyPanels();
     }
 
     /// <summary>这个外观是不是深色。System 读平台设置（拿不到就按浅色）。</summary>

@@ -157,8 +157,7 @@ public sealed class UpdateBannerTests : KanjoTestCase
     /// </summary>
     private static Window Show(Control page)
     {
-        var window = new Window { Width = Metrics.PanelWidth, Height = Metrics.PanelHeight, Content = page };
-        window.Show();
+        var window = TestWindows.Show(page, Metrics.PanelWidth, Metrics.PanelHeight);
         for (var i = 0; i < 3; i++)
         {
             window.UpdateLayout();
