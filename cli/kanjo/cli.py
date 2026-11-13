@@ -535,6 +535,7 @@ def cmd_usage(args) -> int:
     view_val = ViewMode(getattr(args, "view", "projects"))
     interval = getattr(args, "interval", 60.0)
     once = getattr(args, "once", False)
+    mouse = not getattr(args, "no_mouse", False)
 
     is_static = once or (not sys.stdout.isatty()) or (not HAVE_CURSES)
 
@@ -646,6 +647,7 @@ def cmd_usage(args) -> int:
             data_path=data_path,
             use_cache=use_cache,
             lang=lang,
+            mouse=mouse,
         )
     except KeyboardInterrupt:
         return 0
@@ -799,6 +801,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="initial view (default: projects)")
         up.add_argument("--lang", choices=("auto", "en", "zh"), default="auto",
                         help="UI language: auto, en, zh (default: auto)")
+        up.add_argument("--no-mouse", action="store_true",
+                        help="disable mouse support, so the terminal can select text as usual")
         up.add_argument("--data", metavar="PATH", help=argparse.SUPPRESS)
         common(up)
         up.set_defaults(func=cmd_usage)

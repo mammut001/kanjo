@@ -49,6 +49,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "terminal_too_small": "Terminal too small (need >= 60x15, current: {width}x{height})",
         "more": "+{count} more",
         "filter_prompt": "Filter: {query}_ (Enter to apply, Esc to cancel)",
+        "time.today": "Today {time}",
 
         # time ranges
         "range.all": "All",
@@ -124,6 +125,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "help.meters.desc": "M or F7 toggles expanded meters (full quota detail, smaller table)",
         "help.refresh.title": "Refresh",
         "help.refresh.desc": "r or F5 to refresh now (in-process re-scan)",
+        "help.mouse.title": "Mouse",
+        "help.mouse.desc": "Click tabs, F-keys, rows or headers; wheel scrolls; --no-mouse disables",
         "help.quit.title": "Quit",
         "help.quit.desc": "q or F10 to exit cleanly",
 
@@ -178,6 +181,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "terminal_too_small": "终端窗口太小（至少需要 60x15，当前 {width}x{height}）",
         "more": "另有 {count} 项",
         "filter_prompt": "筛选：{query}_（Enter 应用，Esc 取消）",
+        "time.today": "今天 {time}",
 
         # time ranges
         "range.all": "全部",
@@ -197,7 +201,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         # table columns
         "col.project": "项目",
         "col.cost": "花费",
-        "col.tokens": "TOKEN",
+        "col.tokens": "Token",
         "col.sessions": "会话",
         "col.agents": "AGENT",
         "col.last_active": "最后活跃",
@@ -218,7 +222,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "row.excluded": "已排除",
         "row.parse_failed": "解析失败",
         "row.total": "总计",
-        "total.tokens": "{value} TOKEN",
+        "total.tokens": "{value} Token",
         "total.sessions": "{count} 次会话",
         "total.projects": "{count} 个项目",
         "bool.yes": "是",
@@ -253,6 +257,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "help.meters.desc": "M 或 F7 展开额度仪表（完整额度详情，表格更小）",
         "help.refresh.title": "刷新",
         "help.refresh.desc": "r 或 F5 立即刷新（进程内重新扫描）",
+        "help.mouse.title": "鼠标",
+        "help.mouse.desc": "点击范围标签、F 键、行或表头；滚轮滚动；--no-mouse 可关闭",
         "help.quit.title": "退出",
         "help.quit.desc": "q 或 F10 退出",
 
@@ -266,7 +272,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "meter.per_month": "{price}/月",
         "meter.window_ended": "窗口已结束",
         "meter.reset.in_m": "{minutes} 分钟后重置",
-        "meter.reset.at": "{time} 重置",
+        "meter.reset.at": "今天 {time} 重置",
         "meter.reset.in_hm": "{hours} 小时 {minutes} 分后重置",
         "meter.reset.in_dh": "{days} 天 {hours} 小时后重置",
         "meter.quota": "额度",
@@ -293,7 +299,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "detail.title": "项目：{name}",
         "detail.remote": "远程：{remote}",
         "detail.paths": "路径：{paths}",
-        "detail.stats": "花费：{cost}  ·  TOKEN：{tokens}  ·  会话：{sessions}",
+        "detail.stats": "花费：{cost}  ·  Token：{tokens}  ·  会话：{sessions}",
         "detail.sparkline": "30 天走势：{spark}  ({peak})",
         "detail.peak": "单日峰值 {money}",
         "detail.by_agent": "按 Agent：",

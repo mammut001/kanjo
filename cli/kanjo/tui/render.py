@@ -16,6 +16,12 @@ from .model import (
 )
 from .i18n import t, normalize_lang
 
+# A clickable region recorded by the renderer: ``(y, x0, x1, action)`` with an
+# inclusive x range. ``action`` is ``range:<value>``, ``fkey:<name>``,
+# ``row:<index>`` or ``sort:<column>``; the terminal layer maps it to the same
+# behaviour as the keyboard.
+HitBox = Tuple[int, int, int, str]
+
 # Text / Display Width Helpers
 
 def char_width(ch: str) -> int:
@@ -60,26 +66,111 @@ def truncate_str(s: str, max_width: int, ellipsis: str = "…") -> str:
     return "".join(res) + ellipsis
 
 
+def _is_cjk(ch: str) -> bool:
+    """True for characters that may start a new line without a space (CJK/wide)."""
+    if not ch:
+        return False
+    if unicodedata.east_asian_width(ch) in ("W", "F"):
+        return True
+    code = ord(ch)
+    return (
+        0x3040 <= code <= 0x30FF      # kana
+        or 0x3400 <= code <= 0x9FFF   # CJK unified ideographs
+        or 0xF900 <= code <= 0xFAFF   # compatibility ideographs
+    )
+
+
 def wrap_display(text: str, width: int) -> List[str]:
-    """Wrap text by terminal display width (CJK characters count as 2)."""
+    """Wrap text by terminal display width (CJK characters count as 2).
+
+    Latin words are kept intact and break only at whitespace (a word longer
+    than the line is broken as a last resort). CJK text may break between any
+    two characters.
+    """
     if width <= 0:
         return [""]
+
+    # Split into words, single spaces and individual CJK characters.
+    tokens: List[str] = []
+    buf = ""
+    for ch in text:
+        if ch == " ":
+            if buf:
+                tokens.append(buf)
+                buf = ""
+            tokens.append(" ")
+        elif _is_cjk(ch):
+            if buf:
+                tokens.append(buf)
+                buf = ""
+            tokens.append(ch)
+        else:
+            buf += ch
+    if buf:
+        tokens.append(buf)
+
     lines: List[str] = []
     cur = ""
     cur_w = 0
-    for ch in text:
-        cw = char_width(ch)
-        if cur and cur_w + cw > width:
-            lines.append(cur)
-            cur = ""
-            cur_w = 0
-            if ch == " ":
-                continue
-        cur += ch
-        cur_w += cw
+    pending_space = False
+
+    def flush() -> None:
+        nonlocal cur, cur_w, pending_space
+        lines.append(cur.rstrip())
+        cur = ""
+        cur_w = 0
+        pending_space = False
+
+    for tok in tokens:
+        if tok == " ":
+            if cur:
+                pending_space = True
+            continue
+        tw = str_width(tok)
+        space_w = 1 if (cur and pending_space) else 0
+        if cur and cur_w + space_w + tw > width:
+            flush()
+        if not cur and pending_space:
+            pending_space = False
+        if tw <= width:
+            if cur and pending_space:
+                cur += " "
+                cur_w += 1
+            cur += tok
+            cur_w += tw
+            pending_space = False
+            continue
+        # Very long word: break it by display width.
+        for ch in tok:
+            cw = char_width(ch)
+            if cur and cur_w + cw > width:
+                flush()
+            cur += ch
+            cur_w += cw
+
     if cur or not lines:
         lines.append(cur)
     return lines
+
+
+def hit_box_at(hit_boxes: List[HitBox], y: int, x: int) -> Optional[str]:
+    """Return the action of the region containing ``(y, x)``, if any.
+
+    Later boxes win, so a region drawn on top of another one (an overlay row,
+    a re-drawn tab) takes precedence.
+    """
+    for box_y, x0, x1, action in reversed(hit_boxes):
+        if box_y == y and x0 <= x <= x1:
+            return action
+    return None
+
+
+def _add_hit_box(hit_boxes: List[HitBox], y: int, x0: int, x1: int, action: str,
+                  width: int) -> None:
+    """Record a clickable region, clipped to the canvas and never inverted."""
+    if y < 0 or x1 < x0:
+        return
+    hit_boxes.append((y, max(0, x0), min(width - 1, x1), action))
 
 
 def pad_str(s: str, width: int, align: str = "left") -> str:
@@ -502,17 +593,23 @@ def render_ui(
     day_rows: Optional[List[DayRowViewModel]] = None,
     detail_vm: Optional[ProjectDetailViewModel] = None,
     static_mode: bool = False,
-) -> None:
-    """Render the full TUI layout onto canvas."""
+) -> List[HitBox]:
+    """Render the full TUI layout onto canvas.
+
+    Returns the clickable regions (see :data:`HitBox`) so the terminal layer
+    can turn mouse events into the same actions as the keyboard, and so the
+    mapping is testable without a real terminal.
+    """
     width = canvas.width
     height = canvas.height
     lang = normalize_lang(state.lang)
+    hit_boxes: List[HitBox] = []
 
     # 1. Terminal too small check (< 60 cols or < 15 rows)
     if width < 60 or height < 15:
         msg = t("terminal_too_small", state.lang, width=width, height=height)
         canvas.draw_text(0, 0, truncate_str(msg, width), Style(bold=True, fg="yellow"))
-        return
+        return hit_boxes
 
     if filtered is None:
         # Immediate Loading screen
@@ -524,7 +621,10 @@ def render_ui(
             is_active = (state.time_range == r_val)
             tab_str = f" {t('range.' + r_val.value, state.lang)} "
             tab_style = _active_tab_style(state) if is_active else Style()
+            tab_start = cur_x
             cur_x = canvas.draw_text(cur_x, 0, tab_str, tab_style)
+            _add_hit_box(hit_boxes, 0, tab_start, cur_x - 1,
+                         "range:" + r_val.value, width)
             if idx < len(RANGE_TABS) - 1:
                 cur_x = canvas.draw_text(cur_x, 0, " ", Style())
 
@@ -545,11 +645,14 @@ def render_ui(
         for key_lbl, name_lbl in [("F1", t("fkey.help", state.lang)), ("F10", t("fkey.quit", state.lang))]:
             if bx >= width:
                 break
+            item_start = bx
             k_style = Style(bold=True)
             bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
             n_style = _fkey_name_style(state)
             bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
-        return
+            _add_hit_box(hit_boxes, bar_y, item_start, bx - 1,
+                         "fkey:" + key_lbl, width)
+        return hit_boxes
 
     meters = meters or []
     project_rows = project_rows or []
@@ -574,7 +677,10 @@ def render_ui(
             tab_style = _active_tab_style(state)
         else:
             tab_style = Style()
+        tab_start = cur_x
         cur_x = canvas.draw_text(cur_x, cur_y, tab_str, tab_style)
+        _add_hit_box(hit_boxes, cur_y, tab_start, cur_x - 1,
+                     "range:" + r_val.value, width)
         if idx < len(RANGE_TABS) - 1:
             cur_x = canvas.draw_text(cur_x, cur_y, " ", Style())
 
@@ -760,6 +866,15 @@ def render_ui(
         h_line = f"{h_proj} {h_cost} {h_tok} {h_sess} {h_ag} {h_last} {h_8w}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
+        # Clicking a column header sorts by it (a second click flips the
+        # direction). Only the sortable columns are clickable, and the x ranges
+        # mirror the ones the rows below are drawn with.
+        if not static_mode:
+            for col, x0, x1 in (("name", 0, proj_w - 1),
+                                ("cost", proj_w + 1, proj_w + 10),
+                                ("tokens", proj_w + 12, proj_w + 19),
+                                ("sessions", proj_w + 21, proj_w + 28)):
+                _add_hit_box(hit_boxes, table_header_y, x0, x1, "sort:" + col, width)
         cur_y += 1
 
         # Visible rows
@@ -839,6 +954,11 @@ def render_ui(
                 canvas.draw_text(rx, row_y, ch, h_style)
                 rx += 1
 
+        if not static_mode:
+            for idx in range(len(shown_projects)):
+                _add_hit_box(hit_boxes, cur_y + idx, 0, width - 1,
+                             "row:%d" % (scroll_offset + idx), width)
+
         cur_y += len(shown_projects)
 
         # Footer rows
@@ -917,6 +1037,11 @@ def render_ui(
             rx += 11
             canvas.draw_text(rx, row_y, pad_str(row.cost_str, 10, align="right"), row_style)
 
+        if not static_mode:
+            for idx in range(len(shown_models)):
+                _add_hit_box(hit_boxes, cur_y + idx, 0, width - 1,
+                             "row:%d" % (scroll_offset + idx), width)
+
     elif state.view_mode == ViewMode.AGENTS:
         # Columns: AGENT, SESSIONS, TOKENS, COST, SHARE
         ag_w = max(16, width - 50)
@@ -979,6 +1104,11 @@ def render_ui(
                                  _on_selected_row(state, is_sel, Style(dim=True)))
                 canvas.draw_text(rx + 3 + bar_len, row_y, f"{row.share_pct:5.1f}%", row_style)
 
+        if not static_mode:
+            for idx in range(len(shown_agents)):
+                _add_hit_box(hit_boxes, cur_y + idx, 0, width - 1,
+                             "row:%d" % (scroll_offset + idx), width)
+
     elif state.view_mode == ViewMode.DAYS:
         # Columns: DATE, COST BAR, COST, TOKENS
         h_date = pad_str(t("col.date", lang), 12)
@@ -1036,6 +1166,11 @@ def render_ui(
             rx += 11
             canvas.draw_text(rx, row_y, pad_str(row.tokens_str, 10, align="right"), row_style)
 
+        if not static_mode:
+            for idx in range(len(shown_days)):
+                _add_hit_box(hit_boxes, cur_y + idx, 0, width - 1,
+                             "row:%d" % (scroll_offset + idx), width)
+
     elif state.view_mode == ViewMode.ACCOUNTS:
         sec = accounts_section
         # Title shows the accounting window (quota week / billing cycle / 7d).
@@ -1048,12 +1183,15 @@ def render_ui(
             table_header_y += 1
             cur_y = table_header_y
 
-            email_w = max(16, width - 61)
+            # ``10月28日 02:25`` is one column wider than ``Oct 28 02:25``.
+            seen_w = 14 if lang == "zh" else 13
+            fixed_w = 61 + (seen_w - 13)
+            email_w = max(16, width - fixed_w)
             h_line = (pad_str(t("col.account", lang), email_w) + " "
                       + pad_str(t("col.tokens", lang), 9, align="right") + " "
                       + pad_str(t("col.cost", lang), 10, align="right") + " "
                       + pad_str(t("col.messages", lang), 8, align="right") + " "
-                      + pad_str(t("col.last_seen", lang), 13, align="right") + " "
+                      + pad_str(t("col.last_seen", lang), seen_w, align="right") + " "
                       + pad_str(t("col.login", lang), 6))
             canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
             canvas.draw_text(0, table_header_y, truncate_str(h_line, width), header_style)
@@ -1095,8 +1233,8 @@ def render_ui(
                 rx += 11
                 canvas.draw_text(rx, row_y, pad_str(row.messages_str, 8, align="right"), base_style)
                 rx += 9
-                canvas.draw_text(rx, row_y, pad_str(row.last_seen_str, 13, align="right"), base_style)
-                rx += 14
+                canvas.draw_text(rx, row_y, pad_str(row.last_seen_str, seen_w, align="right"), base_style)
+                rx += seen_w + 1
                 if row.is_unattributed:
                     login_str = "—"
                 else:
@@ -1107,6 +1245,11 @@ def render_ui(
                     marker_txt = t("accounts.ascii_current" if state.ascii_mode else "accounts.current", lang)
                     m_style = _on_selected_row(state, is_sel, Style(fg="green", bold=True))
                     canvas.draw_text(rx, row_y, truncate_str(marker_txt, max(0, width - rx)), m_style)
+
+            if not static_mode:
+                for idx in range(len(shown_accounts)):
+                    _add_hit_box(hit_boxes, cur_y + idx, 0, width - 1,
+                                 "row:%d" % (scroll_offset + idx), width)
 
     # 7. Filter input bar (if active)
     if state.filter_active:
@@ -1135,10 +1278,13 @@ def render_ui(
         for key_lbl, name_lbl in f_items:
             if bx >= width:
                 break
+            item_start = bx
             k_style = Style(bold=True)
             bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
             n_style = _fkey_name_style(state)
             bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
+            _add_hit_box(hit_boxes, bar_y, item_start, bx - 1,
+                         "fkey:" + key_lbl, width)
 
     # 9. Detail Pane Overlay
     if state.detail_open and detail_vm is not None:
@@ -1223,6 +1369,7 @@ def render_ui(
             (t("help.sort.title", lang), t("help.sort.desc", lang)),
             (t("help.meters.title", lang), t("help.meters.desc", lang)),
             (t("help.refresh.title", lang), t("help.refresh.desc", lang)),
+            (t("help.mouse.title", lang), t("help.mouse.desc", lang)),
             (t("help.quit.title", lang), t("help.quit.desc", lang)),
         ]
 
@@ -1292,3 +1439,5 @@ def render_ui(
                 break
             canvas.draw_text(dx + 2, cy, line, Style(), max_width=inner_w + 1)
             cy += 1
+
+    return hit_boxes

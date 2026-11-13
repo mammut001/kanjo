@@ -18,16 +18,168 @@ except ImportError:
     HAVE_CURSES = False
 
 from .model import (
-    AntigravityAccountsSection, FilteredData, TimeRange, ViewMode,
-    RANGE_TABS, VIEW_MODES, available_view_modes,
+    AntigravityAccountsSection, FilteredData, ProjectRowViewModel, TimeRange,
+    ViewMode, RANGE_TABS, VIEW_MODES, available_view_modes,
     build_agent_rows, build_antigravity_accounts_section, build_day_rows,
     build_model_rows, build_project_detail, build_project_footer_rows,
     build_project_rows, build_subscription_meters, build_total_view_model,
     filter_report, get_tz
 )
-from .render import Canvas, Style, TUIState, render_ui
+from .render import Canvas, Style, TUIState, render_ui, hit_box_at, HitBox
 from .static import rgb_to_256, NAMED_FG, NAMED_BG
 from .i18n import t, normalize_lang
+
+# How many rows one mouse-wheel notch scrolls the table by (htop uses 3).
+MOUSE_WHEEL_ROWS = 3
+
+
+def _button_bits(button: int) -> int:
+    """Bit mask of the press/click events of one curses mouse button.
+
+    ``curses`` does not expose every button on every platform (macOS Python
+    builds know nothing about button 5), so fall back to the ncurses layout
+    ``2 << (6 * (button - 1))`` and friends, which is what the library itself
+    reports.
+    """
+    bits = 0
+    for shift, event in enumerate(("PRESSED", "CLICKED", "DOUBLE_CLICKED",
+                                   "TRIPLE_CLICKED")):
+        if HAVE_CURSES:
+            bits |= getattr(curses, "BUTTON%d_%s" % (button, event), 0)
+    if bits:
+        return bits
+    return sum(2 << shift << (6 * (button - 1)) for shift in range(4))
+
+
+# Button 1 = left click; buttons 4 and 5 = wheel up / wheel down.
+BUTTON1_BITS = _button_bits(1)
+WHEEL_UP_BITS = _button_bits(4)
+WHEEL_DOWN_BITS = _button_bits(5)
+
+
+def mouse_mask() -> int:
+    """curses event mask that reports clicks and the wheel."""
+    if not HAVE_CURSES:
+        return 0
+    return (getattr(curses, "ALL_MOUSE_EVENTS", 0)
+            | getattr(curses, "REPORT_MOUSE_POSITION", 0))
+
+
+def enable_mouse() -> bool:
+    """Turn curses mouse reporting on; ``False`` without mouse support."""
+    if not HAVE_CURSES:
+        return False
+    try:
+        result = curses.mousemask(mouse_mask())
+    except Exception:
+        return False
+    if isinstance(result, tuple) and result:
+        return bool(result[0])
+    return True
+
+
+def mouse_event_kind(bstate: int) -> Optional[Tuple[str, int]]:
+    """Map a curses ``bstate`` to ``('click', 0)`` / ``('wheel', rows)``.
+
+    ``None`` for events we do not act on (plain pointer motion, modifier-only
+    reports). The wheel delta is negative for wheel up.
+    """
+    if bstate & BUTTON1_BITS:
+        return ("click", 0)
+    if bstate & WHEEL_UP_BITS:
+        return ("wheel", -MOUSE_WHEEL_ROWS)
+    if bstate & WHEEL_DOWN_BITS:
+        return ("wheel", MOUSE_WHEEL_ROWS)
+    return None
+
+
+def read_mouse_event() -> Optional[Tuple[int, int, int]]:
+    """Read the pending curses mouse event as ``(x, y, bstate)``."""
+    if not HAVE_CURSES:
+        return None
+    try:
+        _devid, x, y, _unused, bstate = curses.getmouse()
+    except Exception:
+        return None
+    return (x, y, bstate)
+
+
+def visible_row_count(state: "TUIState", project_rows: List[Any], model_rows: List[Any],
+                       agent_rows: List[Any], day_rows: List[Any],
+                       accounts_section: Optional[AntigravityAccountsSection]) -> int:
+    """Number of selectable rows in the current view."""
+    if state.view_mode == ViewMode.PROJECTS:
+        return len(project_rows)
+    if state.view_mode == ViewMode.MODELS:
+        return len(model_rows)
+    if state.view_mode == ViewMode.AGENTS:
+        return len(agent_rows)
+    if state.view_mode == ViewMode.ACCOUNTS:
+        return len(accounts_section.rows) if accounts_section is not None else 0
+    return len(day_rows)
+
+
+def mouse_click_key(action: str) -> Optional[int]:
+    """Key press a click on ``action`` stands for, or ``None``.
+
+    Range tabs and F-keys behave exactly like the matching key; rows, headers
+    and the wheel have no key equivalent and return ``None``.
+    """
+    if action.startswith("range:"):
+        value = action[len("range:"):]
+        for idx, (r_val, _label) in enumerate(RANGE_TABS):
+            if r_val.value == value:
+                return ord("1") + idx
+        return None
+    if action.startswith("fkey:"):
+        if not HAVE_CURSES:
+            return None
+        return getattr(curses, "KEY_" + action[len("fkey:"):], None)
+    return None
+
+
+def apply_mouse_event(bstate: int, x: int, y: int, hit_boxes: List[HitBox],
+                       state: "TUIState", row_count: int) -> Optional[int]:
+    """Apply one mouse event to the TUI state.
+
+    Returns the key press the event stands for (the caller then runs the normal
+    key handler, so a click is literally the same as pressing that key), or
+    ``None`` when the event was handled here or ignored.
+    """
+    kind = mouse_event_kind(bstate)
+    if kind is None:
+        return None
+    what, delta = kind
+    action = hit_box_at(hit_boxes, y, x) if hit_boxes else None
+
+    if what == "wheel":
+        # The wheel only scrolls the table, never the whole screen.
+        if action and action.startswith("row:"):
+            last = max(0, row_count - 1)
+            state.selected_index = max(0, min(last, state.selected_index + delta))
+        return None
+
+    if not action:
+        return None
+    if action.startswith("row:"):
+        try:
+            index = int(action[len("row:"):])
+        except ValueError:
+            return None
+        if index == state.selected_index:
+            # A second click on the selected row acts like a double-click.
+            return 10
+        state.selected_index = index
+        return None
+    if action.startswith("sort:"):
+        column = action[len("sort:"):]
+        if column == state.sort_column:
+            state.sort_descending = not state.sort_descending
+        else:
+            state.sort_column = column
+            state.sort_descending = column != "name"
+        return None
+    return mouse_click_key(action)
 
 
 class ColorManager:
@@ -218,11 +370,16 @@ def run_curses_tui(
     use_cache: bool = True,
     lang: str = "en",
     switch_login=None,
+    mouse: bool = True,
+    mouse_reader=None,
 ) -> int:
     """Main interactive curses loop.
 
-    ``switch_login`` is injectable for tests; when omitted the real
-    ``kanjo.agy_login.switch`` is imported lazily on macOS only.
+    ``switch_login`` and ``mouse_reader`` are injectable for tests; when
+    ``switch_login`` is omitted the real ``kanjo.agy_login.switch`` is imported
+    lazily on macOS only, and ``mouse_reader`` defaults to
+    :func:`read_mouse_event`. ``mouse=False`` (``--no-mouse``) leaves the
+    terminal's own text selection alone.
     """
     # Setup curses
     try:
@@ -231,6 +388,11 @@ def run_curses_tui(
         pass
     stdscr.timeout(50)  # 50ms poll
     stdscr.keypad(True)
+
+    read_mouse = mouse_reader or read_mouse_event
+    if mouse:
+        # Terminals without mouse support simply never report KEY_MOUSE.
+        enable_mouse()
 
     color_mgr = ColorManager(no_color=no_color)
 
@@ -309,6 +471,7 @@ def run_curses_tui(
         return 0
 
     accounts_sec = None
+    hit_boxes: List[HitBox] = []
     try:
         while True:
             # Check background scan results
@@ -353,7 +516,7 @@ def run_curses_tui(
             canvas = Canvas(scr_w, scr_h)
 
             if doc is None:
-                render_ui(
+                hit_boxes = render_ui(
                     canvas=canvas,
                     state=state,
                     filtered=None,
@@ -393,7 +556,7 @@ def run_curses_tui(
                     detail_vm = build_project_detail(state.detail_project, now_dt, tz, ascii_mode=state.ascii_mode, lang=lang)
 
                 # Render onto canvas
-                render_ui(
+                hit_boxes = render_ui(
                     canvas=canvas,
                     state=state,
                     filtered=filtered,
@@ -460,6 +623,33 @@ def run_curses_tui(
 
             if ch == -1:
                 continue
+
+            # Mouse: clicks on the header tabs, the F-key bar, a table row or a
+            # column header behave exactly like the matching key; the wheel
+            # scrolls the table.
+            if mouse and ch == getattr(curses, "KEY_MOUSE", None):
+                event = read_mouse()
+                if event is None:
+                    continue
+                mx, my, bstate = event
+                kind = mouse_event_kind(bstate)
+                if kind is None:
+                    continue
+                if state.show_help or state.confirm_switch_email:
+                    # A click dismisses an overlay, like any key press.
+                    if kind[0] == "click":
+                        state.show_help = False
+                        state.confirm_switch_email = None
+                    continue
+                synthetic = apply_mouse_event(
+                    bstate, mx, my, hit_boxes, state,
+                    visible_row_count(state, proj_rows, model_rows, agent_rows,
+                                      day_rows, accounts_sec)
+                    if doc is not None else 0
+                )
+                if synthetic is None:
+                    continue
+                ch = synthetic
 
             # Antigravity login switch confirmation
             if state.confirm_switch_email:
@@ -597,16 +787,8 @@ def run_curses_tui(
                 continue
 
             # Navigation: Up, Down, PageUp, PageDown, Home, End
-            if state.view_mode == ViewMode.PROJECTS:
-                cur_list_len = len(proj_rows)
-            elif state.view_mode == ViewMode.MODELS:
-                cur_list_len = len(model_rows)
-            elif state.view_mode == ViewMode.AGENTS:
-                cur_list_len = len(agent_rows)
-            elif state.view_mode == ViewMode.ACCOUNTS:
-                cur_list_len = len(accounts_sec.rows) if accounts_sec is not None else 0
-            else:
-                cur_list_len = len(day_rows)
+            cur_list_len = visible_row_count(state, proj_rows, model_rows,
+                                             agent_rows, day_rows, accounts_sec)
 
             if ch == curses.KEY_UP:
                 if state.selected_index > 0:

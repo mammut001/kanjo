@@ -143,8 +143,9 @@ kanjo export --public-summary  # public high-level summary JSON
 - Antigravity Google account attribution breakdown
 - Interactive scrollable tables for Projects (with 8-week heat strip), Models, Agents, Days, and Accounts (email, window tokens/cost, messages, last seen, saved login, current marker)
 - Filter by name (`/`), switch views (`Tab` or `p`/`m`/`a`/`d`/`g`), switch ranges (`1`-`6` or `←`/`→`), project details (`Enter`)
+- Mouse support like htop: click a range tab, an F-key in the bottom bar, a table row (a second click on the selected row opens it) or a column header to sort (click again to flip the direction); the wheel scrolls the table by three rows. `--no-mouse` turns it off so the terminal can select text as usual
 - On macOS, `Enter` on an Antigravity account with a saved login (view `Accounts`) asks for confirmation and switches the Antigravity CLI login in the background; the result is shown in a temporary status line and running `agy` sessions keep the old account until restarted
-- English and Simplified Chinese UI (`--lang auto|en|zh`, default `auto`: the macOS app language, then `LC_ALL`/`LC_MESSAGES`/`LANG`); compact token counts use 万/亿 in Chinese
+- English and Simplified Chinese UI (`--lang auto|en|zh`, default `auto`: the macOS app language, then `LC_ALL`/`LC_MESSAGES`/`LANG`); compact token counts use 万/亿 in Chinese, and dates read `10月14日 00:00` (`今天 13:00` for today)
 - Pure Python standard library only, 256-color / truecolor with monochrome/ASCII fallback (`--ascii`, `--no-color`, `--once`); static snapshots show the top 15 projects with no selection highlight or F-key bar
 
 ### Publish usage to a website (optional)
@@ -434,8 +435,9 @@ kanjo export      # 导出完整 JSON 数据
 - Antigravity 账号归属统计与当前登录账号高亮
 - 交互式表格：Projects（含 8 周燃烧热力条）、Models、Agents、Days、Accounts（邮箱、当前窗口 token/花费、消息数、最后活跃、是否已保存登录、当前账号标记）
 - 键盘导航：`/` 搜索过滤、`Tab` 或 `p`/`m`/`a`/`d`/`g` 切换视图、`1`-`6` 切换时间范围、`Enter` 查看项目详情
+- 鼠标操作（类似 htop）：点击范围标签、底部 F 键、表格行（再点一次选中的行即打开）或表头排序（再点一次反向）；滚轮上下滚动表格三行。`--no-mouse` 可关闭鼠标，方便终端自行选中复制文本
 - macOS 上，在 `Accounts` 视图对已保存登录的账号按 `Enter`，确认后会在后台切换 Antigravity CLI 登录，结果在状态行短暂显示；正在运行的 `agy` 会话在重启前仍使用旧账号
-- 中英文界面（`--lang auto|en|zh`，默认 `auto`：优先读取 macOS App 语言，其次 `LC_ALL`/`LC_MESSAGES`/`LANG`）；中文紧凑 token 使用万/亿
+- 中英文界面（`--lang auto|en|zh`，默认 `auto`：优先读取 macOS App 语言，其次 `LC_ALL`/`LC_MESSAGES`/`LANG`）；中文紧凑 token 使用万/亿，日期写作 `10月14日 00:00`（今天则写 `今天 13:00`）
 - 仅依赖 Python 标准库，支持 256 色/真彩色与 `--once` / `--ascii` / `--no-color` 静态输出；静态快照只显示前 15 个项目，没有选中高亮和 F 键栏
 
 CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`、`%APPDATA%`、`%LOCALAPPDATA%` 读取，`kanjo disk clean` 会移到回收站。
