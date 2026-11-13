@@ -70,7 +70,8 @@ public sealed class AppServices
 
     public AppServices(AppSettings settings, string[] arguments, string? cacheDirectory = null,
         IBackgroundScheduler? timers = null, ILogWatcherFactory? watcherFactory = null,
-        IPowerMonitor? powerMonitor = null, IEnumerable<string>? logPathsFallback = null)
+        IPowerMonitor? powerMonitor = null, IEnumerable<string>? logPathsFallback = null,
+        IFamilyTokenStorage? familyTokens = null)
     {
         Settings = settings;
         Arguments = arguments;
@@ -90,7 +91,8 @@ public sealed class AppServices
         Disk = new DiskStore(MakeDiskSource,
             DiskDataOverride is null ? new DiskReportCache(cacheDirectory) : null);
         Disk.Changed += NotifyChanged;
-        Family = new FamilyReportStore(settings, NewTokenStorage(), () => ReportRunnerOrNull(), NoNetworkReason);
+        Family = new FamilyReportStore(settings, familyTokens ?? NewTokenStorage(), () => ReportRunnerOrNull(),
+            NoNetworkReason);
         Publish = new PublishStore(settings, () => ReportRunnerOrNull(), NoNetworkReason);
         Family.Activity.Changed += NotifyChanged;
         Publish.Activity.Changed += NotifyChanged;

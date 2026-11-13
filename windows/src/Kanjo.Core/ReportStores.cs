@@ -452,6 +452,12 @@ public sealed class FamilyReportStore
     }
 
     /// <summary>是否满足「Report now」的条件（有令牌、不在上报中、URL 合法）。</summary>
-    public bool CanReportNow =>
-        HasToken && !Activity.IsBusy && FamilyReportSchedule.IsValidUrl(ServerUrl.Trim());
+    public bool CanReportNow => CanReportFrom(ServerUrl);
+
+    /// <summary>
+    /// 同 <see cref="CanReportNow"/>，但按「输入框里正在写的 URL」判断 —— 设置页还没失焦提交时，
+    /// Report now 也要跟着 URL 一起亮起来（否则用户填完地址还得先点别处再回来）。
+    /// </summary>
+    public bool CanReportFrom(string? url) =>
+        HasToken && !Activity.IsBusy && FamilyReportSchedule.IsValidUrl((url ?? "").Trim());
 }

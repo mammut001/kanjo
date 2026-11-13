@@ -478,7 +478,8 @@ public sealed class SettingsPage : ScrollPage
     };
 
     /// <summary>标签 + 输入框的行（回车应用并刷新）。</summary>
-    private Control FieldRow(string label, string? description, string key, string? placeholder, bool mono = true)
+    private Control FieldRow(string label, string? description, string key, string? placeholder, bool mono = true,
+        Action<string>? onTextChanged = null)
     {
         var box = Ui.V(4);
         box.Children.Add(Ui.Text(label, Type.CaptionSize, FontWeight.SemiBold, Palette.Secondary));
@@ -493,6 +494,8 @@ public sealed class SettingsPage : ScrollPage
                 _services.ApplySettings();
             }
         };
+        // 有按钮的启用态依赖这一格（比如「Report now」看服务器 URL）时，输入过程中就要通知它。
+        if (onTextChanged is not null) text.TextChanged += (_, _) => onTextChanged(text.Text ?? "");
         box.Children.Add(field.Root);
         return new Border
         {
@@ -782,14 +785,24 @@ public sealed class SettingsPage : ScrollPage
             }
             else
             {
+                // 「Report now」的启用态有一部分来自服务器 URL（URL 合法 + 有令牌）。
+                // **和令牌保存按钮同一种问题**：URL 输入框只在失焦时提交，而按钮的启用态是建页面时算的，
+                // 所以用户填完地址后这个按钮一直是灰的。这里先建按钮，再把输入框的每次改动接上去。
+                string? pendingUrl = null;
+                var reportNow = ReportNowButton(() => pendingUrl, _services.Family.CanReportNow);
                 rows.Add(FieldRow(L10n.Tr("settings.family.url"), null, SettingsKeys.FamilyReportUrl,
-                    "https://usage.example.com", mono: false));
+                    "https://usage.example.com", mono: false,
+                    onTextChanged: url =>
+                    {
+                        pendingUrl = url;
+                        reportNow.SetEnabled(_services.Family.CanReportFrom(url));
+                    }));
                 rows.Add(TokenRow());
                 rows.Add(FieldRow(L10n.Tr("settings.family.member_label"), null,
                     SettingsKeys.FamilyReportMemberLabel, L10n.Tr("settings.family.member_label_placeholder"),
                     mono: false));
                 rows.AddRange(ScopeRows());
-                rows.Add(FamilyStatusRow());
+                rows.Add(FamilyStatusRow(reportNow));
                 rows.Add(InfoRow(Ui.Text(L10n.Tr("settings.family.note"), Type.CaptionSize, null,
                     Palette.Secondary, wrap: true)));
             }
@@ -854,25 +867,54 @@ public sealed class SettingsPage : ScrollPage
                 BorderBrush = new SolidColorBrush(Palette.CardStrokeColor),
                 BorderThickness = new Thickness(1),
             };
-            input.TextChanged += (_, _) => _tokenInput = input.Text ?? "";
+            // 令牌在**点保存那一刻**才读：闭包里绝不捕获建控件时的文本（旧版捕获的
+            // `trimmed` 永远是建提示框时的空串，点了也没反应）。
+            void Save()
+            {
+                var token = _tokenInput.Trim();
+                if (token.Length == 0) return;
+                _services.Family.SetToken(token);
+                _tokenInput = "";
+                _tokenPromptOpen = false;
+                Rebuild();
+            }
+
+            void Cancel()
+            {
+                _tokenInput = "";
+                _tokenPromptOpen = false;
+                Rebuild();
+            }
+
+            var save = new StateButton(L10n.Tr("settings.family.token.save"), Save,
+                enabled: _tokenInput.Trim().Length > 0);
+            // 保存按钮跟着输入亮起来（真机上报的 bug：粘贴令牌后保存一直是灰的）。
+            input.TextChanged += (_, _) =>
+            {
+                _tokenInput = input.Text ?? "";
+                save.SetEnabled(_tokenInput.Trim().Length > 0);
+            };
+            // Enter 保存、Escape 取消（macOS 版是 .keyboardShortcut(.defaultAction) + 关闭弹层）。
+            input.KeyDown += (_, e) =>
+            {
+                switch (e.Key)
+                {
+                    case Avalonia.Input.Key.Enter or Avalonia.Input.Key.Return:
+                        e.Handled = true;
+                        Save();
+                        break;
+                    case Avalonia.Input.Key.Escape:
+                        e.Handled = true;
+                        Cancel();
+                        break;
+                }
+            };
             prompt.Children.Add(input);
             var actions = Ui.H(8);
             var spacer = new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
             actions.Children.Add(spacer);
-            actions.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.cancel"), () =>
-            {
-                _tokenInput = "";
-                _tokenPromptOpen = false;
-                Rebuild();
-            }));
-            var trimmed = _tokenInput.Trim();
-            actions.Children.Add(Ui.AccentButton(L10n.Tr("settings.family.token.save"), () =>
-            {
-                if (trimmed.Length > 0) _services.Family.SetToken(trimmed);
-                _tokenInput = "";
-                _tokenPromptOpen = false;
-                Rebuild();
-            }, enabled: trimmed.Length > 0));
+            actions.Children.Add(Ui.StandardButton(L10n.Tr("settings.family.token.cancel"), Cancel));
+            actions.Children.Add(save);
             prompt.Children.Add(actions);
             var card = Chrome.HoverCardChrome(prompt);
             card.Margin = new Thickness(0, 4, 0, 0);
@@ -884,6 +926,30 @@ public sealed class SettingsPage : ScrollPage
             Padding = new Thickness(Metrics.RowInset, 8, Metrics.RowInset, 10),
         };
     }
+
+    /// <summary>
+    /// 「Report now」：主按钮，启用态由 <see cref="FamilyReportStore.CanReportNow"/> 决定。
+    /// <paramref name="pendingUrl"/> 读输入框里**还没失焦提交**的服务器地址：按钮既然是按它亮起来的，
+    /// 点下去就得报给这个地址（否则会用到设置里那个旧的 / 空的值）。
+    /// </summary>
+    private StateButton ReportNowButton(Func<string?> pendingUrl, bool enabled) =>
+        new(L10n.Tr("settings.family.now"), () =>
+        {
+            var url = pendingUrl()?.Trim() ?? "";
+            if (url.Length > 0) S.Set(SettingsKeys.FamilyReportUrl, url);
+            Task.Run(() =>
+            {
+                try
+                {
+                    _services.Family.ReportNow();
+                }
+                catch (Exception)
+                {
+                    // 状态已经记下来了。
+                }
+                _services.NotifyChanged();
+            });
+        }, enabled: enabled);
 
     private IEnumerable<Control> ScopeRows()
     {
@@ -977,7 +1043,7 @@ public sealed class SettingsPage : ScrollPage
         return rows;
     }
 
-    private Control FamilyStatusRow()
+    private Control FamilyStatusRow(StateButton reportNow)
     {
         var (text, kind) = _services.Family.StatusText();
         var color = kind switch
@@ -991,21 +1057,6 @@ public sealed class SettingsPage : ScrollPage
         status.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(status, 0);
         row.Children.Add(status);
-        var reportNow = Ui.AccentButton(L10n.Tr("settings.family.now"), () =>
-        {
-            Task.Run(() =>
-            {
-                try
-                {
-                    _services.Family.ReportNow();
-                }
-                catch (Exception)
-                {
-                    // 状态已经记下来了。
-                }
-                _services.NotifyChanged();
-            });
-        }, enabled: _services.Family.CanReportNow);
         Grid.SetColumn(reportNow, 1);
         row.Children.Add(reportNow);
         return new Border
