@@ -17,7 +17,7 @@ from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import (
     COST_NOTE, SOURCES, build_export, build_public_summary, build_family_report,
     check_invariants, check_public_summary_invariants, check_family_report_invariants,
-    mobile_document, scan, load_fast_export, save_fast_export,
+    dedupe, mobile_document, scan, load_fast_export, save_fast_export,
     load_fast_public_summary, save_fast_public_summary,
     load_fast_family_report, save_fast_family_report, source_fingerprint
 )
@@ -55,6 +55,12 @@ def cmd_export(args) -> int:
         print("kanjo: --family-report cannot be combined with --mobile or --public-summary", file=sys.stderr)
         return 2
     cfg = _config(args)
+    raw_accounts = getattr(args, "accounts", None)
+    if raw_accounts:
+        from .config import _validate_family_accounts
+        cfg.family_accounts = _validate_family_accounts(raw_accounts)
+        cfg.family_origins["accounts"] = "cli"
+
     doc = None
     fp = None
     use_cache = not getattr(args, "no_cache", False)
@@ -66,6 +72,7 @@ def cmd_export(args) -> int:
                 else (list(cfg.family_agents) if cfg.family_agents is not None else ["antigravity"])
             ),
             "since": cfg.family_since or None,
+            "accounts_filter": len(cfg.family_accounts) if cfg.family_accounts is not None else None,
         }
         if use_cache:
             fp = source_fingerprint(config=cfg)
@@ -305,6 +312,28 @@ def cmd_ledger(args) -> int:
     return 0
 
 
+def cmd_accounts(args) -> int:
+    from .antigravity_accounts import list_accounts
+    from .sources import antigravity
+    roots = antigravity.roots()
+    result = scan({"antigravity": roots}, cache=_cache(args))
+    sessions = dedupe(result.sessions)
+    rows = list_accounts(sessions)
+    if getattr(args, "json", False):
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+
+    table_rows = [["Account", "Messages", "Total Tokens", "First Seen", "Last Seen"]]
+    for r in rows:
+        acc_label = r["account"]
+        tok_str = f"{r['tokens']:,}" if r["tokens"] else "0"
+        first_str = r["first_seen"] or "-"
+        last_str = r["last_seen"] or "-"
+        table_rows.append([acc_label, str(r["messages"]), tok_str, first_str, last_str])
+    print(_table(table_rows, "lrrrr"))
+    return 0
+
+
 def _format_disk(doc: dict) -> str:
     rows = [["Agent", "Entry", "Size", "Files", "Newest", "Deletable"]]
     errors = 0
@@ -443,6 +472,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="export family usage report document (CONTRACT.md section 13)")
     p.add_argument("--member-label", metavar="NAME",
                    help="display name for member in family report (optional)")
+    p.add_argument("--account", action="append", dest="accounts", metavar="EMAIL",
+                   help="Google account email to include in report (repeatable, overrides config)")
     p.add_argument("--hide-project-names", action="store_true",
                    help="with --mobile, replace project names and ids with opaque values")
     p.add_argument("--gzip", action="store_true", help="write gzip-compressed JSON to stdout")
@@ -500,9 +531,16 @@ def build_parser() -> argparse.ArgumentParser:
     common(p, threshold=False)
     p.set_defaults(func=cmd_publish_usage)
 
+    p = sub.add_parser("accounts", help="list detected Antigravity accounts and message stats")
+    p.add_argument("--json", action="store_true", help="output as JSON")
+    common(p, threshold=False)
+    p.set_defaults(func=cmd_accounts)
+
     p = sub.add_parser("report-family", help="report usage summary to family server")
     p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.example.com)")
     p.add_argument("--member-label", metavar="NAME", help="display name for member (optional)")
+    p.add_argument("--account", action="append", dest="accounts", metavar="EMAIL",
+                   help="Google account email to include in report (repeatable, overrides config)")
     common(p, threshold=False)
     p.set_defaults(func=cmd_report_family)
 

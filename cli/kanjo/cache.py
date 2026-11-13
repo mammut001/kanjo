@@ -25,7 +25,7 @@ CACHE_VERSION = 4
 REPO_CACHE_VERSION = 2
 NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
-               "thinking", "cwd", "branch", "key")
+               "thinking", "cwd", "branch", "key", "account")
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
 
@@ -78,6 +78,7 @@ def _dump_session(s: Session) -> dict:
                 m.cwd,
                 m.branch,
                 m.key,
+                m.account,
             ]
             for m in s.messages
         ],
@@ -110,7 +111,7 @@ def _load_session(d: dict) -> Session:
         s.messages = [Message(*row) for row in msgs]
     except TypeError:
         s.messages = [
-            Message(*row) if len(row) == 11 else Message(**dict(zip(_MSG_FIELDS, row)))
+            Message(*row) if len(row) in (11, 12) else Message(**dict(zip(_MSG_FIELDS, row)))
             for row in msgs
         ]
     return s
@@ -492,9 +493,14 @@ class SessionCache:
             if "error" in entry:
                 raise ParseError(entry["error"])
             if key in self._session_cache:
-                return self._session_cache[key]
+                s = self._session_cache[key]
+                if agent == "antigravity":
+                    self._apply_antigravity_accounts(s)
+                return s
             try:
                 s = _load_session(entry["session"])
+                if agent == "antigravity":
+                    self._apply_antigravity_accounts(s)
                 self._session_cache[key] = s
                 return s
             except (TypeError, KeyError, ValueError):
@@ -512,6 +518,8 @@ class SessionCache:
             dumped = _dump_session(session)
             if entry is not None and entry.get("session") == dumped:
                 entry["sig"] = sig
+                if agent == "antigravity":
+                    self._apply_antigravity_accounts(session)
                 return session
             self.modified_keys.add(path)
             self.entries[key] = {"sig": sig, "session": dumped}
@@ -519,7 +527,18 @@ class SessionCache:
             self.dirty_keys.add(key)
         else:
             self.modified_keys.add(path)
+        if agent == "antigravity":
+            self._apply_antigravity_accounts(session)
         return session
+
+    def _apply_antigravity_accounts(self, session: Session) -> None:
+        try:
+            from .antigravity_accounts import get_account_index
+            idx = get_account_index()
+            for m in session.messages:
+                m.account = idx.attribute(session.id, m.ts)
+        except Exception:
+            pass
 
     def save(self) -> None:
         try:

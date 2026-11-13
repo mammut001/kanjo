@@ -87,6 +87,7 @@ class Config:
     subscription_origins: Dict[str, dict] = field(default_factory=dict)
     family_since: Optional[str] = None
     family_agents: Optional[Any] = None
+    family_accounts: Optional[List[str]] = None
     family_origins: Dict[str, str] = field(default_factory=dict)
     source: Optional[str] = None
 
@@ -271,6 +272,9 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         if "agents" in fam:
             cfg.family_agents = fam["agents"]
             cfg.family_origins["agents"] = "toml"
+        if "accounts" in fam:
+            cfg.family_accounts = fam["accounts"]
+            cfg.family_origins["accounts"] = "toml"
     return cfg
 
 
@@ -408,6 +412,24 @@ def _validate_family_agents(val):
     raise ConfigError("family.agents must be 'all' or a list of agent keys")
 
 
+def _validate_family_accounts(val) -> List[str]:
+    if isinstance(val, str):
+        parts = [p.strip().lower() for p in val.split(",") if p.strip()]
+        if not parts:
+            raise ConfigError("family.accounts must be a list of non-empty strings")
+        return parts
+    if isinstance(val, (list, tuple)):
+        parts = []
+        for p in val:
+            if not isinstance(p, str) or not p.strip():
+                raise ConfigError("family.accounts must be a list of non-empty strings")
+            parts.append(p.strip().lower())
+        if not parts:
+            raise ConfigError("family.accounts must not be empty")
+        return parts
+    raise ConfigError("family.accounts must be a list of non-empty strings")
+
+
 def _family(raw) -> dict:
     if not isinstance(raw, dict):
         raise ConfigError("[family] must be a table")
@@ -416,6 +438,8 @@ def _family(raw) -> dict:
         out["since"] = _validate_family_since(raw["since"])
     if "agents" in raw:
         out["agents"] = _validate_family_agents(raw["agents"])
+    if "accounts" in raw:
+        out["accounts"] = _validate_family_accounts(raw["accounts"])
     return out
 
 
@@ -501,6 +525,9 @@ def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config
     if "agents" in raw_fam:
         cfg.family_agents = _validate_family_agents(raw_fam["agents"])
         cfg.family_origins["agents"] = "overrides"
+    if "accounts" in raw_fam:
+        cfg.family_accounts = _validate_family_accounts(raw_fam["accounts"])
+        cfg.family_origins["accounts"] = "overrides"
 
     return cfg
 
@@ -512,6 +539,8 @@ def family_value(cfg: Config, key: str):
     if key == "agents":
         val = cfg.family_agents if cfg.family_agents is not None else ["antigravity"]
         return val, cfg.family_origins.get("agents", "default")
+    if key == "accounts":
+        return cfg.family_accounts, cfg.family_origins.get("accounts", "default")
     return None, "default"
 
 

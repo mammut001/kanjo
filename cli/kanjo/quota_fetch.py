@@ -288,6 +288,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                     continue
 
                 plan_name = None
+                user_email = None
                 try:
                     url_status = f"{scheme}://127.0.0.1:{port}{paths['status']}"
                     req_status = urllib.request.Request(url_status, data=meta_body, method="POST")
@@ -304,17 +305,21 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                                 user_tier.get("name"), plan_info.get("planName"),
                                 plan_info.get("planDisplayName"), plan_info.get("displayName")
                             ) if isinstance(v, str) and v.strip()), None)
+                            raw_email = st_data.get("email") or st_data.get("userEmail") or (st_data.get("userInfo") or {}).get("email")
+                            if isinstance(raw_email, str) and raw_email.strip():
+                                user_email = raw_email.strip()
                 except Exception:
                     pass
 
-                result = parse_antigravity_summary(data, now=now, plan_name=plan_name)
+                result = parse_antigravity_summary(data, now=now, plan_name=plan_name, email=user_email)
                 if result:
                     return result
     _debug_log("antigravity", last_error_cat)
     return None
 
 
-def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] = None) -> Optional[dict]:
+def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] = None,
+                              email: Optional[str] = None) -> Optional[dict]:
     """Parse RetrieveUserQuotaSummary JSON into standard quota_windows fields + extra_windows."""
     groups = data.get("groups")
     if not isinstance(groups, list):
@@ -414,6 +419,9 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
     }
     if plan_name:
         out["plan"] = plan_name
+    found_email = email or data.get("email") or data.get("userEmail") or data.get("emailAddress")
+    if isinstance(found_email, str) and found_email.strip():
+        out["email"] = found_email.strip()
     if extra_windows:
         out["extra_windows"] = extra_windows
     return out
