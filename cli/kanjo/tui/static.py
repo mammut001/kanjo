@@ -39,6 +39,7 @@ def rgb_to_256(r: int, g: int, b: int) -> int:
 
 
 def style_to_ansi(style: Style, truecolor: bool = True) -> str:
+    style = style.normalized()
     parts = []
     if style.bold:
         parts.append("1")

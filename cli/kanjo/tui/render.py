@@ -85,11 +85,19 @@ class Style:
     inverse: bool = False
     underline: bool = False
 
+    def normalized(self) -> "Style":
+        if self.inverse and (self.fg is not None or self.bg is not None):
+            return Style(bold=self.bold, dim=self.dim, underline=self.underline)
+        return self
+
 
 @dataclass
 class Cell:
     char: str = " "
     style: Style = field(default_factory=Style)
+
+    def __post_init__(self) -> None:
+        self.style = self.style.normalized()
 
 
 class Canvas:
@@ -217,6 +225,72 @@ class TUIState:
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 ASCII_SPINNER = "|/-\\"
+
+SELECTED_ROW_BG = "gray"
+
+
+def _selected_row_style(state: "TUIState") -> Style:
+    if state.no_color:
+        return Style(bold=True, inverse=True)
+    return Style(bold=True, fg="white", bg=SELECTED_ROW_BG)
+
+
+def _selected_row_bg(state: "TUIState") -> Optional[str]:
+    return None if state.no_color else SELECTED_ROW_BG
+
+
+def _on_selected_row(state: "TUIState", is_sel: bool, style: Style) -> Style:
+    if not is_sel:
+        return style
+    if state.no_color:
+        return Style(bold=style.bold, dim=style.dim, inverse=True,
+                     underline=style.underline)
+    return Style(fg=style.fg, bg=SELECTED_ROW_BG, bold=style.bold,
+                 dim=style.dim, underline=style.underline)
+
+
+def _active_tab_style(state: "TUIState") -> Style:
+    if state.no_color:
+        return Style(bold=True, inverse=True)
+    return Style(bold=True, fg="black", bg="cyan")
+
+
+def _table_header_style(state: "TUIState") -> Style:
+    if state.no_color:
+        return Style(bold=True, inverse=True)
+    return Style(bold=True, fg="black", bg="white")
+
+
+def _fkey_name_style(state: "TUIState") -> Style:
+    if state.no_color:
+        return Style(inverse=True)
+    return Style(fg="black", bg="cyan")
+
+
+def _filter_prompt_style(state: "TUIState") -> Style:
+    if state.no_color:
+        return Style(bold=True, inverse=True)
+    return Style(bold=True, fg="white", bg="blue")
+
+
+def _agent_dot_style(agent: str, state: "TUIState", is_sel: bool) -> Style:
+    if state.no_color:
+        return _selected_row_style(state) if is_sel else Style(bold=True)
+    return Style(
+        fg=agent_color(agent),
+        bg=_selected_row_bg(state) if is_sel else None,
+        bold=True,
+    )
+
+
+def _heat_cell_style(dom_ag: Optional[str], state: "TUIState", is_sel: bool) -> Style:
+    if state.no_color:
+        return _selected_row_style(state) if is_sel else Style(bold=bool(dom_ag))
+    return Style(
+        fg=agent_color(dom_ag) if dom_ag else None,
+        bg=_selected_row_bg(state) if is_sel else None,
+        bold=bool(dom_ag),
+    )
 
 
 def _is_weekly_window(w: QuotaMeterWindow) -> bool:
@@ -397,7 +471,7 @@ def render_ui(
         for idx, (r_val, r_label) in enumerate(RANGE_TABS):
             is_active = (state.time_range == r_val)
             tab_str = f" {r_label} "
-            tab_style = Style(bold=True, inverse=True, fg="black", bg="cyan") if is_active else Style(fg="white")
+            tab_style = _active_tab_style(state) if is_active else Style()
             cur_x = canvas.draw_text(cur_x, 0, tab_str, tab_style)
             if idx < len(RANGE_TABS) - 1:
                 cur_x = canvas.draw_text(cur_x, 0, " ", Style())
@@ -414,14 +488,14 @@ def render_ui(
         canvas.draw_text(lx, ly, load_msg, Style(bold=True, fg="cyan"))
 
         bar_y = height - 1
-        canvas.fill_rect(0, bar_y, width, 1, " ", Style(bg="black", fg="white"))
+        canvas.fill_rect(0, bar_y, width, 1, " ", Style())
         bx = 0
         for key_lbl, name_lbl in [("F1", "Help"), ("F10", "Quit")]:
             if bx >= width:
                 break
-            k_style = Style(bold=True, inverse=True, fg="black", bg="cyan")
+            k_style = Style(bold=True)
             bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
-            n_style = Style(inverse=True, fg="black", bg="gray")
+            n_style = _fkey_name_style(state)
             bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
         return
 
@@ -445,9 +519,9 @@ def render_ui(
         is_active = (state.time_range == r_val)
         tab_str = f" {r_label} "
         if is_active:
-            tab_style = Style(bold=True, inverse=True, fg="black", bg="cyan")
+            tab_style = _active_tab_style(state)
         else:
-            tab_style = Style(fg="white")
+            tab_style = Style()
         cur_x = canvas.draw_text(cur_x, cur_y, tab_str, tab_style)
         if idx < len(RANGE_TABS) - 1:
             cur_x = canvas.draw_text(cur_x, cur_y, " ", Style())
@@ -609,7 +683,7 @@ def render_ui(
     # 6. Main Table
     # Determine table columns based on view_mode
     table_header_y = cur_y
-    header_style = Style(bold=True, inverse=True, fg="black", bg="white")
+    header_style = _table_header_style(state)
 
     if state.view_mode == ViewMode.PROJECTS:
         # Columns: PROJECT, COST, TOKENS, SESSIONS, AGENTS, LAST ACTIVE, 8W
@@ -663,7 +737,7 @@ def render_ui(
         for idx, row in enumerate(shown_projects):
             row_y = cur_y + idx
             is_sel = (scroll_offset + idx == state.selected_index)
-            row_style = Style(inverse=True, bold=True) if is_sel else Style()
+            row_style = _selected_row_style(state) if is_sel else Style()
 
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -692,7 +766,7 @@ def render_ui(
             dot_x = rx
             for ag in row.agents[:6]:
                 dot_ch = "*" if state.ascii_mode else "●"
-                dot_style = Style(fg=agent_color(ag), inverse=is_sel, bold=True)
+                dot_style = _agent_dot_style(ag, state, is_sel)
                 canvas.draw_text(dot_x, row_y, dot_ch, dot_style)
                 dot_x += 1
             rx += 9
@@ -704,8 +778,7 @@ def render_ui(
 
             # 8W Heat Strip
             for ch, dom_ag in row.heat_strip:
-                heat_fg = agent_color(dom_ag) if dom_ag else None
-                h_style = Style(fg=heat_fg, inverse=is_sel, bold=bool(dom_ag))
+                h_style = _heat_cell_style(dom_ag, state, is_sel)
                 canvas.draw_text(rx, row_y, ch, h_style)
                 rx += 1
 
@@ -775,7 +848,7 @@ def render_ui(
         for idx, row in enumerate(shown_models):
             row_y = cur_y + idx
             is_sel = (scroll_offset + idx == state.selected_index)
-            row_style = Style(inverse=True, bold=True) if is_sel else Style()
+            row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
 
@@ -821,7 +894,7 @@ def render_ui(
         for idx, row in enumerate(shown_agents):
             row_y = cur_y + idx
             is_sel = (scroll_offset + idx == state.selected_index)
-            row_style = Style(inverse=True, bold=True) if is_sel else Style()
+            row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
 
@@ -839,11 +912,14 @@ def render_ui(
             if bar_len > 0:
                 filled = int(round((row.share_pct / 100.0) * bar_len))
                 empty = bar_len - filled
-                canvas.draw_text(rx, row_y, "[", Style(dim=True))
+                canvas.draw_text(rx, row_y, "[", _on_selected_row(state, is_sel, Style(dim=True)))
                 block_ch = "=" if state.ascii_mode else "█"
-                canvas.draw_text(rx + 1, row_y, block_ch * filled, Style(fg=row.color, bold=True))
-                canvas.draw_text(rx + 1 + filled, row_y, " " * empty, Style())
-                canvas.draw_text(rx + 1 + bar_len, row_y, "]", Style(dim=True))
+                canvas.draw_text(rx + 1, row_y, block_ch * filled,
+                                 _on_selected_row(state, is_sel, Style(fg=row.color, bold=True)))
+                canvas.draw_text(rx + 1 + filled, row_y, " " * empty,
+                                 _on_selected_row(state, is_sel, Style()))
+                canvas.draw_text(rx + 1 + bar_len, row_y, "]",
+                                 _on_selected_row(state, is_sel, Style(dim=True)))
                 canvas.draw_text(rx + 3 + bar_len, row_y, f"{row.share_pct:5.1f}%", row_style)
 
     elif state.view_mode == ViewMode.DAYS:
@@ -879,7 +955,7 @@ def render_ui(
         for idx, row in enumerate(shown_days):
             row_y = cur_y + idx
             is_sel = (scroll_offset + idx == state.selected_index)
-            row_style = Style(inverse=True, bold=True) if is_sel else Style()
+            row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
 
@@ -889,11 +965,14 @@ def render_ui(
             # Bar
             filled = int(round(row.cost_ratio * bar_len))
             empty = bar_len - filled
-            canvas.draw_text(rx, row_y, "[", Style(dim=True))
+            canvas.draw_text(rx, row_y, "[", _on_selected_row(state, is_sel, Style(dim=True)))
             block_ch = "=" if state.ascii_mode else "█"
-            canvas.draw_text(rx + 1, row_y, block_ch * filled, Style(fg="cyan", bold=True))
-            canvas.draw_text(rx + 1 + filled, row_y, " " * empty, Style())
-            canvas.draw_text(rx + 1 + bar_len, row_y, "]", Style(dim=True))
+            canvas.draw_text(rx + 1, row_y, block_ch * filled,
+                             _on_selected_row(state, is_sel, Style(fg="cyan", bold=True)))
+            canvas.draw_text(rx + 1 + filled, row_y, " " * empty,
+                             _on_selected_row(state, is_sel, Style()))
+            canvas.draw_text(rx + 1 + bar_len, row_y, "]",
+                             _on_selected_row(state, is_sel, Style(dim=True)))
             rx += bar_len + 3
 
             canvas.draw_text(rx, row_y, pad_str(row.cost_str, 10, align="right"), row_style)
@@ -904,8 +983,9 @@ def render_ui(
     if state.filter_active:
         fy = height - 2
         f_prompt = f"Filter: {state.filter_input}_ (Enter to apply, Esc to cancel)"
-        canvas.fill_rect(0, fy, width, 1, " ", Style(bg="blue", fg="white", bold=True))
-        canvas.draw_text(1, fy, f_prompt[:width - 2], Style(bg="blue", fg="white", bold=True))
+        filter_style = _filter_prompt_style(state)
+        canvas.fill_rect(0, fy, width, 1, " ", filter_style)
+        canvas.draw_text(1, fy, f_prompt[:width - 2], filter_style)
 
     # 8. F-key Bar (last line, y = height - 1)
     # F1Help F2Range F3View F4Filter F5Refresh F6Sort F10Quit
@@ -920,16 +1000,14 @@ def render_ui(
         ("F7", "Meters"),
         ("F10", "Quit"),
     ]
-    canvas.fill_rect(0, bar_y, width, 1, " ", Style(bg="black", fg="white"))
+    canvas.fill_rect(0, bar_y, width, 1, " ", Style())
     bx = 0
     for key_lbl, name_lbl in f_items:
         if bx >= width:
             break
-        # Draw key label (inverse/bold cyan)
-        k_style = Style(bold=True, inverse=True, fg="black", bg="cyan")
+        k_style = Style(bold=True)
         bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
-        # Draw name label (inverse black on white)
-        n_style = Style(inverse=True, fg="black", bg="gray")
+        n_style = _fkey_name_style(state)
         bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
 
     # 9. Detail Pane Overlay

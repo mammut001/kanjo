@@ -19,7 +19,10 @@ from kanjo.tui.model import (
     ensure_aware, filter_report, format_money, format_reset_countdown, format_tokens,
     get_accounts_window, get_tz, heat_level, parse_iso_dt, quota_level
 )
-from kanjo.tui.render import Canvas, Cell, Style, TUIState, render_ui, char_width, str_width, truncate_str
+from kanjo.tui.render import (
+    Canvas, Cell, SELECTED_ROW_BG, Style, TUIState, render_ui,
+    char_width, str_width, truncate_str
+)
 from kanjo.tui.static import canvas_to_ansi, render_static_snapshot
 from kanjo.tui.term import run_curses_tui
 from kanjo.antigravity_accounts import compute_antigravity_accounts_window
@@ -635,6 +638,100 @@ class TUIRenderTest(unittest.TestCase):
         self.assertIn("F1", last_line)
         self.assertIn("F10", last_line)
 
+    def _render_projects(self, w=120, h=40, selected_index=0, no_color=False):
+        state = TUIState(
+            version="0.9.0", selected_index=selected_index, no_color=no_color
+        )
+        canvas = Canvas(w, h)
+        render_ui(
+            canvas, state, self.filtered, self.total_vm, self.meters,
+            self.accounts_sec, self.proj_rows, self.proj_footers,
+            self.model_rows, self.agent_rows, self.day_rows,
+            static_mode=False,
+        )
+        return canvas, state
+
+    def _project_row_y(self, canvas, name):
+        header_y = next(
+            y for y in range(canvas.height)
+            if "PROJECT" in canvas.get_line_text(y)
+        )
+        return next(
+            y for y in range(header_y + 1, canvas.height)
+            if canvas.get_line_text(y).startswith(name)
+        )
+
+    def test_style_model_never_combines_colour_with_reverse(self):
+        normalized = Style(inverse=True, fg="red").normalized()
+        self.assertFalse(normalized.inverse)
+        self.assertIsNone(normalized.fg)
+
+        for no_color in (False, True):
+            canvas, _ = self._render_projects(no_color=no_color)
+            for y in range(canvas.height):
+                for x in range(canvas.width):
+                    style = canvas.grid[y][x].style
+                    self.assertFalse(
+                        style.inverse and (style.fg is not None or style.bg is not None),
+                        f"cell ({x},{y}) combines colour and reverse: {style!r}",
+                    )
+
+    def test_fkey_bar_uses_explicit_colours(self):
+        canvas, _ = self._render_projects()
+        y = canvas.height - 1
+        f_items = [
+            ("F1", "Help"), ("F2", "Range"), ("F3", "View"),
+            ("F4", "Filter"), ("F5", "Refresh"), ("F6", "Sort"),
+            ("F7", "Meters"), ("F10", "Quit"),
+        ]
+        x = 0
+        for key_lbl, name_lbl in f_items:
+            key_style = canvas.grid[y][x].style
+            self.assertFalse(key_style.inverse)
+            self.assertIsNone(key_style.bg)
+            for i in range(len(name_lbl) + 1):
+                style = canvas.grid[y][x + len(key_lbl) + i].style
+                self.assertFalse(style.inverse)
+                self.assertEqual(style.fg, "black")
+                self.assertEqual(style.bg, "cyan")
+            x += len(key_lbl) + len(name_lbl) + 1
+
+    def test_heat_strip_keeps_agent_colours_without_reverse(self):
+        w = 120
+        canvas, _ = self._render_projects(w=w, selected_index=1)
+        proj_w = max(16, w - 59)
+        heat_x = proj_w + 51
+        for index in (0, 1):
+            row = self.proj_rows[index]
+            y = self._project_row_y(canvas, row.name)
+            for i, (_ch, dom_ag) in enumerate(row.heat_strip):
+                style = canvas.grid[y][heat_x + i].style
+                self.assertFalse(style.inverse)
+                if dom_ag:
+                    self.assertEqual(style.fg, agent_color(dom_ag))
+                if index == 1:
+                    self.assertEqual(style.bg, SELECTED_ROW_BG)
+                else:
+                    self.assertIsNone(style.bg)
+
+    def test_selected_row_agent_dots_keep_agent_colour(self):
+        w = 120
+        canvas, _ = self._render_projects(w=w, selected_index=1)
+        proj_w = max(16, w - 59)
+        dots_x = proj_w + 30
+        row = self.proj_rows[1]
+        y = self._project_row_y(canvas, row.name)
+
+        row_style = canvas.grid[y][0].style
+        self.assertFalse(row_style.inverse)
+        self.assertEqual(row_style.bg, SELECTED_ROW_BG)
+
+        for i, ag in enumerate(row.agents[:6]):
+            style = canvas.grid[y][dots_x + i].style
+            self.assertFalse(style.inverse)
+            self.assertEqual(style.fg, agent_color(ag))
+            self.assertEqual(style.bg, SELECTED_ROW_BG)
+
     def test_matrix_static_and_curses_canvas_robustness(self):
         """Item 3: Matrix test for BOTH sample.json and export_sample.json:
         every range × every view × widths (60, 80, 120, 200) × heights (15, 24, 50).
@@ -747,12 +844,14 @@ class TUIStaticTest(unittest.TestCase):
         tz = get_tz(doc)
         now = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
         out = render_static_snapshot(doc, width=120, no_color=False, now=now)
-        self.assertIn("\033[1;7;30;46m", out)  # active range tab: bold + reverse
+        self.assertIn("\033[1;30;46m", out)  # active range tab: black on cyan
+        self.assertNotIn("\033[7m", out)
+        self.assertNotIn(";7;", out)
 
         filtered = filter_report(doc, TimeRange.ALL, now=now)
         p_rows = build_project_rows(filtered, now, tz)
         row_line = next(line for line in out.splitlines() if p_rows[0].name in line)
-        self.assertIn("\033[1;7", row_line)  # selected project row: reverse video
+        self.assertIn("\033[1;37;100m", row_line)  # selected project row: white on grey
 
     def test_cli_usage_data_flag_isolated(self):
         """Item 2: --data PATH loads an export JSON without scanning or cache writes."""

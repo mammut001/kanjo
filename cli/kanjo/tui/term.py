@@ -355,16 +355,17 @@ def run_curses_tui(
                     if cell.char == "":
                         x += 1
                         continue
+                    style = cell.style.normalized()
                     attrs = curses.A_NORMAL
-                    if cell.style.bold:
+                    if style.bold:
                         attrs |= curses.A_BOLD
-                    if cell.style.dim:
+                    if style.dim:
                         attrs |= curses.A_DIM
-                    if cell.style.inverse:
+                    if style.inverse:
                         attrs |= curses.A_REVERSE
-                    if cell.style.underline:
+                    if style.underline:
                         attrs |= curses.A_UNDERLINE
-                    pair = color_mgr.get_pair(cell.style)
+                    pair = color_mgr.get_pair(style)
                     if pair > 0:
                         attrs |= curses.color_pair(pair)
 
