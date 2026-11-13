@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import textwrap
 from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
 
@@ -211,10 +212,155 @@ class TUIState:
     sort_descending: bool = True
     ascii_mode: bool = False
     no_color: bool = False
+    meters_expanded: bool = False
 
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 ASCII_SPINNER = "|/-\\"
+
+
+def _is_weekly_window(w: QuotaMeterWindow) -> bool:
+    name = (w.name or "").lower()
+    return name.startswith("weekly") or name == "168-hour" or "week" in name
+
+
+def _weekly_windows(m: SubscriptionMeter) -> List[QuotaMeterWindow]:
+    if m.windows and _is_weekly_window(m.windows[0]):
+        return [m.windows[0]]
+    return []
+
+
+def _meter_mode_windows(m: SubscriptionMeter, mode: str) -> List[QuotaMeterWindow]:
+    if mode == "weekly":
+        return _weekly_windows(m)
+    return m.windows
+
+
+def _meter_layout_lines(meters: List[SubscriptionMeter], mode: str, two_col: bool) -> int:
+    if not meters or mode == "hidden":
+        return 0
+    if mode == "compact":
+        return len(meters)
+    if mode == "quota":
+        with_quota = [m for m in meters if m.windows]
+        return len(with_quota) + (1 if len(with_quota) < len(meters) else 0)
+    blocks = [1 + len(_meter_mode_windows(m, mode)) for m in meters]
+    if two_col and len(blocks) > 1:
+        split = (len(blocks) + 1) // 2
+        return max(sum(blocks[:split]), sum(blocks[split:]))
+    return sum(blocks)
+
+
+def _choose_meter_mode(meters: List[SubscriptionMeter], budget: int,
+                       two_col: bool, expanded: bool) -> str:
+    if not meters:
+        return "hidden"
+    if expanded:
+        return "full"
+    for mode in ("full", "weekly", "compact", "quota"):
+        if _meter_layout_lines(meters, mode, two_col) <= budget:
+            return mode
+    return "hidden"
+
+
+def _mini_bar(w: QuotaMeterWindow, ascii_mode: bool, length: int = 4) -> str:
+    if w.percent is None:
+        return ""
+    filled = int(round((min(100.0, max(0.0, w.percent)) / 100.0) * length))
+    fill = "=" if ascii_mode else "█"
+    left = "[" if ascii_mode else "▕"
+    right = "]" if ascii_mode else "▏"
+    return f"{left}{fill * filled}{' ' * (length - filled)}{right}{int(round(w.percent))}%"
+
+
+def _compact_meter_body(m: SubscriptionMeter, ascii_mode: bool) -> str:
+    parts = [m.plan_label]
+    weekly = next((w for w in m.windows if _is_weekly_window(w)), None)
+    five = next((w for w in m.windows if not _is_weekly_window(w)
+                 and (w.name.lower().startswith("5") or "5h" in w.name.lower())), None)
+    if weekly is not None:
+        bar = _mini_bar(weekly, ascii_mode)
+        parts.append("W " + bar if bar else "W")
+    if five is not None and five.percent is not None:
+        parts.append(f"5h {int(round(five.percent))}%")
+    parts.append(m.multiplier_str)
+    usage = m.usage_str
+    if usage.startswith("usage "):
+        usage = usage[len("usage "):]
+    parts.append(usage)
+    return "  ".join(parts)
+
+
+def _meter_label_width(meters: List[SubscriptionMeter], mode: str) -> int:
+    longest = 1
+    for m in meters:
+        for w in _meter_mode_windows(m, mode):
+            longest = max(longest, str_width(w.name))
+    return max(1, min(16, longest))
+
+
+def _draw_full_meter_block(canvas: Canvas, x: int, y: int, width: int,
+                           m: SubscriptionMeter, windows: List[QuotaMeterWindow],
+                           state: "TUIState", label_w: int) -> int:
+    dot = "*" if state.ascii_mode else "●"
+    canvas.draw_text(x, y, f"{dot} ", Style(fg=m.color, bold=True))
+    header = f"{m.plan_label}  {m.price_str}   {m.usage_str}  {m.multiplier_str}"
+    header_w = max(0, width - 2)
+    canvas.draw_text(x + 2, y, truncate_str(header, header_w), Style(bold=True),
+                     max_width=header_w)
+    y += 1
+
+    label_x = x + 2
+    bar_x = label_x + label_w + 1
+    right = x + width
+    detail_reserve = 16 if any(w.detail for w in windows) else 0
+    bar_len = min(28, max(6, right - bar_x - 8 - detail_reserve))
+
+    for w in windows:
+        label = pad_str(truncate_str(w.name, label_w), label_w)
+        canvas.draw_text(label_x, y, label, Style(dim=True))
+
+        canvas.draw_text(bar_x, y, "[", Style(dim=True))
+        filled = 0
+        if w.percent is not None:
+            filled = int(round((min(100.0, max(0.0, w.percent)) / 100.0) * bar_len))
+        empty = bar_len - filled
+
+        bar_fg = m.color
+        if w.level == QuotaLevel.CRITICAL:
+            bar_fg = (235, 60, 60)
+        elif w.level == QuotaLevel.WARNING:
+            bar_fg = (235, 180, 50)
+
+        canvas.draw_text(bar_x + 1, y, "|" * filled, Style(fg=bar_fg, bold=True))
+        canvas.draw_text(bar_x + 1 + filled, y, " " * empty, Style())
+        canvas.draw_text(bar_x + 1 + bar_len, y, "]", Style(dim=True))
+
+        pct_str = f"{int(round(w.percent)):2d}%" if w.percent is not None else " — "
+        pct_style = Style(fg=bar_fg, bold=True) if w.percent is not None else Style(dim=True)
+        pct_x = bar_x + bar_len + 3
+        canvas.draw_text(pct_x, y, pct_str, pct_style, max_width=max(0, right - pct_x))
+
+        detail_x = pct_x + 5
+        if w.detail and detail_x < right:
+            canvas.draw_text(detail_x, y, truncate_str(w.detail, right - detail_x),
+                             Style(dim=True), max_width=max(0, right - detail_x))
+        y += 1
+    return len(windows) + 1
+
+
+def _draw_compact_meters(canvas: Canvas, y: int, meters: List[SubscriptionMeter],
+                         width: int, state: "TUIState", add_more: int = 0) -> int:
+    dot = "*" if state.ascii_mode else "●"
+    for m in meters:
+        canvas.draw_text(0, y, f"{dot} ", Style(fg=m.color, bold=True))
+        body = _compact_meter_body(m, state.ascii_mode)
+        canvas.draw_text(2, y, truncate_str(body, max(0, width - 2)), Style())
+        y += 1
+    if add_more:
+        canvas.draw_text(0, y, f"+{add_more} more", Style(dim=True), max_width=width)
+        y += 1
+    return y
 
 
 def render_ui(
@@ -351,73 +497,91 @@ def render_ui(
         bx += rem_bar
     canvas.draw_text(1 + bar_width, cur_y, "]", Style(dim=True))
 
-    # Legend
+    # Legend: drop whole items that do not fit, then summarise with +N.
     leg_x = bar_width + 4
-    for ag, lbl, cost, pct, rgb in total_vm.shares:
-        dot = "*" if state.ascii_mode else "■"
-        item_text = f" {dot} {lbl} {pct:.0f}%"
-        if leg_x + str_width(item_text) <= width:
-            leg_x = canvas.draw_text(leg_x, cur_y, f" {dot} ", Style(fg=rgb))
-            leg_x = canvas.draw_text(leg_x, cur_y, f"{lbl} {pct:.0f}%", Style(dim=True))
+    dot = "*" if state.ascii_mode else "■"
+    legend_items = [
+        (f" {dot} {lbl} {pct:.0f}%", lbl, pct, rgb)
+        for ag, lbl, cost, pct, rgb in total_vm.shares
+    ]
+    dropped = 0
+    while legend_items:
+        total_w = sum(str_width(it[0]) for it in legend_items)
+        suffix_w = str_width(f" +{dropped}") if dropped else 0
+        if leg_x + total_w + suffix_w <= width:
+            break
+        legend_items.pop()
+        dropped += 1
+    for item_text, lbl, pct, rgb in legend_items:
+        leg_x = canvas.draw_text(leg_x, cur_y, f" {dot} ", Style(fg=rgb))
+        leg_x = canvas.draw_text(leg_x, cur_y, f"{lbl} {pct:.0f}%", Style(dim=True))
+    if dropped:
+        canvas.draw_text(leg_x, cur_y, f" +{dropped}", Style(dim=True),
+                         max_width=max(0, width - leg_x))
 
     cur_y += 1
 
+    # Bottom reserved rows: 1 row for F-key bar, plus 1 if filter prompt active
+    bottom_reserved = 2 if state.filter_active else 1
+    table_bottom_y = height - bottom_reserved
+
+    # Like htop, keep a meaningful slice of the screen for the table.
+    if height >= 24:
+        table_min = max(8, int(math.ceil(height * 0.4)))
+    else:
+        table_min = max(2, min(4, height - 4))
+    if state.meters_expanded:
+        table_min = 1
+    content_limit_y = table_bottom_y - table_min - 1
+
     # 4. Subscriptions / Quota Meters (htop CPU-meter style)
-    if meters:
-        for m in meters:
-            if cur_y >= height - 8:
-                break
-            # ● Google AI Ultra $249.99/mo usage $412.30 1.6×
-            dot = "*" if state.ascii_mode else "●"
-            dot_style = Style(fg=m.color, bold=True)
-            canvas.draw_text(0, cur_y, f"{dot} ", dot_style)
-            sub_title = f"{m.plan_label}  {m.price_str}   {m.usage_str}  {m.multiplier_str}"
-            canvas.draw_text(2, cur_y, sub_title, Style(bold=True))
-            cur_y += 1
+    two_col = width >= 110 and len(meters) > 1
+    meter_budget = max(0, content_limit_y - cur_y)
+    meter_mode = _choose_meter_mode(meters, meter_budget, two_col, state.meters_expanded)
 
-            # Meter rows
-            meter_bar_len = min(28, max(14, width - 48))
-            for w in m.windows:
-                if cur_y >= height - 7:
+    if meter_mode in ("full", "weekly"):
+        label_w = _meter_label_width(meters, meter_mode)
+        if two_col:
+            split = (len(meters) + 1) // 2
+            cols = [meters[:split], meters[split:]]
+            col_w = (width - 2) // 2
+            max_col_y = cur_y
+            for ci, col in enumerate(cols):
+                col_x = ci * (col_w + 2)
+                col_y = cur_y
+                for m in col:
+                    if col_y >= content_limit_y:
+                        break
+                    col_y += _draw_full_meter_block(
+                        canvas, col_x, col_y, col_w, m,
+                        _meter_mode_windows(m, meter_mode), state, label_w
+                    )
+                max_col_y = max(max_col_y, col_y)
+            cur_y = max_col_y
+        else:
+            for m in meters:
+                if cur_y >= content_limit_y:
                     break
-                w_title = pad_str(w.name, 9)
-                canvas.draw_text(2, cur_y, w_title, Style(dim=True))
-
-                # Bar [|||||||||||||||||||||||||||| ]
-                canvas.draw_text(11, cur_y, "[", Style(dim=True))
-                filled = 0
-                if w.percent is not None:
-                    filled = int(round((min(100.0, max(0.0, w.percent)) / 100.0) * meter_bar_len))
-                empty = meter_bar_len - filled
-
-                # Color by level: normal -> agent color, warning -> yellow, critical -> red
-                bar_fg = m.color
-                if w.level == QuotaLevel.CRITICAL:
-                    bar_fg = (235, 60, 60)
-                elif w.level == QuotaLevel.WARNING:
-                    bar_fg = (235, 180, 50)
-
-                fill_ch = "|" if state.ascii_mode else "|"
-                canvas.draw_text(12, cur_y, fill_ch * filled, Style(fg=bar_fg, bold=True))
-                canvas.draw_text(12 + filled, cur_y, " " * empty, Style())
-                canvas.draw_text(12 + meter_bar_len, cur_y, "]", Style(dim=True))
-
-                pct_str = f"{int(round(w.percent)):2d}%" if w.percent is not None else " — "
-                pct_style = Style(fg=bar_fg, bold=True) if w.percent is not None else Style(dim=True)
-                canvas.draw_text(14 + meter_bar_len, cur_y, pct_str, pct_style)
-
-                detail_str = f"  {w.detail}"
-                canvas.draw_text(18 + meter_bar_len, cur_y, detail_str, Style(dim=True))
-                cur_y += 1
+                cur_y += _draw_full_meter_block(
+                    canvas, 0, cur_y, width, m,
+                    _meter_mode_windows(m, meter_mode), state, label_w
+                )
+    elif meter_mode == "compact":
+        cur_y = _draw_compact_meters(canvas, cur_y, meters, width, state, 0)
+    elif meter_mode == "quota":
+        with_quota = [m for m in meters if m.windows]
+        dropped_meters = len(meters) - len(with_quota)
+        cur_y = _draw_compact_meters(canvas, cur_y, with_quota, width, state, dropped_meters)
 
     # 5. Antigravity Accounts (only if attribution data exists)
-    if accounts_section:
-        if cur_y < height - 7:
+    if accounts_section and cur_y < content_limit_y:
+        remaining = content_limit_y - cur_y
+        if remaining >= 2:
             # Header
             canvas.draw_text(0, cur_y, accounts_section.header_label, Style(bold=True, fg="white"))
             cur_y += 1
             for r in accounts_section.rows:
-                if cur_y >= height - 6:
+                if cur_y >= content_limit_y:
                     break
                 acc_col_w = min(36, max(20, width - 40))
                 email_str = pad_str(truncate_str(r.email, acc_col_w), acc_col_w)
@@ -438,7 +602,7 @@ def render_ui(
                 cur_y += 1
 
     # Separator line before main table if space permits
-    if cur_y < height - 6:
+    if cur_y < table_bottom_y - 2:
         canvas.draw_hline(0, cur_y, width, "─" if not state.ascii_mode else "-", Style(dim=True))
         cur_y += 1
 
@@ -446,10 +610,6 @@ def render_ui(
     # Determine table columns based on view_mode
     table_header_y = cur_y
     header_style = Style(bold=True, inverse=True, fg="black", bg="white")
-
-    # Bottom reserved rows: 1 row for F-key bar, plus 1 if filter prompt active
-    bottom_reserved = 2 if state.filter_active else 1
-    table_bottom_y = height - bottom_reserved
 
     if state.view_mode == ViewMode.PROJECTS:
         # Columns: PROJECT, COST, TOKENS, SESSIONS, AGENTS, LAST ACTIVE, 8W
@@ -502,7 +662,7 @@ def render_ui(
 
         for idx, row in enumerate(shown_projects):
             row_y = cur_y + idx
-            is_sel = not static_mode and (scroll_offset + idx == state.selected_index)
+            is_sel = (scroll_offset + idx == state.selected_index)
             row_style = Style(inverse=True, bold=True) if is_sel else Style()
 
             if is_sel:
@@ -614,7 +774,7 @@ def render_ui(
 
         for idx, row in enumerate(shown_models):
             row_y = cur_y + idx
-            is_sel = not static_mode and (scroll_offset + idx == state.selected_index)
+            is_sel = (scroll_offset + idx == state.selected_index)
             row_style = Style(inverse=True, bold=True) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -660,7 +820,7 @@ def render_ui(
 
         for idx, row in enumerate(shown_agents):
             row_y = cur_y + idx
-            is_sel = not static_mode and (scroll_offset + idx == state.selected_index)
+            is_sel = (scroll_offset + idx == state.selected_index)
             row_style = Style(inverse=True, bold=True) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -718,7 +878,7 @@ def render_ui(
 
         for idx, row in enumerate(shown_days):
             row_y = cur_y + idx
-            is_sel = not static_mode and (scroll_offset + idx == state.selected_index)
+            is_sel = (scroll_offset + idx == state.selected_index)
             row_style = Style(inverse=True, bold=True) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -757,6 +917,7 @@ def render_ui(
         ("F4", "Filter"),
         ("F5", "Refresh"),
         ("F6", "Sort"),
+        ("F7", "Meters"),
         ("F10", "Quit"),
     ]
     canvas.fill_rect(0, bar_y, width, 1, " ", Style(bg="black", fg="white"))
@@ -836,15 +997,11 @@ def render_ui(
 
     # 10. Help Overlay
     if state.show_help:
-        hw = min(width - 4, 72)
-        hh = min(height - 4, 20)
+        hw = max(24, min(width - 4, 76))
         hx = (width - hw) // 2
-        hy = (height - hh) // 2
-
-        canvas.draw_box(hx, hy, hw, hh, title="Help & Shortcuts",
-                        style=Style(bg="black", fg="white"),
-                        border_style=Style(fg="yellow", bold=True),
-                        ascii_mode=state.ascii_mode)
+        title_col_w = 12
+        desc_x_off = 2 + title_col_w + 2
+        desc_w = max(8, hw - desc_x_off - 2)
 
         help_lines = [
             ("Navigation", "↑ / ↓ / PgUp / PgDn / Home / End to scroll rows"),
@@ -853,17 +1010,43 @@ def render_ui(
             ("Detail", "Enter on a project to open details, Esc / Backspace to close"),
             ("Filter", "/ or F4 to filter by name, Enter to confirm, Esc to cancel"),
             ("Sort", "s or F6 to cycle sort column"),
+            ("Meters", "M or F7 toggles expanded meters (full quota detail, smaller table)"),
             ("Refresh", "r or F5 to refresh now (in-process re-scan)"),
             ("Quit", "q or F10 to exit cleanly"),
         ]
 
-        cy = hy + 2
+        wrapped = []
         for title_str, desc in help_lines:
-            if cy >= hy + hh - 3:
+            rows = textwrap.wrap(desc, width=desc_w, break_long_words=True,
+                                 break_on_hyphens=False) or [""]
+            wrapped.append((title_str, rows))
+
+        needed = 2 + sum(len(rows) for _, rows in wrapped) + 2
+        hh = max(8, min(height - 4, needed))
+        hy = (height - hh) // 2
+
+        # Clear the full rows behind the overlay so no text bleeds around the box.
+        canvas.fill_rect(0, hy, width, hh, " ", Style())
+
+        canvas.draw_box(hx, hy, hw, hh, title="Help & Shortcuts",
+                        style=Style(bg="black", fg="white"),
+                        border_style=Style(fg="yellow", bold=True),
+                        ascii_mode=state.ascii_mode)
+
+        cy = hy + 2
+        last_cy = hy + hh - 3
+        for title_str, rows in wrapped:
+            if cy > last_cy:
                 break
-            canvas.draw_text(hx + 3, cy, pad_str(title_str, 12), Style(bold=True, fg="cyan"))
-            canvas.draw_text(hx + 16, cy, desc, Style())
-            cy += 2
+            canvas.draw_text(hx + 2, cy, pad_str(title_str, title_col_w),
+                             Style(bold=True, fg="cyan"), max_width=title_col_w)
+            for i, row in enumerate(rows):
+                if cy > last_cy:
+                    break
+                canvas.draw_text(hx + desc_x_off, cy, row, Style(), max_width=desc_w)
+                cy += 1
 
         close_note = "Press any key to close help"
-        canvas.draw_text(hx + (hw - len(close_note)) // 2, hy + hh - 2, close_note, Style(dim=True))
+        note_x = hx + max(1, (hw - str_width(close_note)) // 2)
+        canvas.draw_text(note_x, hy + hh - 2, truncate_str(close_note, hw - 2),
+                         Style(dim=True), max_width=max(0, hx + hw - 1 - note_x))

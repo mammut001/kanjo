@@ -484,6 +484,11 @@ def run_curses_tui(
                 state.scroll_top = 0
                 continue
 
+            # Meters expanded (M or F7)
+            if ch in (ord('M'), getattr(curses, "KEY_F7", -999)):
+                state.meters_expanded = not state.meters_expanded
+                continue
+
             # Help (? or F1)
             if ch in (ord('?'), getattr(curses, "KEY_F1", -999)):
                 state.show_help = True

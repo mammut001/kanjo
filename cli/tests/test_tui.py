@@ -483,6 +483,85 @@ class TUIRenderTest(unittest.TestCase):
         last_line = canvas.get_line_text(h - 1)
         self.assertIn("F10", last_line)
 
+    def _render_sample_canvas(self, w, h, show_help=False):
+        doc = load_sample_fixture()
+        tz = get_tz(doc)
+        now = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
+        filtered = filter_report(doc, TimeRange.ALL, now=now)
+        p_rows = build_project_rows(filtered, now, tz)
+        state = TUIState(version="0.5.4", show_help=show_help)
+        canvas = Canvas(w, h)
+        render_ui(
+            canvas, state, filtered, build_total_view_model(filtered),
+            build_subscription_meters(doc, now=now),
+            build_antigravity_accounts_section(doc, now=now),
+            p_rows, build_project_footer_rows(filtered, now, tz),
+            build_model_rows(filtered), build_agent_rows(filtered),
+            build_day_rows(filtered)
+        )
+        return canvas, p_rows
+
+    def test_layout_round_sample_sizes(self):
+        for w, h in ((80, 24), (100, 30), (120, 40), (200, 50)):
+            canvas, p_rows = self._render_sample_canvas(w, h)
+            lines = [canvas.get_line_text(y) for y in range(h)]
+
+            for y, line in enumerate(lines):
+                self.assertLessEqual(str_width(line), w,
+                                     f"Line {y} wider than {w} at {w}x{h}: {line!r}")
+
+            header_y = next(y for y, line in enumerate(lines) if "PROJECT" in line)
+            names = {r.name for r in p_rows}
+            row_count = sum(
+                1 for line in lines[header_y + 1:]
+                if any(line.startswith(name) for name in names)
+            )
+            if (w, h) == (80, 24):
+                self.assertGreaterEqual(
+                    row_count, 5,
+                    f"Expected >=5 project rows at 80x24, got {row_count}"
+                )
+
+            for line in lines:
+                for idx, ch in enumerate(line):
+                    if ch == "[" and idx > 0:
+                        self.assertEqual(
+                            line[idx - 1], " ",
+                            f"Meter label touches '[' at {w}x{h}: {line!r}"
+                        )
+
+            if w >= 110:
+                self.assertTrue(
+                    any(line.count("●") >= 2 or line.count("[") >= 2 for line in lines),
+                    f"Expected two-column meter layout at {w}x{h}"
+                )
+
+    def test_help_overlay_fits_sample_sizes(self):
+        for w, h in ((80, 24), (100, 30), (120, 40), (200, 50)):
+            canvas, _ = self._render_sample_canvas(w, h, show_help=True)
+            lines = [canvas.get_line_text(y) for y in range(h)]
+
+            for y, line in enumerate(lines):
+                self.assertLessEqual(str_width(line), w,
+                                     f"Help line {y} wider than {w} at {w}x{h}: {line!r}")
+
+            top = next(y for y, line in enumerate(lines) if "Help & Shortcuts" in line)
+            left = lines[top].index("┌")
+            right = lines[top].rindex("┐")
+            bottom = next(y for y in range(top, h) if lines[y][left] == "└")
+
+            for y in range(top, bottom + 1):
+                stripped = lines[y].rstrip()
+                if y in (top, bottom):
+                    self.assertIn(stripped[-1], "┐┘", f"Bad help border at {w}x{h}: {stripped!r}")
+                else:
+                    self.assertEqual(
+                        lines[y][right], "│",
+                        f"Help content overflowed border at {w}x{h} line {y}: {lines[y]!r}"
+                    )
+                    self.assertTrue(stripped.endswith("│"),
+                                    f"Help line does not end with border at {w}x{h}: {stripped!r}")
+
     def test_wide_cjk_characters(self):
         self.assertEqual(char_width("中"), 2)
         self.assertEqual(char_width("文"), 2)
@@ -630,6 +709,8 @@ class TUIRenderTest(unittest.TestCase):
         # Exercise scripted key sequences: range switch, tab view switch, help toggle, filter open/cancel, quit
         scripted_keys = [
             ord('2'),       # Range: Today
+            ord('M'),       # Toggle expanded meters
+            ord('M'),       # Restore normal meters
             ord('\t'),      # Next view: Models
             ord('?'),       # Open help
             ord('?'),       # Close help
@@ -660,6 +741,18 @@ class TUIStaticTest(unittest.TestCase):
         self.assertIn("Kanjo", out_nocolor)
         self.assertIn("Total", out_nocolor)
         self.assertIn("F1Help", out_nocolor)
+
+    def test_static_colored_highlighting(self):
+        doc = load_sample_fixture()
+        tz = get_tz(doc)
+        now = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
+        out = render_static_snapshot(doc, width=120, no_color=False, now=now)
+        self.assertIn("\033[1;7;30;46m", out)  # active range tab: bold + reverse
+
+        filtered = filter_report(doc, TimeRange.ALL, now=now)
+        p_rows = build_project_rows(filtered, now, tz)
+        row_line = next(line for line in out.splitlines() if p_rows[0].name in line)
+        self.assertIn("\033[1;7", row_line)  # selected project row: reverse video
 
     def test_cli_usage_data_flag_isolated(self):
         """Item 2: --data PATH loads an export JSON without scanning or cache writes."""
