@@ -29,7 +29,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from .cache import _cache_dir
 from .sources.base import Message, Session, iso_utc, local_zone
 
-LOGS_CACHE_VERSION = 4
+LOGS_CACHE_VERSION = 5
 _FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})")
 _GLOG_LINE_RE = re.compile(r"^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?")
 _EMAIL_RE = re.compile(r"\bemail=([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})")
@@ -55,6 +55,7 @@ class LaunchSpan:
     emails: Set[str] = field(default_factory=set)
     conversations: Set[str] = field(default_factory=set)
     auth_ts: Optional[float] = None
+    auth_events: List[Tuple[float, str]] = field(default_factory=list)
 
 
 def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
@@ -84,6 +85,7 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
     has_keyring_load: bool = False
     keyring_auth_ts: Optional[float] = None
     apply_auth_ts: Optional[float] = None
+    auth_events: List[Tuple[float, str]] = []
 
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -126,10 +128,12 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
                         apply_auth_ts = current_line_ts
 
                 # 2. Email detection
+                ts_for_email = current_line_ts if current_line_ts is not None else (last_glog_ts if last_glog_ts is not None else start_ts)
                 for em in _EMAIL_RE.findall(line):
                     clean_em = em.strip().lower()
                     if clean_em:
                         emails.add(clean_em)
+                        auth_events.append((ts_for_email, clean_em))
 
                 # 3. Conversation detection (created, active, streaming)
                 for pat in _CONV_PATTERNS:
@@ -167,6 +171,7 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
         emails=emails,
         conversations=conversations,
         auth_ts=auth_ts,
+        auth_events=auth_events,
     )
 
 
@@ -274,6 +279,7 @@ class AntigravityAccountIndex:
                             emails=set(cached_entry.get("emails") or []),
                             conversations=set(cached_entry.get("conversations") or []),
                             auth_ts=float(cached_entry["auth_ts"]) if cached_entry.get("auth_ts") is not None else None,
+                            auth_events=[(float(ev[0]), str(ev[1])) for ev in cached_entry.get("auth_events") or []],
                         )
                         new_cached_files[path] = cached_entry
                     except (KeyError, ValueError, TypeError):
@@ -289,6 +295,7 @@ class AntigravityAccountIndex:
                             "auth_ts": span.auth_ts,
                             "emails": sorted(span.emails),
                             "conversations": sorted(span.conversations),
+                            "auth_events": [(ev[0], ev[1]) for ev in span.auth_events],
                         }
                         dirty = True
 

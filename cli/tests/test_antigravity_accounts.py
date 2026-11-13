@@ -70,6 +70,8 @@ I1112 12:05:00.789012       1 server.go:500] Shutting down
         span = parse_log_file(log_path)
         self.assertIsNotNone(span)
         self.assertEqual(span.emails, {"alice.doe@gmail.com"})
+        self.assertEqual(len(span.auth_events), 1)
+        self.assertEqual(span.auth_events[0][1], "alice.doe@gmail.com")
         # Created and active=true are counted; active=false and path UUIDs are ignored
         self.assertIn(cid_created.lower(), span.conversations)
         self.assertIn(cid_active.lower(), span.conversations)
@@ -341,6 +343,8 @@ I1112 17:10:00.000000 1 server.go:500] Exit
             mock_parse.assert_not_called()
             self.assertEqual(len(idx2.spans), 1)
             self.assertEqual(idx2.get_current_account(), "cached@gmail.com")
+            self.assertEqual(len(idx2.spans[0].auth_events), 1)
+            self.assertEqual(idx2.spans[0].auth_events[0][1], "cached@gmail.com")
 
 
 class KanjoAccountsCommandTest(unittest.TestCase):

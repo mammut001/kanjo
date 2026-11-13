@@ -1,9 +1,11 @@
 """Tests for Antigravity login management, switcher, and backend safety."""
 
+import hashlib
 import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -411,6 +413,145 @@ class AgyLoginTest(unittest.TestCase):
             span3 = parse_log_file(log3)
             self.assertIsNone(span3.auth_ts)
             self.assertEqual(span3.emails, {"charlie@example.com"})
+
+    def test_refresh_by_live_single_account_process(self):
+        # Refresh by a running process: launch started 100.0, loaded keyring as X,
+        # slot mdat moved to 150.0 (silent token refresh by agy), process alive until 200.0,
+        # no later launch -> get_slot_owner returns X.
+        backend = FakeKeychainBackend(
+            slot=b"x_refreshed_bytes",
+            slot_mdat=150.0,
+            saved={"x@example.com": b"x_old_bytes"},
+        )
+        s1 = LaunchSpan(
+            path="cli-1.log",
+            start=100.0,
+            end=200.0,
+            emails={"x@example.com"},
+            auth_ts=100.5,
+            auth_events=[(100.5, "x@example.com")],
+        )
+        idx = FakeAccountIndex(spans=[s1])
+        self.assertEqual(get_slot_owner(backend, idx), "x@example.com")
+
+        # Sync updates X's saved copy with the silently refreshed token
+        res = sync(backend, idx)
+        self.assertEqual(res["status"], "ok")
+        self.assertTrue(res["synced"])
+        self.assertEqual(res["account"], "x@example.com")
+        self.assertEqual(backend.read_saved("x@example.com"), b"x_refreshed_bytes")
+
+    def test_two_live_processes_different_emails_returns_none(self):
+        # Two running processes alive at mdat with different accounts -> ambiguous, return None
+        backend = FakeKeychainBackend(
+            slot=b"ambiguous_token",
+            slot_mdat=150.0,
+            saved={"x@example.com": b"x_tok", "y@example.com": b"y_tok"},
+        )
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=200.0, emails={"x@example.com"}, auth_ts=100.5)
+        s2 = LaunchSpan(path="cli-2.log", start=110.0, end=210.0, emails={"y@example.com"}, auth_ts=110.5)
+        idx = FakeAccountIndex(spans=[s1, s2])
+        self.assertIsNone(get_slot_owner(backend, idx))
+
+    def test_live_process_logs_different_email_after_mdat(self):
+        # Live process X logs applyAuthResult: email=Y after mdat (interactive login)
+        # -> None by refresh rule, but evidence rule still works once a later launch exists.
+        backend = FakeKeychainBackend(
+            slot=b"token_y",
+            slot_mdat=150.0,
+            saved={"x@example.com": b"token_x", "y@example.com": b"token_y"},
+        )
+        # s1 started as X, but at 160.0 (after mdat=150.0) logged an auth line as Y
+        s1 = LaunchSpan(
+            path="cli-1.log",
+            start=100.0,
+            end=300.0,
+            emails={"x@example.com", "y@example.com"},
+            auth_ts=100.5,
+            auth_events=[(100.5, "x@example.com"), (160.0, "y@example.com")],
+        )
+        idx_no_later = FakeAccountIndex(spans=[s1])
+        # Refresh rule refuses because of different email logged after mdat-1
+        self.assertIsNone(get_slot_owner(backend, idx_no_later))
+
+        # Once a later launch exists with auth_ts >= mdat + 1.0, evidence rule triggers
+        s2 = LaunchSpan(
+            path="cli-2.log",
+            start=200.0,
+            end=250.0,
+            emails={"y@example.com"},
+            auth_ts=200.5,
+            auth_events=[(200.5, "y@example.com")],
+        )
+        idx_with_later = FakeAccountIndex(spans=[s1, s2])
+        self.assertEqual(get_slot_owner(backend, idx_with_later), "y@example.com")
+
+    def test_kanjo_switch_while_process_alive_hash_record_guard(self):
+        # Kanjo switch to Y while a process as X is alive -> owner Y via the hash record,
+        # and sync does not write Y's bytes into X's copy.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backend = FakeKeychainBackend(
+                slot=b"x_secret_token",
+                slot_mdat=100.0,
+                saved={"x@example.com": b"x_secret_token", "y@example.com": b"y_saved_token"},
+            )
+            # Process X is alive through timestamp 500
+            s_live_x = LaunchSpan(
+                path="cli-1.log",
+                start=50.0,
+                end=500.0,
+                emails={"x@example.com"},
+                auth_ts=50.5,
+            )
+            idx = FakeAccountIndex(spans=[s_live_x])
+
+            # Switch to Y
+            code, res = switch("y@example.com", backend, idx, cache_dir=tmpdir)
+            self.assertEqual(code, 0)
+            self.assertEqual(res["status"], "ok")
+            self.assertEqual(res["account"], "y@example.com")
+            self.assertEqual(backend.read_slot(), b"y_saved_token")
+
+            # get_slot_owner identifies Y via hash record despite live process X
+            owner = get_slot_owner(backend, idx, slot_bytes=backend.read_slot(), cache_dir=tmpdir)
+            self.assertEqual(owner, "y@example.com")
+
+            # sync does NOT write Y's bytes into X's copy
+            sync_res = sync(backend, idx, cache_dir=tmpdir)
+            self.assertEqual(sync_res["status"], "ok")
+            self.assertEqual(backend.read_saved("x@example.com"), b"x_secret_token")
+            self.assertEqual(backend.read_saved("y@example.com"), b"y_saved_token")
+
+    def test_state_file_permissions_and_no_secret_content(self):
+        # State file permissions must be 0600 and contain no secret bytes (only sha256 hex).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            secret_token = b"TOP_SECRET_OAUTH_TOKEN_DO_NOT_WRITE_RAW_KEYRING_VALUE_12345"
+            backend = FakeKeychainBackend(
+                slot=b"prev_token",
+                slot_mdat=50.0,
+                saved={"x@example.com": b"prev_token", "y@example.com": secret_token},
+            )
+            code, res = switch("y@example.com", backend, FakeAccountIndex(), cache_dir=tmpdir)
+            self.assertEqual(code, 0)
+
+            state_file = os.path.join(tmpdir, "agy-slot-write.json")
+            self.assertTrue(os.path.exists(state_file))
+
+            # 0600 permissions
+            st = os.stat(state_file)
+            self.assertEqual(stat.S_IMODE(st.st_mode), 0o600)
+
+            # No secret content
+            with open(state_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertNotIn("TOP_SECRET", content)
+            self.assertNotIn(secret_token.decode("utf-8"), content)
+
+            data = json.loads(content)
+            self.assertEqual(data["sha256"], hashlib.sha256(secret_token).hexdigest())
+            self.assertEqual(data["email"], "y@example.com")
+            self.assertIn("written_at", data)
 
 
 if __name__ == "__main__":

@@ -14,17 +14,75 @@ never logged, and never included in error messages or exceptions.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Dict, List, Optional, Set, Tuple
+
+from .cache import _cache_dir
 
 SLOT_SERVICE = "gemini"
 SLOT_ACCOUNT = "antigravity"
 SAVED_SERVICE = "com.lanshuagent.kanjo.agy-login"
+SLOT_WRITE_STATE_FILE = "agy-slot-write.json"
+
+
+def _slot_write_state_path(cache_dir: Optional[str] = None) -> str:
+    cdir = cache_dir or _cache_dir()
+    return os.path.join(cdir, SLOT_WRITE_STATE_FILE)
+
+
+def _read_slot_write_record(cache_dir: Optional[str] = None) -> Optional[dict]:
+    path = _slot_write_state_path(cache_dir)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and "sha256" in data and "email" in data:
+            return data
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _record_slot_write(secret_bytes: bytes, email: str, cache_dir: Optional[str] = None) -> None:
+    cdir = cache_dir or _cache_dir()
+    try:
+        os.makedirs(cdir, exist_ok=True)
+    except OSError:
+        pass
+    digest = hashlib.sha256(secret_bytes).hexdigest()
+    payload = {
+        "sha256": digest,
+        "email": email.strip().lower(),
+        "written_at": time.time(),
+    }
+    path = _slot_write_state_path(cdir)
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(prefix=".agy-slot-write-", dir=cdir)
+        os.chmod(tmp, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, separators=(",", ":"))
+        os.replace(tmp, path)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    except OSError:
+        pass
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 class KeychainBackend:
@@ -191,15 +249,42 @@ def set_backend(backend: Optional[KeychainBackend]) -> None:
     _BACKEND = backend
 
 
-def get_slot_owner(backend: KeychainBackend, index=None) -> Optional[str]:
+def get_slot_owner(
+    backend: KeychainBackend,
+    index=None,
+    slot_bytes: Optional[bytes] = None,
+    cache_dir: Optional[str] = None,
+) -> Optional[str]:
     """Determine the account in the slot.
 
-    Owner = email of the earliest span with auth_ts >= mdat + 1.0 (strictly
-    after the whole mdat second) that loaded from the keyring and has exactly
-    one email. Spans with auth_ts inside [mdat, mdat+1) are ambiguous: if any
-    such span exists with a DIFFERENT email than the first qualifying span,
-    return None. Never guess.
+    1. Kanjo-write hash match: if sha256(current slot bytes) equals the recorded
+       hash from a Kanjo switch, owner = recorded email.
+    2. Evidence rule: email of earliest span with auth_ts >= mdat + 1.0 that loaded
+       from keyring and has exactly one email. Spans with auth_ts in [mdat, mdat+1)
+       are ambiguous: if any such span exists with a different email, return None.
+    3. Alive-at-mdat refresh rule: if evidence rule finds nothing, look at
+       keyring-loaded spans alive at mdat (start <= mdat+1 and end >= mdat-1).
+       If there is at least one, they all have exactly one and the same email X,
+       and none of them logged any auth/email line with a different email at or
+       after mdat-1, owner = X.
+    4. Otherwise None.
     """
+    if slot_bytes is None:
+        slot_bytes = backend.read_slot()
+
+    effective_cache_dir = cache_dir or getattr(index, "cache_dir", None)
+
+    # 1. Kanjo-write hash match
+    if slot_bytes:
+        record = _read_slot_write_record(effective_cache_dir)
+        if record:
+            rec_sha = record.get("sha256")
+            rec_email = record.get("email")
+            if rec_sha and rec_email:
+                cur_sha = hashlib.sha256(slot_bytes).hexdigest()
+                if cur_sha.lower() == str(rec_sha).strip().lower():
+                    return str(rec_email).strip().lower()
+
     mdat = backend.slot_modified_at()
     if mdat is None:
         return None
@@ -211,6 +296,7 @@ def get_slot_owner(backend: KeychainBackend, index=None) -> Optional[str]:
     keyring_spans = [s for s in index.spans if s.auth_ts is not None]
     keyring_spans.sort(key=lambda s: s.auth_ts)
 
+    # 2. Evidence rule
     first_qualifying_email = None
     for s in keyring_spans:
         if s.auth_ts < (mdat + 1.0):
@@ -221,33 +307,70 @@ def get_slot_owner(backend: KeychainBackend, index=None) -> Optional[str]:
         elif len(s.emails) > 1:
             return None
 
-    if first_qualifying_email is None:
-        return None
+    if first_qualifying_email is not None:
+        for s in keyring_spans:
+            if mdat <= s.auth_ts < (mdat + 1.0):
+                if not s.emails:
+                    continue
+                s_emails = {e.lower() for e in s.emails}
+                if len(s_emails) != 1 or next(iter(s_emails)) != first_qualifying_email:
+                    return None
+        return first_qualifying_email
 
+    # Spans with auth_ts in [mdat, mdat+1) are ambiguous; if any exists with no qualifying span >= mdat+1, return None
     for s in keyring_spans:
         if mdat <= s.auth_ts < (mdat + 1.0):
-            if not s.emails:
-                continue
-            s_emails = {e.lower() for e in s.emails}
-            if len(s_emails) != 1 or next(iter(s_emails)) != first_qualifying_email:
-                return None
+            return None
 
-    return first_qualifying_email
+    # 3. Alive-at-mdat refresh rule
+    # Look at keyring-loaded spans that were ALIVE at mdat (start <= mdat+1 and end >= mdat-1)
+    # and loaded keyring before mdat (auth_ts < mdat)
+    live_spans = [
+        s for s in keyring_spans
+        if s.start <= (mdat + 1.0) and s.end >= (mdat - 1.0) and s.auth_ts < mdat
+    ]
+    if live_spans:
+        distinct_emails: Set[str] = set()
+        all_single = True
+        for s in live_spans:
+            if len(s.emails) != 1:
+                all_single = False
+                break
+            distinct_emails.add(next(iter(s.emails)).lower())
+        if all_single and len(distinct_emails) == 1:
+            candidate = next(iter(distinct_emails))
+            # none of them logged any auth/email line with a different email at or after mdat - 1
+            has_different_auth = False
+            for s in live_spans:
+                for event_ts, event_email in getattr(s, "auth_events", []):
+                    if event_ts >= (mdat - 1.0) and str(event_email).strip().lower() != candidate:
+                        has_different_auth = True
+                        break
+                if has_different_auth:
+                    break
+            if not has_different_auth:
+                return candidate
+
+    return None
 
 
-def sync(backend: Optional[KeychainBackend] = None, index=None) -> dict:
+def sync(
+    backend: Optional[KeychainBackend] = None,
+    index=None,
+    cache_dir: Optional[str] = None,
+) -> dict:
     """Save/refresh the slot value into that account's saved copy if owner is known."""
     backend = backend or get_backend()
     if backend is None:
         return {"status": "error", "message": "only supported on macOS"}
 
-    owner = get_slot_owner(backend, index)
-    if not owner:
-        return {"status": "ok", "synced": False, "reason": "slot owner unknown"}
-
     slot_bytes = backend.read_slot()
     if not slot_bytes:
         return {"status": "ok", "synced": False, "reason": "slot empty"}
+
+    owner = get_slot_owner(backend, index, slot_bytes=slot_bytes, cache_dir=cache_dir)
+    if not owner:
+        return {"status": "ok", "synced": False, "reason": "slot owner unknown"}
 
     saved_bytes = backend.read_saved(owner)
     if saved_bytes != slot_bytes:
@@ -261,7 +384,12 @@ def sync(backend: Optional[KeychainBackend] = None, index=None) -> dict:
     return {"status": "ok", "synced": False, "account": owner, "reason": "already up to date"}
 
 
-def switch(email: str, backend: Optional[KeychainBackend] = None, index=None) -> Tuple[int, dict]:
+def switch(
+    email: str,
+    backend: Optional[KeychainBackend] = None,
+    index=None,
+    cache_dir: Optional[str] = None,
+) -> Tuple[int, dict]:
     """Switch active login slot to target email."""
     backend = backend or get_backend()
     if backend is None:
@@ -272,7 +400,7 @@ def switch(email: str, backend: Optional[KeychainBackend] = None, index=None) ->
         return 1, {"status": "error", "message": "email cannot be empty"}
 
     # 1. run sync first (keeps the outgoing account's refreshed token)
-    sync(backend, index)
+    sync(backend, index, cache_dir=cache_dir)
 
     # After step 1 sync, if slot bytes equal target's saved copy already, return ok without writing
     target_bytes = backend.read_saved(target)
@@ -287,7 +415,7 @@ def switch(email: str, backend: Optional[KeychainBackend] = None, index=None) ->
     # 2. if slot owner is unknown and slot is non-empty and differs from every saved copy, refuse
     slot_bytes = backend.read_slot()
     if slot_bytes:
-        owner = get_slot_owner(backend, index)
+        owner = get_slot_owner(backend, index, slot_bytes=slot_bytes, cache_dir=cache_dir)
         if not owner:
             saved_list = backend.list_saved()
             matches_any = False
@@ -324,6 +452,8 @@ def switch(email: str, backend: Optional[KeychainBackend] = None, index=None) ->
             "message": "read-back mismatch after writing slot; restored previous login",
         }
 
+    _record_slot_write(target_bytes, target, cache_dir=cache_dir)
+
     # 5. output
     return 0, {
         "status": "ok",
@@ -359,7 +489,7 @@ def list_accounts_login(backend: Optional[KeychainBackend] = None, index=None) -
     return 0, {"status": "ok", "current": current_account, "accounts": accounts}
 
 
-def forget(email: str, backend: Optional[KeychainBackend] = None) -> Tuple[int, dict]:
+def forget(email: str, backend: Optional[KeychainBackend] = None, cache_dir: Optional[str] = None) -> Tuple[int, dict]:
     """Remove saved login for email."""
     backend = backend or get_backend()
     if backend is None:
@@ -367,4 +497,12 @@ def forget(email: str, backend: Optional[KeychainBackend] = None) -> Tuple[int, 
 
     target = email.strip().lower()
     backend.delete_saved(target)
+    try:
+        record = _read_slot_write_record(cache_dir)
+        if record and str(record.get("email")).strip().lower() == target:
+            path = _slot_write_state_path(cache_dir)
+            if os.path.exists(path):
+                os.unlink(path)
+    except OSError:
+        pass
     return 0, {"status": "ok", "account": target, "action": "forgotten"}
