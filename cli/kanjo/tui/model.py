@@ -215,6 +215,29 @@ def parse_iso_dt(value: Optional[str], default_tz: Optional[datetime.tzinfo] = N
         return None
 
 
+_WINDOW_TITLE_WORDS = (
+    (re.compile(r"weekly|week", re.IGNORECASE), "每周"),
+    (re.compile(r"monthly|month", re.IGNORECASE), "每月"),
+    (re.compile(r"daily|day", re.IGNORECASE), "每日"),
+    (re.compile(r"5[- ]?hours?", re.IGNORECASE), "5小时"),
+    (re.compile(r"5h", re.IGNORECASE), "5小时"),
+)
+
+
+def localize_window_title(title: str, lang: Optional[str]) -> str:
+    """Localize the descriptive part of a data-supplied quota window title.
+
+    Brand / model names are kept as-is (``Claude/GPT Weekly`` becomes
+    ``Claude/GPT 每周``); unknown titles are returned unchanged.
+    """
+    if normalize_lang(lang) != "zh" or not title:
+        return title
+    out = title
+    for pattern, replacement in _WINDOW_TITLE_WORDS:
+        out = pattern.sub(replacement, out, count=1)
+    return out
+
+
 def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: datetime.tzinfo,
                            lang: str = "en") -> str:
     """Format relative countdown to reset_dt: resets in 2d 4h, resets 18:40, resets in 35m."""
@@ -1177,6 +1200,7 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
             except (ValueError, TypeError):
                 ew_pct = None
             ew_title = ew.get("title") or t("meter.extra", lang)
+            ew_title = localize_window_title(str(ew_title), lang)
             if ew_reset is not None:
                 now_utc = now.astimezone(timezone.utc)
                 reset_utc = ew_reset.astimezone(timezone.utc)

@@ -1125,6 +1125,35 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         text = "".join(str(c[2]) for c in scr.captured if len(c) > 2)
         return text
 
+    def test_extra_quota_window_titles_localized(self):
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {
+                "antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99},
+            },
+            "quota_windows": {
+                "antigravity": {
+                    "extra_windows": [
+                        {"title": "Claude/GPT Weekly", "used_percent": 26.0,
+                         "resets_at": "2026-11-20T12:00:00Z"},
+                        {"title": "Claude/GPT 5h", "used_percent": 50.0,
+                         "resets_at": "2026-11-13T18:00:00Z"},
+                    ],
+                },
+            },
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        names = [w.name for m in build_subscription_meters(doc, now=now, lang="zh")
+                 for w in m.windows]
+        self.assertIn("Claude/GPT 每周", names)
+        self.assertIn("Claude/GPT 5小时", names)
+        self.assertTrue(all("Week" not in n and "5h" not in n for n in names))
+        en_names = [w.name for m in build_subscription_meters(doc, now=now, lang="en")
+                    for w in m.windows]
+        self.assertIn("Claude/GPT Weekly", en_names)
+        self.assertIn("Claude/GPT 5h", en_names)
+
     def test_account_rows_carry_login_metadata(self):
         sec = build_antigravity_accounts_section(self.doc, now=self.now, lang="en")
         self.assertIsNotNone(sec)
