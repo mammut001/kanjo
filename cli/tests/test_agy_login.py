@@ -522,6 +522,7 @@ class AgyLoginTest(unittest.TestCase):
             self.assertEqual(backend.read_saved("x@example.com"), b"x_secret_token")
             self.assertEqual(backend.read_saved("y@example.com"), b"y_saved_token")
 
+    @unittest.skipIf(sys.platform == "win32", "POSIX file modes do not apply on Windows")
     def test_state_file_permissions_and_no_secret_content(self):
         # State file permissions must be 0600 and contain no secret bytes (only sha256 hex).
         with tempfile.TemporaryDirectory() as tmpdir:
