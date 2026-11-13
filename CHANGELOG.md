@@ -6,6 +6,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Family usage reporting on Linux.** `scripts/install-family-linux.sh` is an interactive installer for
+  servers and desktops (no root): it checks for Python 3.9+, installs the Kanjo CLI under
+  `~/.local/share/kanjo-family`, asks for the server URL, the report token (hidden input, stored in
+  `~/.config/kanjo-family/report.env` with mode 600, never on a command line) and a member label, reports every
+  30 minutes through cron (or a systemd user timer when cron is missing) and sends a first report, telling you
+  plainly when the server rejects the token. Re-running keeps the saved settings and updates the CLI;
+  `--uninstall` removes the schedule, the token and the files. It also works piped from curl, reading answers
+  from the terminal. Tested on Ubuntu 26.04 against a mock server: wrong token, replace token, curl-pipe mode,
+  cron entry replaced rather than duplicated, uninstall.
+
 ## [0.5.4] - 2026-11-12
 
 ### Fixed

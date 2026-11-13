@@ -162,7 +162,7 @@ If someone in your family has already deployed a server, ask them for the **serv
 | Mac with Apple silicon (M1 or later) | Download `Kanjo-<version>-macos.dmg` from [Releases](https://github.com/mammut001/kanjo/releases/latest) and install it as above. |
 | Mac with Intel | The same DMG: it is a universal build. |
 | Windows (no admin rights needed) | Run in PowerShell:<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f -Server https://<your-family-server>'`<br>*(Check company IT policy before running on work computers; to uninstall, run the script with `-Uninstall`)* |
-| Linux | Not supported yet. There is no app, and the CLI has not been tested there. |
+| Linux (reporting only, no root needed) | Run in a terminal as the user who runs Antigravity:<br>`bash <(curl -fsSL https://raw.githubusercontent.com/mammut001/kanjo/main/scripts/install-family-linux.sh) --server https://<your-family-server>`<br>*(It asks for the token with hidden input, reports every 30 minutes via cron or a systemd user timer, and sends a first report. Needs Python 3.9+. To uninstall, run it again with `--uninstall`)* |
 
 1. On Mac: Open Kanjo → Settings → **Family usage**, turn it on, choose **Join a family**, enter the server URL, and paste the token. It is stored securely in the macOS Keychain.
 2. That's it. Kanjo reports after its normal refreshes, at most every 15 minutes; **Report now** sends one immediately.
@@ -427,7 +427,7 @@ CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE
 | Apple 芯片的 Mac（M1 及以后） | 从 [Releases](https://github.com/mammut001/kanjo/releases/latest) 下载 `Kanjo-<版本>-macos.dmg`，按上面的方式安装。 |
 | Intel 芯片的 Mac | 下载同一个 DMG，是通用版。 |
 | Windows（无需管理员权限） | 在 PowerShell 中运行：<br>`powershell -ExecutionPolicy Bypass -NoProfile -Command '$f=Join-Path $env:TEMP kanjo-family.ps1; irm https://github.com/mammut001/kanjo/releases/latest/download/install-family-windows.ps1 -OutFile $f; & $f -Server https://<你的家庭服务器地址>'`<br>*(在公司电脑上运行前请确认符合公司 IT 规定；如需卸载，运行脚本并加上 `-Uninstall`)* |
-| Linux | 暂不支持：没有应用，CLI 也没有在这些系统上测试过。 |
+| Linux（只上报，无需 root） | 用平时跑 Antigravity 的那个用户，在终端运行：<br>`bash <(curl -fsSL https://raw.githubusercontent.com/mammut001/kanjo/main/scripts/install-family-linux.sh) --server https://<你的家庭服务器地址>`<br>*(会提示粘贴令牌（输入不显示），用 cron 或 systemd 用户定时器每 30 分钟上报一次，并马上发一次。需要 Python 3.9+。卸载：再运行一次并加上 `--uninstall`)* |
 
 1. Mac 端：打开 Kanjo → 设置 → **家庭用量**，打开开关，选择 **加入家庭**，填入服务器地址并粘贴令牌（安全存储在 macOS 钥匙串中）。
 2. 完成。Kanjo 在每次刷新数据后自动上报，最多每 15 分钟一次；点 **立即上报** 可以马上发一次。
