@@ -17,7 +17,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--uninstall` removes the schedule, the token and the files. It also works piped from curl, reading answers
   from the terminal. Tested on Ubuntu 26.04 against a mock server: wrong token, replace token, curl-pipe mode,
   cron entry replaced rather than duplicated, uninstall.
-
 - **Antigravity Google account attribution and family report account filtering (`kanjo accounts`, `kanjo report-family --account`).**
   - Attributed Antigravity messages per-message to Google accounts by parsing launch log spans (`cli-*.log`, `acp-server-*.log`) into start/end time windows, authenticated email addresses, and created/active conversation IDs.
   - Added `kanjo accounts [--json]` command to inspect detected accounts, message counts, total tokens, first/last active timestamps, and unassigned usage. Local output only.
