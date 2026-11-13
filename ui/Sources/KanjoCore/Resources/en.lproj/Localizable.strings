@@ -99,6 +99,12 @@
 "settings.hidden_projects_count" = "Hidden projects: %d";
 "settings.unhide_all" = "Unhide all";
 "settings.projects_note" = "Hide or pin a project from its row in the overview (hover or right-click).";
+"settings.section.updates" = "Updates";
+"settings.updates.version" = "Kanjo %@";
+"settings.updates.automatic" = "Automatically check for updates";
+"settings.updates.check_now" = "Check for Updates…";
+"settings.updates.last_check" = "Last check: %@";
+"settings.updates.note" = "Updates install in place and Kanjo relaunches. You are only told about a new version when one is found.";
 "settings.section.quota_reset" = "Quota reset";
 "settings.grid.agent" = "Agent";
 "settings.grid.next_reset" = "Next weekly reset";
@@ -227,6 +233,13 @@
 "menu.refreshing" = "Refreshing…";
 "menu.updated_at" = "Updated %@";
 "menu.not_refreshed_yet" = "Not refreshed yet";
+"menu.update.available" = "%@ %@ is available";
+"menu.update.action" = "Update";
+"menu.update.help" = "Opens the update window. Install installs it and relaunches Kanjo.";
+"updates.never_checked" = "Never checked";
+"updates.just_now" = "Just now";
+"updates.minutes_ago" = "%dm ago";
+"updates.hours_ago" = "%dh ago";
 "menu.disk" = "Disk";
 "menu.settings" = "Settings";
 "menu.quit" = "Quit Kanjo";

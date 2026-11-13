@@ -8,6 +8,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **In-app updates on macOS (Sparkle).** Kanjo now ships Sparkle 2 in the `Kanjo` executable (only;
+  `KanjoCore` stays dependency-free for the iOS app) and checks
+  `https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml` once a day. A found update
+  appears as a "Kanjo X is available — Update" row at the top of the menu-bar popover, because a scheduled
+  check in an `LSUIElement` app otherwise shows its window behind every other app; clicking the row brings
+  Sparkle's window forward, and Install installs in place and relaunches. Settings gained an **Updates**
+  section (current version, automatic checks, "Check for Updates…", last check time). `package.sh` now
+  embeds and signs `Sparkle.framework` inside-out and derives `CFBundleVersion` from the version
+  (`0.5.2` → `502`), and `scripts/make-appcast.sh` signs the release zip into `appcast.xml` with
+  `sign_update --account kanjo`. The updater only starts from a packaged `.app` whose `Info.plist` has a
+  real `SUFeedURL` / `SUPublicEDKey`, so `swift run`, `--snapshot`, `--window` and `--data` are unaffected.
 - **Windows: an Appearance setting.** Settings has a new Appearance card right below Language with
   **Dark** (the new default on Windows), **Light** and **System** (follow Windows). The label and the three
   choices are localised like the rest of the app. The choice is stored in the same settings file as Language
