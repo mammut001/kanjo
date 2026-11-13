@@ -131,11 +131,19 @@ This installs `kanjo` for terminal use; the app already includes its own CLI. Py
 The CLI also runs on Windows (Python 3.9+): agent logs are read from `%USERPROFILE%\.claude`, `%USERPROFILE%\.codex`, `%APPDATA%` and `%LOCALAPPDATA%`, and `kanjo disk clean` moves files to the Recycle Bin.
 
 ```bash
+kanjo usage       # htop-style full-screen terminal UI (or `kanjo top`)
 kanjo doctor      # which logs were found
 kanjo projects    # table of repos by cost
 kanjo export      # the full JSON the app renders
 kanjo export --public-summary  # public high-level summary JSON
 ```
+
+`kanjo usage` (or `kanjo top`) provides an htop-style live terminal dashboard:
+- Quota meters for active subscription windows (weekly, 5-hour, extra windows)
+- Antigravity Google account attribution breakdown
+- Interactive scrollable tables for Projects (with 8-week heat strip), Models, Agents, and Days
+- Filter by name (`/`), switch views (`Tab` or `p`/`m`/`a`/`d`), switch ranges (`1`-`6` or `←`/`→`), project details (`Enter`)
+- Pure Python standard library only, 256-color / truecolor with monochrome/ASCII fallback (`--ascii`, `--no-color`, `--once`)
 
 ### Publish usage to a website (optional)
 
@@ -411,6 +419,20 @@ brew install --cask mammut001/kanjo/kanjo
 git clone https://github.com/mammut001/kanjo.git
 cd kanjo && ./install.sh
 ```
+
+```bash
+kanjo usage       # 类似 htop 的全终端交互看板（别名 `kanjo top`）
+kanjo doctor      # 查看发现了哪些日志
+kanjo projects    # 按花费排序的仓库表格
+kanjo export      # 导出完整 JSON 数据
+```
+
+`kanjo usage`（或 `kanjo top`）提供了类似 htop 的全屏终端仪表盘：
+- 订阅额度仪表条（周额度、5 小时额度及各 agent 额外窗口，按占用比例实时变色）
+- Antigravity 账号归属统计与当前登录账号高亮
+- 交互式表格：Projects（含 8 周燃烧热力条）、Models、Agents、Days
+- 键盘导航：`/` 搜索过滤、`Tab` 或 `p`/`m`/`a`/`d` 切换视图、`1`-`6` 切换时间范围、`Enter` 查看项目详情
+- 仅依赖 Python 标准库，支持 256 色/真彩色与 `--once` / `--ascii` / `--no-color` 静态输出
 
 CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`、`%APPDATA%`、`%LOCALAPPDATA%` 读取，`kanjo disk clean` 会移到回收站。
 

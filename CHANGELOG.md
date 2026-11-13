@@ -12,6 +12,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Added `antigravity_accounts` top-level block in `kanjo export` JSON, reporting all historical accounts and saved logins, with usage figures (`tokens`, `cost_usd`, `messages`) scoped to the current quota week / billing cycle / last 7 days, sorted by tokens descending then email. Strictly omitted from mobile export, publish summary, and family reports.
   - Added `cli/kanjo/agy_login.py` and `kanjo agy-account` command (`list`, `sync`, `switch`, `forget`) on macOS using `/usr/bin/security`. Secrets are fed strictly on stdin via `security -i` (never in `argv`), read back and verified, refusing to overwrite unsaved logins. Automatically syncs refreshed credentials on export.
   - In the macOS app Overview, clicking the Antigravity subscription row pins the quota card open, showing an accounts breakdown for the current quota week with compact token counts and costs, "● Current" indicator, and one-click "Switch" buttons with inline spinner and status notes. Unpins on click, Esc or outside click.
+- **`kanjo usage` (alias `kanjo top`): an htop-style full-screen terminal UI (pure Python stdlib).**
+  - Full-screen, keyboard-driven dashboard for Linux servers (SSH, headless) and any terminal without a desktop environment.
+  - Top meters: big totals line with agent share bar and legend; htop CPU-meter style blocks per subscription with weekly and 5-hour quota windows, level-based color thresholding (normal → agent color, warning ≥ 80% → yellow, critical ≥ 95% → red), and countdown/reset times.
+  - Antigravity Google account attribution section showing usage and current account marker for the active quota/billing window.
+  - Scrollable main table with 4 views (`Tab` / `F3` or keys `p m a d`): Projects (with agent dots and 8-week heat strip), Models, Agents (with share bar), and Days (with cost bar).
+  - Project detail drill-down pane (`Enter` to open, `Esc`/`Backspace` to close) showing by-agent, by-model, and 30-day sparkline breakdowns.
+  - F-key bar with full keyboard control: `1-6` or `←/→` range, `Tab` view, `↑↓ PgUp PgDn Home End` navigation, `/` or `F4` filter by name, `s` or `F6` cycle sort column, `r` or `F5` refresh, `?` or `F1` help overlay, `q` or `F10` quit.
+  - Non-blocking background scan with auto-refresh every `--interval` seconds (default 60) and animated spinner.
+  - Safe terminal restoration with graceful Ctrl-C handling, terminal resize handling, and small-terminal warning (< 60x15).
+  - Static mode snapshot with ANSI colors when output is piped, or with `--once`, or on Windows without curses.
 - **Family usage reporting on Linux.** `scripts/install-family-linux.sh` is an interactive installer for
   servers and desktops (no root): it checks for Python 3.9+, installs the Kanjo CLI under
   `~/.local/share/kanjo-family`, asks for the server URL, the report token (hidden input, stored in
