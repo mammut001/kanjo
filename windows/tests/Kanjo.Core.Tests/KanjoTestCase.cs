@@ -47,14 +47,28 @@ public abstract class KanjoTestCase : IDisposable
     ///
     /// 一旦进程里建立过 headless 会话，在测试线程上 new 任何 Avalonia 对象都会抛
     /// "Call from invalid thread"，所以所有涉及控件的测试都必须走这里。
+    ///
+    /// 外观 / headless 初始化也必须在**UI 线程上**做：<see cref="AppSetup.ConfigureHeadless"/>
+    /// 会取 <c>Application.Current</c>，而测试线程上看到的是上一轮 Dispatch 留下的那个
+    /// （已经拆掉了，但它开的窗口还在）。往那个 Application 写全局资源就会往正在拆除的窗口
+    /// 广播资源变化 —— 那是 CI 上偶发 ArgumentOutOfRangeException 的来源。
+    ///
+    /// 用例结束（含断言失败）后统一关掉它建的窗口，见 <see cref="TestWindows"/>。
     /// </summary>
     protected static void OnUi(Action body)
     {
-        AppSetup.ConfigureHeadless("light");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         Session.Dispatch(() =>
         {
-            body();
+            AppSetup.ConfigureHeadless("light");
+            try
+            {
+                body();
+            }
+            finally
+            {
+                TestWindows.CloseAll();
+            }
             return true;
         }, cts.Token).GetAwaiter().GetResult();
     }

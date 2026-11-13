@@ -22,11 +22,22 @@ public sealed class AppearanceTests : KanjoTestCase
 {
     private static Application App => Application.Current!;
 
-    /// <summary>每个用例结束后把外观与覆盖复位，避免影响别的测试。</summary>
+    /// <summary>
+    /// 每个用例结束后把外观、覆盖和色板都复位，避免影响别的测试。
+    ///
+    /// **色板也必须恢复**：<see cref="Palette.IsDark"/> 是进程级状态，而所有视图的画笔都是
+    /// 构造时取值的。只复位 <see cref="Appearance"/> 的 <c>Current</c> / <c>Override</c> 而不把色板
+    /// 切回去的话，下一个用例建出来的界面会带着上一个用例留下的浅 / 深色 ——
+    /// "某个用例自己单跑能过、整批跑就红" 就是这么来的。
+    ///
+    /// <see cref="Appearance.Force"/> 在 UI 线程上会同步改好色板和主题资源（不会 Post 出去），
+    /// 所以下面这行就够；<c>RunJobs</c> 只是把重建界面的队列任务清干净。
+    /// </summary>
     private static void Reset()
     {
         Appearance.Override = null;
         Appearance.Force(AppearanceChoice.Dark);
+        Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>等外观通知里的 UI 重建跑完（Appearance 会把非 UI 线程的调用 Post 过去）。</summary>

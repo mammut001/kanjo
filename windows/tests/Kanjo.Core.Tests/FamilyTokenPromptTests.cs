@@ -40,9 +40,11 @@ public sealed class FamilyTokenPromptTests : KanjoTestCase
 
     private static Window Show(Control page, double height = Metrics.PanelHeight)
     {
-        var window = new Window { Width = Metrics.PanelWidth, Height = height, Content = page };
-        window.Show();
-        LayOut(window);
+        var window = TestWindows.Show(page, Metrics.PanelWidth, height);
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        if (window.Content is Control content) content.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
         return window;
     }
 
@@ -255,20 +257,27 @@ public sealed class FamilyTokenPromptTests : KanjoTestCase
         });
     }
 
-    /// <summary>切换启用态的按钮：禁用外观和 <see cref="Ui.DisabledButton"/> 完全一致，启用后是真 Button。</summary>
+    /// <summary>
+    /// 切换启用态的按钮：禁用外观和 <see cref="Ui.DisabledButton"/> 完全一致，启用后是真 Button。
+    ///
+    /// 断言用的是**建按钮那一刻**的强调色，而不是断言时再取一次 <see cref="Palette.AccentFillColor"/>：
+    /// 色板是全局状态（别的用例 / 外观切换会改它），取两次就可能不一样，那样这条用例会因为
+    /// 跟它无关的原因红。这里只关心「启用态用的是强调色填充」。
+    /// </summary>
     [Fact]
     public void TestStateButtonSwitchesBetweenDisabledAndAccentLooks()
     {
         OnUi(() =>
         {
             var clicked = 0;
+            var accent = Palette.AccentFillColor;
             var button = new StateButton("Save", () => clicked++, enabled: false);
             Assert.IsType<Border>(button.Child);
 
             button.SetEnabled(true);
             var real = Assert.IsType<Button>(button.Child);
             Assert.True(real.IsEnabled);
-            Assert.Equal(Palette.AccentFillColor, ((Avalonia.Media.ISolidColorBrush)real.Background!).Color);
+            Assert.Equal(accent, ((Avalonia.Media.ISolidColorBrush)real.Background!).Color);
             real.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, clicked);
 
