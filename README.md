@@ -235,6 +235,39 @@ Release builds can be notarized with Apple’s notary service.
    ```
 This submits the app zip to Apple, staples the ticket to `Kanjo.app`, rebuilds the zip and DMG, signs the DMG, notarizes the DMG, and staples it.
 
+### Publish a macOS update
+
+Mac users update with one click inside the app: Kanjo bundles [Sparkle 2](https://sparkle-project.org)
+and reads an appcast from GitHub Releases.
+
+One-time setup on the release machine:
+
+```bash
+# EdDSA signing key; the private key stays in the login keychain under account "kanjo"
+ui/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account kanjo
+# paste the printed public key into ui/Resources/sparkle-public-ed-key.txt
+```
+
+Until that file holds a real key, local builds simply ship without the `SU` keys (no updater) and
+`./package.sh --notarize` refuses to run.
+
+Every release:
+
+```bash
+cd ui && ./package.sh --notarize          # build/Kanjo-<ver>-macos.zip, notarized and stapled
+cd .. && ./scripts/make-appcast.sh 0.6.0  # build/appcast.xml, signed with sign_update --account kanjo
+gh release create v0.6.0 \
+  ui/build/Kanjo-0.6.0-macos.zip ui/build/appcast.xml ui/build/Kanjo-0.6.0-macos.dmg \
+  --title "Kanjo 0.6.0" --notes "..."
+```
+
+Upload `appcast.xml` as a release asset next to the zip: `SUFeedURL` is
+`https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml`, so the newest release's
+feed is what installed copies read. `CFBundleVersion` is derived from the version
+(`major * 10000 + minor * 100 + patch`, e.g. `0.6.0` → `600`) and must keep increasing.
+The update shows up as a row at the top of the menu-bar popover ("Kanjo X is available — Update");
+clicking it opens Sparkle's window, and Install installs and relaunches the app.
+
 ### Building with iCloud sync
 
 Pass the Developer ID provisioning profile that contains the `iCloud.com.lanshuagent.kanjo` container:
@@ -428,6 +461,36 @@ CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE
    cd ui && ./package.sh --notarize
    ```
 该流程会将应用提交至 Apple 公证服务，装订（staple）公证票据至 `Kanjo.app`，重新构建 zip 与 DMG，对 DMG 签名并完成公证与装订。
+
+### 发布 macOS 更新
+
+Mac 用户在应用里点一下就能更新：Kanjo 内置 [Sparkle 2](https://sparkle-project.org)，从 GitHub Releases 读取 appcast。
+
+发布机上做一次：
+
+```bash
+# 生成 EdDSA 签名密钥；私钥留在登录钥匙串的 "kanjo" 账号下
+ui/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account kanjo
+# 把打印出来的公钥填进 ui/Resources/sparkle-public-ed-key.txt
+```
+
+这个文件还是占位符时，本地构建照常但不会写 `SU` 键（更新关闭），`./package.sh --notarize` 也会直接拒绝。
+
+每次发布：
+
+```bash
+cd ui && ./package.sh --notarize          # 产出 build/Kanjo-<版本>-macos.zip（已公证、已装订）
+cd .. && ./scripts/make-appcast.sh 0.6.0  # 产出 build/appcast.xml，用 sign_update --account kanjo 签名
+gh release create v0.6.0 \
+  ui/build/Kanjo-0.6.0-macos.zip ui/build/appcast.xml ui/build/Kanjo-0.6.0-macos.dmg \
+  --title "Kanjo 0.6.0" --notes "..."
+```
+
+`appcast.xml` 必须和 zip 一起作为 release 资源上传：`SUFeedURL` 指向
+`https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml`，已安装的副本读到的就是最新一次发布。
+`CFBundleVersion` 由版本号派生（`major * 10000 + minor * 100 + patch`，例如 `0.6.0` → `600`），每次发布必须变大。
+发现更新时，菜单栏面板顶部会出现一行「Kanjo X 可供更新 — 更新」；点它会打开 Sparkle 的窗口，
+点「安装」即就地安装并重新启动。
 
 ### 和 Tokei 的关系
 

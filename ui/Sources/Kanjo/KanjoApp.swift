@@ -82,6 +82,9 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 纯菜单栏应用：不占 Dock。
         NSApp.setActivationPolicy(.accessory)
+        // 应用内更新要在启动时就跑起来，否则第一次定时检查得等用户打开面板才发生。
+        // 不是打包的 .app（或缺 SU 键）时 UpdateController 自己就是空转的。
+        _ = UpdateController.shared
     }
 }
 
