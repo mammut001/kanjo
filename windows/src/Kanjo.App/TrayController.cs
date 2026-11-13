@@ -57,7 +57,7 @@ public sealed class TrayController : IDisposable
         UpdateTray();
     }
 
-    /// <summary>更新下载完成后才把菜单项显示出来（Windows 的通知区域菜单是活的原生菜单）。</summary>
+    /// <summary>更新状态变了（比如下载完成）：菜单项该出现 / 消失了。</summary>
     private void UpdateRestartItem()
     {
         void Apply()
@@ -69,20 +69,17 @@ public sealed class TrayController : IDisposable
         else Dispatcher.UIThread.Post(Apply);
     }
 
-    /// <summary>装了已下载的更新并重启（Velopack 会在这里结束进程）。</summary>
+    /// <summary>装了已下载的更新并重启（Velopack 会在这里结束进程）。和面板横幅 / 设置页同一条路径。</summary>
     private void RestartToUpdate()
     {
-        Task.Run(() =>
+        try
         {
-            try
-            {
-                _updates?.RestartToUpdate();
-            }
-            catch (Exception)
-            {
-                // 更新器起不来就算了，下次启动照样会应用。
-            }
-        });
+            _updates?.RestartToUpdate();
+        }
+        catch (Exception)
+        {
+            // 更新器起不来就算了，下次启动照样会应用。
+        }
     }
 
     private static NativeMenuItem MenuItem(string header, Action action)

@@ -13,9 +13,10 @@ disk="$repo/ui/fixtures/disk-sample.json"
 out="$repo/windows/snapshots"
 mkdir -p "$out"
 
-shoot() { # <route> <file> <appearance>
+shoot() { # <route> <file> <appearance> [update-state]
   "$dotnet" run --project "$repo/windows/src/Kanjo.App" --no-build -- \
     --snapshot "$out/$2" --route "$1" --snapshot-appearance "$3" \
+    ${4:+--snapshot-update "$4"} \
     --data "$data" --disk-data "$disk"
 }
 
@@ -56,5 +57,14 @@ for entry in "overview|overview-dark.png" "project:0|project-0-dark.png" \
              "settings:subscriptions:codex|settings-subscriptions-codex-dark.png"; do
   shoot "${entry%%|*}" "${entry##*|}" dark
 done
+
+# 更新横幅 / 设置页 Updates 卡片：注入假的更新状态（只有 --snapshot 才有这条路），明暗各一张。
+shoot "overview" "update-banner-ready-light.png" light ready
+shoot "overview" "update-banner-ready-dark.png" dark ready
+shoot "overview" "update-banner-downloading-light.png" light downloading
+shoot "settings" "settings-update-ready-light.png" light ready
+shoot "settings" "settings-update-ready-dark.png" dark ready
+shoot "settings" "settings-update-downloading-light.png" light downloading
+shoot "settings" "settings-update-not-installed-light.png" light not-installed
 
 echo "snapshots written to $out"

@@ -151,10 +151,11 @@ public sealed class KanjoApplication : Application
             // 纯托盘应用：不占任务栏按钮，关掉主窗口也不会退出。
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-            // 自动更新（只在 Velopack 装出来的正式版里跑；见 UpdatePolicy）。
-            // Mac 版没有更新界面，所以这里也不提示：后台下载，下次启动装上，
-            // 托盘菜单只在「已经下载好、可以立刻重启装上」时多一项。
-            _updates = UpdateService.Create(args);
+            // 自动更新（只在 Velopack 装出来的正式版里真的检查；非安装版是一个 NotInstalled 的空壳，
+            // 设置页仍然显示版本号）。启动 30 秒后检查、之后每 6 小时一次，后台下载，
+            // 下载完面板顶部出现横幅、设置页按钮变成「Restart to update」，托盘菜单也多一项。
+            _updates = UpdateService.Create(args, dispatch: services.DispatchAction);
+            services.UseUpdates(_updates);
             _tray = new TrayController(services, _updates);
 
             // 第二次启动的实例请求激活：把已运行实例的面板弹出来。

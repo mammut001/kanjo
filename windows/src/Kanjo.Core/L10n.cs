@@ -274,7 +274,9 @@ public static class L10n
         var index = 0;
         return FormatSpecifier.Replace(format, m =>
         {
-            if (m.Groups[3].Value == "%") return "%";
+            // 组 2 是转换符本身（组 1 是可选的 `n$` 显式序号）：`%%` 是字面百分号，
+            // 不占参数位、也不会被换成一个 `{n}`（否则 "… %d%%" 这种「42%」就永远格式化不出来）。
+            if (m.Groups[2].Value == "%") return "%";
             if (m.Groups[1].Success && int.TryParse(m.Groups[1].Value, out var explicitIndex))
             {
                 return "{" + (explicitIndex - 1).ToString(CultureInfo.InvariantCulture) + "}";

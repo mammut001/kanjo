@@ -35,6 +35,30 @@ public sealed class AppServices
     public FamilyReportStore Family { get; }
     public PublishStore Publish { get; }
 
+    /// <summary>
+    /// 自动更新的状态（面板横幅 + 设置页 Updates 卡片）。默认是「没安装」的空壳，
+    /// 由 <see cref="App.KanjoApplication"/> / 截图在拿到真正的 <see cref="App.UpdateService"/> 后
+    /// 用 <see cref="UseUpdates"/> 换掉。
+    /// </summary>
+    public UpdateService Updates { get; private set; } = UpdateService.CreateUnavailable();
+
+    /// <summary>
+    /// 更新状态变了。**不**走 <see cref="Changed"/>：那会让整个面板重建成新的一页（下载进度
+    /// 每跳 5% 就把设置页的滚动位置清零）。界面只重建横幅和 Updates 卡片。
+    /// </summary>
+    public event Action? UpdatesChanged;
+
+    /// <summary>装上真正的更新服务（状态变化会触发 <see cref="UpdatesChanged"/>）。</summary>
+    public void UseUpdates(UpdateService updates)
+    {
+        Updates.Changed -= OnUpdatesChanged;
+        Updates = updates;
+        Updates.Changed += OnUpdatesChanged;
+        OnUpdatesChanged();
+    }
+
+    private void OnUpdatesChanged() => UpdatesChanged?.Invoke();
+
     /// <summary>文件变化 / 兜底定时器 / 睡眠唤醒 / 节电模式 / 面板打开。</summary>
     public RefreshEngine Background { get; }
 

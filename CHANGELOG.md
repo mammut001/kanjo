@@ -19,6 +19,25 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`0.5.2` → `502`), and `scripts/make-appcast.sh` signs the release zip into `appcast.xml` with
   `sign_update --account kanjo`. The updater only starts from a packaged `.app` whose `Info.plist` has a
   real `SUFeedURL` / `SUPublicEDKey`, so `swift run`, `--snapshot`, `--window` and `--data` are unaffected.
+- **Windows: update banner and Check for updates in Settings.** When a release is downloaded, the panel now
+  shows a Fluent InfoBar-style banner at the top of every page — "Kanjo X.Y.Z is ready" with a
+  **Restart to update** accent button that runs the same `UpdateService.RestartToUpdate` path as the tray menu.
+  While downloading it reads "Downloading Kanjo X.Y.Z… NN%" with a progress bar underneath. The ✕ dismisses it
+  for the current run only; a relaunch brings it back if the update is still pending. Settings has a new
+  **Updates** card below Appearance with the current version, the last check time and a button that follows the
+  state: **Check for updates** / *Checking for updates…* / *Downloading… NN%* / **Restart to update**, plus a
+  short retryable message on failure. When the app isn't a Velopack install (dev run, portable / unzipped
+  folder, `--snapshot` / `--window`) the card shows the version and "Updates are only available in the
+  installed version" with the button disabled, and nothing touches the network.
+  `UpdateService` now exposes an `UpdateStatus` (Idle / Checking / UpToDate / Downloading(progress) /
+  Ready(version) / Failed) driven by a small `UpdateCoordinator` state machine in Core that takes an
+  `IUpdateManager`, so concurrent scheduled / manual checks collapse into one and the status is unit-tested
+  with a fake manager; download progress comes from Velopack's `DownloadUpdatesAsync` callback. Notifications
+  are marshalled to the UI thread like the rest of the app, and the existing 30 s / 6 h schedule and
+  auto-apply-on-startup are unchanged. All new strings are localised (en / zh-Hans / fr through
+  `WindowsL10n`), and `--snapshot-update ready|downloading|not-installed|…` renders the banner and the
+  Updates card in both themes (`update-banner-*-light/dark.png`, `settings-update-*-light/dark.png`).
+
 - **Windows: an Appearance setting.** Settings has a new Appearance card right below Language with
   **Dark** (the new default on Windows), **Light** and **System** (follow Windows). The label and the three
   choices are localised like the rest of the app. The choice is stored in the same settings file as Language

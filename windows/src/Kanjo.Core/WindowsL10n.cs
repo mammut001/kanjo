@@ -86,6 +86,97 @@ public static class WindowsL10n
             ["zh-Hans"] = "重启以更新",
             ["fr"] = "Redémarrer pour mettre à jour",
         },
+        // 更新横幅（面板顶部）与设置页的 Updates 卡片。三语都在这一张表里，和其余 Windows 覆盖一致。
+        ["update.section"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Updates",
+            ["zh-Hans"] = "更新",
+            ["fr"] = "Mises à jour",
+        },
+        ["update.version_label"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Current version",
+            ["zh-Hans"] = "当前版本",
+            ["fr"] = "Version actuelle",
+        },
+        ["update.check"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Check for updates",
+            ["zh-Hans"] = "检查更新",
+            ["fr"] = "Rechercher des mises à jour",
+        },
+        ["update.checking"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Checking for updates…",
+            ["zh-Hans"] = "正在检查更新…",
+            ["fr"] = "Recherche de mises à jour…",
+        },
+        ["update.downloading_button"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Downloading…",
+            ["zh-Hans"] = "正在下载…",
+            ["fr"] = "Téléchargement…",
+        },
+        ["update.up_to_date"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "You're up to date",
+            ["zh-Hans"] = "已是最新版本",
+            ["fr"] = "Vous êtes à jour",
+        },
+        ["update.downloading"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Downloading Kanjo %@… %d%%",
+            ["zh-Hans"] = "正在下载 Kanjo %@… %d%%",
+            ["fr"] = "Téléchargement de Kanjo %@… %d %%",
+        },
+        ["update.ready"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Kanjo %@ is ready",
+            ["zh-Hans"] = "Kanjo %@ 已就绪",
+            ["fr"] = "Kanjo %@ est prêt",
+        },
+        ["update.ready_hint"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "The new version opens a few seconds after restarting.",
+            ["zh-Hans"] = "重启后几秒内就会打开新版本。",
+            ["fr"] = "La nouvelle version s'ouvre quelques secondes après le redémarrage.",
+        },
+        ["update.failed"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Couldn't check for updates",
+            ["zh-Hans"] = "检查更新失败",
+            ["fr"] = "Impossible de rechercher des mises à jour",
+        },
+        ["update.idle"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Updates are checked automatically in the background.",
+            ["zh-Hans"] = "更新会在后台自动检查。",
+            ["fr"] = "Les mises à jour sont recherchées automatiquement en arrière-plan.",
+        },
+        ["update.last_checked"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Last checked today at %@",
+            ["zh-Hans"] = "上次检查：今天 %@",
+            ["fr"] = "Dernière vérification aujourd'hui à %@",
+        },
+        ["update.never_checked"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Not checked yet",
+            ["zh-Hans"] = "还没有检查过",
+            ["fr"] = "Pas encore vérifié",
+        },
+        ["update.not_installed"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Updates are only available in the installed version",
+            ["zh-Hans"] = "只有安装版才能自动更新",
+            ["fr"] = "Les mises à jour ne sont disponibles que dans la version installée",
+        },
+        ["update.dismiss"] = new(StringComparer.Ordinal)
+        {
+            ["en"] = "Dismiss",
+            ["zh-Hans"] = "关闭",
+            ["fr"] = "Ignorer",
+        },
         // 外观（Windows 专有；Mac 版跟随系统，没有这一节）。
         ["settings.section.appearance"] = new(StringComparer.Ordinal)
         {

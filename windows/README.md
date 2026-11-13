@@ -73,6 +73,7 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- --window --route pro
 | `--snapshot <out.png>` | 离屏渲染面板到 PNG 后退出 0 |
 | `--snapshot-scale <n>` | 截图倍率（默认 2） |
 | `--snapshot-appearance light\|dark` | 截图外观 |
+| `--snapshot-update idle\|up-to-date\|downloading\|ready\|not-installed` | 截图时注入假的更新状态（画横幅 / Updates 卡片） |
 
 ### 路由
 
@@ -334,11 +335,22 @@ Avalonia 的原生库必须和 exe 并排；**不做 trimming**，Avalonia 依�
   `RELEASES-<rid>`；启动 30 秒后检查一次，之后每 6 小时一次（`Core/UpdatePolicy.cs`）。
 - 有新版就在后台**下载**；装的时候是「下次启动」：Velopack 的 `SetAutoApplyOnStartup` 在下次启动时
   换掉文件再拉起新版本。**不会**自己重启。
-- Mac 版没有更新界面，所以这里也不弹窗、不在面板里提示。唯一的 UI 是托盘菜单里多一项
-  **「重启以更新 / Restart to update」**，而且只在更新已经下载好之后才出现（`WindowsL10n` 里的
-  `update.restart_to_install`）。
-- 这些情况**完全不碰更新**：`--snapshot`、`--window`、Debug 构建、不是 Velopack 装的（开发运行、
-  解压出来的文件夹、便携版）。
+- **用户看得见的三处提示**（都是同一个 `UpdateCoordinator`，见下）：
+  1. **面板顶部横幅**（总览 / 项目 / 设置等所有页面）：下载中显示「Downloading Kanjo X.Y.Z… NN%」+ 进度条；
+     下载完变成「Kanjo X.Y.Z is ready」+ 强调色的 **Restart to update** 按钮。右上角 ✕ 关掉后本次运行
+     不再出现（下次启动如果更新还在，横幅照常回来）。
+  2. **设置 → Updates 卡片**（Appearance 下面）：当前版本、上次检查时间、一个按状态变的按钮
+     （Check for updates / Checking… / Downloading… / **Restart to update**），失败时显示一句短消息并可重试。
+  3. 托盘右键菜单里的 **Restart to update**（只在下载完之后出现）。
+- 状态机在 `Core/UpdateCoordinator.cs`（纯逻辑、有单测，用 `IUpdateManager` 假实现驱动）：
+  Idle → Checking → UpToDate / Downloading(progress) → Ready(version) / Failed。并发的检查（定时器 +
+  用户点按钮）只会跑一次；状态通知都切到 UI 线程，和 `AppServices.Changed` 一样的规则。
+- 不是 Velopack 装的（开发运行、解压出来的文件夹、便携版、`--snapshot`）：设置卡片显示版本号和
+  「Updates are only available in the installed version」，按钮禁用，**绝不联网**；
+  这些模式下 Velopack 的自动应用也关着。
+- 截图：`--snapshot-update idle|up-to-date|downloading|ready|not-installed` 注入假的更新状态
+  （只有 `--snapshot` 才有这条路），所以 `windows/scripts/snapshots.sh` 里能出横幅和 Updates 卡片的
+  明 / 暗两套图。
 
 ### 卸载
 

@@ -10,6 +10,10 @@
     <IsPackable>false</IsPackable>
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- 和 App / CLI 同一个版本号（仓库根目录的 VERSION）：设置页「Current version」由
+         <see cref="Kanjo.Core.AppVersion"/> 从这个程序集的 InformationalVersion 读。 -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../../VERSION').Trim())</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <!-- 本地化文案直接链接 Mac 版的那三份 Localizable.strings（不复制文件、不复制翻译）。 -->
