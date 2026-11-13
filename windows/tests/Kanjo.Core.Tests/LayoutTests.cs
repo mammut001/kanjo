@@ -34,13 +34,7 @@ public sealed class LayoutTests : KanjoTestCase
     /// <summary>建页面 + 窗口并完成布局。</summary>
     private static Window Show(Control page)
     {
-        var window = new Window
-        {
-            Width = Metrics.PanelWidth,
-            Height = Metrics.PanelHeight,
-            Content = page,
-        };
-        window.Show();
+        var window = TestWindows.Show(page, Metrics.PanelWidth, Metrics.PanelHeight);
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
         page.UpdateLayout();
