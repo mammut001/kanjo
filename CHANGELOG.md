@@ -6,41 +6,36 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
 ### Added
 
-- **Antigravity accounts breakdown this quota week and one-click account switcher (`kanjo agy-account`, macOS app).**
-  - Added `antigravity_accounts` top-level block in `kanjo export` JSON, reporting all historical accounts and saved logins, with usage figures (`tokens`, `cost_usd`, `messages`) scoped to the current quota week / billing cycle / last 7 days, sorted by tokens descending then email. Strictly omitted from mobile export, publish summary, and family reports.
-  - Added `cli/kanjo/agy_login.py` and `kanjo agy-account` command (`list`, `sync`, `switch`, `forget`) on macOS using `/usr/bin/security`. Secrets are fed strictly on stdin via `security -i` (never in `argv`), read back and verified, refusing to overwrite unsaved logins. Automatically syncs refreshed credentials on export.
-  - In the macOS app Overview, clicking the Antigravity subscription row pins the quota card open, showing an accounts breakdown for the current quota week with compact token counts and costs, "● Current" indicator, and one-click "Switch" buttons with inline spinner and status notes. Unpins on click, Esc or outside click.
-- **`kanjo usage` (alias `kanjo top`): an htop-style full-screen terminal UI (pure Python stdlib).**
-  - Full-screen, keyboard-driven dashboard for Linux servers (SSH, headless) and any terminal without a desktop environment.
-  - Top meters: big totals line with agent share bar and legend; htop CPU-meter style blocks per subscription with weekly and 5-hour quota windows, level-based color thresholding (normal → agent color, warning ≥ 80% → yellow, critical ≥ 95% → red), and countdown/reset times.
-  - Antigravity Google account attribution section showing usage and current account marker for the active quota/billing window.
-  - Scrollable main table with 5 views (`Tab` / `F3` or keys `p m a d g`): Projects (with agent dots and 8-week heat strip), Models, Agents (with share bar), Days (with cost bar), and Accounts (email, window tokens/cost, messages, last seen, saved login, current marker).
-  - Project detail drill-down pane (`Enter` to open, `Esc`/`Backspace` to close) showing by-agent, by-model, and 30-day sparkline breakdowns.
-  - F-key bar with full keyboard control: `1-6` or `←/→` range, `Tab` view, `↑↓ PgUp PgDn Home End` navigation, `/` or `F4` filter by name, `s` or `F6` cycle sort column, `r` or `F5` refresh, `?` or `F1` help overlay, `q` or `F10` quit.
-  - Non-blocking background scan with auto-refresh every `--interval` seconds (default 60) and animated spinner.
-  - Safe terminal restoration with graceful Ctrl-C handling, terminal resize handling, and small-terminal warning (< 60x15).
-  - Static mode snapshot with ANSI colors when output is piped, or with `--once`, or on Windows without curses.
-  - English and Simplified Chinese UI (`--lang auto|en|zh`); `auto` follows the macOS app language setting, then `LC_ALL`/`LC_MESSAGES`/`LANG`. All TUI strings live in `cli/kanjo/tui/i18n.py`; Chinese range tabs, columns, quotas and help match the macOS app, compact token counts use 万/亿, and all alignment/truncation uses display width so CJK text lines up in 80x24 and 140x40 terminals.
-  - New `Accounts` table view (`g`, also in the `Tab`/`F3` cycle when account data exists) with email, window tokens/cost, messages, last seen, saved-login yes/no and a `● current` marker plus an unattributed footer row. On macOS, `Enter` on a non-current account with a saved login shows a centred confirmation; `y` runs `kanjo.agy_login.switch` on the background thread and reports ok / `no_saved_login` / unsaved-current-login in a five-second status line above the F-key bar, then refreshes. Non-macOS shows "Switching is macOS-only"; rows without a saved login show a sign-in hint.
-  - Static snapshots (`--once` or piped output) no longer draw the selected-row highlight, F-key bar or trailing blank padding, and show the top 15 project rows.
-  - Subscriptions with no quota windows now render one dim `quota — (no live data)` row so a missing meter is not mistaken for zero usage.
-- **Family usage reporting on Linux.** `scripts/install-family-linux.sh` is an interactive installer for
-  servers and desktops (no root): it checks for Python 3.9+, installs the Kanjo CLI under
-  `~/.local/share/kanjo-family`, asks for the server URL, the report token (hidden input, stored in
-  `~/.config/kanjo-family/report.env` with mode 600, never on a command line) and a member label, reports every
-  30 minutes through cron (or a systemd user timer when cron is missing) and sends a first report, telling you
-  plainly when the server rejects the token. Re-running keeps the saved settings and updates the CLI;
-  `--uninstall` removes the schedule, the token and the files. It also works piped from curl, reading answers
-  from the terminal. Tested on Ubuntu 26.04 against a mock server: wrong token, replace token, curl-pipe mode,
-  cron entry replaced rather than duplicated, uninstall.
-- **Antigravity Google account attribution and family report account filtering (`kanjo accounts`, `kanjo report-family --account`).**
-  - Attributed Antigravity messages per-message to Google accounts by parsing launch log spans (`cli-*.log`, `acp-server-*.log`) into start/end time windows, authenticated email addresses, and created/active conversation IDs.
-  - Added `kanjo accounts [--json]` command to inspect detected accounts, message counts, total tokens, first/last active timestamps, and unassigned usage. Local output only.
-  - Added `family.accounts = ["email@gmail.com", ...]` configuration in `attribution.toml` and a repeatable `--account EMAIL` CLI flag for `kanjo report-family` and `kanjo export --family-report` to include only chosen accounts in family reports. Unknown and unselected accounts are excluded from summary numbers.
-  - Added `scope.accounts_filter` integer/null field to `kanjo-family-report` schema; full email addresses are strictly excluded from network payloads.
-  - Omit `quota_windows.antigravity` from the family report when the active signed-in Antigravity account does not match the configured accounts filter.
+- **`kanjo usage` (alias `kanjo top`): an htop-style terminal view.** For Linux servers over SSH and any
+  terminal: totals and agent share bar, quota meters per subscription (weekly, 5-hour and extra windows,
+  yellow from 80 %, red from 95 %), and a scrollable table with Projects (agent dots, 8-week heat strip),
+  Models, Agents, Days and Antigravity Accounts views. Enter opens a project's detail pane; `/` filters,
+  `s` sorts, `1`–`6` switch the time range, `?` shows help. Refreshes in the background every 60 s
+  (`--interval`). English and Chinese (`--lang`, follows the app language or `LANG`; Chinese uses 万/亿).
+  `--once`, or piping the output, prints a single snapshot; on Windows it always prints a snapshot.
+  Pure Python, no dependencies.
+- **Antigravity accounts.** Kanjo works out which Google account each Antigravity CLI message was sent
+  from (from the CLI's launch logs) and lists every account with its usage this quota week: in the Mac app
+  (click the Antigravity row of the Subscription value card), in `kanjo usage` (Accounts view) and with
+  `kanjo accounts`. Usage the desktop app made stays "unattributed".
+- **Switch the Antigravity CLI account in one click (macOS).** Each account you have signed in with once is
+  saved in your Keychain; the Mac app's Switch button, Enter in `kanjo usage`'s Accounts view, or
+  `kanjo agy-account switch EMAIL` puts it back. The login is passed to `security` on stdin and never
+  printed; a login Kanjo has not saved yet is never overwritten. Running agy sessions keep their account
+  until restarted.
+- **Family report: choose accounts.** `family.accounts` in `attribution.toml` or
+  `kanjo report-family --account EMAIL` reports only those Antigravity accounts. Emails are never sent.
+- **Family usage reporting on Linux.** `scripts/install-family-linux.sh` installs the reporter without root,
+  asks for the server, token (hidden input, stored with mode 600) and label, reports every 30 minutes
+  through cron or a systemd user timer and sends a first report. `--uninstall` removes everything.
+
+Updating:
+- **Mac:** use in-app update (menu-bar panel or Settings → Check for Updates…), or `brew upgrade --cask kanjo`.
+- **Windows:** the installed app updates itself.
 
 ## [0.5.4] - 2026-11-12
 
