@@ -519,6 +519,134 @@ def cmd_family_token(args) -> int:
     return 0
 
 
+def cmd_usage(args) -> int:
+    import shutil
+    from .tui.model import TimeRange, ViewMode
+    from .tui.static import render_static_snapshot
+    from .tui.term import HAVE_CURSES, run_curses_tui
+
+    cfg = _config(args)
+    cache = _cache(args)
+    ascii_mode = getattr(args, "ascii", False)
+    no_color = getattr(args, "no_color", False) or ("NO_COLOR" in os.environ)
+    range_val = TimeRange(getattr(args, "range", "all"))
+    view_val = ViewMode(getattr(args, "view", "projects"))
+    interval = getattr(args, "interval", 60.0)
+    once = getattr(args, "once", False)
+
+    is_static = once or (not sys.stdout.isatty()) or (not HAVE_CURSES)
+
+    use_cache = not getattr(args, "no_cache", False)
+    data_path = getattr(args, "data", None)
+    doc = None
+    antigravity_accounts_data = None
+    current_account = None
+
+    if data_path:
+        with open(data_path, "r", encoding="utf-8") as f:
+            doc = json.load(f)
+        if isinstance(doc.get("antigravity_accounts"), dict):
+            antigravity_accounts_data = doc["antigravity_accounts"]
+            current_account = antigravity_accounts_data.get("current")
+    else:
+        if is_static:
+            if use_cache:
+                fp = source_fingerprint(config=cfg)
+                doc = load_fast_export(fp)
+            if doc is None:
+                doc = build_export(config=cfg, cache=cache)
+                if use_cache:
+                    fp = source_fingerprint(config=cfg)
+                    save_fast_export(fp, doc)
+
+            if isinstance(doc.get("antigravity_accounts"), dict):
+                antigravity_accounts_data = doc["antigravity_accounts"]
+                current_account = antigravity_accounts_data.get("current")
+            else:
+                try:
+                    from .antigravity_accounts import get_account_index, compute_antigravity_accounts_window
+                    idx = get_account_index()
+                    current_account = idx.get_current_account()
+                    from .sources import antigravity
+                    roots = antigravity.roots()
+                    scan_res = scan({"antigravity": roots}, cache=cache)
+                    if scan_res.sessions:
+                        antigravity_accounts_data = compute_antigravity_accounts_window(
+                            scan_res.sessions, doc, current_account=current_account
+                        )
+                except Exception:
+                    pass
+        else:
+            # curses mode: start fast! Check fast export cache; if cold, start with None to show "Loading…"
+            if use_cache:
+                fp = source_fingerprint(config=cfg)
+                doc = load_fast_export(fp)
+                if doc and isinstance(doc.get("antigravity_accounts"), dict):
+                    antigravity_accounts_data = doc["antigravity_accounts"]
+                    current_account = antigravity_accounts_data.get("current")
+
+    now_dt = None
+    if data_path and doc and doc.get("generated_at"):
+        from .tui.model import parse_iso_dt, get_tz
+        tz = get_tz(doc)
+        now_dt = parse_iso_dt(doc["generated_at"], default_tz=tz)
+
+    if is_static:
+        width = 80
+        if "COLUMNS" in os.environ:
+            try:
+                width = int(os.environ["COLUMNS"])
+            except ValueError:
+                pass
+        elif sys.stdout.isatty():
+            width = shutil.get_terminal_size().columns
+
+        height = None
+        if "LINES" in os.environ:
+            try:
+                height = int(os.environ["LINES"])
+            except ValueError:
+                pass
+
+        snapshot = render_static_snapshot(
+            doc=doc,
+            width=width,
+            height=height,
+            no_color=no_color,
+            ascii_mode=ascii_mode,
+            now=now_dt,
+            time_range=range_val,
+            view_mode=view_val,
+            version=__version__,
+            antigravity_accounts_data=antigravity_accounts_data,
+            current_account=current_account,
+        )
+        sys.stdout.write(snapshot)
+        sys.stdout.flush()
+        return 0
+
+    import curses
+    try:
+        return curses.wrapper(
+            run_curses_tui,
+            initial_doc=doc,
+            config=cfg,
+            cache=cache,
+            interval=interval,
+            time_range=range_val,
+            view_mode=view_val,
+            ascii_mode=ascii_mode,
+            no_color=no_color,
+            version=__version__,
+            antigravity_accounts_data=antigravity_accounts_data,
+            current_account=current_account,
+            data_path=data_path,
+            use_cache=use_cache,
+        )
+    except KeyboardInterrupt:
+        return 0
+
+
 def _max_age(text: str) -> float:
     import math
     value = float(text)
@@ -654,6 +782,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("token_action", choices=("set", "clear", "status"), metavar="ACTION",
                    help="set, clear or check status of family report token")
     p.set_defaults(func=cmd_family_token)
+
+    def add_usage_subcommand(cmd_name: str, help_text: str):
+        up = sub.add_parser(cmd_name, help=help_text)
+        up.add_argument("--interval", type=float, default=60, help="auto-refresh interval in seconds (default 60)")
+        up.add_argument("--once", action="store_true", help="print one snapshot and exit")
+        up.add_argument("--no-color", action="store_true", help="monochrome output (also respects NO_COLOR env)")
+        up.add_argument("--ascii", action="store_true", help="plain ASCII output, no Unicode")
+        up.add_argument("--range", choices=("all", "today", "7d", "30d", "reset", "cycle"), default="all",
+                        help="initial time range (default: all)")
+        up.add_argument("--view", choices=("projects", "models", "agents", "days"), default="projects",
+                        help="initial view (default: projects)")
+        up.add_argument("--data", metavar="PATH", help=argparse.SUPPRESS)
+        common(up)
+        up.set_defaults(func=cmd_usage)
+
+    add_usage_subcommand("usage", "htop-style full-screen terminal UI for token usage and quotas")
+    add_usage_subcommand("top", "alias for `kanjo usage`")
     return parser
 
 
