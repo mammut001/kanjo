@@ -9,8 +9,6 @@ import unittest
 from datetime import datetime
 from unittest import mock
 
-import pytest
-
 from kanjo import antigravity_accounts, cli, export
 from kanjo.antigravity_accounts import (
     AntigravityAccountIndex, LaunchSpan, get_account_index, list_accounts,
@@ -422,42 +420,53 @@ class KanjoAccountsCommandTest(unittest.TestCase):
             self.assertEqual(data[-1]["account"], "unknown")
 
 
-@pytest.mark.parametrize("pattern_template", [
-    "Print mode: resuming conversation {cid}",
-    "Resuming conversation {cid}",
-    "Sending user message to conversation {cid}",
-    "Forwarding user message to conversation {cid}",
-    "Stream completed for {cid}",
-    "Stream goroutine exited for {cid}",
-    "Stream goroutine exited for {cid}, sending completion...",
-    "GetConversationDetail: found conversation {cid} (active=true)",
-])
-def test_new_trust_patterns_attribution(pattern_template, tmp_path):
-    reset_account_index()
-    try:
-        log_dir = tmp_path / "log"
-        log_dir.mkdir()
-        log_file = log_dir / "cli-20261112_100000.log"
-        cid = "9e60b0f4-c279-4f0e-a098-0ce2d7c1bc19"
-        line = pattern_template.format(cid=cid)
+class AntigravityTrustPatternsTest(unittest.TestCase):
+    def setUp(self):
+        reset_account_index()
 
-        content = f"""I1112 10:00:01.000000 1 server_oauth.go:221] applyAuthResult: email=trusted@gmail.com
+    def tearDown(self):
+        reset_account_index()
+
+    def test_new_trust_patterns_attribution(self):
+        patterns = [
+            "Print mode: resuming conversation {cid}",
+            "Resuming conversation {cid}",
+            "Sending user message to conversation {cid}",
+            "Forwarding user message to conversation {cid}",
+            "Stream completed for {cid}",
+            "Stream goroutine exited for {cid}",
+            "Stream goroutine exited for {cid}, sending completion...",
+            "GetConversationDetail: found conversation {cid} (active=true)",
+        ]
+        for pattern_template in patterns:
+            with self.subTest(pattern=pattern_template):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    reset_account_index()
+                    try:
+                        log_dir = os.path.join(tmp_dir, "log")
+                        os.makedirs(log_dir, exist_ok=True)
+                        log_file = os.path.join(log_dir, "cli-20261112_100000.log")
+                        cid = "9e60b0f4-c279-4f0e-a098-0ce2d7c1bc19"
+                        line = pattern_template.format(cid=cid)
+
+                        content = f"""I1112 10:00:01.000000 1 server_oauth.go:221] applyAuthResult: email=trusted@gmail.com
 I1112 10:00:02.000000 1 server.go:100] {line}
 I1112 10:05:00.000000 1 server.go:500] Exit
 """
-        write_log(str(log_file), content)
+                        write_log(log_file, content)
 
-        # 1. parse_log_file extracts the conversation ID
-        span = parse_log_file(str(log_file))
-        assert span is not None
-        assert cid in span.conversations
-        assert "trusted@gmail.com" in span.emails
+                        # 1. parse_log_file extracts the conversation ID
+                        span = parse_log_file(log_file)
+                        self.assertIsNotNone(span)
+                        self.assertIn(cid, span.conversations)
+                        self.assertIn("trusted@gmail.com", span.emails)
 
-        # 2. AntigravityAccountIndex attributes the message to trusted@gmail.com
-        idx = AntigravityAccountIndex(dirs=[str(log_dir)], cache_dir=str(tmp_path))
-        tz = local_zone()
-        ts = datetime(2026, 11, 12, 10, 2, 0, tzinfo=tz).timestamp()
-        assert idx.attribute(cid, ts) == "trusted@gmail.com"
-    finally:
-        reset_account_index()
+                        # 2. AntigravityAccountIndex attributes the message to trusted@gmail.com
+                        idx = AntigravityAccountIndex(dirs=[log_dir], cache_dir=tmp_dir)
+                        tz = local_zone()
+                        ts = datetime(2026, 11, 12, 10, 2, 0, tzinfo=tz).timestamp()
+                        self.assertEqual(idx.attribute(cid, ts), "trusted@gmail.com")
+                    finally:
+                        reset_account_index()
+
 
