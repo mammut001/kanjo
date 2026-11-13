@@ -6,6 +6,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows: the family token Save button stayed disabled after pasting a token.** The Settings →
+  Family usage → Report token prompt worked out whether Save was available once, while the box was still
+  empty, so the button kept its disabled look and the click handler kept the empty string it had captured —
+  typing or pasting a token never got you any closer to saving it. Save now follows the text box as you type
+  (whitespace-only still counts as empty), the token is read at click time, Enter saves and Escape cancels,
+  and the same build-time-`enabled` mistake is fixed on **Report now**, which also depends on the server URL
+  field. Both buttons switch between the normal accent button and the existing disabled look, so a disabled
+  button still reads as unavailable. `StateButton` in the Fluent theme is the shared helper, and a headless
+  test drives the whole prompt (open it, type, click, check what the token storage received).
+
 ## [0.5.3] - 2026-11-12
 
 ### Added

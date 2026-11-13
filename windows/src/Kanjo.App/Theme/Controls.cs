@@ -216,3 +216,55 @@ public static class Toggle
     }
 }
 
+/// <summary>
+/// 可以在运行时切换启用态的按钮（「输入框有内容才能点」这种）。
+/// 启用时是真 <see cref="Button"/>（Fluent 自带悬停 / 按下 / 聚焦三态）；禁用时换成
+/// <see cref="Ui.DisabledButton"/> 的静态外观 —— 和 <see cref="Ui.AccentButton"/> /
+/// <see cref="Ui.StandardButton"/> 在构造时按 `enabled: false` 给的样子**完全一致**，
+/// 所以「先灰着、输入后亮起来」和「一开始就是启用的」看起来是同一个按钮。
+///
+/// 为什么需要它：那两个构造函数的 `enabled` 只在建控件时看一次。提示框里的按钮通常是在
+/// 输入框还空着的时候建的，之后再输入也不会回头改外观 —— 家庭令牌的保存按钮就卡在这里
+/// （真机上粘贴令牌后一直点不了）。
+/// </summary>
+public sealed class StateButton : Border
+{
+    private readonly string _text;
+    private readonly Action _onClick;
+    private readonly bool _accent;
+    private readonly double _size;
+    private readonly bool _compact;
+    private bool _built;
+    private bool _current;
+
+    public StateButton(string text, Action onClick, bool enabled = true, bool accent = true,
+        double size = Type.BodySize, bool compact = false)
+    {
+        _text = text;
+        _onClick = onClick;
+        _accent = accent;
+        _size = size;
+        _compact = compact;
+        BorderThickness = new Thickness(0);
+        HorizontalAlignment = HorizontalAlignment.Left;
+        VerticalAlignment = VerticalAlignment.Center;
+        SetEnabled(enabled);
+    }
+
+    /// <summary>
+    /// 切换启用态：外观和 <see cref="Control.IsEnabled"/> 一起换（只改 IsEnabled 会留下强调色底）。
+    /// 状态没变就不动控件树 —— 这个函数会被输入框的每次按键调用。
+    /// </summary>
+    public void SetEnabled(bool enabled)
+    {
+        if (_built && _current == enabled) return;
+        _built = true;
+        _current = enabled;
+        IsEnabled = enabled;
+        Child = enabled ? EnabledButton() : Ui.DisabledButton(_text, _size, _compact);
+    }
+
+    private Control EnabledButton() => _accent
+        ? Ui.AccentButton(_text, _onClick, size: _size)
+        : Ui.StandardButton(_text, _onClick, size: _size, compact: _compact);
+}
