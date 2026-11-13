@@ -83,13 +83,25 @@ public sealed class UpdatePolicyTests : KanjoTestCase
     }
 
     /// <summary>
-    /// Debug 构建（测试就是）永远不建 UpdateService：不联网、不碰 Velopack 的 locator。
+    /// Debug 构建（测试就是）永远不连 Velopack：<see cref="Kanjo.App.UpdateService.Create"/> 返回的
+    /// 是 NotInstalled 的空壳（设置页仍显示版本号、按钮禁用），不联网、不碰 locator。
     /// </summary>
     [Fact]
-    public void TestCreateReturnsNullOutsideRelease()
+    public void TestCreateIsInertOutsideRelease()
     {
-        Assert.Null(Kanjo.App.UpdateService.Create([]));
-        Assert.Null(Kanjo.App.UpdateService.Create(["--snapshot", "out.png"]));
-        Assert.Null(Kanjo.App.UpdateService.Create(["--window"]));
+        foreach (var service in new[]
+                 {
+                     Kanjo.App.UpdateService.Create([]),
+                     Kanjo.App.UpdateService.Create(["--snapshot", "out.png"]),
+                     Kanjo.App.UpdateService.Create(["--window"]),
+                 })
+        {
+            Assert.NotNull(service);
+            Assert.Equal(UpdateState.NotInstalled, service!.Status.State);
+            Assert.False(service.Status.CanCheck);
+            Assert.False(service.HasReadyUpdate);
+            Assert.False(string.IsNullOrWhiteSpace(service.CurrentVersion));
+            service.Dispose();
+        }
     }
 }

@@ -30,6 +30,12 @@ public static class SnapshotRunner
 
             var services = AppServices.Create(Environment.GetCommandLineArgs());
             services.LoadQuietly();
+            // 更新状态：截图注入假状态（`--snapshot-update ready|downloading|not-installed|…`），
+            // 默认是「已是最新」，所以普通截图里不会出现横幅。
+            var launchArgs = Environment.GetCommandLineArgs();
+            var fakeUpdate = UpdateSnapshots.Parse(DefaultPaths.FlagValue("--snapshot-update", launchArgs),
+                AppVersion.Current) ?? UpdateSnapshots.Default(AppVersion.Current);
+            services.UseUpdates(UpdateService.ForSnapshot(fakeUpdate));
             // 外观：`--snapshot-appearance light|dark` 是显式覆盖，否则用设置（缺省 Dark）。
             // 必须在建界面之前定好，否则代码里取色的画笔会停在上一套。
             Appearance.Apply(services.Settings);

@@ -207,6 +207,15 @@ public static class Icons
     public static Control ChevronDown(double size = 7, IBrush? brush = null, double strokeThickness = 1.1) =>
         Glyph("M1.5,3.5 L4.5,6.5 L7.5,3.5", size, brush, filled: false, strokeThickness: strokeThickness);
 
+    /// <summary>xmark：两条对角线（关闭横幅 / 关闭提示）。</summary>
+    public static Control Close(double size = 9, IBrush? brush = null) => Glyph(
+        "M3,3 L9,9 M9,3 L3,9", size, brush, filled: false, strokeThickness: 1.3);
+
+    /// <summary>arrow.down.circle：更新横幅左侧的「下载」状态图标。</summary>
+    public static Control UpdateArrow(double size = 14, IBrush? brush = null) => Glyph(
+        "M6,1.6 L6,8.2 M3.4,5.8 L6,8.4 L8.6,5.8 M1.8,10.8 L10.2,10.8",
+        size, brush, filled: false);
+
     /// <summary>状态小点（托盘状态 / 圆点）。</summary>
     public static Control StatusDot(IBrush brush, double size = 6) => new Ellipse
     {

@@ -71,6 +71,20 @@ public sealed class PanelView : Grid
         DetachedFromVisualTree += (_, _) => Appearance.Unwatch(this);
         Rebuild();
         _services.Changed += OnChanged;
+        // 更新状态（检查中 / 下载进度 / 已下载）只重建顶部横幅，不重建整页：
+        // 否则下载进度每跳一次，设置页的滚动位置就被清零。
+        _services.UpdatesChanged += RebuildBannersThreadSafe;
+    }
+
+    /// <summary>更新状态变了：只重建横幅（切到 UI 线程，和 <see cref="OnChanged"/> 一样的规则）。</summary>
+    private void RebuildBannersThreadSafe()
+    {
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            RebuildBanners();
+            return;
+        }
+        Avalonia.Threading.Dispatcher.UIThread.Post(RebuildBanners);
     }
 
     /// <summary>外观切换后重建外壳 + 页面（色板已由 <see cref="Appearance"/> 切好）。</summary>
@@ -248,9 +262,15 @@ public sealed class PanelView : Grid
     {
         _banners.Children.Clear();
         _banners.IsVisible = false;
-        if (Route.Kind is AppRouteKind.Loading or AppRouteKind.Disk) return;
+        if (Route.Kind is AppRouteKind.Loading) return;
 
         var list = new List<Control>();
+        // 更新横幅在最上面：用户一打开面板就能看到「重启即可更新」。
+        var updates = _services.Updates;
+        if (UpdateBanner.ShouldShow(updates.Status, updates.DismissedVersion))
+        {
+            list.Add(UpdateBannerView.Make(updates, RestartToUpdate, updates.DismissBanner));
+        }
         if (_services.Report is { } report && report.IsNewerSchema)
         {
             list.Add(Widgets.StatusBlock(false,
@@ -271,6 +291,9 @@ public sealed class PanelView : Grid
         foreach (var control in list) _banners.Children.Add(control);
         _banners.IsVisible = true;
     }
+
+    /// <summary>横幅里的「Restart to update」：走和托盘菜单同一条 <see cref="UpdateService.RestartToUpdate"/>。</summary>
+    private void RestartToUpdate() => _services.Updates.RestartToUpdate();
 
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
     /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边三个图标按钮（带 tooltip）。</summary>

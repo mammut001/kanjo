@@ -61,10 +61,13 @@ public sealed class SettingsPage : ScrollPage
         }
         _services.Family.Activity.Changed += OnExternalChange;
         _services.Publish.Activity.Changed += OnExternalChange;
+        // 更新状态（检查中 / 下载进度 / 已下载）只重建这一页：按钮标题和说明都随状态变。
+        _services.UpdatesChanged += OnExternalChange;
         DetachedFromVisualTree += (_, _) =>
         {
             _services.Family.Activity.Changed -= OnExternalChange;
             _services.Publish.Activity.Changed -= OnExternalChange;
+            _services.UpdatesChanged -= OnExternalChange;
         };
 
         if (snapshot) ScrollToAnchor(anchor);
@@ -146,6 +149,7 @@ public sealed class SettingsPage : ScrollPage
 
         _root.Children.Add(LanguageSection());
         _root.Children.Add(AppearanceSection());
+        _root.Children.Add(UpdatesSection());
         _root.Children.Add(DataSourceSection());
         _root.Children.Add(RefreshSection());
         _root.Children.Add(ICloudSection());
@@ -268,6 +272,87 @@ public sealed class SettingsPage : ScrollPage
         });
         return Section(WindowsL10n.Tr("settings.section.appearance"),
             [SimpleRow(WindowsL10n.Tr("settings.appearance"), WindowsL10n.Tr("settings.appearance.note"), picker)]);
+    }
+
+    // MARK: - Updates（Windows 专有：Mac 版没有更新界面）
+
+    /// <summary>
+    /// 更新卡片（Windows 11「设置 → Windows 更新」的节奏）：版本号 + 上次检查时间 +
+    /// 一个按状态变的按钮（Check for updates / Checking… / Downloading… / Restart to update），
+    /// 下面一行是状态说明（已是最新 / 下载中 42% / 失败原因）。
+    /// 非安装版（开发运行、便携版、截图）：只显示版本号和「只有安装版才能自动更新」，按钮禁用。
+    /// 自动检查本来就是开着的（启动 30 秒 + 每 6 小时），所以这里不再给开关。
+    /// </summary>
+    private Control UpdatesSection()
+    {
+        var updates = _services.Updates;
+        var status = updates.Status;
+
+        var box = Ui.V(6);
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var left = Ui.V(2);
+        left.Children.Add(Ui.Text(WindowsL10n.Tr("update.version_label"), Type.BodySize, wrap: true));
+        left.Children.Add(Ui.Text(status.CurrentVersion, Type.CaptionSize, null, Palette.Secondary));
+        left.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(left, 0);
+        row.Children.Add(left);
+
+        var button = UpdateButton(status);
+        Grid.SetColumn(button, 1);
+        row.Children.Add(button);
+        box.Children.Add(row);
+
+        // 状态说明：已是最新 / 下载中 / 失败都是正文色（要读的信息），失败用错误色。
+        var description = UpdateStatusText.Description(status);
+        var failed = status.State == UpdateState.Failed;
+        box.Children.Add(Ui.Text(description, Type.CaptionSize, null,
+            failed ? Palette.Bad : Palette.Foreground, wrap: true));
+
+        if (UpdateBanner.ShowsProgress(status))
+        {
+            box.Children.Add(UpdateBannerView.ProgressLine(status.Progress));
+        }
+
+        // 第二行：上次检查时间 / 失败原因（没有可说的就不占位置）。
+        var detail = UpdateStatusText.Detail(status);
+        if (detail.Length > 0)
+        {
+            var detailColor = failed ? Palette.Bad : Palette.Secondary;
+            box.Children.Add(Ui.Text(detail, Type.CaptionSize, null, detailColor, wrap: true));
+        }
+
+        return GroupedSection(WindowsL10n.Tr("update.section"),
+        [
+            new Border
+            {
+                Child = box,
+                Padding = new Thickness(Metrics.RowInset, 10, Metrics.RowInset, 10),
+            },
+        ]);
+    }
+
+    /// <summary>按钮标题与启用态都由状态决定（<see cref="UpdateStatusText"/>，和横幅共用同一套规则）。</summary>
+    private Control UpdateButton(UpdateStatus status)
+    {
+        var label = UpdateStatusText.Button(status);
+        var enabled = UpdateStatusText.ButtonEnabled(status);
+        Action action = status.State == UpdateState.Ready
+            ? () => _services.Updates.RestartToUpdate()
+            : CheckNow;
+        // 「Restart to update」是主按钮（强调色）；其它状态是标准按钮。
+        return UpdateStatusText.ButtonIsPrimary(status)
+            ? Ui.AccentButton(label, action, enabled: enabled, size: Type.CaptionSize)
+            : Ui.StandardButton(label, action, enabled: enabled, size: Type.CaptionSize);
+    }
+
+    /// <summary>
+    /// 「Check for updates」：立刻检查一次（后台线程；状态变化会回来重建这一页）。
+    /// 截图模式不联网 —— 假状态由 `--snapshot-update` 注入。
+    /// </summary>
+    private void CheckNow()
+    {
+        if (_snapshot) return;
+        _ = _services.Updates.CheckNowAsync();
     }
 
     // MARK: - Data source
