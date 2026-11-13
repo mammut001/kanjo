@@ -220,15 +220,15 @@ ASCII_SPINNER = "|/-\\"
 def render_ui(
     canvas: Canvas,
     state: TUIState,
-    filtered: FilteredData,
-    total_vm: TotalViewModel,
-    meters: List[SubscriptionMeter],
-    accounts_section: Optional[AntigravityAccountsSection],
-    project_rows: List[ProjectRowViewModel],
-    project_footers: List[ProjectRowViewModel],
-    model_rows: List[ModelRowViewModel],
-    agent_rows: List[AgentRowViewModel],
-    day_rows: List[DayRowViewModel],
+    filtered: Optional[FilteredData] = None,
+    total_vm: Optional[TotalViewModel] = None,
+    meters: Optional[List[SubscriptionMeter]] = None,
+    accounts_section: Optional[AntigravityAccountsSection] = None,
+    project_rows: Optional[List[ProjectRowViewModel]] = None,
+    project_footers: Optional[List[ProjectRowViewModel]] = None,
+    model_rows: Optional[List[ModelRowViewModel]] = None,
+    agent_rows: Optional[List[AgentRowViewModel]] = None,
+    day_rows: Optional[List[DayRowViewModel]] = None,
     detail_vm: Optional[ProjectDetailViewModel] = None,
     static_mode: bool = False,
 ) -> None:
@@ -241,6 +241,50 @@ def render_ui(
         msg = f"Terminal too small (need >= 60x15, current: {width}x{height})"
         canvas.draw_text(0, 0, msg[:width], Style(bold=True, fg="yellow"))
         return
+
+    if filtered is None:
+        # Immediate Loading screen
+        ver_str = f"Kanjo {state.version}"
+        cur_x = canvas.draw_text(0, 0, ver_str, Style(bold=True, fg="cyan"))
+        cur_x = canvas.draw_text(cur_x, 0, " · ", Style(dim=True))
+
+        for idx, (r_val, r_label) in enumerate(RANGE_TABS):
+            is_active = (state.time_range == r_val)
+            tab_str = f" {r_label} "
+            tab_style = Style(bold=True, inverse=True, fg="black", bg="cyan") if is_active else Style(fg="white")
+            cur_x = canvas.draw_text(cur_x, 0, tab_str, tab_style)
+            if idx < len(RANGE_TABS) - 1:
+                cur_x = canvas.draw_text(cur_x, 0, " ", Style())
+
+        spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
+        right_str = f"{spin} Loading…"
+        rw = str_width(right_str)
+        if width - rw > cur_x + 1:
+            canvas.draw_text(width - rw, 0, right_str, Style(fg="yellow"))
+
+        load_msg = "Loading…"
+        ly = height // 2
+        lx = max(0, (width - str_width(load_msg)) // 2)
+        canvas.draw_text(lx, ly, load_msg, Style(bold=True, fg="cyan"))
+
+        bar_y = height - 1
+        canvas.fill_rect(0, bar_y, width, 1, " ", Style(bg="black", fg="white"))
+        bx = 0
+        for key_lbl, name_lbl in [("F1", "Help"), ("F10", "Quit")]:
+            if bx >= width:
+                break
+            k_style = Style(bold=True, inverse=True, fg="black", bg="cyan")
+            bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
+            n_style = Style(inverse=True, fg="black", bg="gray")
+            bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
+        return
+
+    meters = meters or []
+    project_rows = project_rows or []
+    project_footers = project_footers or []
+    model_rows = model_rows or []
+    agent_rows = agent_rows or []
+    day_rows = day_rows or []
 
     cur_y = 0
 
@@ -428,13 +472,13 @@ def render_ui(
         cur_y += 1
 
         # Visible rows
-        visible_height = table_bottom_y - cur_y
-        footer_height = len(project_footers)
-        body_height = max(1, visible_height - footer_height)
+        visible_height = max(0, table_bottom_y - cur_y)
+        footer_height = min(len(project_footers), visible_height)
+        body_height = max(0, visible_height - footer_height)
 
-        # In static mode, show top 15 projects
+        # In static mode, show top 15 projects bounded by body_height
         if static_mode:
-            shown_projects = project_rows[:15]
+            shown_projects = project_rows[:min(15, body_height)]
             scroll_offset = 0
         else:
             total_items = len(project_rows)
@@ -445,13 +489,16 @@ def render_ui(
                 state.selected_index = 0
 
             # Scroll view
-            if state.selected_index < state.scroll_top:
-                state.scroll_top = state.selected_index
-            elif state.selected_index >= state.scroll_top + body_height:
-                state.scroll_top = state.selected_index - body_height + 1
+            if body_height > 0:
+                if state.selected_index < state.scroll_top:
+                    state.scroll_top = state.selected_index
+                elif state.selected_index >= state.scroll_top + body_height:
+                    state.scroll_top = state.selected_index - body_height + 1
+            else:
+                state.scroll_top = 0
 
             scroll_offset = state.scroll_top
-            shown_projects = project_rows[scroll_offset:scroll_offset + body_height]
+            shown_projects = project_rows[scroll_offset:scroll_offset + body_height] if body_height > 0 else []
 
         for idx, row in enumerate(shown_projects):
             row_y = cur_y + idx
@@ -547,20 +594,23 @@ def render_ui(
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
         cur_y += 1
 
-        body_height = max(1, table_bottom_y - cur_y)
+        body_height = max(0, table_bottom_y - cur_y)
         total_items = len(model_rows)
         if total_items > 0:
             state.selected_index = max(0, min(total_items - 1, state.selected_index))
         else:
             state.selected_index = 0
 
-        if state.selected_index < state.scroll_top:
-            state.scroll_top = state.selected_index
-        elif state.selected_index >= state.scroll_top + body_height:
-            state.scroll_top = state.selected_index - body_height + 1
+        if body_height > 0:
+            if state.selected_index < state.scroll_top:
+                state.scroll_top = state.selected_index
+            elif state.selected_index >= state.scroll_top + body_height:
+                state.scroll_top = state.selected_index - body_height + 1
+        else:
+            state.scroll_top = 0
 
         scroll_offset = state.scroll_top
-        shown_models = model_rows[scroll_offset:scroll_offset + body_height] if not static_mode else model_rows[:15]
+        shown_models = model_rows[scroll_offset:scroll_offset + body_height] if not static_mode else model_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_models):
             row_y = cur_y + idx
@@ -590,20 +640,23 @@ def render_ui(
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
         cur_y += 1
 
-        body_height = max(1, table_bottom_y - cur_y)
+        body_height = max(0, table_bottom_y - cur_y)
         total_items = len(agent_rows)
         if total_items > 0:
             state.selected_index = max(0, min(total_items - 1, state.selected_index))
         else:
             state.selected_index = 0
 
-        if state.selected_index < state.scroll_top:
-            state.scroll_top = state.selected_index
-        elif state.selected_index >= state.scroll_top + body_height:
-            state.scroll_top = state.selected_index - body_height + 1
+        if body_height > 0:
+            if state.selected_index < state.scroll_top:
+                state.scroll_top = state.selected_index
+            elif state.selected_index >= state.scroll_top + body_height:
+                state.scroll_top = state.selected_index - body_height + 1
+        else:
+            state.scroll_top = 0
 
         scroll_offset = state.scroll_top
-        shown_agents = agent_rows[scroll_offset:scroll_offset + body_height] if not static_mode else agent_rows
+        shown_agents = agent_rows[scroll_offset:scroll_offset + body_height] if not static_mode else agent_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_agents):
             row_y = cur_y + idx
@@ -645,20 +698,23 @@ def render_ui(
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
         cur_y += 1
 
-        body_height = max(1, table_bottom_y - cur_y)
+        body_height = max(0, table_bottom_y - cur_y)
         total_items = len(day_rows)
         if total_items > 0:
             state.selected_index = max(0, min(total_items - 1, state.selected_index))
         else:
             state.selected_index = 0
 
-        if state.selected_index < state.scroll_top:
-            state.scroll_top = state.selected_index
-        elif state.selected_index >= state.scroll_top + body_height:
-            state.scroll_top = state.selected_index - body_height + 1
+        if body_height > 0:
+            if state.selected_index < state.scroll_top:
+                state.scroll_top = state.selected_index
+            elif state.selected_index >= state.scroll_top + body_height:
+                state.scroll_top = state.selected_index - body_height + 1
+        else:
+            state.scroll_top = 0
 
         scroll_offset = state.scroll_top
-        shown_days = day_rows[scroll_offset:scroll_offset + body_height] if not static_mode else day_rows[:15]
+        shown_days = day_rows[scroll_offset:scroll_offset + body_height] if not static_mode else day_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_days):
             row_y = cur_y + idx

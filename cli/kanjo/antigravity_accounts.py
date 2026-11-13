@@ -435,3 +435,109 @@ def reset_account_index() -> None:
 def attribute(conversation_id: str, ts: float) -> Optional[str]:
     """Module-level attribution helper using the process-level index."""
     return get_account_index().attribute(conversation_id, ts)
+
+
+def compute_antigravity_accounts_window(
+    sessions: Iterable[Session],
+    doc: dict,
+    now: Optional[datetime] = None,
+    prices=None,
+    current_account: Optional[str] = None
+) -> dict:
+    """Aggregate Antigravity sessions/messages for the current quota window.
+
+    Window is Antigravity weekly quota window start, else billing cycle start,
+    else now - 7 days. Returns dict matching schema:
+    {
+        "window_start": ISO,
+        "window_kind": "quota_week"|"billing_cycle"|"last_7_days",
+        "current": email|null,
+        "accounts": [{"email", "tokens", "cost_usd", "messages", "last_seen", "saved_login"}],
+        "unknown": {"tokens", "cost_usd"}
+    }
+    """
+    from .tui.model import get_tz, ensure_aware, get_accounts_window
+    from .pricing import default_book
+    from .export import dedupe
+
+    doc = doc or {}
+    tz = get_tz(doc)
+    now = ensure_aware(now, tz) or datetime.now(tz)
+    qw = doc.get("quota_windows") or {}
+    subs = doc.get("subscriptions") or {}
+    window_start_dt, kind, _ = get_accounts_window(qw, subs, now=now, tz_name=doc.get("timezone"))
+    if kind == "last_7d":
+        kind = "last_7_days"
+    window_start_ts = window_start_dt.timestamp()
+
+    prices = prices or default_book()
+    deduped = dedupe(sessions)
+
+    stats: Dict[str, dict] = {}
+    unknown_tokens = 0
+    unknown_cost = 0.0
+
+    for s in deduped:
+        if s.agent != "antigravity":
+            continue
+        for m in s.messages:
+            if m.ts < window_start_ts:
+                continue
+            tok = (m.input or 0) + (m.output or 0) + (m.cache_read or 0) + (m.cache_write or 0)
+            cost, _ = prices.cost(
+                m.model, "antigravity",
+                m.input or 0, m.output or 0,
+                m.cache_read or 0, m.cache_write or 0,
+                m.cache_write_1h or 0
+            )
+            acc = m.account.strip() if m.account else ""
+            if not acc or acc.lower() in ("unknown", "unattributed"):
+                unknown_tokens += tok
+                unknown_cost += cost
+            else:
+                acc_key = acc.lower()
+                if acc_key not in stats:
+                    stats[acc_key] = {
+                        "email": acc,
+                        "tokens": 0,
+                        "cost_usd": 0.0,
+                        "messages": 0,
+                        "last_seen": None,
+                        "saved_login": None,
+                    }
+                entry = stats[acc_key]
+                entry["tokens"] += tok
+                entry["cost_usd"] += cost
+                entry["messages"] += 1
+                if entry["last_seen"] is None or m.ts > entry["last_seen"]:
+                    entry["last_seen"] = m.ts
+
+    known_rows = []
+    for k in sorted(stats.keys()):
+        r = stats[k]
+        ls_iso = None
+        if r["last_seen"] is not None:
+            ls_iso = datetime.fromtimestamp(r["last_seen"], tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        known_rows.append({
+            "email": r["email"],
+            "tokens": r["tokens"],
+            "cost_usd": r["cost_usd"],
+            "messages": r["messages"],
+            "last_seen": ls_iso,
+            "saved_login": r["saved_login"],
+        })
+    known_rows.sort(key=lambda r: (-r["tokens"], r["email"]))
+
+    ws_utc = window_start_dt.astimezone(timezone.utc)
+    ws_iso = ws_utc.isoformat().replace("+00:00", "Z")
+
+    return {
+        "window_start": ws_iso,
+        "window_kind": kind,
+        "current": current_account,
+        "accounts": known_rows,
+        "unknown": {
+            "tokens": unknown_tokens,
+            "cost_usd": unknown_cost,
+        }
+    }

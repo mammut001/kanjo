@@ -16,11 +16,14 @@ from kanjo.tui.model import (
     build_day_rows, build_model_rows, build_project_detail,
     build_project_footer_rows, build_project_rows, build_subscription_meters,
     build_total_view_model, compute_30d_sparkline, compute_8w_strip,
-    filter_report, format_money, format_reset_countdown, format_tokens,
+    ensure_aware, filter_report, format_money, format_reset_countdown, format_tokens,
     get_accounts_window, get_tz, heat_level, parse_iso_dt, quota_level
 )
 from kanjo.tui.render import Canvas, Cell, Style, TUIState, render_ui, char_width, str_width, truncate_str
 from kanjo.tui.static import canvas_to_ansi, render_static_snapshot
+from kanjo.tui.term import run_curses_tui
+from kanjo.antigravity_accounts import compute_antigravity_accounts_window
+from kanjo.sources.base import Message, Session
 from kanjo import cli
 
 
@@ -28,6 +31,47 @@ def load_fixture_doc() -> dict:
     fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "export_sample.json")
     with open(fixture_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_sample_fixture() -> dict:
+    fixture_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "ui", "fixtures", "sample.json"))
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+class FakeStdscr:
+    """Mock curses stdscr for headless testing."""
+    def __init__(self, width: int = 80, height: int = 24, keys=None):
+        self.w = width
+        self.h = height
+        self.keys = list(keys or [ord("q")])
+        self.captured = []
+
+    def getmaxyx(self):
+        return (self.h, self.w)
+
+    def timeout(self, ms):
+        pass
+
+    def keypad(self, flag):
+        pass
+
+    def erase(self):
+        pass
+
+    def addstr(self, *args):
+        self.captured.append(args)
+
+    def insch(self, *args):
+        pass
+
+    def noutrefresh(self):
+        pass
+
+    def getch(self):
+        if self.keys:
+            return self.keys.pop(0)
+        return ord("q")
 
 
 class TUIModelTest(unittest.TestCase):
@@ -206,6 +250,157 @@ class TUIModelTest(unittest.TestCase):
         self.assertTrue(sec.rows[2].is_unattributed)
         self.assertEqual(sec.rows[2].email, "unattributed")
 
+    def test_sample_fixture_timezone_awareness_and_crash_fix(self):
+        """Item 1: Ensure ui/fixtures/sample.json does not crash across all ranges."""
+        doc = load_sample_fixture()
+        tz = get_tz(doc)
+        now_aware = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
+        now_naive = datetime(2026, 11, 13, 12, 0, 0)
+
+        # Test both offset-aware and offset-naive now across all 6 ranges
+        for now in (now_aware, now_naive):
+            for tr in [TimeRange.ALL, TimeRange.TODAY, TimeRange.DAYS_7, TimeRange.DAYS_30, TimeRange.RESET, TimeRange.CYCLE]:
+                # filter_report
+                filtered = filter_report(doc, tr, now=now)
+                self.assertIsNotNone(filtered)
+                self.assertGreaterEqual(filtered.total_cost, 0.0)
+
+                # build_subscription_meters (which triggered the supervisor crash on TimeRange.CYCLE)
+                meters = build_subscription_meters(doc, now=now)
+                self.assertIsInstance(meters, list)
+
+                # static snapshot
+                snapshot = render_static_snapshot(doc, width=80, time_range=tr, now=now, no_color=True)
+                self.assertIn("Kanjo", snapshot)
+                self.assertIn("Total", snapshot)
+
+    def test_model_tolerance_missing_and_corrupt_fields(self):
+        """Ensure no exception escapes model or render for empty or partially missing docs."""
+        test_docs = [
+            {},
+            {"timezone": None},
+            {"timezone": "Invalid/Timezone/Name_123"},
+            {"projects": None, "totals": None, "subscriptions": None, "quota_windows": None},
+            {"projects": [{"name": None, "cost": None, "tokens": None, "by_day": None, "by_agent": None}]},
+            {"totals": {"cost": None, "tokens": None, "sessions": None}, "projects": []},
+            {"subscriptions": {"antigravity": None, "claude": {"monthly_price_usd": "invalid", "cycle_start": None}}},
+            {"quota_windows": {"antigravity": {"weekly_resets_at": "bad-date", "weekly_window_hours": None}}},
+        ]
+        for doc in test_docs:
+            tz = get_tz(doc)
+            now = datetime.now(tz)
+            for tr in [TimeRange.ALL, TimeRange.TODAY, TimeRange.CYCLE]:
+                filtered = filter_report(doc, tr, now=now)
+                total_vm = build_total_view_model(filtered)
+                meters = build_subscription_meters(doc, now=now)
+                acc_sec = build_antigravity_accounts_section(doc, now=now)
+                p_rows = build_project_rows(filtered, now, tz)
+                p_footers = build_project_footer_rows(filtered, now, tz)
+                m_rows = build_model_rows(filtered)
+                a_rows = build_agent_rows(filtered)
+                d_rows = build_day_rows(filtered)
+
+                canvas = Canvas(80, 24)
+                state = TUIState(version="0.9.0", time_range=tr)
+                render_ui(
+                    canvas, state=state, filtered=filtered, total_vm=total_vm,
+                    meters=meters, accounts_section=acc_sec, project_rows=p_rows,
+                    project_footers=p_footers, model_rows=m_rows, agent_rows=a_rows,
+                    day_rows=d_rows, static_mode=True
+                )
+                self.assertGreater(len(canvas.get_line_text(0)), 0)
+
+    def test_antigravity_accounts_quota_week_paths(self):
+        """Item 5: Antigravity accounts panel reflects quota week / billing cycle / last 7 days."""
+        # Path 1: Top-level antigravity_accounts object in export doc
+        doc_qw = {
+            "antigravity_accounts": {
+                "window_start": "2026-11-08T16:55:00Z",
+                "window_kind": "quota_week",
+                "current": "current@example.com",
+                "accounts": [
+                    {"email": "current@example.com", "tokens": 5000000, "cost_usd": 25.0, "messages": 10},
+                    {"email": "other@example.com", "tokens": 1000000, "cost_usd": 5.0, "messages": 2},
+                ],
+                "unknown": {"tokens": 20000, "cost_usd": 0.10}
+            }
+        }
+        sec_qw = build_antigravity_accounts_section(doc_qw)
+        self.assertIsNotNone(sec_qw)
+        self.assertIn("this quota week", sec_qw.header_label)
+        self.assertEqual(len(sec_qw.rows), 3)  # current, other, unattributed
+        self.assertTrue(sec_qw.rows[0].is_current)
+        self.assertEqual(sec_qw.rows[0].email, "current@example.com")
+        self.assertEqual(sec_qw.rows[0].tokens_str, "5M")
+        self.assertEqual(sec_qw.rows[0].cost_str, "$25.00")
+        self.assertTrue(sec_qw.rows[2].is_unattributed)
+        self.assertEqual(sec_qw.rows[2].tokens_str, "20k")
+
+        # Test billing_cycle title
+        doc_bc = {
+            "antigravity_accounts": {
+                "window_start": "2026-11-01T00:00:00Z",
+                "window_kind": "billing_cycle",
+                "current": None,
+                "accounts": [{"email": "user@example.com", "tokens": 1000, "cost_usd": 0.05}],
+                "unknown": {"tokens": 0, "cost_usd": 0.0}
+            }
+        }
+        sec_bc = build_antigravity_accounts_section(doc_bc)
+        self.assertIn("this billing cycle", sec_bc.header_label)
+
+        # Test last_7_days title
+        doc_7d = {
+            "antigravity_accounts": {
+                "window_start": "2026-11-06T12:00:00Z",
+                "window_kind": "last_7_days",
+                "current": None,
+                "accounts": [{"email": "user@example.com", "tokens": 1000, "cost_usd": 0.05}],
+                "unknown": {"tokens": 0, "cost_usd": 0.0}
+            }
+        }
+        sec_7d = build_antigravity_accounts_section(doc_7d)
+        self.assertIn("last 7 days", sec_7d.header_label)
+
+        # Path 2: Locally computed via compute_antigravity_accounts_window
+        now = datetime(2026, 11, 13, 12, 0, 0, tzinfo=timezone.utc)
+        doc_calc = {
+            "quota_windows": {
+                "antigravity": {
+                    "weekly_resets_at": "2026-11-15T16:55:00Z",
+                    "weekly_window_hours": 168
+                }
+            }
+        }
+        # window_start is Nov 8 16:55:00 UTC (1794156900 ts)
+        # Message before window: 2026-11-07 12:00:00 (1794052800) -> excluded
+        # Message inside window: 2026-11-09 12:00:00 (1794225600) -> included
+        # Message inside window unattributed: 2026-11-10 12:00:00 (1794312000) -> included in unknown
+        ts_before = datetime(2026, 11, 7, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        ts_inside = datetime(2026, 11, 9, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        ts_unatt = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+
+        m_old = Message(ts=ts_before, model="gemini-2.5-pro", input=500000, output=100000, account="alice@gmail.com")
+        m_new = Message(ts=ts_inside, model="gemini-2.5-pro", input=200000, output=50000, account="alice@gmail.com")
+        m_unk = Message(ts=ts_unatt, model="gemini-2.5-pro", input=10000, output=2000, account=None)
+        s = Session(id="s1", agent="antigravity", file="f.log", messages=[m_old, m_new, m_unk])
+
+        computed = compute_antigravity_accounts_window([s], doc_calc, now=now, current_account="alice@gmail.com")
+        self.assertEqual(computed["window_kind"], "quota_week")
+        self.assertEqual(computed["current"], "alice@gmail.com")
+        # Alice should have 250k tokens (from m_new only, excluding m_old)
+        self.assertEqual(len(computed["accounts"]), 1)
+        self.assertEqual(computed["accounts"][0]["tokens"], 250000)
+        self.assertEqual(computed["unknown"]["tokens"], 12000)
+
+        # Build section with computed dict
+        sec_computed = build_antigravity_accounts_section(doc_calc, now=now, antigravity_data=computed)
+        self.assertIsNotNone(sec_computed)
+        self.assertIn("this quota week", sec_computed.header_label)
+        self.assertEqual(len(sec_computed.rows), 2)
+        self.assertTrue(sec_computed.rows[0].is_current)
+        self.assertEqual(sec_computed.rows[0].tokens_str, "250k")
+
 
 class TUIRenderTest(unittest.TestCase):
     def setUp(self):
@@ -348,6 +543,105 @@ class TUIRenderTest(unittest.TestCase):
         self.assertIn("Time Range", all_text)
         self.assertIn("Navigation", all_text)
 
+    def test_start_fast_loading_state(self):
+        """Item 4: Fast start shows Loading… immediately without blocking."""
+        canvas = Canvas(80, 24)
+        state = TUIState(version="0.9.0", is_scanning=True)
+        render_ui(canvas, state=state, filtered=None, static_mode=False)
+
+        all_text = "\n".join(canvas.get_line_text(y) for y in range(24))
+        self.assertIn("Loading…", all_text)
+
+        last_line = canvas.get_line_text(23)
+        self.assertIn("F1", last_line)
+        self.assertIn("F10", last_line)
+
+    def test_matrix_static_and_curses_canvas_robustness(self):
+        """Item 3: Matrix test for BOTH sample.json and export_sample.json:
+        every range × every view × widths (60, 80, 120, 200) × heights (15, 24, 50).
+        Asserts no exception, no line wider than width (str_width), F-key bar on last line of curses canvas."""
+        f_sample = load_sample_fixture()
+        f_export = load_fixture_doc()
+
+        for doc in (f_sample, f_export):
+            tz = get_tz(doc)
+            now = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
+            for tr in [TimeRange.ALL, TimeRange.TODAY, TimeRange.DAYS_7, TimeRange.DAYS_30, TimeRange.RESET, TimeRange.CYCLE]:
+                filtered = filter_report(doc, tr, now=now)
+                total_vm = build_total_view_model(filtered)
+                meters = build_subscription_meters(doc, now=now)
+                acc_sec = build_antigravity_accounts_section(doc, now=now)
+                p_rows = build_project_rows(filtered, now, tz)
+                p_footers = build_project_footer_rows(filtered, now, tz)
+                m_rows = build_model_rows(filtered)
+                a_rows = build_agent_rows(filtered)
+                d_rows = build_day_rows(filtered)
+
+                for vm in [ViewMode.PROJECTS, ViewMode.MODELS, ViewMode.AGENTS, ViewMode.DAYS]:
+                    for w in (60, 80, 120, 200):
+                        for h in (15, 24, 50):
+                            # 1. Static snapshot
+                            out = render_static_snapshot(
+                                doc, width=w, height=h, no_color=True, now=now,
+                                time_range=tr, view_mode=vm
+                            )
+                            for line in out.splitlines():
+                                self.assertLessEqual(
+                                    str_width(line), w,
+                                    f"Static line {repr(line)} width {str_width(line)} > {w} (range={tr}, view={vm}, h={h})"
+                                )
+
+                            # 2. Curses canvas render
+                            canvas = Canvas(w, h)
+                            state = TUIState(version="0.9.0", time_range=tr, view_mode=vm)
+                            render_ui(
+                                canvas, state=state, filtered=filtered, total_vm=total_vm,
+                                meters=meters, accounts_section=acc_sec, project_rows=p_rows,
+                                project_footers=p_footers, model_rows=m_rows, agent_rows=a_rows,
+                                day_rows=d_rows, static_mode=False
+                            )
+                            for y in range(h):
+                                line = canvas.get_line_text(y)
+                                self.assertLessEqual(
+                                    str_width(line), w,
+                                    f"Canvas line {y} {repr(line)} width {str_width(line)} > {w} (range={tr}, view={vm}, h={h})"
+                                )
+                            last_line = canvas.get_line_text(h - 1)
+                            self.assertIn("F1", last_line, f"F1 missing on line {h-1} for {w}x{h}")
+                            self.assertIn("F10", last_line, f"F10 missing on line {h-1} for {w}x{h}")
+
+    def test_interactive_curses_tui_fake_stdscr(self):
+        """Item 3 & 4: Drive run_curses_tui with fake stdscr across all views and interactive key sequences."""
+        doc = load_sample_fixture()
+        # Exercise each view mode
+        for vm in [ViewMode.PROJECTS, ViewMode.MODELS, ViewMode.AGENTS, ViewMode.DAYS]:
+            scr = FakeStdscr(width=80, height=24, keys=[ord('q')])
+            rc = run_curses_tui(scr, initial_doc=doc, data_path="fake.json", view_mode=vm, no_color=True)
+            self.assertEqual(rc, 0)
+            self.assertGreater(len(scr.captured), 0)
+
+        # Exercise fast start with initial_doc=None
+        scr_loading = FakeStdscr(width=80, height=24, keys=[ord('q')])
+        rc = run_curses_tui(scr_loading, initial_doc=None, data_path="fake.json", view_mode=ViewMode.PROJECTS, no_color=True)
+        self.assertEqual(rc, 0)
+        captured_text = "".join(str(c[2]) for c in scr_loading.captured if len(c) > 2)
+        self.assertIn("Loading", captured_text)
+
+        # Exercise scripted key sequences: range switch, tab view switch, help toggle, filter open/cancel, quit
+        scripted_keys = [
+            ord('2'),       # Range: Today
+            ord('\t'),      # Next view: Models
+            ord('?'),       # Open help
+            ord('?'),       # Close help
+            ord('/'),       # Open filter
+            ord('a'), ord('b'), # Filter text
+            27,             # Esc (cancel filter)
+            ord('q'),       # Quit
+        ]
+        scr_keys = FakeStdscr(width=100, height=30, keys=scripted_keys)
+        rc = run_curses_tui(scr_keys, initial_doc=doc, data_path="fake.json", view_mode=ViewMode.PROJECTS, no_color=True)
+        self.assertEqual(rc, 0)
+
 
 class TUIStaticTest(unittest.TestCase):
     def test_static_output_color_and_nocolor(self):
@@ -366,6 +660,40 @@ class TUIStaticTest(unittest.TestCase):
         self.assertIn("Kanjo", out_nocolor)
         self.assertIn("Total", out_nocolor)
         self.assertIn("F1Help", out_nocolor)
+
+    def test_cli_usage_data_flag_isolated(self):
+        """Item 2: --data PATH loads an export JSON without scanning or cache writes."""
+        sample_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "ui", "fixtures", "sample.json"))
+        tmp_dir = tempfile.mkdtemp(prefix="kanjo-data-test-")
+        try:
+            cache_dir = os.path.join(tmp_dir, "cache")
+            data_dir = os.path.join(tmp_dir, "data")
+            os.makedirs(cache_dir, exist_ok=True)
+            os.makedirs(data_dir, exist_ok=True)
+
+            env = dict(os.environ)
+            env["KANJO_DATA_DIR"] = data_dir
+            env["KANJO_CACHE_DIR"] = cache_dir
+            env["KANJO_NO_NETWORK"] = "1"
+            env["COLUMNS"] = "120"
+            env["NO_COLOR"] = "1"
+
+            with mock.patch.dict(os.environ, env):
+                parser = cli.build_parser()
+                args = parser.parse_args(["usage", "--data", sample_path, "--once", "--no-color", "--range", "7d"])
+                out = io.StringIO()
+                with mock.patch("sys.stdout", out):
+                    rc = cli.cmd_usage(args)
+                self.assertEqual(rc, 0)
+                output = out.getvalue()
+                self.assertIn("Kanjo", output)
+                self.assertIn("weather-cli", output)
+                self.assertIn("PocketTimer", output)
+                # Verify no cache writes
+                self.assertEqual(os.listdir(cache_dir), [])
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_cli_usage_once_isolated(self):
         # Run kanjo usage --once --no-color against test fixtures with clean isolation env vars

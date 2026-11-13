@@ -150,7 +150,15 @@ def format_money(amount: float) -> str:
     return f"${amount:,.2f}"
 
 
-def parse_iso_dt(value: Optional[str]) -> Optional[datetime]:
+def ensure_aware(dt: Optional[datetime], tz: Optional[datetime.tzinfo] = None) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=tz or timezone.utc)
+    return dt
+
+
+def parse_iso_dt(value: Optional[str], default_tz: Optional[datetime.tzinfo] = None) -> Optional[datetime]:
     if not value or not isinstance(value, str):
         return None
     text = value.strip()
@@ -162,7 +170,10 @@ def parse_iso_dt(value: Optional[str]) -> Optional[datetime]:
     if match:
         text = match.group(1) + match.group(2)
     try:
-        return datetime.fromisoformat(text)
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=default_tz or timezone.utc)
+        return dt
     except (ValueError, TypeError):
         return None
 
@@ -171,8 +182,12 @@ def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: date
     """Format relative countdown to reset_dt: resets in 2d 4h, resets 18:40, resets in 35m."""
     if reset_dt is None:
         return "—"
-    now_utc = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
-    reset_utc = reset_dt if reset_dt.tzinfo else reset_dt.replace(tzinfo=timezone.utc)
+    now_utc = ensure_aware(now, tz) or datetime.now(timezone.utc)
+    reset_utc = ensure_aware(reset_dt, tz)
+    if reset_utc is None:
+        return "—"
+    now_utc = now_utc.astimezone(timezone.utc)
+    reset_utc = reset_utc.astimezone(timezone.utc)
     diff = (reset_utc - now_utc).total_seconds()
     if diff <= 0:
         return "window ended"
@@ -193,24 +208,38 @@ def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: date
     return f"resets in {d}d {h}h"
 
 
-def get_tz(doc: dict) -> datetime.tzinfo:
-    name = doc.get("timezone") or local_timezone_name()
+def get_tz(doc: Optional[dict] = None) -> datetime.tzinfo:
+    name = None
+    if isinstance(doc, dict):
+        name = doc.get("timezone")
+    if not name:
+        try:
+            name = local_timezone_name()
+        except Exception:
+            name = "UTC"
     try:
         return ZoneInfo(name)
     except Exception:
-        return local_zone(name)
+        try:
+            return local_zone(name)
+        except Exception:
+            return timezone.utc
 
 
 def window_start(quota_entry: Optional[dict], now: datetime, tz: datetime.tzinfo) -> Optional[datetime]:
     """Calculate current weekly quota window start for an agent (weekly_resets_at - window_hours)."""
-    if not quota_entry:
+    if not quota_entry or not isinstance(quota_entry, dict):
         return None
     reset_iso = quota_entry.get("weekly_resets_at")
     hours = quota_entry.get("weekly_window_hours", 168)
-    reset = parse_iso_dt(reset_iso)
+    try:
+        hours = float(hours if hours is not None else 168)
+    except (ValueError, TypeError):
+        hours = 168.0
+    reset = parse_iso_dt(reset_iso, default_tz=tz)
     if not reset or hours <= 0:
         return None
-    now_utc = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    now_utc = (ensure_aware(now, tz) or datetime.now(tz)).astimezone(timezone.utc)
     reset_utc = reset.astimezone(timezone.utc)
     period_sec = hours * 3600
     if hours == 168:
@@ -230,7 +259,7 @@ def window_start(quota_entry: Optional[dict], now: datetime, tz: datetime.tzinfo
 
 def format_month_day_time(dt: datetime, tz: datetime.tzinfo) -> str:
     """Format e.g. Nov 8 16:55."""
-    local_dt = dt.astimezone(tz)
+    local_dt = (ensure_aware(dt, tz) or datetime.now(tz)).astimezone(tz)
     return f"{local_dt.strftime('%b')} {local_dt.day} {local_dt.strftime('%H:%M')}"
 
 
@@ -240,21 +269,21 @@ def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[d
     else billing cycle start, else last 7 days.
     Returns (window_start_dt, kind, label).
     """
-    now = now or datetime.now(timezone.utc)
-    tz = ZoneInfo(tz_name) if tz_name else local_zone(tz_name)
+    tz = get_tz({"timezone": tz_name}) if tz_name else get_tz()
+    now = ensure_aware(now, tz) or datetime.now(tz)
     qw = quota_windows or {}
     subs = subscriptions or {}
 
     # 1. Antigravity weekly quota window
-    if "antigravity" in qw and qw["antigravity"].get("weekly_resets_at"):
+    if isinstance(qw.get("antigravity"), dict) and qw["antigravity"].get("weekly_resets_at"):
         start = window_start(qw["antigravity"], now, tz)
         if start is not None:
             lbl = f"Antigravity accounts · this quota week (since {format_month_day_time(start, tz)})"
             return start, "quota_week", lbl
 
     # 2. Antigravity billing cycle start
-    if "antigravity" in subs and subs["antigravity"].get("cycle_start"):
-        start = parse_iso_dt(subs["antigravity"]["cycle_start"])
+    if isinstance(subs.get("antigravity"), dict) and subs["antigravity"].get("cycle_start"):
+        start = parse_iso_dt(subs["antigravity"]["cycle_start"], default_tz=tz)
         if start is not None:
             lbl = f"Antigravity accounts · this billing cycle (since {format_month_day_time(start, tz)})"
             return start, "billing_cycle", lbl
@@ -278,11 +307,12 @@ def heat_level(value: float, peak: float, levels: int = 8) -> int:
     return min(max(1, math.ceil(ratio * levels)), levels)
 
 
-def compute_8w_strip(by_day: List[dict], now: datetime, tz: datetime.tzinfo,
+def compute_8w_strip(by_day: Optional[List[dict]], now: datetime, tz: datetime.tzinfo,
                      fallback_agent: str = "unknown", ascii_mode: bool = False) -> List[Tuple[str, Optional[str]]]:
     """Compute 8-week heat strip ending on the week of `now`.
     Returns list of 8 (char, dominant_agent) pairs, oldest week first.
     """
+    now = ensure_aware(now, tz) or datetime.now(tz)
     now_local = now.astimezone(tz)
     today = datetime(now_local.year, now_local.month, now_local.day, tzinfo=tz)
     monday_offset = today.weekday()  # Monday = 0
@@ -296,13 +326,15 @@ def compute_8w_strip(by_day: List[dict], now: datetime, tz: datetime.tzinfo,
     first_start = week_starts[0]
     first_date = first_start.date()
 
-    for d in by_day:
+    for d in (by_day or []):
+        if not isinstance(d, dict):
+            continue
         d_str = d.get("day")
         if not d_str:
             continue
         try:
-            d_date = date.fromisoformat(d_str)
-        except ValueError:
+            d_date = date.fromisoformat(str(d_str))
+        except (ValueError, TypeError):
             continue
         days_from_first = (d_date - first_date).days
         if days_from_first < 0:
@@ -310,12 +342,19 @@ def compute_8w_strip(by_day: List[dict], now: datetime, tz: datetime.tzinfo,
         w_idx = days_from_first // 7
         if w_idx >= 8:
             continue
-        c = float(d.get("cost", 0.0))
+        try:
+            c = float(d.get("cost") or 0.0)
+        except (ValueError, TypeError):
+            c = 0.0
         week_costs[w_idx] += c
         split = d.get("by_agent")
-        if split:
+        if isinstance(split, dict):
             for ag, cost_val in split.items():
-                week_agent_costs[w_idx][ag] = week_agent_costs[w_idx].get(ag, 0.0) + float(cost_val)
+                try:
+                    cv = float(cost_val or 0.0)
+                except (ValueError, TypeError):
+                    cv = 0.0
+                week_agent_costs[w_idx][ag] = week_agent_costs[w_idx].get(ag, 0.0) + cv
         else:
             week_agent_costs[w_idx][fallback_agent] = week_agent_costs[w_idx].get(fallback_agent, 0.0) + c
 
@@ -337,16 +376,23 @@ def compute_8w_strip(by_day: List[dict], now: datetime, tz: datetime.tzinfo,
     return out
 
 
-def compute_30d_sparkline(by_day: List[dict], now: datetime, tz: datetime.tzinfo,
+def compute_30d_sparkline(by_day: Optional[List[dict]], now: datetime, tz: datetime.tzinfo,
                           ascii_mode: bool = False) -> Tuple[str, float]:
     """Compute 30-day sparkline ending on `today`. Returns (sparkline_string, peak_cost)."""
+    now = ensure_aware(now, tz) or datetime.now(tz)
     now_local = now.astimezone(tz)
     today = datetime(now_local.year, now_local.month, now_local.day, tzinfo=tz)
     day_map: Dict[str, float] = {}
-    for d in by_day:
+    for d in (by_day or []):
+        if not isinstance(d, dict):
+            continue
         d_str = d.get("day")
         if d_str:
-            day_map[d_str] = day_map.get(d_str, 0.0) + float(d.get("cost", 0.0))
+            try:
+                c = float(d.get("cost") or 0.0)
+            except (ValueError, TypeError):
+                c = 0.0
+            day_map[str(d_str)] = day_map.get(str(d_str), 0.0) + c
 
     days = [(today - timedelta(days=29 - i)).date().isoformat() for i in range(30)]
     costs = [day_map.get(day_str, 0.0) for day_str in days]
@@ -359,6 +405,7 @@ def compute_30d_sparkline(by_day: List[dict], now: datetime, tz: datetime.tzinfo
             chars.append("." if ascii_mode else " ")
         else:
             chars.append(_ASCII_CHARS[lvl] if ascii_mode else _BLOCK_CHARS[lvl - 1])
+    return "".join(chars), peak
     return "".join(chars), peak
 
 
@@ -386,10 +433,11 @@ class FilteredData:
 def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                   now: Optional[datetime] = None) -> FilteredData:
     """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
-    now = now or datetime.now(timezone.utc)
+    doc = doc or {}
     tz = get_tz(doc)
-    qw = doc.get("quota_windows", {})
-    subs = doc.get("subscriptions", {})
+    now = ensure_aware(now, tz) or datetime.now(tz)
+    qw = doc.get("quota_windows") or {}
+    subs = doc.get("subscriptions") or {}
 
     now_local = now.astimezone(tz)
     today_start = datetime(now_local.year, now_local.month, now_local.day, tzinfo=tz)
@@ -408,16 +456,18 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     elif time_range == TimeRange.DAYS_30:
         range_start = today_start - timedelta(days=29)
     elif time_range == TimeRange.RESET:
-        for ag, q in qw.items():
-            s = window_start(q, now, tz)
-            if s is not None:
-                agent_starts[ag] = s
+        for ag, q in (qw if isinstance(qw, dict) else {}).items():
+            if isinstance(q, dict):
+                s = window_start(q, now, tz)
+                if s is not None:
+                    agent_starts[ag] = ensure_aware(s, tz)
     elif time_range == TimeRange.CYCLE:
-        for ag, sub in subs.items():
-            s_iso = sub.get("cycle_start")
-            s = parse_iso_dt(s_iso)
-            if s is not None:
-                agent_starts[ag] = s
+        for ag, sub in (subs if isinstance(subs, dict) else {}).items():
+            if isinstance(sub, dict):
+                s_iso = sub.get("cycle_start")
+                s = parse_iso_dt(s_iso, default_tz=tz)
+                if s is not None:
+                    agent_starts[ag] = ensure_aware(s, tz)
 
     def agent_window(ag: str) -> Optional[Tuple[Optional[datetime], Optional[datetime]]]:
         if time_range == TimeRange.ALL:
@@ -434,8 +484,8 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             return False
         w_start, w_end = w
         try:
-            d_date = date.fromisoformat(day_str)
-        except ValueError:
+            d_date = date.fromisoformat(str(day_str))
+        except (ValueError, TypeError):
             return False
         d0 = datetime(d_date.year, d_date.month, d_date.day, tzinfo=tz)
         d1 = d0 + timedelta(days=1)
@@ -446,13 +496,15 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         return True
 
     def session_included(s: dict) -> bool:
+        if not isinstance(s, dict):
+            return False
         ag = s.get("agent", "")
         w = agent_window(ag)
         if w is None:
             return False
         w_start, w_end = w
-        started = parse_iso_dt(s.get("started"))
-        ended = parse_iso_dt(s.get("ended")) or started
+        started = parse_iso_dt(s.get("started"), default_tz=tz)
+        ended = parse_iso_dt(s.get("ended"), default_tz=tz) or started
         if not started and not ended:
             return False
         s0 = min(started or ended, ended or started)
@@ -464,9 +516,17 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         return True
 
     def session_in_range_cost_tokens(s: dict) -> Tuple[float, int]:
-        total_c = float(s.get("cost", 0.0))
-        toks = s.get("tokens", {})
-        total_t = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
+        if not isinstance(s, dict):
+            return 0.0, 0
+        try:
+            total_c = float(s.get("cost") or 0.0)
+        except (ValueError, TypeError):
+            total_c = 0.0
+        toks = s.get("tokens")
+        try:
+            total_t = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
+        except (ValueError, TypeError):
+            total_t = 0
         if time_range == TimeRange.ALL:
             return total_c, total_t
         if not session_included(s):
@@ -476,8 +536,8 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         if w is None:
             return 0.0, 0
         w_start, w_end = w
-        started = parse_iso_dt(s.get("started"))
-        ended = parse_iso_dt(s.get("ended")) or started
+        started = parse_iso_dt(s.get("started"), default_tz=tz)
+        ended = parse_iso_dt(s.get("ended"), default_tz=tz) or started
         if not started and not ended:
             return total_c, total_t
         s0 = min(started or ended, ended or started)
@@ -495,15 +555,21 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         return total_c * share, int(round(total_t * share))
 
     filtered_projects: List[dict] = []
-    all_projects = doc.get("projects", [])
+    all_projects = doc.get("projects") or []
 
     for p in all_projects:
+        if not isinstance(p, dict):
+            continue
         fallback_ag = "unknown"
         if p.get("by_agent"):
             fallback_ag = p["by_agent"][0].get("agent", "unknown")
 
         if time_range == TimeRange.ALL:
             filtered_p = dict(p)
+            try:
+                filtered_p["cost"] = float(p.get("cost") or 0.0)
+            except (ValueError, TypeError):
+                filtered_p["cost"] = 0.0
             filtered_projects.append(filtered_p)
             continue
 
@@ -512,7 +578,9 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         p_agent_cost: Dict[str, float] = {}
         p_agent_tokens: Dict[str, int] = {}
 
-        for d in p.get("by_day", []):
+        for d in (p.get("by_day") or []):
+            if not isinstance(d, dict):
+                continue
             d_str = d.get("day", "")
             cost_split = d.get("by_agent") or {fallback_ag: d.get("cost", 0.0)}
             tok_split = d.get("by_agent_tokens") or {fallback_ag: d.get("tokens", 0)}
@@ -523,9 +591,15 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             for ag in agents_to_check:
                 if day_included(d_str, ag):
                     if ag in cost_split:
-                        dc[ag] = float(cost_split[ag])
+                        try:
+                            dc[ag] = float(cost_split[ag] or 0.0)
+                        except (ValueError, TypeError):
+                            dc[ag] = 0.0
                     if ag in tok_split:
-                        dt[ag] = int(tok_split[ag])
+                        try:
+                            dt[ag] = int(tok_split[ag] or 0)
+                        except (ValueError, TypeError):
+                            dt[ag] = 0
 
             if dc or dt:
                 for ag, c in dc.items():
@@ -541,7 +615,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                 })
 
         # Filter sessions_detail
-        f_sessions = [s for s in p.get("sessions_detail", []) if session_included(s)]
+        f_sessions = [s for s in (p.get("sessions_detail") or []) if session_included(s)]
         p_agent_sessions: Dict[str, int] = {}
         for s in f_sessions:
             ag = s.get("agent", fallback_ag)
@@ -576,17 +650,30 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         filtered_projects.append(filtered_p)
 
     # Sort projects by cost desc
-    filtered_projects.sort(key=lambda p: (-p["cost"], p.get("name", "").lower()))
+    filtered_projects.sort(key=lambda p: (-p.get("cost", 0.0), str(p.get("name", "")).lower()))
 
     # Filter buckets
-    buckets = doc.get("buckets", {})
-    raw_unattr = buckets.get("unattributed", {})
-    raw_excl = buckets.get("excluded", {})
+    buckets = doc.get("buckets") or {}
+    raw_unattr = buckets.get("unattributed") or {}
+    raw_excl = buckets.get("excluded") or {}
 
     def filter_bucket(b: dict) -> dict:
+        if not isinstance(b, dict):
+            b = {}
         if time_range == TimeRange.ALL:
-            return dict(b)
-        ss = [s for s in b.get("sessions_detail", []) if session_included(s)]
+            fb = dict(b)
+            try:
+                fb["cost"] = float(b.get("cost") or 0.0)
+            except (ValueError, TypeError):
+                fb["cost"] = 0.0
+            toks = b.get("tokens")
+            try:
+                fb["tokens"] = {"total": toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)}
+            except (ValueError, TypeError):
+                fb["tokens"] = {"total": 0}
+            fb["sessions"] = int(b.get("sessions") or 0)
+            return fb
+        ss = [s for s in (b.get("sessions_detail") or []) if session_included(s)]
         c = 0.0
         t = 0
         days = []
@@ -594,7 +681,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             sc, st = session_in_range_cost_tokens(s)
             c += sc
             t += st
-            started = parse_iso_dt(s.get("started"))
+            started = parse_iso_dt(s.get("started"), default_tz=tz)
             if started:
                 days.append(started.astimezone(tz).date().isoformat())
         fb = dict(b)
@@ -608,16 +695,28 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
 
     filtered_unattr = filter_bucket(raw_unattr)
     filtered_excl = filter_bucket(raw_excl)
-    parse_failed = buckets.get("parse_failed", {})
-    failed_count = parse_failed.get("sessions", 0)
+    parse_failed = buckets.get("parse_failed") or {}
+    try:
+        failed_count = int(parse_failed.get("sessions") or 0) if isinstance(parse_failed, dict) else 0
+    except (ValueError, TypeError):
+        failed_count = 0
 
     # Calculate overall totals
     if time_range == TimeRange.ALL:
-        raw_tot = doc.get("totals", {})
-        total_cost = float(raw_tot.get("cost", 0.0))
-        toks = raw_tot.get("tokens", {})
-        total_tokens = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
-        total_sessions = int(raw_tot.get("sessions", 0))
+        raw_tot = doc.get("totals") or {}
+        try:
+            total_cost = float(raw_tot.get("cost", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            total_cost = 0.0
+        toks = raw_tot.get("tokens") or {}
+        try:
+            total_tokens = int(toks.get("total", 0) or 0) if isinstance(toks, dict) else int(toks or 0)
+        except (ValueError, TypeError):
+            total_tokens = 0
+        try:
+            total_sessions = int(raw_tot.get("sessions", 0) or 0)
+        except (ValueError, TypeError):
+            total_sessions = 0
     else:
         total_cost = sum(p["cost"] for p in filtered_projects) + filtered_unattr["cost"] + filtered_excl["cost"]
         total_tokens = sum(p["tokens"]["total"] for p in filtered_projects) + filtered_unattr["tokens"]["total"] + filtered_excl["tokens"]["total"]
@@ -629,10 +728,18 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     # Agent breakdown across report
     agent_cost_total: Dict[str, float] = {}
     for p in filtered_projects:
-        for a in p.get("by_agent", []):
+        for a in (p.get("by_agent") or []):
+            if not isinstance(a, dict):
+                continue
             ag = a.get("agent", "")
-            agent_cost_total[ag] = agent_cost_total.get(ag, 0.0) + float(a.get("cost", 0.0))
-    for s in filtered_unattr.get("sessions_detail", []) + filtered_excl.get("sessions_detail", []):
+            try:
+                acost = float(a.get("cost", 0.0) or 0.0)
+            except (ValueError, TypeError):
+                acost = 0.0
+            agent_cost_total[ag] = agent_cost_total.get(ag, 0.0) + acost
+    for s in (filtered_unattr.get("sessions_detail") or []) + (filtered_excl.get("sessions_detail") or []):
+        if not isinstance(s, dict):
+            continue
         sc, _ = session_in_range_cost_tokens(s)
         ag = s.get("agent", "")
         agent_cost_total[ag] = agent_cost_total.get(ag, 0.0) + sc
@@ -647,14 +754,24 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     # Aggregated Days View
     daily_agg: Dict[str, Dict[str, Any]] = {}
     for p in filtered_projects:
-        for d in p.get("by_day", []):
+        for d in (p.get("by_day") or []):
+            if not isinstance(d, dict):
+                continue
             d_str = d.get("day")
             if not d_str:
                 continue
             if d_str not in daily_agg:
                 daily_agg[d_str] = {"day": d_str, "cost": 0.0, "tokens": 0}
-            daily_agg[d_str]["cost"] += float(d.get("cost", 0.0))
-            daily_agg[d_str]["tokens"] += int(d.get("tokens", 0))
+            try:
+                d_c = float(d.get("cost", 0.0) or 0.0)
+            except (ValueError, TypeError):
+                d_c = 0.0
+            try:
+                d_t = int(d.get("tokens", 0) or 0)
+            except (ValueError, TypeError):
+                d_t = 0
+            daily_agg[d_str]["cost"] += d_c
+            daily_agg[d_str]["tokens"] += d_t
 
     by_day_list = sorted(daily_agg.values(), key=lambda d: d["day"], reverse=True)
 
@@ -662,8 +779,10 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     model_agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
     if time_range == TimeRange.ALL:
         for p in all_projects:
-            for m in p.get("by_model", []):
-                key = (m.get("model", ""), m.get("agent", ""))
+            for m in (p.get("by_model") or []):
+                if not isinstance(m, dict):
+                    continue
+                key = (m.get("model", "") or "", m.get("agent", "") or "")
                 if key not in model_agg:
                     model_agg[key] = {
                         "model": key[0],
@@ -672,21 +791,30 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                         "cost": 0.0,
                         "tokens": 0,
                     }
-                model_agg[key]["cost"] += float(m.get("cost", 0.0))
-                tok_val = m.get("tokens", {})
-                tok_count = tok_val.get("total", 0) if isinstance(tok_val, dict) else int(tok_val or 0)
+                try:
+                    m_c = float(m.get("cost", 0.0) or 0.0)
+                except (ValueError, TypeError):
+                    m_c = 0.0
+                model_agg[key]["cost"] += m_c
+                tok_val = m.get("tokens") or {}
+                try:
+                    tok_count = int(tok_val.get("total", 0) or 0) if isinstance(tok_val, dict) else int(tok_val or 0)
+                except (ValueError, TypeError):
+                    tok_count = 0
                 model_agg[key]["tokens"] += tok_count
     else:
         # Apportion from filtered sessions in filtered projects
         for p in filtered_projects:
-            for s in p.get("sessions_detail", []):
-                models = s.get("models", [])
-                if not models:
+            for s in (p.get("sessions_detail") or []):
+                if not isinstance(s, dict):
+                    continue
+                models = s.get("models") or []
+                if not models or not isinstance(models, list):
                     continue
                 sc, st = session_in_range_cost_tokens(s)
                 share_c = sc / len(models)
                 share_t = int(round(st / len(models)))
-                ag = s.get("agent", "")
+                ag = s.get("agent", "") or ""
                 for m_name in models:
                     key = (m_name, ag)
                     if key not in model_agg:
@@ -705,7 +833,9 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     # Aggregated Agents View
     agent_rows: Dict[str, Dict[str, Any]] = {}
     for p in filtered_projects:
-        for a in p.get("by_agent", []):
+        for a in (p.get("by_agent") or []):
+            if not isinstance(a, dict):
+                continue
             ag = a.get("agent", "")
             if ag not in agent_rows:
                 agent_rows[ag] = {
@@ -715,13 +845,26 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                     "tokens": 0,
                     "cost": 0.0,
                 }
-            agent_rows[ag]["cost"] += float(a.get("cost", 0.0))
-            agent_rows[ag]["sessions"] += int(a.get("sessions", 0))
-            tok_val = a.get("tokens", {})
-            tok_count = tok_val.get("total", 0) if isinstance(tok_val, dict) else int(tok_val or 0)
+            try:
+                acost = float(a.get("cost", 0.0) or 0.0)
+            except (ValueError, TypeError):
+                acost = 0.0
+            try:
+                asess = int(a.get("sessions", 0) or 0)
+            except (ValueError, TypeError):
+                asess = 0
+            agent_rows[ag]["cost"] += acost
+            agent_rows[ag]["sessions"] += asess
+            tok_val = a.get("tokens") or {}
+            try:
+                tok_count = int(tok_val.get("total", 0) or 0) if isinstance(tok_val, dict) else int(tok_val or 0)
+            except (ValueError, TypeError):
+                tok_count = 0
             agent_rows[ag]["tokens"] += tok_count
 
-    for s in filtered_unattr.get("sessions_detail", []) + filtered_excl.get("sessions_detail", []):
+    for s in (filtered_unattr.get("sessions_detail") or []) + (filtered_excl.get("sessions_detail") or []):
+        if not isinstance(s, dict):
+            continue
         sc, st = session_in_range_cost_tokens(s)
         ag = s.get("agent", "")
         if ag not in agent_rows:
@@ -884,11 +1027,12 @@ def build_total_view_model(filtered: FilteredData) -> TotalViewModel:
 
 def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List[SubscriptionMeter]:
     """Build htop CPU-meter style subscription blocks."""
-    now = now or datetime.now(timezone.utc)
+    doc = doc or {}
     tz = get_tz(doc)
-    subs = doc.get("subscriptions", {})
-    qw = doc.get("quota_windows", {})
-    if not subs:
+    now = ensure_aware(now, tz) or datetime.now(tz)
+    subs = doc.get("subscriptions") or {}
+    qw = doc.get("quota_windows") or {}
+    if not subs or not isinstance(subs, dict):
         return []
 
     # Cycle usage for each agent
@@ -898,9 +1042,15 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
     meters: List[SubscriptionMeter] = []
     for ag in sorted(subs.keys()):
         sub = subs[ag]
+        if not isinstance(sub, dict):
+            continue
         plan_label = sub.get("plan_label", ag)
         price = sub.get("monthly_price_usd")
-        usage = usage_map.get(ag, 0.0)
+        try:
+            price = float(price) if price is not None else None
+        except (ValueError, TypeError):
+            price = None
+        usage = float(usage_map.get(ag, 0.0) or 0.0)
 
         price_str = f"${price:,.2f}/mo" if (price is not None and price > 0) else "—"
         usage_str = f"usage {format_money(usage)}"
@@ -911,18 +1061,28 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
             mult_str = "—"
 
         # Quota windows
-        q = qw.get(ag, {})
+        q = qw.get(ag, {}) if isinstance(qw, dict) else {}
+        if not isinstance(q, dict):
+            q = {}
         windows: List[QuotaMeterWindow] = []
 
         # Weekly window
-        weekly_reset = parse_iso_dt(q.get("weekly_resets_at"))
+        weekly_reset = parse_iso_dt(q.get("weekly_resets_at"), default_tz=tz)
         weekly_hours = q.get("weekly_window_hours", 168)
+        try:
+            weekly_hours = float(weekly_hours if weekly_hours is not None else 168)
+        except (ValueError, TypeError):
+            weekly_hours = 168.0
         weekly_pct = q.get("weekly_used_percent")
-        weekly_title = "Weekly" if weekly_hours == 168 else f"{weekly_hours}-hour"
+        try:
+            weekly_pct = float(weekly_pct) if weekly_pct is not None else None
+        except (ValueError, TypeError):
+            weekly_pct = None
+        weekly_title = "Weekly" if weekly_hours == 168 else f"{int(round(weekly_hours))}-hour"
 
         if weekly_reset is not None:
-            now_utc = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
-            reset_utc = weekly_reset if weekly_reset.tzinfo else weekly_reset.replace(tzinfo=timezone.utc)
+            now_utc = now.astimezone(timezone.utc)
+            reset_utc = weekly_reset.astimezone(timezone.utc)
             ended = reset_utc <= now_utc
             pct = None if ended else weekly_pct
             detail = "window ended" if ended else format_reset_countdown(weekly_reset, now, tz)
@@ -935,13 +1095,21 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
 
         # 5-hour window
         five_hours = q.get("five_hour_window_hours")
+        try:
+            five_hours = float(five_hours) if five_hours is not None else None
+        except (ValueError, TypeError):
+            five_hours = None
         if five_hours is not None or q.get("five_hour_resets_at"):
-            five_reset = parse_iso_dt(q.get("five_hour_resets_at"))
+            five_reset = parse_iso_dt(q.get("five_hour_resets_at"), default_tz=tz)
             five_pct = q.get("five_hour_used_percent")
+            try:
+                five_pct = float(five_pct) if five_pct is not None else None
+            except (ValueError, TypeError):
+                five_pct = None
             five_title = f"{int(round(five_hours)) if five_hours else 5}-hour"
             if five_reset is not None:
-                now_utc = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
-                reset_utc = five_reset if five_reset.tzinfo else five_reset.replace(tzinfo=timezone.utc)
+                now_utc = now.astimezone(timezone.utc)
+                reset_utc = five_reset.astimezone(timezone.utc)
                 ended = reset_utc <= now_utc
                 pct = None if ended else five_pct
                 detail = "window ended" if ended else format_reset_countdown(five_reset, now, tz)
@@ -953,13 +1121,19 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
                 ))
 
         # Extra windows (e.g. Claude & GPT weekly in Antigravity)
-        for ew in q.get("extra_windows", []):
-            ew_reset = parse_iso_dt(ew.get("resets_at"))
+        for ew in (q.get("extra_windows") or []):
+            if not isinstance(ew, dict):
+                continue
+            ew_reset = parse_iso_dt(ew.get("resets_at"), default_tz=tz)
             ew_pct = ew.get("used_percent")
+            try:
+                ew_pct = float(ew_pct) if ew_pct is not None else None
+            except (ValueError, TypeError):
+                ew_pct = None
             ew_title = ew.get("title", "Extra")
             if ew_reset is not None:
-                now_utc = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
-                reset_utc = ew_reset if ew_reset.tzinfo else ew_reset.replace(tzinfo=timezone.utc)
+                now_utc = now.astimezone(timezone.utc)
+                reset_utc = ew_reset.astimezone(timezone.utc)
                 ended = reset_utc <= now_utc
                 pct = None if ended else ew_pct
                 detail = "window ended" if ended else format_reset_countdown(ew_reset, now, tz)
@@ -986,58 +1160,135 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
 def build_antigravity_accounts_section(
     doc: dict,
     now: Optional[datetime] = None,
-    antigravity_data: Optional[List[dict]] = None,
+    antigravity_data: Optional[Any] = None,
     current_account: Optional[str] = None
 ) -> Optional[AntigravityAccountsSection]:
     """Build Antigravity accounts section if attribution data exists."""
-    now = now or datetime.now(timezone.utc)
-    qw = doc.get("quota_windows", {})
-    subs = doc.get("subscriptions", {})
-    window_start_dt, kind, header_label = get_accounts_window(qw, subs, now=now, tz_name=doc.get("timezone"))
+    doc = doc or {}
+    tz = get_tz(doc)
+    now = ensure_aware(now, tz) or datetime.now(tz)
+    qw = doc.get("quota_windows") or {}
+    subs = doc.get("subscriptions") or {}
+    window_start_dt, default_kind, default_header_label = get_accounts_window(
+        qw, subs, now=now, tz_name=doc.get("timezone")
+    )
 
-    rows_data = antigravity_data or doc.get("antigravity_accounts")
+    rows_data = antigravity_data if antigravity_data is not None else doc.get("antigravity_accounts")
     if not rows_data:
         return None
 
-    # Check if there is any attribution data
-    has_any = any(r.get("account") != "unknown" or r.get("tokens", 0) > 0 for r in rows_data)
-    if not has_any:
-        return None
+    # Case 1: Dict with schema {"window_start", "window_kind", "current", "accounts", "unknown"}
+    if isinstance(rows_data, dict):
+        w_start_iso = rows_data.get("window_start")
+        w_start_dt = parse_iso_dt(w_start_iso, default_tz=tz) if w_start_iso else window_start_dt
+        w_kind = rows_data.get("window_kind") or default_kind
 
-    out_rows: List[AntigravityAccountRow] = []
-    unattr_row: Optional[AntigravityAccountRow] = None
-
-    for r in rows_data:
-        acc = r.get("account", "").strip()
-        toks = int(r.get("tokens", 0))
-        cost = float(r.get("cost", 0.0))
-        is_cur = r.get("is_current", False)
-        if current_account and acc.lower() == current_account.lower():
-            is_cur = True
-
-        if acc.lower() in ("unknown", "unattributed", ""):
-            unattr_row = AntigravityAccountRow(
-                email="unattributed",
-                tokens_str=format_tokens(toks),
-                cost_str=format_money(cost),
-                is_current=False,
-                is_unattributed=True,
-            )
+        if w_kind == "quota_week":
+            header_label = "Antigravity accounts · this quota week"
+            if w_start_dt:
+                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
+        elif w_kind == "billing_cycle":
+            header_label = "Antigravity accounts · this billing cycle"
+            if w_start_dt:
+                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
         else:
+            header_label = "Antigravity accounts · last 7 days"
+            if w_start_dt:
+                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
+
+        cur_acc = rows_data.get("current") or current_account
+        accounts_list = rows_data.get("accounts") or []
+        unknown_obj = rows_data.get("unknown") or {}
+
+        out_rows: List[AntigravityAccountRow] = []
+        for acc in accounts_list:
+            if not isinstance(acc, dict):
+                continue
+            email = acc.get("email") or acc.get("account", "")
+            if not email:
+                continue
+            toks = int(acc.get("tokens", 0) or 0)
+            cost = float(acc.get("cost_usd") if "cost_usd" in acc else acc.get("cost", 0.0) or 0.0)
+            is_cur = False
+            if cur_acc and email.lower() == cur_acc.lower():
+                is_cur = True
+            elif acc.get("is_current"):
+                is_cur = True
             out_rows.append(AntigravityAccountRow(
-                email=acc,
+                email=email,
                 tokens_str=format_tokens(toks),
                 cost_str=format_money(cost),
                 is_current=is_cur,
                 is_unattributed=False,
             ))
 
-    # Known rows sorted by tokens descending
-    out_rows.sort(key=lambda r: -parse_tokens_str(r.tokens_str))
-    if unattr_row is not None:
-        out_rows.append(unattr_row)
+        out_rows.sort(key=lambda r: -parse_tokens_str(r.tokens_str))
 
-    return AntigravityAccountsSection(header_label=header_label, rows=out_rows)
+        u_toks = int(unknown_obj.get("tokens", 0) or 0) if isinstance(unknown_obj, dict) else 0
+        u_cost = float(unknown_obj.get("cost_usd", unknown_obj.get("cost", 0.0)) or 0.0) if isinstance(unknown_obj, dict) else 0.0
+        if u_toks > 0 or u_cost > 0:
+            out_rows.append(AntigravityAccountRow(
+                email="unattributed",
+                tokens_str=format_tokens(u_toks),
+                cost_str=format_money(u_cost),
+                is_current=False,
+                is_unattributed=True,
+            ))
+
+        if not out_rows or not any(parse_tokens_str(r.tokens_str) > 0 or r.cost_str not in ("$0.00", "—") for r in out_rows):
+            return None
+
+        return AntigravityAccountsSection(header_label=header_label, rows=out_rows)
+
+    # Case 2: List of dicts (legacy format)
+    if isinstance(rows_data, list):
+        has_any = any(
+            isinstance(r, dict) and (r.get("account") not in ("unknown", "unattributed", "") or (r.get("tokens") or 0) > 0)
+            for r in rows_data
+        )
+        if not has_any:
+            return None
+
+        out_rows = []
+        unattr_row = None
+        cur_acc = current_account
+
+        for r in rows_data:
+            if not isinstance(r, dict):
+                continue
+            acc = str(r.get("account") or r.get("email") or "").strip()
+            toks = int(r.get("tokens", 0) or 0)
+            cost = float(r.get("cost_usd") if "cost_usd" in r else r.get("cost", 0.0) or 0.0)
+            is_cur = r.get("is_current", False)
+            if cur_acc and acc.lower() == cur_acc.lower():
+                is_cur = True
+
+            if acc.lower() in ("unknown", "unattributed", ""):
+                unattr_row = AntigravityAccountRow(
+                    email="unattributed",
+                    tokens_str=format_tokens(toks),
+                    cost_str=format_money(cost),
+                    is_current=False,
+                    is_unattributed=True,
+                )
+            else:
+                out_rows.append(AntigravityAccountRow(
+                    email=acc,
+                    tokens_str=format_tokens(toks),
+                    cost_str=format_money(cost),
+                    is_current=is_cur,
+                    is_unattributed=False,
+                ))
+
+        out_rows.sort(key=lambda r: -parse_tokens_str(r.tokens_str))
+        if unattr_row is not None:
+            out_rows.append(unattr_row)
+
+        if not out_rows:
+            return None
+        return AntigravityAccountsSection(header_label=default_header_label, rows=out_rows)
+
+    return None
 
 
 def parse_tokens_str(tok_str: str) -> float:
@@ -1056,29 +1307,41 @@ def parse_tokens_str(tok_str: str) -> float:
 def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinfo,
                        ascii_mode: bool = False, filter_query: str = "") -> List[ProjectRowViewModel]:
     """Build row view models for the Projects view table."""
+    now = ensure_aware(now, tz) or datetime.now(tz)
     rows: List[ProjectRowViewModel] = []
     query = filter_query.strip().lower()
 
-    for p in filtered.projects:
-        name = p.get("name", "Unnamed")
+    for p in (filtered.projects if filtered else []):
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "Unnamed")
         if query and query not in name.lower():
             continue
-        c_str = format_money(p["cost"])
-        t_str = format_tokens(p["tokens"]["total"])
-        s_str = str(p["sessions"])
-        agents = [a["agent"] for a in p.get("by_agent", []) if a.get("cost", 0) > 0 or a.get("tokens", {}).get("total", 0) > 0 or a.get("sessions", 0) > 0]
+        c_str = format_money(float(p.get("cost") or 0.0))
+        toks = p.get("tokens")
+        total_toks = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
+        t_str = format_tokens(total_toks)
+        s_str = str(int(p.get("sessions") or 0))
+        agents = [
+            a["agent"] for a in (p.get("by_agent") or [])
+            if isinstance(a, dict) and (
+                float(a.get("cost") or 0.0) > 0 or
+                (isinstance(a.get("tokens"), dict) and a["tokens"].get("total", 0) > 0) or
+                int(a.get("sessions") or 0) > 0
+            )
+        ]
         last_act = p.get("last_active") or "—"
         fallback_ag = agents[0] if agents else "unknown"
-        heat = compute_8w_strip(p.get("by_day", []), now, tz, fallback_agent=fallback_ag, ascii_mode=ascii_mode)
+        heat = compute_8w_strip(p.get("by_day") or [], now, tz, fallback_agent=fallback_ag, ascii_mode=ascii_mode)
 
         rows.append(ProjectRowViewModel(
-            id=p.get("id", ""),
+            id=str(p.get("id") or ""),
             name=name + (" (missing)" if p.get("path_missing") else ""),
             cost_str=c_str,
             tokens_str=t_str,
             sessions_str=s_str,
             agents=agents,
-            last_active_str=last_act,
+            last_active_str=str(last_act),
             heat_strip=heat,
         ))
 
@@ -1088,16 +1351,19 @@ def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinf
 def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinfo,
                               ascii_mode: bool = False) -> List[ProjectRowViewModel]:
     """Footer rows for Projects view: Unattributed, Excluded, Parse failed, Total."""
+    now = ensure_aware(now, tz) or datetime.now(tz)
     footers: List[ProjectRowViewModel] = []
-    u = filtered.unattributed
-    e = filtered.excluded
+    u = filtered.unattributed if filtered and isinstance(filtered.unattributed, dict) else {}
+    e = filtered.excluded if filtered and isinstance(filtered.excluded, dict) else {}
 
     empty_heat = [(" " if ascii_mode else " ", None)] * 8
 
     # Unattributed
-    u_c = format_money(u.get("cost", 0.0))
-    u_t = format_tokens(u.get("tokens", {}).get("total", 0))
-    u_s = str(u.get("sessions", 0))
+    u_c = format_money(float(u.get("cost") or 0.0))
+    u_toks = u.get("tokens")
+    u_t_val = u_toks.get("total", 0) if isinstance(u_toks, dict) else int(u_toks or 0)
+    u_t = format_tokens(u_t_val)
+    u_s = str(int(u.get("sessions") or 0))
     u_last = u.get("last_active") or "—"
     footers.append(ProjectRowViewModel(
         id="__unattributed__",
@@ -1106,15 +1372,17 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
         tokens_str=u_t,
         sessions_str=u_s,
         agents=[],
-        last_active_str=u_last,
+        last_active_str=str(u_last),
         heat_strip=empty_heat,
         is_bucket=True,
     ))
 
     # Excluded
-    e_c = format_money(e.get("cost", 0.0))
-    e_t = format_tokens(e.get("tokens", {}).get("total", 0))
-    e_s = str(e.get("sessions", 0))
+    e_c = format_money(float(e.get("cost") or 0.0))
+    e_toks = e.get("tokens")
+    e_t_val = e_toks.get("total", 0) if isinstance(e_toks, dict) else int(e_toks or 0)
+    e_t = format_tokens(e_t_val)
+    e_s = str(int(e.get("sessions") or 0))
     e_last = e.get("last_active") or "—"
     footers.append(ProjectRowViewModel(
         id="__excluded__",
@@ -1123,13 +1391,13 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
         tokens_str=e_t,
         sessions_str=e_s,
         agents=[],
-        last_active_str=e_last,
+        last_active_str=str(e_last),
         heat_strip=empty_heat,
         is_bucket=True,
     ))
 
     # Parse failed
-    if filtered.parse_failed_count > 0:
+    if filtered and filtered.parse_failed_count > 0:
         footers.append(ProjectRowViewModel(
             id="__parse_failed__",
             name="Parse failed",
@@ -1143,10 +1411,10 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
         ))
 
     # Total
-    tot_c = format_money(filtered.total_cost)
-    tot_t = format_tokens(filtered.total_tokens)
-    tot_s = str(filtered.total_sessions)
-    tot_last = filtered.last_active or "—"
+    tot_c = format_money(filtered.total_cost if filtered else 0.0)
+    tot_t = format_tokens(filtered.total_tokens if filtered else 0)
+    tot_s = str(filtered.total_sessions if filtered else 0)
+    tot_last = (filtered.last_active if filtered else None) or "—"
     footers.append(ProjectRowViewModel(
         id="__total__",
         name="Total",
@@ -1154,7 +1422,7 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
         tokens_str=tot_t,
         sessions_str=tot_s,
         agents=[],
-        last_active_str=tot_last,
+        last_active_str=str(tot_last),
         heat_strip=empty_heat,
         is_total=True,
     ))
@@ -1165,15 +1433,18 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
 def build_model_rows(filtered: FilteredData, filter_query: str = "") -> List[ModelRowViewModel]:
     rows: List[ModelRowViewModel] = []
     query = filter_query.strip().lower()
-    for m in filtered.by_model:
-        name = m.get("model", "")
-        if query and query not in name.lower() and query not in m.get("provider", "").lower():
+    for m in (filtered.by_model if filtered else []):
+        if not isinstance(m, dict):
+            continue
+        name = str(m.get("model") or "")
+        prov = str(m.get("provider") or "Other")
+        if query and query not in name.lower() and query not in prov.lower():
             continue
         rows.append(ModelRowViewModel(
             model=name,
-            provider=m.get("provider", "Other"),
-            tokens_str=format_tokens(m.get("tokens", 0)),
-            cost_str=format_money(m.get("cost", 0.0)),
+            provider=prov,
+            tokens_str=format_tokens(int(m.get("tokens") or 0)),
+            cost_str=format_money(float(m.get("cost") or 0.0)),
         ))
     return rows
 
@@ -1181,18 +1452,20 @@ def build_model_rows(filtered: FilteredData, filter_query: str = "") -> List[Mod
 def build_agent_rows(filtered: FilteredData, filter_query: str = "") -> List[AgentRowViewModel]:
     rows: List[AgentRowViewModel] = []
     query = filter_query.strip().lower()
-    for a in filtered.by_agent:
-        lbl = a.get("label", a.get("agent", ""))
-        if query and query not in lbl.lower() and query not in a.get("agent", "").lower():
+    for a in (filtered.by_agent if filtered else []):
+        if not isinstance(a, dict):
             continue
-        ag = a.get("agent", "")
+        lbl = str(a.get("label") or a.get("agent") or "")
+        ag = str(a.get("agent") or "")
+        if query and query not in lbl.lower() and query not in ag.lower():
+            continue
         rows.append(AgentRowViewModel(
             agent=ag,
             label=lbl,
-            sessions_str=str(a.get("sessions", 0)),
-            tokens_str=format_tokens(a.get("tokens", 0)),
-            cost_str=format_money(a.get("cost", 0.0)),
-            share_pct=float(a.get("share_pct", 0.0)),
+            sessions_str=str(int(a.get("sessions") or 0)),
+            tokens_str=format_tokens(int(a.get("tokens") or 0)),
+            cost_str=format_money(float(a.get("cost") or 0.0)),
+            share_pct=float(a.get("share_pct") or 0.0),
             color=agent_color(ag),
         ))
     return rows
@@ -1201,17 +1474,19 @@ def build_agent_rows(filtered: FilteredData, filter_query: str = "") -> List[Age
 def build_day_rows(filtered: FilteredData, filter_query: str = "") -> List[DayRowViewModel]:
     rows: List[DayRowViewModel] = []
     query = filter_query.strip().lower()
-    peak = max((d.get("cost", 0.0) for d in filtered.by_day), default=0.0)
-    for d in filtered.by_day:
-        d_str = d.get("day", "")
+    peak = max((float(d.get("cost") or 0.0) for d in (filtered.by_day if filtered else []) if isinstance(d, dict)), default=0.0)
+    for d in (filtered.by_day if filtered else []):
+        if not isinstance(d, dict):
+            continue
+        d_str = str(d.get("day") or "")
         if query and query not in d_str.lower():
             continue
-        c = float(d.get("cost", 0.0))
+        c = float(d.get("cost") or 0.0)
         ratio = (c / peak) if peak > 0 else 0.0
         rows.append(DayRowViewModel(
             date_str=d_str,
             cost_str=format_money(c),
-            tokens_str=format_tokens(d.get("tokens", 0)),
+            tokens_str=format_tokens(int(d.get("tokens") or 0)),
             cost_ratio=ratio,
         ))
     return rows
@@ -1220,26 +1495,30 @@ def build_day_rows(filtered: FilteredData, filter_query: str = "") -> List[DayRo
 def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
                          ascii_mode: bool = False) -> ProjectDetailViewModel:
     """Build detail pane model for a selected project."""
-    name = project.get("name", "Unnamed")
+    project = project or {}
+    now = ensure_aware(now, tz) or datetime.now(tz)
+    name = str(project.get("name") or "Unnamed")
     remote = project.get("remote")
-    paths = project.get("paths", [])
-    cost_str = format_money(project.get("cost", 0.0))
-    tok_val = project.get("tokens", {})
+    paths = project.get("paths") or []
+    cost_str = format_money(float(project.get("cost") or 0.0))
+    tok_val = project.get("tokens")
     tok_count = tok_val.get("total", 0) if isinstance(tok_val, dict) else int(tok_val or 0)
     tokens_str = format_tokens(tok_count)
-    sessions_str = str(project.get("sessions", 0))
+    sessions_str = str(int(project.get("sessions") or 0))
 
     # Breakdown by agent
     by_agent: List[Tuple[str, str, str, str, float, Tuple[int, int, int]]] = []
-    tot_c = float(project.get("cost", 0.0)) or 1.0
-    for a in project.get("by_agent", []):
-        ag = a.get("agent", "")
-        c = float(a.get("cost", 0.0))
+    tot_c = float(project.get("cost") or 0.0) or 1.0
+    for a in (project.get("by_agent") or []):
+        if not isinstance(a, dict):
+            continue
+        ag = str(a.get("agent") or "")
+        c = float(a.get("cost") or 0.0)
         t = a.get("tokens", {}).get("total", 0) if isinstance(a.get("tokens"), dict) else int(a.get("tokens") or 0)
-        s = int(a.get("sessions", 0))
+        s = int(a.get("sessions") or 0)
         pct = (c / tot_c) * 100.0
         by_agent.append((
-            a.get("label", AGENT_LABELS.get(ag, ag)),
+            str(a.get("label") or AGENT_LABELS.get(ag, ag)),
             format_money(c),
             format_tokens(t),
             str(s),
@@ -1249,11 +1528,13 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
 
     # Breakdown by model
     by_model: List[Tuple[str, str, str, str]] = []
-    for m in project.get("by_model", []):
-        m_name = m.get("model", "")
-        ag = m.get("agent", "")
+    for m in (project.get("by_model") or []):
+        if not isinstance(m, dict):
+            continue
+        m_name = str(m.get("model") or "")
+        ag = str(m.get("agent") or "")
         prov = PROVIDER_LABELS.get(provider_for(m_name, ag), "Other")
-        c = float(m.get("cost", 0.0))
+        c = float(m.get("cost") or 0.0)
         t = m.get("tokens", {}).get("total", 0) if isinstance(m.get("tokens"), dict) else int(m.get("tokens") or 0)
         by_model.append((
             m_name,
@@ -1263,11 +1544,11 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
         ))
 
     # 30-day sparkline
-    spark, peak = compute_30d_sparkline(project.get("by_day", []), now, tz, ascii_mode=ascii_mode)
+    spark, peak = compute_30d_sparkline(project.get("by_day") or [], now, tz, ascii_mode=ascii_mode)
     peak_str = f"{format_money(peak)}/day max"
 
     return ProjectDetailViewModel(
-        id=project.get("id", ""),
+        id=str(project.get("id") or ""),
         name=name,
         remote=remote,
         paths=paths,

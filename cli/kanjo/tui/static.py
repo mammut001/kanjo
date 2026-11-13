@@ -5,13 +5,13 @@ from __future__ import annotations
 import os
 import re
 import sys
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
 from .model import (
     FilteredData, TimeRange, ViewMode, build_agent_rows, build_antigravity_accounts_section,
     build_day_rows, build_model_rows, build_project_footer_rows, build_project_rows,
-    build_subscription_meters, build_total_view_model, filter_report, get_tz
+    build_subscription_meters, build_total_view_model, ensure_aware, filter_report, get_tz
 )
 from .render import Canvas, Style, TUIState, render_ui, str_width
 
@@ -137,12 +137,13 @@ def render_static_snapshot(
     time_range: TimeRange = TimeRange.ALL,
     view_mode: ViewMode = ViewMode.PROJECTS,
     version: str = "0.9.0",
-    antigravity_accounts_data: Optional[list] = None,
+    antigravity_accounts_data: Optional[Any] = None,
     current_account: Optional[str] = None
 ) -> str:
     """Produce one static snapshot of the UI."""
-    now = now or datetime.now()
+    doc = doc or {}
     tz = get_tz(doc)
+    now = ensure_aware(now, tz) or datetime.now(tz)
 
     filtered = filter_report(doc, time_range, now=now)
     total_vm = build_total_view_model(filtered)
