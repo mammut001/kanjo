@@ -9,6 +9,8 @@ import unittest
 from datetime import datetime
 from unittest import mock
 
+import pytest
+
 from kanjo import antigravity_accounts, cli, export
 from kanjo.antigravity_accounts import (
     AntigravityAccountIndex, LaunchSpan, get_account_index, list_accounts,
@@ -198,6 +200,62 @@ I1112 16:40:00.000000 1 server.go:500] Exit
         ts_overlap = datetime(2026, 11, 12, 16, 20, 0, tzinfo=tz).timestamp()
         self.assertEqual(idx.attribute("random-conv", ts_overlap), "alice@gmail.com")
 
+    def test_reconcile_and_summary_never_trust_concurrent_launch(self):
+        # Conversation B
+        cid_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        # Conversation C (no evidence, print mode for X)
+        cid_c = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+
+        # Launch X: 12:00:00 to 12:10:00, signed in as X
+        # Contains NEVER-trust reconcile/summary/search/project lines mentioning B
+        lx = os.path.join(self.log_dir, "cli-20261112_120000.log")
+        write_log(lx, f"""I1112 12:00:01.000000 1 server_oauth.go:221] applyAuthResult: email=x@gmail.com
+I1112 12:00:02.000000 1 reconciler.go:42] while reconciling: conversation {cid_b}
+I1112 12:00:03.000000 1 summarizer.go:50] failed to generate summary for {cid_b}
+I1112 12:00:04.000000 1 search.go:10] conversationsearch: upserting {cid_b}
+I1112 12:00:05.000000 1 config.go:15] project ID: {cid_b}
+I1112 12:00:06.000000 1 config.go:20] Backend project ID updated dynamically to: {cid_b}
+I1112 12:00:07.000000 1 trace.go:30] trajectory_id:{cid_b}
+I1112 12:00:08.000000 1 trace.go:31] cascade_id:{cid_b}
+I1112 12:00:09.000000 1 trace.go:32] {cid_b}
+I1112 12:10:00.000000 1 server.go:500] Exit
+""")
+
+        # Concurrent Launch Y: 12:01:00 to 12:08:00, signed in as Y
+        # Has TRUST line for B: Sending user message to conversation B
+        ly = os.path.join(self.log_dir, "cli-20261112_120100.log")
+        write_log(ly, f"""I1112 12:01:01.000000 1 server_oauth.go:221] applyAuthResult: email=y@gmail.com
+I1112 12:01:02.000000 1 server.go:100] Sending user message to conversation {cid_b}
+I1112 12:08:00.000000 1 server.go:500] Exit
+""")
+
+        # Parse log X directly to verify no conversation IDs are claimed
+        span_x = parse_log_file(lx)
+        self.assertIsNotNone(span_x)
+        self.assertEqual(span_x.conversations, set())
+        self.assertEqual(span_x.emails, {"x@gmail.com"})
+
+        # Parse log Y directly
+        span_y = parse_log_file(ly)
+        self.assertIsNotNone(span_y)
+        self.assertIn(cid_b, span_y.conversations)
+        self.assertEqual(span_y.emails, {"y@gmail.com"})
+
+        # Index both launches
+        idx = AntigravityAccountIndex(dirs=[self.log_dir], cache_dir=self.tmp)
+
+        tz = local_zone()
+        # Message produced in conversation B at 12:05:00 (during both launches)
+        ts_b = datetime(2026, 11, 12, 12, 5, 0, tzinfo=tz).timestamp()
+
+        # B's messages must go to Y, not X, and not unknown
+        self.assertEqual(idx.attribute(cid_b, ts_b), "y@gmail.com")
+
+        # Launch X has no conversation IDs, so print-mode time-window fallback applies to it
+        # For a conversation without evidence at 12:09:30 (covered only by X), attributes to X
+        ts_c = datetime(2026, 11, 12, 12, 9, 30, tzinfo=tz).timestamp()
+        self.assertEqual(idx.attribute(cid_c, ts_c), "x@gmail.com")
+
     def test_no_log_dir_returns_none_everywhere(self):
         idx = AntigravityAccountIndex(dirs=[os.path.join(self.tmp, "nonexistent")], cache_dir=self.tmp)
         self.assertIsNone(idx.attribute("conv-1", 1700000000.0))
@@ -213,7 +271,7 @@ I1112 17:10:00.000000 1 server.go:500] Exit
         idx1 = AntigravityAccountIndex(dirs=[self.log_dir], cache_dir=self.tmp)
         self.assertEqual(len(idx1.spans), 1)
 
-        cache_file = os.path.join(self.tmp, "antigravity-logs-cache-v1.json")
+        cache_file = os.path.join(self.tmp, f"antigravity-logs-cache-v{antigravity_accounts.LOGS_CACHE_VERSION}.json")
         self.assertTrue(os.path.exists(cache_file))
 
         # Second run reads from cache
@@ -299,3 +357,42 @@ class KanjoAccountsCommandTest(unittest.TestCase):
             accounts = [d["account"] for d in data]
             self.assertIn("alice@gmail.com", accounts)
             self.assertEqual(data[-1]["account"], "unknown")
+
+
+@pytest.mark.parametrize("pattern_template", [
+    "Print mode: resuming conversation {cid}",
+    "Resuming conversation {cid}",
+    "Sending user message to conversation {cid}",
+    "Forwarding user message to conversation {cid}",
+    "Stream completed for {cid}",
+    "GetConversationDetail: found conversation {cid} (active=true)",
+])
+def test_new_trust_patterns_attribution(pattern_template, tmp_path):
+    reset_account_index()
+    try:
+        log_dir = tmp_path / "log"
+        log_dir.mkdir()
+        log_file = log_dir / "cli-20261112_100000.log"
+        cid = "9e60b0f4-c279-4f0e-a098-0ce2d7c1bc19"
+        line = pattern_template.format(cid=cid)
+
+        content = f"""I1112 10:00:01.000000 1 server_oauth.go:221] applyAuthResult: email=trusted@gmail.com
+I1112 10:00:02.000000 1 server.go:100] {line}
+I1112 10:05:00.000000 1 server.go:500] Exit
+"""
+        write_log(str(log_file), content)
+
+        # 1. parse_log_file extracts the conversation ID
+        span = parse_log_file(str(log_file))
+        assert span is not None
+        assert cid in span.conversations
+        assert "trusted@gmail.com" in span.emails
+
+        # 2. AntigravityAccountIndex attributes the message to trusted@gmail.com
+        idx = AntigravityAccountIndex(dirs=[str(log_dir)], cache_dir=str(tmp_path))
+        tz = local_zone()
+        ts = datetime(2026, 11, 12, 10, 2, 0, tzinfo=tz).timestamp()
+        assert idx.attribute(cid, ts) == "trusted@gmail.com"
+    finally:
+        reset_account_index()
+

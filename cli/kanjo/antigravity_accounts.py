@@ -29,15 +29,20 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from .cache import _cache_dir
 from .sources.base import Message, Session, iso_utc, local_zone
 
-LOGS_CACHE_VERSION = 1
+LOGS_CACHE_VERSION = 2
 _FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})")
 _GLOG_LINE_RE = re.compile(r"^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?")
 _EMAIL_RE = re.compile(r"\bemail=([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})")
 _CONV_PATTERNS = [
     re.compile(r"Created conversation\s+([0-9a-fA-F-]{36})"),
-    re.compile(r"found conversation\s+([0-9a-fA-F-]{36})\s+\(active=true\)"),
+    re.compile(r"(?:GetConversationDetail:\s+)?found conversation\s+([0-9a-fA-F-]{36})\s+\(active=true\)"),
     re.compile(r"Streaming conversation\s+([0-9a-fA-F-]{36})"),
     re.compile(r"Starting conversation update stream for\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Print mode: resuming conversation\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Resuming conversation\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Sending user message to conversation\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Forwarding user message to conversation\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Stream completed for\s+([0-9a-fA-F-]{36})"),
 ]
 
 
