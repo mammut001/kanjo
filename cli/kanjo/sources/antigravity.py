@@ -379,10 +379,17 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     decoded_any = True
                     if rec.get("empty"):
                         continue
+                    acc = None
+                    try:
+                        from ..antigravity_accounts import get_account_index
+                        acc = get_account_index().attribute(sid, float(rec["ts"]))
+                    except Exception:
+                        pass
                     session.messages.append(Message(
                         ts=float(rec["ts"]), model=rec["model"], input=rec["input"], output=rec["output"],
                         cache_read=rec["cache_read"], thinking=rec["thinking"], cwd=workspace, branch=branch,
-                        key="antigravity:%s:%s:%d" % (sid, idx, record_index)))
+                        key="antigravity:%s:%s:%d" % (sid, idx, record_index),
+                        account=acc))
                     session.note_time(float(rec["ts"]))
                     record_index += 1
         except sqlite3.Error as exc:

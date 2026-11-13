@@ -378,7 +378,7 @@ class TestFamilyReportScope(unittest.TestCase):
         self.assertEqual(code, 0, err)
         doc = json.loads(out)
         # Default scope: antigravity only, since is null
-        self.assertEqual(doc.get("scope"), {"agents": ["antigravity"], "since": None})
+        self.assertEqual(doc.get("scope"), {"agents": ["antigravity"], "since": None, "accounts_filter": None})
         # plans must ONLY contain antigravity (claude is filtered out)
         self.assertEqual(doc.get("plans", {}), {"antigravity": "Google AI Ultra"})
         # quota_windows must not contain claude
@@ -399,7 +399,7 @@ class TestFamilyReportScope(unittest.TestCase):
         code, out, err = self._run_cli("export", "--family-report", "--no-cache")
         self.assertEqual(code, 0, err)
         doc = json.loads(out)
-        self.assertEqual(doc.get("scope"), {"agents": ["all"], "since": None})
+        self.assertEqual(doc.get("scope"), {"agents": ["all"], "since": None, "accounts_filter": None})
 
         # When scope is all, both antigravity and claude plans appear
         self.assertIn("antigravity", doc.get("plans", {}))
@@ -445,7 +445,7 @@ class TestFamilyReportScope(unittest.TestCase):
         cfg = Config(family_since="2026-11-09", family_agents=["antigravity"])
         doc = export.build_family_report(config=cfg, scan_result=scan_res)
 
-        self.assertEqual(doc["scope"], {"agents": ["antigravity"], "since": "2026-11-09"})
+        self.assertEqual(doc["scope"], {"agents": ["antigravity"], "since": "2026-11-09", "accounts_filter": None})
         # Only messages 2 and 3 should be included:
         # input = 200 + 300 = 500
         # output = 100 + 150 = 250
@@ -460,7 +460,7 @@ class TestFamilyReportScope(unittest.TestCase):
         code, out1, err = self._run_cli("export", "--family-report")
         self.assertEqual(code, 0, err)
         doc1 = json.loads(out1)
-        self.assertEqual(doc1["scope"], {"agents": ["antigravity"], "since": None})
+        self.assertEqual(doc1["scope"], {"agents": ["antigravity"], "since": None, "accounts_filter": None})
 
         # Verify fast cache file was created
         cache_file = os.path.join(self.cache_dir, "family-report-last.json")
@@ -475,7 +475,7 @@ class TestFamilyReportScope(unittest.TestCase):
         self.assertEqual(code, 0, err)
         doc2 = json.loads(out2)
         # Must reflect the new scope, NOT stale cached doc1!
-        self.assertEqual(doc2["scope"], {"agents": ["antigravity"], "since": "2026-11-09"})
+        self.assertEqual(doc2["scope"], {"agents": ["antigravity"], "since": "2026-11-09", "accounts_filter": None})
 
         # 4. Change scope to agents = all
         code, _, err = self._run_cli("config", "set", "family.agents", "all")
@@ -484,13 +484,189 @@ class TestFamilyReportScope(unittest.TestCase):
         code, out3, err = self._run_cli("export", "--family-report")
         self.assertEqual(code, 0, err)
         doc3 = json.loads(out3)
-        self.assertEqual(doc3["scope"], {"agents": ["all"], "since": "2026-11-09"})
+        self.assertEqual(doc3["scope"], {"agents": ["all"], "since": "2026-11-09", "accounts_filter": None})
 
         # 5. Direct load_fast_family_report with wrong scope returns None
         fp = export.source_fingerprint(config=cli._config(type("Args", (), {"config": None})()))
         wrong_scope = {"agents": ["antigravity"], "since": "1999-01-01"}
         cached = export.load_fast_family_report(fp, directory=self.cache_dir, scope=wrong_scope)
         self.assertIsNone(cached)
+
+
+class TestFamilyReportAccountsFilter(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-family-acct-test-")
+        self.data_dir = os.path.join(self.tmp, "data")
+        self.cache_dir = os.path.join(self.tmp, "cache")
+        self.config_dir = os.path.join(self.tmp, "config")
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
+
+        self.env = {
+            "KANJO_DATA_DIR": self.data_dir,
+            "KANJO_CACHE_DIR": self.cache_dir,
+            "KANJO_CONFIG_DIR": self.config_dir,
+            "KANJO_CLAUDE_DIR": FIXTURE_DIRS["claude"][0],
+            "KANJO_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
+            "KANJO_CODEX_DIR": FIXTURE_DIRS["codex"][0],
+            "KANJO_GROK_DIR": self.tmp,
+            "KANJO_QWEN_DIR": self.tmp,
+            "KANJO_COMMANDCODE_DIR": self.tmp,
+            "KANJO_MINIMAX_DIR": self.tmp,
+            "KANJO_OPENCODE_DIR": self.tmp,
+            "KANJO_COPILOT_DIR": self.tmp,
+            "KANJO_PI_DIR": self.tmp,
+        }
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run_cli(self, *args, extra_env=None):
+        out = io.StringIO()
+        err = io.StringIO()
+        env = dict(self.env)
+        if extra_env:
+            env.update(extra_env)
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            code = cli.main(list(args))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_config_validation(self):
+        from kanjo.config import _validate_family_accounts, ConfigError
+        # Valid list
+        res = _validate_family_accounts(["Alice@Gmail.com", "Bob@gmail.com"])
+        self.assertEqual(res, ["alice@gmail.com", "bob@gmail.com"])
+
+        # Valid string
+        res = _validate_family_accounts("Alice@Gmail.com, Bob@gmail.com")
+        self.assertEqual(res, ["alice@gmail.com", "bob@gmail.com"])
+
+        # Invalid cases
+        with self.assertRaises(ConfigError):
+            _validate_family_accounts([])
+        with self.assertRaises(ConfigError):
+            _validate_family_accounts([""])
+        with self.assertRaises(ConfigError):
+            _validate_family_accounts([123])
+        with self.assertRaises(ConfigError):
+            _validate_family_accounts("")
+        with self.assertRaises(ConfigError):
+            _validate_family_accounts(None)
+
+    def test_report_without_filter_identical_to_before(self):
+        # Baseline export with no accounts filter
+        code, out1, err = self._run_cli("export", "--family-report", "--no-cache")
+        self.assertEqual(code, 0, err)
+        doc1 = json.loads(out1)
+        self.assertIsNone(doc1["scope"]["accounts_filter"])
+        self.assertGreater(doc1["summary"]["all_time"]["tokens"]["total"], 0)
+
+    def test_report_with_filter_counts_only_chosen_account_and_no_email_leak(self):
+        from kanjo.sources.base import Message, Session
+        from kanjo.config import Config
+
+        # Antigravity session with 3 messages
+        s_agy = Session(id="s-agy", agent="antigravity", file="/f1")
+        s_agy.messages = [
+            Message(ts=1000.0, model="gemini-2.5-flash", input=100, output=50, account="alice@gmail.com"),
+            Message(ts=1010.0, model="gemini-2.5-flash", input=200, output=100, account="bob@gmail.com"),
+            Message(ts=1020.0, model="gemini-2.5-flash", input=300, output=150, account=None),
+        ]
+        # Claude session with 1 message (should be unaffected if included in scope)
+        s_claude = Session(id="s-claude", agent="claude", file="/f2")
+        s_claude.messages = [
+            Message(ts=1000.0, model="claude-3-5-sonnet", input=1000, output=500),
+        ]
+        scan_res = export.ScanResult(sessions=[s_agy, s_claude], failed_files=[], stats={})
+
+        # Filter for Alice only, agents = all
+        cfg = Config(family_agents="all", family_accounts=["alice@gmail.com"])
+        doc = export.build_family_report(config=cfg, scan_result=scan_res)
+
+        # scope.accounts_filter must be 1
+        self.assertEqual(doc["scope"]["accounts_filter"], 1)
+
+        # summary: all_time Antigravity should only have Alice's 100 input, 50 output
+        # Claude should have 1000 input, 500 output
+        tokens = doc["summary"]["all_time"]["tokens"]
+        self.assertEqual(tokens["input"], 1100)
+        self.assertEqual(tokens["output"], 550)
+        self.assertEqual(tokens["total"], 1650)
+
+        # Antigravity tokens alone
+        agy_tokens = next(a for a in doc["summary"]["all_time"]["by_agent"] if a["agent"] == "antigravity")
+        self.assertEqual(agy_tokens["tokens_total"], 150)
+
+        # Privacy check: payload MUST NOT contain email address or forbidden keys
+        raw_json = json.dumps(doc)
+        self.assertNotIn("alice@gmail.com", raw_json)
+        self.assertNotIn("bob@gmail.com", raw_json)
+        self.assertNotIn("@gmail.com", raw_json)
+
+        # Server validation & privacy backstop
+        self.assertIsNone(validate_report_payload(doc))
+        self.assertIsNone(check_privacy_backstop(raw_json.encode("utf-8")))
+
+    def test_cli_account_flag_overrides_config(self):
+        from kanjo.sources.base import Message, Session
+
+        s_agy = Session(id="s-agy", agent="antigravity", file="/f1")
+        s_agy.messages = [
+            Message(ts=1000.0, model="gemini-2.5-flash", input=100, output=50, account="alice@gmail.com"),
+            Message(ts=1010.0, model="gemini-2.5-flash", input=200, output=100, account="bob@gmail.com"),
+        ]
+        scan_res = export.ScanResult(sessions=[s_agy], failed_files=[], stats={})
+
+        # Set config to Alice
+        self._run_cli("config", "set", "family.accounts", "alice@gmail.com")
+
+        # Run with CLI flag overriding to Bob
+        with mock.patch("kanjo.export.scan", return_value=scan_res):
+            code, out, err = self._run_cli("export", "--family-report", "--no-cache", "--account", "bob@gmail.com")
+            self.assertEqual(code, 0, err)
+            doc = json.loads(out)
+
+            self.assertEqual(doc["scope"]["accounts_filter"], 1)
+            tokens = doc["summary"]["all_time"]["tokens"]
+            # Only Bob's tokens (200 + 100 = 300) should be counted
+            self.assertEqual(tokens["input"], 200)
+            self.assertEqual(tokens["output"], 100)
+            self.assertEqual(tokens["total"], 300)
+
+    def test_quota_windows_antigravity_omitted_when_not_in_filter(self):
+        from kanjo.config import Config
+
+        cfg = Config(family_accounts=["alice@gmail.com"])
+        scan_res = export.ScanResult(sessions=[], failed_files=[], stats={})
+
+        # 1. Live account is bob (not in filter) -> antigravity omitted
+        fake_qw = {
+            "antigravity": {"weekly_resets_at": "2026-11-14T12:00:00Z", "source": "live", "email": "bob@gmail.com"},
+            "claude": {"weekly_resets_at": "2026-11-14T12:00:00Z", "source": "live"},
+        }
+        with mock.patch("kanjo.quota.quota_windows", return_value=fake_qw):
+            doc = export.build_family_report(config=cfg, scan_result=scan_res)
+            self.assertNotIn("antigravity", doc["quota_windows"])
+
+        # 2. Live account is alice (in filter) -> antigravity included
+        fake_qw_alice = {
+            "antigravity": {"weekly_resets_at": "2026-11-14T12:00:00Z", "source": "live", "email": "alice@gmail.com"},
+        }
+        with mock.patch("kanjo.quota.quota_windows", return_value=fake_qw_alice):
+            doc = export.build_family_report(config=cfg, scan_result=scan_res)
+            self.assertIn("antigravity", doc["quota_windows"])
+            # Ensure email stripped from quota window
+            self.assertNotIn("email", doc["quota_windows"]["antigravity"])
+
+        # 3. No live email on entry, fallback to index.get_current_account()
+        fake_qw_no_email = {
+            "antigravity": {"weekly_resets_at": "2026-11-14T12:00:00Z", "source": "live"},
+        }
+        with mock.patch("kanjo.quota.quota_windows", return_value=fake_qw_no_email):
+            with mock.patch("kanjo.antigravity_accounts.AntigravityAccountIndex.get_current_account", return_value="alice@gmail.com"):
+                doc = export.build_family_report(config=cfg, scan_result=scan_res)
+                self.assertIn("antigravity", doc["quota_windows"])
 
 
 if __name__ == "__main__":

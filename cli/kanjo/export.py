@@ -161,6 +161,14 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     for key, session in ledger.orphan_sessions(exclude_keys=seen):
         if key in seen:
             continue
+        if session.agent == "antigravity":
+            try:
+                from .antigravity_accounts import get_account_index
+                idx = get_account_index()
+                for m in session.messages:
+                    m.account = idx.attribute(session.id, m.ts) or m.account
+            except Exception:
+                pass
         sessions.append(session)
         st = stats.get(session.agent)
         if st is None:
@@ -1115,6 +1123,25 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     items.append(("__cfg_aliases__", str(sorted(cfg.aliases.items())), 0))
     items.append(("__cfg_family_since__", str(cfg.family_since), 0))
     items.append(("__cfg_family_agents__", str(cfg.family_agents), 0))
+    items.append(("__cfg_family_accounts__", str(sorted(cfg.family_accounts) if cfg.family_accounts else None), 0))
+
+    try:
+        from .antigravity_accounts import log_dirs as get_agy_log_dirs
+        agy_roots = dirs.get("antigravity") if dirs else None
+        for ld in get_agy_log_dirs(agy_roots):
+            try:
+                with os.scandir(ld) as it:
+                    for entry in it:
+                        if entry.name.endswith(".log"):
+                            try:
+                                st = entry.stat()
+                                items.append((entry.path, st.st_size, st.st_mtime_ns))
+                            except OSError:
+                                items.append((entry.path, None, None))
+            except OSError:
+                pass
+    except Exception:
+        pass
     items.sort(key=lambda x: str(x[0]))
     h = hashlib.sha256()
     for row in items:
@@ -1336,7 +1363,8 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
                                     cache=None, repo_cache=None, fs_root: Optional[str] = None,
                                     include_days: bool = False,
                                     filter_agents: Optional[Set[str]] = None,
-                                    since_ts: Optional[float] = None):
+                                    since_ts: Optional[float] = None,
+                                    filter_accounts: Optional[Set[str]] = None):
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
@@ -1402,12 +1430,19 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
         if decision.kind == "excluded":
             continue
 
+        effective_filter_accounts = filter_accounts
+        if effective_filter_accounts is None and config.family_accounts is not None:
+            effective_filter_accounts = set(config.family_accounts)
+
         for m in unit.messages:
             agent = unit.top.agent
             if filter_agents is not None and agent not in filter_agents:
                 continue
             if since_ts is not None and m.ts < since_ts:
                 continue
+            if agent == "antigravity" and effective_filter_accounts is not None:
+                if not m.account or m.account.lower() not in effective_filter_accounts:
+                    continue
             cost, _ = prices.cost(m.model, agent, m.input, m.output, m.cache_read,
                                   m.cache_write, m.cache_write_1h)
             provider = provider_for(m.model, agent)
@@ -1510,10 +1545,12 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
             dt = dt.replace(tzinfo=tz)
         since_ts = dt.timestamp()
 
+    filter_accounts = set(config.family_accounts) if config.family_accounts is not None else None
+
     all_time_period, month_periods, week_periods, day_periods, tz_name = _aggregate_public_summary_data(
         config=config, dirs=dirs, prices=prices, home=home, scan_result=scan_result,
         cache=cache, repo_cache=repo_cache, fs_root=fs_root, include_days=True,
-        filter_agents=included_agents, since_ts=since_ts,
+        filter_agents=included_agents, since_ts=since_ts, filter_accounts=filter_accounts,
     )
     now = now or datetime.now(timezone.utc)
     if cache is not None:
@@ -1530,6 +1567,21 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         if not isinstance(entry, dict):
             continue
         cleaned_entry = dict(entry)
+        if agent == "antigravity" and filter_accounts is not None:
+            live_email = cleaned_entry.get("email") or cleaned_entry.get("user_email")
+            if not live_email:
+                try:
+                    from .antigravity_accounts import get_account_index
+                    live_email = get_account_index().get_current_account()
+                except Exception:
+                    live_email = None
+            if not live_email or live_email.lower() not in filter_accounts:
+                continue
+
+        # Strictly strip email from payload to protect privacy
+        cleaned_entry.pop("email", None)
+        cleaned_entry.pop("user_email", None)
+
         if "extra_windows" in cleaned_entry and isinstance(cleaned_entry["extra_windows"], list):
             cleaned_ew = []
             for ew in cleaned_entry["extra_windows"]:
@@ -1560,6 +1612,7 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         "scope": {
             "agents": scope_agents,
             "since": config.family_since if config.family_since else None,
+            "accounts_filter": len(config.family_accounts) if config.family_accounts is not None else None,
         },
         "plans": plans,
         "quota_windows": qw_clean,
@@ -1768,6 +1821,9 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
             problems.append("scope must be an object")
         elif "agents" not in scope or not isinstance(scope["agents"], list):
             problems.append("scope.agents must be a list")
+        if isinstance(scope, dict) and "accounts_filter" in scope and scope["accounts_filter"] is not None:
+            if not isinstance(scope["accounts_filter"], int) or scope["accounts_filter"] < 0:
+                problems.append("scope.accounts_filter must be a non-negative integer or null")
 
     return problems
 

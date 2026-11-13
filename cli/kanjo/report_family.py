@@ -59,6 +59,12 @@ def cmd_report_family(args) -> int:
 
     # 3. Build family report document
     cfg = _config(args)
+    raw_accounts = getattr(args, "accounts", None)
+    if raw_accounts:
+        from .config import _validate_family_accounts
+        cfg.family_accounts = _validate_family_accounts(raw_accounts)
+        cfg.family_origins["accounts"] = "cli"
+
     doc = None
     fp = None
     member_label = getattr(args, "member_label", None)
@@ -69,6 +75,7 @@ def cmd_report_family(args) -> int:
             else (list(cfg.family_agents) if cfg.family_agents is not None else ["antigravity"])
         ),
         "since": cfg.family_since or None,
+        "accounts_filter": len(cfg.family_accounts) if cfg.family_accounts is not None else None,
     }
     if use_cache:
         fp = source_fingerprint(config=cfg)

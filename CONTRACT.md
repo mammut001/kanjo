@@ -434,7 +434,8 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
   "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
   "scope": {
     "agents": ["antigravity"],         // 纳入统计的 agent 列表；若设为 "all" 则为 ["all"]
-    "since": "2026-11-09"              // 统计起始时间（ISO 日期或日期时间，时区按 timezone）；未设置时为 null
+    "since": "2026-11-09",             // 统计起始时间（ISO 日期或日期时间，时区按 timezone）；未设置时为 null
+    "accounts_filter": 1               // 纳入过滤的账号数量（整数）；未配置账号过滤时为 null。出于隐私考虑，报文中严禁包含账号邮箱明文
   },
   "plans": {
     "antigravity": "Google AI Ultra",
@@ -462,9 +463,9 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 
 - `Period` 结构与公开汇总（第 12 节）完全一致。
 - `days` 包含最近 62 天内有数据的天，`period` 为 `YYYY-MM-DD`，`first_day` 和 `last_day` 均为对应日期。
-- `scope`: 汇总统计范围。`agents` 列出纳入统计的 agent（未配置时默认 `["antigravity"]`；值为 `"all"` 时代表全部 agent）；`since` 为统计起始时间（ISO 字符串，未配置时为 `null` 代表无起始下界）。
-- **消息级过滤**：仅纳入 `agent` 属于 `scope.agents` 且消息时间戳 `timestamp >= scope.since` 的消息。在消息级别过滤后再聚合，使 `summary`（all_time/months/weeks/days、by_provider、by_agent、models）均反映过滤后的范围。
-- `plans` 与 `quota_windows` 仅保留包含在统计范围中的 agent。
+- `scope`: 汇总统计范围。`agents` 列出纳入统计的 agent（未配置时默认 `["antigravity"]`；值为 `"all"` 时代表全部 agent）；`since` 为统计起始时间（ISO 字符串，未配置时为 `null` 代表无起始下界）；`accounts_filter` 为纳入过滤的 Google 账号数量（整数，未配置账号过滤时为 `null`）。报文全文绝不包含账号邮箱明文。
+- **消息级过滤**：仅纳入 `agent` 属于 `scope.agents` 且消息时间戳 `timestamp >= scope.since` 的消息。若配置了账号过滤（`family.accounts`），Antigravity 消息还必须归属于过滤列表中的账号（未知账号/未归属账号消息予以排除）；其他 agent 不受账号过滤影响。在消息级别过滤后再聚合，使 `summary`（all_time/months/weeks/days、by_provider、by_agent、models）均反映过滤后的范围。
+- `plans` 与 `quota_windows` 仅保留包含在统计范围中的 agent。若配置了账号过滤，且当前签到的 Antigravity 账号不在过滤列表中，`quota_windows.antigravity` 将被省略，避免描述错误的配额池。
 
 ### 不变量
 

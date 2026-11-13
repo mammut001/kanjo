@@ -63,6 +63,7 @@ class Message:
     cwd: Optional[str] = None
     branch: Optional[str] = None
     key: Optional[str] = None      # global de-duplication key
+    account: Optional[str] = None
 
 
 @dataclass

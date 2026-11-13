@@ -18,6 +18,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from the terminal. Tested on Ubuntu 26.04 against a mock server: wrong token, replace token, curl-pipe mode,
   cron entry replaced rather than duplicated, uninstall.
 
+- **Antigravity Google account attribution and family report account filtering (`kanjo accounts`, `kanjo report-family --account`).**
+  - Attributed Antigravity messages per-message to Google accounts by parsing launch log spans (`cli-*.log`, `acp-server-*.log`) into start/end time windows, authenticated email addresses, and created/active conversation IDs.
+  - Added `kanjo accounts [--json]` command to inspect detected accounts, message counts, total tokens, first/last active timestamps, and unassigned usage. Local output only.
+  - Added `family.accounts = ["email@gmail.com", ...]` configuration in `attribution.toml` and a repeatable `--account EMAIL` CLI flag for `kanjo report-family` and `kanjo export --family-report` to include only chosen accounts in family reports. Unknown and unselected accounts are excluded from summary numbers.
+  - Added `scope.accounts_filter` integer/null field to `kanjo-family-report` schema; full email addresses are strictly excluded from network payloads.
+  - Omit `quota_windows.antigravity` from the family report when the active signed-in Antigravity account does not match the configured accounts filter.
+
 ## [0.5.4] - 2026-11-12
 
 ### Fixed

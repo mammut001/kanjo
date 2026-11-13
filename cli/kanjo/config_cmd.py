@@ -5,7 +5,7 @@ import os
 import tempfile
 
 from .config import (
-    ConfigError, _subscriptions, _validate_family_agents, _validate_family_since,
+    ConfigError, _subscriptions, _validate_family_accounts, _validate_family_agents, _validate_family_since,
     config_paths, family_value, load, quota_value, read_overrides, subscription_value,
 )
 from .quota import parse_weekly_reset
@@ -27,9 +27,9 @@ def _key(text):
             return section, agent, field
     elif len(parts) == 2:
         section, field = parts[0], parts[1]
-        if section == "family" and field in ("since", "agents"):
+        if section == "family" and field in ("since", "agents", "accounts"):
             return section, None, field
-    raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd>, quota_windows.<agent>.weekly_reset, or family.<since|agents>")
+    raise ConfigError("key must be subscriptions.<agent>.<anchor_day|plan|monthly_price_usd>, quota_windows.<agent>.weekly_reset, or family.<since|agents|accounts>")
 
 
 def _value(section, agent, key, text):
@@ -38,6 +38,8 @@ def _value(section, agent, key, text):
             return _validate_family_since(text)
         if key == "agents":
             return _validate_family_agents(text)
+        if key == "accounts":
+            return _validate_family_accounts(text)
     if section == "quota_windows":
         if key == "weekly_reset":
             try:

@@ -98,8 +98,21 @@
 ## 4. Kanjo 端（第二批）
 
 - **CLI**
-  - `kanjo export --family-report`：输出第 2 节的文档。
-  - `kanjo report-family --url URL`：生成报文并 POST。令牌从环境变量 `KANJO_FAMILY_TOKEN` 读，**不走命令行参数**（避免出现在进程列表里）。输出一行 JSON 状态（`sent` / `error` + message）。只用标准库 `urllib`，超时 30 秒，失败不重试（由 App 调度）。
+  - `kanjo accounts [--json]`：查看本机检测到的 Antigravity Google 账号用量（消息数、Token 统计、首次/最后活跃时间、未知账号用量）。仅在本地输出，不走网络。
+  - `kanjo export --family-report`：输出第 2 节的文档。支持 `--account EMAIL`（可重复）过滤要上报的 Antigravity 账号。
+  - `kanjo report-family --url URL`：生成报文并 POST。令牌从环境变量 `KANJO_FAMILY_TOKEN` 读，**不走命令行参数**（避免出现在进程列表里）。支持 `--account EMAIL`（可重复）覆盖配置中的账号筛选。输出一行 JSON 状态（`sent` / `error` + message）。只用标准库 `urllib`，超时 30 秒，失败不重试（由 App 调度）。
+- **账号过滤配置（多人共享 Ultra 账号场景）**：
+  - 在 `attribution.toml` 中配置：
+    ```toml
+    [family]
+    accounts = ["someone@gmail.com"]
+    ```
+    或通过 CLI 命令 `kanjo config set family.accounts "someone@gmail.com"` 设置。
+  - 当设置了账号过滤时：
+    - 仅上报归属于所选账号的 Antigravity 消息，未知账号及其他账号的消息被严格排除。
+    - 其他 agent（若 `family.agents` 包含）不受影响。
+    - 若当前签到的 Antigravity 账号不在过滤列表中，报文中的 `quota_windows.antigravity` 将被省略，避免描述错误的配额池。
+    - 报文中的 `scope.accounts_filter` 仅记录过滤账号数量（整数或 null），邮箱明文绝不上报。
 - **App 设置**：在「发布到网站」那节后面加「家庭用量」：
   - 开关（默认关）
   - 服务器地址（默认空）
