@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-12
+
 ### Added
 
 - **In-app updates on macOS (Sparkle).** Kanjo now ships Sparkle 2 in the `Kanjo` executable (only;
