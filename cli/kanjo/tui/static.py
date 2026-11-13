@@ -139,7 +139,8 @@ def render_static_snapshot(
     view_mode: ViewMode = ViewMode.PROJECTS,
     version: str = "0.9.0",
     antigravity_accounts_data: Optional[Any] = None,
-    current_account: Optional[str] = None
+    current_account: Optional[str] = None,
+    lang: str = "en",
 ) -> str:
     """Produce one static snapshot of the UI."""
     doc = doc or {}
@@ -147,16 +148,17 @@ def render_static_snapshot(
     now = ensure_aware(now, tz) or datetime.now(tz)
 
     filtered = filter_report(doc, time_range, now=now)
-    total_vm = build_total_view_model(filtered)
-    meters = build_subscription_meters(doc, now=now)
+    total_vm = build_total_view_model(filtered, lang)
+    meters = build_subscription_meters(doc, now=now, lang=lang)
     accounts_section = build_antigravity_accounts_section(
-        doc, now=now, antigravity_data=antigravity_accounts_data, current_account=current_account
+        doc, now=now, antigravity_data=antigravity_accounts_data,
+        current_account=current_account, lang=lang
     )
-    proj_rows = build_project_rows(filtered, now, tz, ascii_mode=ascii_mode)
-    proj_footers = build_project_footer_rows(filtered, now, tz, ascii_mode=ascii_mode)
-    model_rows = build_model_rows(filtered)
-    agent_rows = build_agent_rows(filtered)
-    day_rows = build_day_rows(filtered)
+    proj_rows = build_project_rows(filtered, now, tz, ascii_mode=ascii_mode, lang=lang)
+    proj_footers = build_project_footer_rows(filtered, now, tz, ascii_mode=ascii_mode, lang=lang)
+    model_rows = build_model_rows(filtered, lang=lang)
+    agent_rows = build_agent_rows(filtered, lang=lang)
+    day_rows = build_day_rows(filtered, lang=lang)
 
     # Estimate required height if not specified
     if height is None:
@@ -177,8 +179,11 @@ def render_static_snapshot(
             needed += min(15, len(agent_rows))
         elif view_mode == ViewMode.DAYS:
             needed += min(15, len(day_rows))
-        needed += 2  # F-key bar + margin
-        height = max(24, needed)
+        elif view_mode == ViewMode.ACCOUNTS:
+            needed += 1  # window title
+            needed += min(15, len(accounts_section.rows)) if accounts_section else 0
+        # Static snapshots have no F-key bar: output ends after the table footer.
+        height = max(20, needed)
 
     canvas = Canvas(width, height)
     state = TUIState(
@@ -188,6 +193,7 @@ def render_static_snapshot(
         ascii_mode=ascii_mode,
         no_color=no_color,
         last_refresh_time=now.strftime("%H:%M:%S"),
+        lang=lang,
     )
 
     render_ui(

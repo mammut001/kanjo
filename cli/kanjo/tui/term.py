@@ -19,7 +19,7 @@ except ImportError:
 
 from .model import (
     AntigravityAccountsSection, FilteredData, TimeRange, ViewMode,
-    RANGE_TABS, VIEW_MODES,
+    RANGE_TABS, VIEW_MODES, available_view_modes,
     build_agent_rows, build_antigravity_accounts_section, build_day_rows,
     build_model_rows, build_project_detail, build_project_footer_rows,
     build_project_rows, build_subscription_meters, build_total_view_model,
@@ -27,6 +27,7 @@ from .model import (
 )
 from .render import Canvas, Style, TUIState, render_ui
 from .static import rgb_to_256, NAMED_FG, NAMED_BG
+from .i18n import t, normalize_lang
 
 
 class ColorManager:
@@ -214,9 +215,15 @@ def run_curses_tui(
     antigravity_accounts_data: Optional[Any] = None,
     current_account: Optional[str] = None,
     data_path: Optional[str] = None,
-    use_cache: bool = True
+    use_cache: bool = True,
+    lang: str = "en",
+    switch_login=None,
 ) -> int:
-    """Main interactive curses loop."""
+    """Main interactive curses loop.
+
+    ``switch_login`` is injectable for tests; when omitted the real
+    ``kanjo.agy_login.switch`` is imported lazily on macOS only.
+    """
     # Setup curses
     try:
         curses.curs_set(0)
@@ -239,6 +246,7 @@ def run_curses_tui(
     scanner.current_account = current_account
     scanner.start()
 
+    lang = normalize_lang(lang)
     state = TUIState(
         version=version,
         time_range=time_range,
@@ -247,9 +255,43 @@ def run_curses_tui(
         no_color=no_color,
         is_scanning=(initial_doc is None),
         last_refresh_time=scanner.last_scan_time,
+        lang=lang,
     )
 
     last_spinner_tick = time.time()
+
+    switch_result: Optional[Tuple[str, int, dict]] = None
+    switch_lock = threading.Lock()
+    switch_thread: Optional[threading.Thread] = None
+
+    def set_status(message: str) -> None:
+        state.status_message = message
+        state.status_until = time.time() + 5.0
+
+    def start_switch(email: str) -> None:
+        nonlocal switch_thread
+
+        def run_switch():
+            nonlocal switch_result
+            code, payload = 1, {"status": "error", "error": "generic"}
+            try:
+                fn = switch_login
+                if fn is None:
+                    from ..agy_login import switch as real_switch
+                    fn = real_switch
+                result = fn(email)
+                if isinstance(result, tuple) and len(result) == 2:
+                    code, payload = int(result[0]), dict(result[1] or {})
+                elif isinstance(result, dict):
+                    payload = dict(result)
+                    code = 0 if payload.get("status") == "ok" else 1
+            except Exception:
+                code, payload = 1, {"status": "error", "error": "generic"}
+            with switch_lock:
+                switch_result = (email, code, payload)
+
+        switch_thread = threading.Thread(target=run_switch, daemon=True)
+        switch_thread.start()
 
     def get_sort_key(row, col):
         if isinstance(row, ProjectRowViewModel):
@@ -266,6 +308,7 @@ def run_curses_tui(
             except ValueError: return 0.0
         return 0
 
+    accounts_sec = None
     try:
         while True:
             # Check background scan results
@@ -278,6 +321,26 @@ def run_curses_tui(
                     antigravity_accounts_data = scanner.antigravity_accounts_data
                 if scanner.current_account:
                     current_account = scanner.current_account
+
+            # Pick up a finished background login switch.
+            pending = None
+            with switch_lock:
+                if switch_result is not None:
+                    pending = switch_result
+                    switch_result = None
+            if pending is not None:
+                email, code, payload = pending
+                if code == 0:
+                    set_status(t("accounts.switched", lang, email=email))
+                else:
+                    err = payload.get("error") if isinstance(payload, dict) else None
+                    if err == "no_saved_login":
+                        set_status(t("accounts.error.no_saved_login", lang))
+                    elif err == "unsaved_login":
+                        set_status(t("accounts.error.unsaved_login", lang))
+                    else:
+                        set_status(t("accounts.error.generic", lang))
+                scanner.refresh_now()
 
             # Spinner update
             now_ts = time.time()
@@ -305,20 +368,21 @@ def run_curses_tui(
                     now_dt = datetime.now(tz)
 
                 filtered = filter_report(doc, state.time_range, now=now_dt)
-                total_vm = build_total_view_model(filtered)
-                meters = build_subscription_meters(doc, now=now_dt)
+                total_vm = build_total_view_model(filtered, lang)
+                meters = build_subscription_meters(doc, now=now_dt, lang=lang)
                 accounts_sec = build_antigravity_accounts_section(
                     doc, now=now_dt,
                     antigravity_data=antigravity_accounts_data,
-                    current_account=current_account
+                    current_account=current_account,
+                    lang=lang
                 )
 
                 query = state.filter_query if not state.filter_active else state.filter_input
-                proj_rows = build_project_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode, filter_query=query)
-                proj_footers = build_project_footer_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode)
-                model_rows = build_model_rows(filtered, filter_query=query)
-                agent_rows = build_agent_rows(filtered, filter_query=query)
-                day_rows = build_day_rows(filtered, filter_query=query)
+                proj_rows = build_project_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode, filter_query=query, lang=lang)
+                proj_footers = build_project_footer_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode, lang=lang)
+                model_rows = build_model_rows(filtered, filter_query=query, lang=lang)
+                agent_rows = build_agent_rows(filtered, filter_query=query, lang=lang)
+                day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
 
                 # Apply sorting if requested
                 if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
@@ -326,7 +390,7 @@ def run_curses_tui(
 
                 detail_vm = None
                 if state.detail_open and state.detail_project:
-                    detail_vm = build_project_detail(state.detail_project, now_dt, tz, ascii_mode=state.ascii_mode)
+                    detail_vm = build_project_detail(state.detail_project, now_dt, tz, ascii_mode=state.ascii_mode, lang=lang)
 
                 # Render onto canvas
                 render_ui(
@@ -397,6 +461,15 @@ def run_curses_tui(
             if ch == -1:
                 continue
 
+            # Antigravity login switch confirmation
+            if state.confirm_switch_email:
+                if ch in (ord('y'), ord('Y')):
+                    start_switch(state.confirm_switch_email)
+                    state.confirm_switch_email = None
+                elif ch in (ord('n'), ord('N'), 27):
+                    state.confirm_switch_email = None
+                continue
+
             # Handle Help mode
             if state.show_help:
                 state.show_help = False
@@ -456,11 +529,12 @@ def run_curses_tui(
                 state.scroll_top = 0
                 continue
 
-            # Views switching (Tab or F3 or p/m/a/d)
+            # Views switching (Tab or F3 or p/m/a/d/g)
             if ch in (ord('\t'), getattr(curses, "KEY_F3", -999)):
-                cur_v_idx = next((i for i, v in enumerate(VIEW_MODES) if v[0] == state.view_mode), 0)
-                next_v_idx = (cur_v_idx + 1) % len(VIEW_MODES)
-                state.view_mode = VIEW_MODES[next_v_idx][0]
+                views = available_view_modes(accounts_sec is not None)
+                cur_v_idx = next((i for i, v in enumerate(views) if v[0] == state.view_mode), 0)
+                next_v_idx = (cur_v_idx + 1) % len(views)
+                state.view_mode = views[next_v_idx][0]
                 state.selected_index = 0
                 state.scroll_top = 0
                 continue
@@ -483,6 +557,12 @@ def run_curses_tui(
                 state.view_mode = ViewMode.DAYS
                 state.selected_index = 0
                 state.scroll_top = 0
+                continue
+            if ch == ord('g'):
+                if accounts_sec is not None:
+                    state.view_mode = ViewMode.ACCOUNTS
+                    state.selected_index = 0
+                    state.scroll_top = 0
                 continue
 
             # Meters expanded (M or F7)
@@ -517,11 +597,16 @@ def run_curses_tui(
                 continue
 
             # Navigation: Up, Down, PageUp, PageDown, Home, End
-            cur_list_len = len(proj_rows) if state.view_mode == ViewMode.PROJECTS else (
-                len(model_rows) if state.view_mode == ViewMode.MODELS else (
-                    len(agent_rows) if state.view_mode == ViewMode.AGENTS else len(day_rows)
-                )
-            )
+            if state.view_mode == ViewMode.PROJECTS:
+                cur_list_len = len(proj_rows)
+            elif state.view_mode == ViewMode.MODELS:
+                cur_list_len = len(model_rows)
+            elif state.view_mode == ViewMode.AGENTS:
+                cur_list_len = len(agent_rows)
+            elif state.view_mode == ViewMode.ACCOUNTS:
+                cur_list_len = len(accounts_sec.rows) if accounts_sec is not None else 0
+            else:
+                cur_list_len = len(day_rows)
 
             if ch == curses.KEY_UP:
                 if state.selected_index > 0:
@@ -537,19 +622,31 @@ def run_curses_tui(
             if ch == curses.KEY_NPAGE:  # PgDn
                 state.selected_index = min(max(0, cur_list_len - 1), state.selected_index + 10)
                 continue
-            if ch in (curses.KEY_HOME, ord('g')):
+            if ch == curses.KEY_HOME:
                 state.selected_index = 0
                 continue
             if ch in (curses.KEY_END, ord('G')):
                 state.selected_index = max(0, cur_list_len - 1)
                 continue
 
-            # Enter on Project -> Detail pane
+            # Enter on Project -> Detail pane; Enter on account -> switch login
             if ch in (10, 13, curses.KEY_ENTER):
                 if state.view_mode == ViewMode.PROJECTS and proj_rows:
                     if 0 <= state.selected_index < len(filtered.projects):
                         state.detail_project = filtered.projects[state.selected_index]
                         state.detail_open = True
+                elif state.view_mode == ViewMode.ACCOUNTS and accounts_sec is not None:
+                    rows = accounts_sec.rows
+                    if 0 <= state.selected_index < len(rows):
+                        row = rows[state.selected_index]
+                        if row.is_current or row.is_unattributed:
+                            pass
+                        elif not row.saved_login:
+                            set_status(t("accounts.no_saved_login", lang))
+                        elif sys.platform != "darwin" and switch_login is None:
+                            set_status(t("accounts.macos_only", lang))
+                        else:
+                            state.confirm_switch_email = row.email
                 continue
 
             # Esc or Backspace

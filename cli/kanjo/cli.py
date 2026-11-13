@@ -524,7 +524,9 @@ def cmd_usage(args) -> int:
     from .tui.model import TimeRange, ViewMode
     from .tui.static import render_static_snapshot
     from .tui.term import HAVE_CURSES, run_curses_tui
+    from .tui.i18n import resolve_lang
 
+    lang = resolve_lang(getattr(args, "lang", "auto"))
     cfg = _config(args)
     cache = _cache(args)
     ascii_mode = getattr(args, "ascii", False)
@@ -620,6 +622,7 @@ def cmd_usage(args) -> int:
             version=__version__,
             antigravity_accounts_data=antigravity_accounts_data,
             current_account=current_account,
+            lang=lang,
         )
         sys.stdout.write(snapshot)
         sys.stdout.flush()
@@ -642,6 +645,7 @@ def cmd_usage(args) -> int:
             current_account=current_account,
             data_path=data_path,
             use_cache=use_cache,
+            lang=lang,
         )
     except KeyboardInterrupt:
         return 0
@@ -791,8 +795,10 @@ def build_parser() -> argparse.ArgumentParser:
         up.add_argument("--ascii", action="store_true", help="plain ASCII output, no Unicode")
         up.add_argument("--range", choices=("all", "today", "7d", "30d", "reset", "cycle"), default="all",
                         help="initial time range (default: all)")
-        up.add_argument("--view", choices=("projects", "models", "agents", "days"), default="projects",
+        up.add_argument("--view", choices=("projects", "models", "agents", "days", "accounts"), default="projects",
                         help="initial view (default: projects)")
+        up.add_argument("--lang", choices=("auto", "en", "zh"), default="auto",
+                        help="UI language: auto, en, zh (default: auto)")
         up.add_argument("--data", metavar="PATH", help=argparse.SUPPRESS)
         common(up)
         up.set_defaults(func=cmd_usage)

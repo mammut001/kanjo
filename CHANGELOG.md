@@ -16,12 +16,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Full-screen, keyboard-driven dashboard for Linux servers (SSH, headless) and any terminal without a desktop environment.
   - Top meters: big totals line with agent share bar and legend; htop CPU-meter style blocks per subscription with weekly and 5-hour quota windows, level-based color thresholding (normal → agent color, warning ≥ 80% → yellow, critical ≥ 95% → red), and countdown/reset times.
   - Antigravity Google account attribution section showing usage and current account marker for the active quota/billing window.
-  - Scrollable main table with 4 views (`Tab` / `F3` or keys `p m a d`): Projects (with agent dots and 8-week heat strip), Models, Agents (with share bar), and Days (with cost bar).
+  - Scrollable main table with 5 views (`Tab` / `F3` or keys `p m a d g`): Projects (with agent dots and 8-week heat strip), Models, Agents (with share bar), Days (with cost bar), and Accounts (email, window tokens/cost, messages, last seen, saved login, current marker).
   - Project detail drill-down pane (`Enter` to open, `Esc`/`Backspace` to close) showing by-agent, by-model, and 30-day sparkline breakdowns.
   - F-key bar with full keyboard control: `1-6` or `←/→` range, `Tab` view, `↑↓ PgUp PgDn Home End` navigation, `/` or `F4` filter by name, `s` or `F6` cycle sort column, `r` or `F5` refresh, `?` or `F1` help overlay, `q` or `F10` quit.
   - Non-blocking background scan with auto-refresh every `--interval` seconds (default 60) and animated spinner.
   - Safe terminal restoration with graceful Ctrl-C handling, terminal resize handling, and small-terminal warning (< 60x15).
   - Static mode snapshot with ANSI colors when output is piped, or with `--once`, or on Windows without curses.
+  - English and Simplified Chinese UI (`--lang auto|en|zh`); `auto` follows the macOS app language setting, then `LC_ALL`/`LC_MESSAGES`/`LANG`. All TUI strings live in `cli/kanjo/tui/i18n.py`; Chinese range tabs, columns, quotas and help match the macOS app, compact token counts use 万/亿, and all alignment/truncation uses display width so CJK text lines up in 80x24 and 140x40 terminals.
+  - New `Accounts` table view (`g`, also in the `Tab`/`F3` cycle when account data exists) with email, window tokens/cost, messages, last seen, saved-login yes/no and a `● current` marker plus an unattributed footer row. On macOS, `Enter` on a non-current account with a saved login shows a centred confirmation; `y` runs `kanjo.agy_login.switch` on the background thread and reports ok / `no_saved_login` / unsaved-current-login in a five-second status line above the F-key bar, then refreshes. Non-macOS shows "Switching is macOS-only"; rows without a saved login show a sign-in hint.
+  - Static snapshots (`--once` or piped output) no longer draw the selected-row highlight, F-key bar or trailing blank padding, and show the top 15 project rows.
+  - Subscriptions with no quota windows now render one dim `quota — (no live data)` row so a missing meter is not mistaken for zero usage.
 - **Family usage reporting on Linux.** `scripts/install-family-linux.sh` is an interactive installer for
   servers and desktops (no root): it checks for Python 3.9+, installs the Kanjo CLI under
   `~/.local/share/kanjo-family`, asks for the server URL, the report token (hidden input, stored in

@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
-import textwrap
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
 
 from .model import (
-    AntigravityAccountsSection, DayRowViewModel, FilteredData, ModelRowViewModel,
-    ProjectDetailViewModel, ProjectRowViewModel, QuotaLevel, QuotaMeterWindow,
-    RANGE_TABS, SubscriptionMeter, TimeRange, TotalViewModel, VIEW_MODES, ViewMode,
-    format_money, format_tokens, agent_color
+    AntigravityAccountsSection, AntigravityAccountRow, DayRowViewModel, FilteredData,
+    ModelRowViewModel, ProjectDetailViewModel, ProjectRowViewModel, QuotaLevel,
+    QuotaMeterWindow, RANGE_TABS, SubscriptionMeter, TimeRange, TotalViewModel,
+    VIEW_MODES, ViewMode, format_money, format_tokens, agent_color
 )
+from .i18n import t, normalize_lang
 
 # Text / Display Width Helpers
 
@@ -57,6 +58,28 @@ def truncate_str(s: str, max_width: int, ellipsis: str = "…") -> str:
         res.append(ch)
         cur += cw
     return "".join(res) + ellipsis
+
+
+def wrap_display(text: str, width: int) -> List[str]:
+    """Wrap text by terminal display width (CJK characters count as 2)."""
+    if width <= 0:
+        return [""]
+    lines: List[str] = []
+    cur = ""
+    cur_w = 0
+    for ch in text:
+        cw = char_width(ch)
+        if cur and cur_w + cw > width:
+            lines.append(cur)
+            cur = ""
+            cur_w = 0
+            if ch == " ":
+                continue
+        cur += ch
+        cur_w += cw
+    if cur or not lines:
+        lines.append(cur)
+    return lines
 
 
 def pad_str(s: str, width: int, align: str = "left") -> str:
@@ -221,6 +244,10 @@ class TUIState:
     ascii_mode: bool = False
     no_color: bool = False
     meters_expanded: bool = False
+    lang: str = "en"
+    confirm_switch_email: Optional[str] = None
+    status_message: str = ""
+    status_until: float = 0.0
 
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -295,13 +322,16 @@ def _heat_cell_style(dom_ag: Optional[str], state: "TUIState", is_sel: bool) -> 
 
 def _is_weekly_window(w: QuotaMeterWindow) -> bool:
     name = (w.name or "").lower()
-    return name.startswith("weekly") or name == "168-hour" or "week" in name
+    return (name.startswith("weekly") or name == "168-hour" or "week" in name
+            or name in ("每周", "周") or name.startswith("每周"))
 
 
 def _weekly_windows(m: SubscriptionMeter) -> List[QuotaMeterWindow]:
     if m.windows and _is_weekly_window(m.windows[0]):
         return [m.windows[0]]
-    return []
+    placeholders = [w for w in m.windows
+                    if w.percent is None and w.level is None and w.detail]
+    return placeholders
 
 
 def _meter_mode_windows(m: SubscriptionMeter, mode: str) -> List[QuotaMeterWindow]:
@@ -347,21 +377,27 @@ def _mini_bar(w: QuotaMeterWindow, ascii_mode: bool, length: int = 4) -> str:
     return f"{left}{fill * filled}{' ' * (length - filled)}{right}{int(round(w.percent))}%"
 
 
-def _compact_meter_body(m: SubscriptionMeter, ascii_mode: bool) -> str:
+def _compact_meter_body(m: SubscriptionMeter, ascii_mode: bool, lang: str = "en") -> str:
     parts = [m.plan_label]
     weekly = next((w for w in m.windows if _is_weekly_window(w)), None)
     five = next((w for w in m.windows if not _is_weekly_window(w)
                  and (w.name.lower().startswith("5") or "5h" in w.name.lower())), None)
     if weekly is not None:
         bar = _mini_bar(weekly, ascii_mode)
-        parts.append("W " + bar if bar else "W")
+        label = t("meter.weekly_short", lang)
+        parts.append(label + " " + bar if bar else label)
     if five is not None and five.percent is not None:
-        parts.append(f"5h {int(round(five.percent))}%")
+        parts.append(f"{t('meter.five_short', lang)} {int(round(five.percent))}%")
     parts.append(m.multiplier_str)
     usage = m.usage_str
-    if usage.startswith("usage "):
-        usage = usage[len("usage "):]
+    prefix = t("meter.usage", lang, amount="")
+    if prefix and usage.startswith(prefix):
+        usage = usage[len(prefix):]
     parts.append(usage)
+    if weekly is None and five is None:
+        placeholders = [w for w in m.windows if w.percent is None and w.detail]
+        if placeholders:
+            parts[-1:] = ["—", placeholders[0].detail]
     return "  ".join(parts)
 
 
@@ -385,6 +421,21 @@ def _draw_full_meter_block(canvas: Canvas, x: int, y: int, width: int,
     y += 1
 
     label_x = x + 2
+    right = x + width
+
+    # Subscription with no live quota data: one dim explanatory row, no meter.
+    if len(windows) == 1 and windows[0].placeholder:
+        w = windows[0]
+        label = pad_str(truncate_str(w.name, label_w), label_w)
+        canvas.draw_text(label_x, y, label, Style(dim=True))
+        text = "—"
+        if w.detail:
+            text += "  " + w.detail
+        canvas.draw_text(label_x + label_w + 1, y, truncate_str(text, max(0, right - label_x - label_w - 1)),
+                         Style(dim=True), max_width=max(0, right - label_x - label_w - 1))
+        return 2
+
+
     bar_x = label_x + label_w + 1
     right = x + width
     detail_reserve = 16 if any(w.detail for w in windows) else 0
@@ -455,11 +506,12 @@ def render_ui(
     """Render the full TUI layout onto canvas."""
     width = canvas.width
     height = canvas.height
+    lang = normalize_lang(state.lang)
 
     # 1. Terminal too small check (< 60 cols or < 15 rows)
     if width < 60 or height < 15:
-        msg = f"Terminal too small (need >= 60x15, current: {width}x{height})"
-        canvas.draw_text(0, 0, msg[:width], Style(bold=True, fg="yellow"))
+        msg = t("terminal_too_small", state.lang, width=width, height=height)
+        canvas.draw_text(0, 0, truncate_str(msg, width), Style(bold=True, fg="yellow"))
         return
 
     if filtered is None:
@@ -470,19 +522,19 @@ def render_ui(
 
         for idx, (r_val, r_label) in enumerate(RANGE_TABS):
             is_active = (state.time_range == r_val)
-            tab_str = f" {r_label} "
+            tab_str = f" {t('range.' + r_val.value, state.lang)} "
             tab_style = _active_tab_style(state) if is_active else Style()
             cur_x = canvas.draw_text(cur_x, 0, tab_str, tab_style)
             if idx < len(RANGE_TABS) - 1:
                 cur_x = canvas.draw_text(cur_x, 0, " ", Style())
 
         spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
-        right_str = f"{spin} Loading…"
+        right_str = f"{spin} {t('loading', state.lang)}"
         rw = str_width(right_str)
         if width - rw > cur_x + 1:
             canvas.draw_text(width - rw, 0, right_str, Style(fg="yellow"))
 
-        load_msg = "Loading…"
+        load_msg = t("loading", state.lang)
         ly = height // 2
         lx = max(0, (width - str_width(load_msg)) // 2)
         canvas.draw_text(lx, ly, load_msg, Style(bold=True, fg="cyan"))
@@ -490,7 +542,7 @@ def render_ui(
         bar_y = height - 1
         canvas.fill_rect(0, bar_y, width, 1, " ", Style())
         bx = 0
-        for key_lbl, name_lbl in [("F1", "Help"), ("F10", "Quit")]:
+        for key_lbl, name_lbl in [("F1", t("fkey.help", state.lang)), ("F10", t("fkey.quit", state.lang))]:
             if bx >= width:
                 break
             k_style = Style(bold=True)
@@ -517,7 +569,7 @@ def render_ui(
     # Range tabs
     for idx, (r_val, r_label) in enumerate(RANGE_TABS):
         is_active = (state.time_range == r_val)
-        tab_str = f" {r_label} "
+        tab_str = f" {t('range.' + r_val.value, state.lang)} "
         if is_active:
             tab_style = _active_tab_style(state)
         else:
@@ -530,7 +582,7 @@ def render_ui(
     right_items = []
     if state.is_scanning:
         spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
-        right_items.append(f"{spin} refreshing…")
+        right_items.append(f"{spin} {t('refreshing', state.lang)}")
     if state.last_refresh_time:
         right_items.append(state.last_refresh_time)
 
@@ -595,8 +647,12 @@ def render_ui(
 
     cur_y += 1
 
-    # Bottom reserved rows: 1 row for F-key bar, plus 1 if filter prompt active
-    bottom_reserved = 2 if state.filter_active else 1
+    # Bottom reserved rows: 1 row for F-key bar, plus 1 if filter prompt active.
+    # Static snapshots have no chrome: the table may use the full height.
+    if static_mode:
+        bottom_reserved = 0
+    else:
+        bottom_reserved = 2 if state.filter_active else 1
     table_bottom_y = height - bottom_reserved
 
     # Like htop, keep a meaningful slice of the screen for the table.
@@ -647,8 +703,9 @@ def render_ui(
         dropped_meters = len(meters) - len(with_quota)
         cur_y = _draw_compact_meters(canvas, cur_y, with_quota, width, state, dropped_meters)
 
-    # 5. Antigravity Accounts (only if attribution data exists)
-    if accounts_section and cur_y < content_limit_y:
+    # 5. Antigravity Accounts summary (only outside the dedicated Accounts view)
+    if (accounts_section and state.view_mode != ViewMode.ACCOUNTS
+            and cur_y < content_limit_y):
         remaining = content_limit_y - cur_y
         if remaining >= 2:
             # Header
@@ -664,7 +721,7 @@ def render_ui(
                 cur_marker = ""
                 cur_style = Style()
                 if r.is_current:
-                    cur_marker = "  * current" if state.ascii_mode else "  ● current"
+                    cur_marker = "  " + t("accounts.ascii_current" if state.ascii_mode else "accounts.current", lang)
                     cur_style = Style(fg="green", bold=True)
 
                 row_style = Style(dim=True) if r.is_unattributed else Style()
@@ -692,13 +749,13 @@ def render_ui(
         fixed_w = 10 + 8 + 8 + 8 + 11 + 8 + 6  # 59
         proj_w = max(16, width - fixed_w)
 
-        h_proj = pad_str("PROJECT", proj_w)
-        h_cost = pad_str("COST", 10, align="right")
-        h_tok = pad_str("TOKENS", 8, align="right")
-        h_sess = pad_str("SESSIONS", 8, align="right")
-        h_ag = pad_str("AGENTS", 8, align="center")
-        h_last = pad_str("LAST ACTIVE", 11, align="right")
-        h_8w = pad_str("8W", 8, align="center")
+        h_proj = pad_str(t("col.project", lang), proj_w)
+        h_cost = pad_str(t("col.cost", lang), 10, align="right")
+        h_tok = pad_str(t("col.tokens", lang), 8, align="right")
+        h_sess = pad_str(t("col.sessions", lang), 8, align="right")
+        h_ag = pad_str(t("col.agents", lang), 8, align="center")
+        h_last = pad_str(t("col.last_active", lang), 11, align="right")
+        h_8w = pad_str(t("col.week8", lang), 8, align="center")
 
         h_line = f"{h_proj} {h_cost} {h_tok} {h_sess} {h_ag} {h_last} {h_8w}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
@@ -736,7 +793,7 @@ def render_ui(
 
         for idx, row in enumerate(shown_projects):
             row_y = cur_y + idx
-            is_sel = (scroll_offset + idx == state.selected_index)
+            is_sel = (not static_mode) and (scroll_offset + idx == state.selected_index)
             row_style = _selected_row_style(state) if is_sel else Style()
 
             if is_sel:
@@ -818,10 +875,10 @@ def render_ui(
     elif state.view_mode == ViewMode.MODELS:
         # Columns: MODEL, PROVIDER, TOKENS, COST
         mod_w = max(20, width - 40)
-        h_mod = pad_str("MODEL", mod_w)
-        h_prov = pad_str("PROVIDER", 15)
-        h_tok = pad_str("TOKENS", 10, align="right")
-        h_cost = pad_str("COST", 10, align="right")
+        h_mod = pad_str(t("col.model", lang), mod_w)
+        h_prov = pad_str(t("col.provider", lang), 15)
+        h_tok = pad_str(t("col.tokens", lang), 10, align="right")
+        h_cost = pad_str(t("col.cost", lang), 10, align="right")
         h_line = f"{h_mod} {h_prov} {h_tok} {h_cost}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
@@ -842,12 +899,12 @@ def render_ui(
         else:
             state.scroll_top = 0
 
-        scroll_offset = state.scroll_top
+        scroll_offset = 0 if static_mode else state.scroll_top
         shown_models = model_rows[scroll_offset:scroll_offset + body_height] if not static_mode else model_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_models):
             row_y = cur_y + idx
-            is_sel = (scroll_offset + idx == state.selected_index)
+            is_sel = (not static_mode) and (scroll_offset + idx == state.selected_index)
             row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -863,11 +920,11 @@ def render_ui(
     elif state.view_mode == ViewMode.AGENTS:
         # Columns: AGENT, SESSIONS, TOKENS, COST, SHARE
         ag_w = max(16, width - 50)
-        h_ag = pad_str("AGENT", ag_w)
-        h_sess = pad_str("SESSIONS", 10, align="right")
-        h_tok = pad_str("TOKENS", 10, align="right")
-        h_cost = pad_str("COST", 10, align="right")
-        h_share = "SHARE"
+        h_ag = pad_str(t("col.agent", lang), ag_w)
+        h_sess = pad_str(t("col.sessions", lang), 10, align="right")
+        h_tok = pad_str(t("col.tokens", lang), 10, align="right")
+        h_cost = pad_str(t("col.cost", lang), 10, align="right")
+        h_share = t("col.share", lang)
         h_line = f"{h_ag} {h_sess} {h_tok} {h_cost}  {h_share}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
@@ -888,12 +945,12 @@ def render_ui(
         else:
             state.scroll_top = 0
 
-        scroll_offset = state.scroll_top
+        scroll_offset = 0 if static_mode else state.scroll_top
         shown_agents = agent_rows[scroll_offset:scroll_offset + body_height] if not static_mode else agent_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_agents):
             row_y = cur_y + idx
-            is_sel = (scroll_offset + idx == state.selected_index)
+            is_sel = (not static_mode) and (scroll_offset + idx == state.selected_index)
             row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -924,11 +981,11 @@ def render_ui(
 
     elif state.view_mode == ViewMode.DAYS:
         # Columns: DATE, COST BAR, COST, TOKENS
-        h_date = pad_str("DATE", 12)
-        h_cost = pad_str("COST", 10, align="right")
-        h_tok = pad_str("TOKENS", 10, align="right")
+        h_date = pad_str(t("col.date", lang), 12)
+        h_cost = pad_str(t("col.cost", lang), 10, align="right")
+        h_tok = pad_str(t("col.tokens", lang), 10, align="right")
         bar_len = min(30, max(10, width - 40))
-        h_bar = pad_str("COST BAR", bar_len + 2)
+        h_bar = pad_str(t("col.cost_bar", lang), bar_len + 2)
         h_line = f"{h_date} {h_bar} {h_cost} {h_tok}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
         canvas.draw_text(0, table_header_y, h_line[:width], header_style)
@@ -949,12 +1006,12 @@ def render_ui(
         else:
             state.scroll_top = 0
 
-        scroll_offset = state.scroll_top
+        scroll_offset = 0 if static_mode else state.scroll_top
         shown_days = day_rows[scroll_offset:scroll_offset + body_height] if not static_mode else day_rows[:min(15, body_height)]
 
         for idx, row in enumerate(shown_days):
             row_y = cur_y + idx
-            is_sel = (scroll_offset + idx == state.selected_index)
+            is_sel = (not static_mode) and (scroll_offset + idx == state.selected_index)
             row_style = _selected_row_style(state) if is_sel else Style()
             if is_sel:
                 canvas.fill_rect(0, row_y, width, 1, " ", row_style)
@@ -979,10 +1036,82 @@ def render_ui(
             rx += 11
             canvas.draw_text(rx, row_y, pad_str(row.tokens_str, 10, align="right"), row_style)
 
+    elif state.view_mode == ViewMode.ACCOUNTS:
+        sec = accounts_section
+        # Title shows the accounting window (quota week / billing cycle / 7d).
+        if sec is None:
+            pass
+        else:
+            canvas.draw_text(0, table_header_y,
+                             truncate_str(sec.header_label, width),
+                             Style(bold=True, fg="white"))
+            table_header_y += 1
+            cur_y = table_header_y
+
+            email_w = max(16, width - 61)
+            h_line = (pad_str(t("col.account", lang), email_w) + " "
+                      + pad_str(t("col.tokens", lang), 9, align="right") + " "
+                      + pad_str(t("col.cost", lang), 10, align="right") + " "
+                      + pad_str(t("col.messages", lang), 8, align="right") + " "
+                      + pad_str(t("col.last_seen", lang), 13, align="right") + " "
+                      + pad_str(t("col.login", lang), 6))
+            canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
+            canvas.draw_text(0, table_header_y, truncate_str(h_line, width), header_style)
+            cur_y += 1
+
+            body_height = max(0, table_bottom_y - cur_y)
+            total_items = len(sec.rows)
+            if not static_mode:
+                if total_items > 0:
+                    state.selected_index = max(0, min(total_items - 1, state.selected_index))
+                else:
+                    state.selected_index = 0
+                if body_height > 0:
+                    if state.selected_index < state.scroll_top:
+                        state.scroll_top = state.selected_index
+                    elif state.selected_index >= state.scroll_top + body_height:
+                        state.scroll_top = state.selected_index - body_height + 1
+                else:
+                    state.scroll_top = 0
+                scroll_offset = state.scroll_top
+                shown_accounts = sec.rows[scroll_offset:scroll_offset + body_height]
+            else:
+                scroll_offset = 0
+                shown_accounts = sec.rows[:min(15, body_height)]
+
+            for idx, row in enumerate(shown_accounts):
+                row_y = cur_y + idx
+                is_sel = (not static_mode) and (scroll_offset + idx == state.selected_index)
+                row_style = _selected_row_style(state) if is_sel else Style()
+                if is_sel:
+                    canvas.fill_rect(0, row_y, width, 1, " ", row_style)
+                base_style = Style(dim=True) if row.is_unattributed else row_style
+
+                canvas.draw_text(0, row_y, pad_str(truncate_str(row.email, email_w), email_w), base_style)
+                rx = email_w + 1
+                canvas.draw_text(rx, row_y, pad_str(row.tokens_str, 9, align="right"), base_style)
+                rx += 10
+                canvas.draw_text(rx, row_y, pad_str(row.cost_str, 10, align="right"), base_style)
+                rx += 11
+                canvas.draw_text(rx, row_y, pad_str(row.messages_str, 8, align="right"), base_style)
+                rx += 9
+                canvas.draw_text(rx, row_y, pad_str(row.last_seen_str, 13, align="right"), base_style)
+                rx += 14
+                if row.is_unattributed:
+                    login_str = "—"
+                else:
+                    login_str = t("bool.yes", lang) if row.saved_login else t("bool.no", lang)
+                canvas.draw_text(rx, row_y, pad_str(login_str, 6), base_style)
+                rx += 7
+                if row.is_current:
+                    marker_txt = t("accounts.ascii_current" if state.ascii_mode else "accounts.current", lang)
+                    m_style = _on_selected_row(state, is_sel, Style(fg="green", bold=True))
+                    canvas.draw_text(rx, row_y, truncate_str(marker_txt, max(0, width - rx)), m_style)
+
     # 7. Filter input bar (if active)
     if state.filter_active:
         fy = height - 2
-        f_prompt = f"Filter: {state.filter_input}_ (Enter to apply, Esc to cancel)"
+        f_prompt = t("filter_prompt", lang, query=state.filter_input)
         filter_style = _filter_prompt_style(state)
         canvas.fill_rect(0, fy, width, 1, " ", filter_style)
         canvas.draw_text(1, fy, f_prompt[:width - 2], filter_style)
@@ -991,24 +1120,25 @@ def render_ui(
     # F1Help F2Range F3View F4Filter F5Refresh F6Sort F10Quit
     bar_y = height - 1
     f_items = [
-        ("F1", "Help"),
-        ("F2", "Range"),
-        ("F3", "View"),
-        ("F4", "Filter"),
-        ("F5", "Refresh"),
-        ("F6", "Sort"),
-        ("F7", "Meters"),
-        ("F10", "Quit"),
+        ("F1", t("fkey.help", lang)),
+        ("F2", t("fkey.range", lang)),
+        ("F3", t("fkey.view", lang)),
+        ("F4", t("fkey.filter", lang)),
+        ("F5", t("fkey.refresh", lang)),
+        ("F6", t("fkey.sort", lang)),
+        ("F7", t("fkey.meters", lang)),
+        ("F10", t("fkey.quit", lang)),
     ]
-    canvas.fill_rect(0, bar_y, width, 1, " ", Style())
-    bx = 0
-    for key_lbl, name_lbl in f_items:
-        if bx >= width:
-            break
-        k_style = Style(bold=True)
-        bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
-        n_style = _fkey_name_style(state)
-        bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
+    if not static_mode:
+        canvas.fill_rect(0, bar_y, width, 1, " ", Style())
+        bx = 0
+        for key_lbl, name_lbl in f_items:
+            if bx >= width:
+                break
+            k_style = Style(bold=True)
+            bx = canvas.draw_text(bx, bar_y, f"{key_lbl}", k_style)
+            n_style = _fkey_name_style(state)
+            bx = canvas.draw_text(bx, bar_y, f"{name_lbl} ", n_style)
 
     # 9. Detail Pane Overlay
     if state.detail_open and detail_vm is not None:
@@ -1017,25 +1147,27 @@ def render_ui(
         dx = (width - dw) // 2
         dy = (height - dh) // 2
 
-        canvas.draw_box(dx, dy, dw, dh, title=f"Project: {detail_vm.name}",
+        canvas.draw_box(dx, dy, dw, dh, title=t("detail.title", lang, name=detail_vm.name),
                         style=Style(bg="black", fg="white"),
                         border_style=Style(fg="cyan", bold=True),
                         ascii_mode=state.ascii_mode)
 
         cy = dy + 1
         if detail_vm.remote:
-            canvas.draw_text(dx + 2, cy, f"Remote: {detail_vm.remote}", Style(fg="gray"), max_width=dw - 4)
+            canvas.draw_text(dx + 2, cy, t("detail.remote", lang, remote=detail_vm.remote), Style(fg="gray"), max_width=dw - 4)
             cy += 1
         if detail_vm.paths:
             p_str = ", ".join(detail_vm.paths)
-            canvas.draw_text(dx + 2, cy, f"Paths:  {p_str}", Style(fg="gray"), max_width=dw - 4)
+            canvas.draw_text(dx + 2, cy, t("detail.paths", lang, paths=p_str), Style(fg="gray"), max_width=dw - 4)
             cy += 1
 
-        stats_line = f"Cost: {detail_vm.cost_str}  ·  Tokens: {detail_vm.tokens_str}  ·  Sessions: {detail_vm.sessions_str}"
+        stats_line = t("detail.stats", lang, cost=detail_vm.cost_str,
+                       tokens=detail_vm.tokens_str, sessions=detail_vm.sessions_str)
         canvas.draw_text(dx + 2, cy, stats_line, Style(bold=True), max_width=dw - 4)
         cy += 1
 
-        spark_line = f"30-day sparkline: {detail_vm.sparkline_30d}  ({detail_vm.sparkline_peak_str})"
+        spark_line = t("detail.sparkline", lang, spark=detail_vm.sparkline_30d,
+                       peak=detail_vm.sparkline_peak_str)
         canvas.draw_text(dx + 2, cy, spark_line, Style(fg="cyan"), max_width=dw - 4)
         cy += 1
 
@@ -1044,13 +1176,13 @@ def render_ui(
         cy += 1
 
         # By Agent
-        canvas.draw_text(dx + 2, cy, "By Agent:", Style(bold=True))
+        canvas.draw_text(dx + 2, cy, t("detail.by_agent", lang), Style(bold=True))
         cy += 1
-        for lbl, c, t, s, pct, rgb in detail_vm.by_agent[:4]:
+        for lbl, c, tok_str, sess_str, pct, rgb in detail_vm.by_agent[:4]:
             if cy >= dy + dh - 7:
                 break
             dot = "*" if state.ascii_mode else "●"
-            ag_line = f"  {dot} {pad_str(lbl, 16)}  {pad_str(c, 10, align='right')}  {pad_str(t, 8, align='right')}  {pad_str(s, 4, align='right')}  ({pct:.1f}%)"
+            ag_line = f"  {dot} {pad_str(lbl, 16)}  {pad_str(c, 10, align='right')}  {pad_str(tok_str, 8, align='right')}  {pad_str(sess_str, 4, align='right')}  ({pct:.1f}%)"
             canvas.draw_text(dx + 2, cy, f"  {dot} ", Style(fg=rgb, bold=True))
             canvas.draw_text(dx + 6, cy, ag_line[4:], Style())
             cy += 1
@@ -1060,18 +1192,19 @@ def render_ui(
         cy += 1
 
         # By Model
-        canvas.draw_text(dx + 2, cy, "By Model:", Style(bold=True))
+        canvas.draw_text(dx + 2, cy, t("detail.by_model", lang), Style(bold=True))
         cy += 1
-        for m_name, prov, c, t in detail_vm.by_model[:4]:
+        for m_name, prov, c, tok_str in detail_vm.by_model[:4]:
             if cy >= dy + dh - 3:
                 break
-            m_line = f"  {pad_str(truncate_str(m_name, 22), 22)}  {pad_str(prov, 12)}  {pad_str(c, 10, align='right')}  {pad_str(t, 8, align='right')}"
+            m_line = f"  {pad_str(truncate_str(m_name, 22), 22)}  {pad_str(prov, 12)}  {pad_str(c, 10, align='right')}  {pad_str(tok_str, 8, align='right')}"
             canvas.draw_text(dx + 2, cy, m_line, Style())
             cy += 1
 
         # Close note at bottom of detail pane
-        close_note = "[Esc / Backspace] Close"
-        canvas.draw_text(dx + (dw - len(close_note)) // 2, dy + dh - 2, close_note, Style(dim=True))
+        close_note = t("detail.close", lang)
+        canvas.draw_text(dx + max(1, (dw - str_width(close_note)) // 2), dy + dh - 2,
+                         truncate_str(close_note, dw - 2), Style(dim=True))
 
     # 10. Help Overlay
     if state.show_help:
@@ -1082,21 +1215,20 @@ def render_ui(
         desc_w = max(8, hw - desc_x_off - 2)
 
         help_lines = [
-            ("Navigation", "↑ / ↓ / PgUp / PgDn / Home / End to scroll rows"),
-            ("Time Range", "1-6 or ← / → to change range (All, Today, 7d, 30d, Reset, Cycle)"),
-            ("Views", "Tab / F3 or p / m / a / d to switch view (Projects, Models, Agents, Days)"),
-            ("Detail", "Enter on a project to open details, Esc / Backspace to close"),
-            ("Filter", "/ or F4 to filter by name, Enter to confirm, Esc to cancel"),
-            ("Sort", "s or F6 to cycle sort column"),
-            ("Meters", "M or F7 toggles expanded meters (full quota detail, smaller table)"),
-            ("Refresh", "r or F5 to refresh now (in-process re-scan)"),
-            ("Quit", "q or F10 to exit cleanly"),
+            (t("help.navigation.title", lang), t("help.navigation.desc", lang)),
+            (t("help.range.title", lang), t("help.range.desc", lang)),
+            (t("help.views.title", lang), t("help.views.desc", lang)),
+            (t("help.detail.title", lang), t("help.detail.desc", lang)),
+            (t("help.filter.title", lang), t("help.filter.desc", lang)),
+            (t("help.sort.title", lang), t("help.sort.desc", lang)),
+            (t("help.meters.title", lang), t("help.meters.desc", lang)),
+            (t("help.refresh.title", lang), t("help.refresh.desc", lang)),
+            (t("help.quit.title", lang), t("help.quit.desc", lang)),
         ]
 
         wrapped = []
         for title_str, desc in help_lines:
-            rows = textwrap.wrap(desc, width=desc_w, break_long_words=True,
-                                 break_on_hyphens=False) or [""]
+            rows = wrap_display(desc, desc_w)
             wrapped.append((title_str, rows))
 
         needed = 2 + sum(len(rows) for _, rows in wrapped) + 2
@@ -1106,7 +1238,7 @@ def render_ui(
         # Clear the full rows behind the overlay so no text bleeds around the box.
         canvas.fill_rect(0, hy, width, hh, " ", Style())
 
-        canvas.draw_box(hx, hy, hw, hh, title="Help & Shortcuts",
+        canvas.draw_box(hx, hy, hw, hh, title=t("help.title", lang),
                         style=Style(bg="black", fg="white"),
                         border_style=Style(fg="yellow", bold=True),
                         ascii_mode=state.ascii_mode)
@@ -1124,7 +1256,39 @@ def render_ui(
                 canvas.draw_text(hx + desc_x_off, cy, row, Style(), max_width=desc_w)
                 cy += 1
 
-        close_note = "Press any key to close help"
+        close_note = t("help.close", lang)
         note_x = hx + max(1, (hw - str_width(close_note)) // 2)
         canvas.draw_text(note_x, hy + hh - 2, truncate_str(close_note, hw - 2),
                          Style(dim=True), max_width=max(0, hx + hw - 1 - note_x))
+
+    # 11. One-line status above the F-key bar (expires by itself)
+    if (not static_mode and state.status_message
+            and (state.status_until <= 0 or time.time() < state.status_until)):
+        sy = height - 2
+        if state.filter_active:
+            sy = height - 3
+        canvas.fill_rect(0, sy, width, 1, " ", Style())
+        canvas.draw_text(0, sy, truncate_str(state.status_message, width),
+                         Style(bold=True, fg="yellow"), max_width=width)
+
+    # 12. Antigravity login switch confirmation (small centred box)
+    if state.confirm_switch_email:
+        msg = t("accounts.confirm", lang, email=state.confirm_switch_email)
+        dw = max(24, min(width - 4, 72))
+        inner_w = max(8, dw - 4)
+        lines = wrap_display(msg, inner_w)
+        dh = len(lines) + 3
+        dh = min(height - 2, dh)
+        dx = (width - dw) // 2
+        dy = (height - dh) // 2
+        canvas.fill_rect(dx, dy, dw, dh, " ", Style())
+        canvas.draw_box(dx, dy, dw, dh, title=t("accounts.confirm_title", lang),
+                        style=Style(bg="black", fg="white"),
+                        border_style=Style(fg="yellow", bold=True),
+                        ascii_mode=state.ascii_mode)
+        cy = dy + 2
+        for line in lines:
+            if cy >= dy + dh - 1:
+                break
+            canvas.draw_text(dx + 2, cy, line, Style(), max_width=inner_w + 1)
+            cy += 1

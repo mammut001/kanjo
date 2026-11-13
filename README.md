@@ -139,11 +139,13 @@ kanjo export --public-summary  # public high-level summary JSON
 ```
 
 `kanjo usage` (or `kanjo top`) provides an htop-style live terminal dashboard:
-- Quota meters for active subscription windows (weekly, 5-hour, extra windows)
+- Quota meters for active subscription windows (weekly, 5-hour, extra windows); subscriptions with no live quota data show an explicit `quota — (no live data)` row instead of a blank meter
 - Antigravity Google account attribution breakdown
-- Interactive scrollable tables for Projects (with 8-week heat strip), Models, Agents, and Days
-- Filter by name (`/`), switch views (`Tab` or `p`/`m`/`a`/`d`), switch ranges (`1`-`6` or `←`/`→`), project details (`Enter`)
-- Pure Python standard library only, 256-color / truecolor with monochrome/ASCII fallback (`--ascii`, `--no-color`, `--once`)
+- Interactive scrollable tables for Projects (with 8-week heat strip), Models, Agents, Days, and Accounts (email, window tokens/cost, messages, last seen, saved login, current marker)
+- Filter by name (`/`), switch views (`Tab` or `p`/`m`/`a`/`d`/`g`), switch ranges (`1`-`6` or `←`/`→`), project details (`Enter`)
+- On macOS, `Enter` on an Antigravity account with a saved login (view `Accounts`) asks for confirmation and switches the Antigravity CLI login in the background; the result is shown in a temporary status line and running `agy` sessions keep the old account until restarted
+- English and Simplified Chinese UI (`--lang auto|en|zh`, default `auto`: the macOS app language, then `LC_ALL`/`LC_MESSAGES`/`LANG`); compact token counts use 万/亿 in Chinese
+- Pure Python standard library only, 256-color / truecolor with monochrome/ASCII fallback (`--ascii`, `--no-color`, `--once`); static snapshots show the top 15 projects with no selection highlight or F-key bar
 
 ### Publish usage to a website (optional)
 
@@ -428,11 +430,13 @@ kanjo export      # 导出完整 JSON 数据
 ```
 
 `kanjo usage`（或 `kanjo top`）提供了类似 htop 的全屏终端仪表盘：
-- 订阅额度仪表条（周额度、5 小时额度及各 agent 额外窗口，按占用比例实时变色）
+- 订阅额度仪表条（周额度、5 小时额度及各 agent 额外窗口，按占用比例实时变色）；没有实时额度数据的订阅会明确显示 `额度 — （暂无实时数据）`，而不是留空
 - Antigravity 账号归属统计与当前登录账号高亮
-- 交互式表格：Projects（含 8 周燃烧热力条）、Models、Agents、Days
-- 键盘导航：`/` 搜索过滤、`Tab` 或 `p`/`m`/`a`/`d` 切换视图、`1`-`6` 切换时间范围、`Enter` 查看项目详情
-- 仅依赖 Python 标准库，支持 256 色/真彩色与 `--once` / `--ascii` / `--no-color` 静态输出
+- 交互式表格：Projects（含 8 周燃烧热力条）、Models、Agents、Days、Accounts（邮箱、当前窗口 token/花费、消息数、最后活跃、是否已保存登录、当前账号标记）
+- 键盘导航：`/` 搜索过滤、`Tab` 或 `p`/`m`/`a`/`d`/`g` 切换视图、`1`-`6` 切换时间范围、`Enter` 查看项目详情
+- macOS 上，在 `Accounts` 视图对已保存登录的账号按 `Enter`，确认后会在后台切换 Antigravity CLI 登录，结果在状态行短暂显示；正在运行的 `agy` 会话在重启前仍使用旧账号
+- 中英文界面（`--lang auto|en|zh`，默认 `auto`：优先读取 macOS App 语言，其次 `LC_ALL`/`LC_MESSAGES`/`LANG`）；中文紧凑 token 使用万/亿
+- 仅依赖 Python 标准库，支持 256 色/真彩色与 `--once` / `--ascii` / `--no-color` 静态输出；静态快照只显示前 15 个项目，没有选中高亮和 F 键栏
 
 CLI 现在也能在 Windows 上运行（Python 3.9+）：日志从 `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`、`%APPDATA%`、`%LOCALAPPDATA%` 读取，`kanjo disk clean` 会移到回收站。
 

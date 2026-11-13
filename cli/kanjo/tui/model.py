@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
+from .i18n import t, normalize_lang
 
 # Agent colours from ui/Sources/KanjoCore/AgentColors.swift
 AGENT_COLORS: Dict[str, Tuple[int, int, int]] = {
@@ -78,6 +79,7 @@ class ViewMode(str, Enum):
     MODELS = "models"
     AGENTS = "agents"
     DAYS = "days"
+    ACCOUNTS = "accounts"
 
 
 VIEW_MODES: List[Tuple[ViewMode, str]] = [
@@ -85,7 +87,15 @@ VIEW_MODES: List[Tuple[ViewMode, str]] = [
     (ViewMode.MODELS, "Models"),
     (ViewMode.AGENTS, "Agents"),
     (ViewMode.DAYS, "Days"),
+    (ViewMode.ACCOUNTS, "Accounts"),
 ]
+
+
+def available_view_modes(has_accounts: bool) -> List[Tuple[ViewMode, str]]:
+    """Views present in the Tab / F3 cycle: Accounts only with account data."""
+    if has_accounts:
+        return list(VIEW_MODES)
+    return [(v, name) for v, name in VIEW_MODES if v != ViewMode.ACCOUNTS]
 
 
 class QuotaLevel(str, Enum):
@@ -106,10 +116,37 @@ def quota_level(percent: Optional[float]) -> Optional[QuotaLevel]:
 
 # ---- Formatting Helpers ----
 
-def format_tokens(n: int) -> str:
-    """Format token count in compact format: 1.21B, 266.2M, 45.2k, 500."""
+def format_tokens(n: int, lang: str = "en") -> str:
+    """Format token count in compact format: 1.21B, 266.2M, 45.2k, 500.
+
+    In Chinese, uses 万 / 亿 / 万亿 units like the macOS app
+    (``ui/Sources/KanjoCore/Formatting.swift``): < 10,000 is a plain number,
+    otherwise one decimal with a trailing ``.0`` removed.
+    """
     v = abs(float(n))
     sign = "-" if n < 0 else ""
+    if normalize_lang(lang) == "zh":
+        if v < 10_000:
+            return sign + str(int(v))
+        units = ((1e4, "万", False), (1e8, "亿", False), (1e12, "万亿", True))
+        for base, suffix, last in units:
+            scaled = v / base
+            if scaled >= 1000:
+                rounded_int = float(round(scaled))
+                if rounded_int < 10000 or last:
+                    return sign + str(int(rounded_int)) + suffix
+                continue
+            rounded = round(scaled * 10) / 10.0
+            if rounded >= 1000:
+                rounded_int = float(round(scaled))
+                if rounded_int < 10000 or last:
+                    return sign + str(int(rounded_int)) + suffix
+                continue
+            body = "%.1f" % rounded
+            if body.endswith(".0"):
+                body = body[:-2]
+            return sign + body + suffix
+        return sign + str(int(v))
     if v < 1000:
         return sign + str(int(v))
     if v < 1_000_000:
@@ -178,7 +215,31 @@ def parse_iso_dt(value: Optional[str], default_tz: Optional[datetime.tzinfo] = N
         return None
 
 
-def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: datetime.tzinfo) -> str:
+_WINDOW_TITLE_WORDS = (
+    (re.compile(r"weekly|week", re.IGNORECASE), "每周"),
+    (re.compile(r"monthly|month", re.IGNORECASE), "每月"),
+    (re.compile(r"daily|day", re.IGNORECASE), "每日"),
+    (re.compile(r"5[- ]?hours?", re.IGNORECASE), "5小时"),
+    (re.compile(r"5h", re.IGNORECASE), "5小时"),
+)
+
+
+def localize_window_title(title: str, lang: Optional[str]) -> str:
+    """Localize the descriptive part of a data-supplied quota window title.
+
+    Brand / model names are kept as-is (``Claude/GPT Weekly`` becomes
+    ``Claude/GPT 每周``); unknown titles are returned unchanged.
+    """
+    if normalize_lang(lang) != "zh" or not title:
+        return title
+    out = title
+    for pattern, replacement in _WINDOW_TITLE_WORDS:
+        out = pattern.sub(replacement, out, count=1)
+    return out
+
+
+def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: datetime.tzinfo,
+                           lang: str = "en") -> str:
     """Format relative countdown to reset_dt: resets in 2d 4h, resets 18:40, resets in 35m."""
     if reset_dt is None:
         return "—"
@@ -190,22 +251,22 @@ def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: date
     reset_utc = reset_utc.astimezone(timezone.utc)
     diff = (reset_utc - now_utc).total_seconds()
     if diff <= 0:
-        return "window ended"
+        return t("meter.window_ended", lang)
     minutes = max(1, math.ceil(diff / 60))
     if minutes < 60:
-        return f"resets in {minutes}m"
+        return t("meter.reset.in_m", lang, minutes=minutes)
     if minutes < 1440:
         # Check if same local day
         local_reset = reset_utc.astimezone(tz)
         local_now = now_utc.astimezone(tz)
         if local_reset.date() == local_now.date():
-            return f"resets {local_reset.strftime('%H:%M')}"
+            return t("meter.reset.at", lang, time=local_reset.strftime('%H:%M'))
         h = minutes // 60
         m = minutes % 60
-        return f"resets in {h}h {m}m"
+        return t("meter.reset.in_hm", lang, hours=h, minutes=m)
     d = minutes // 1440
     h = (minutes % 1440) // 60
-    return f"resets in {d}d {h}h"
+    return t("meter.reset.in_dh", lang, days=d, hours=h)
 
 
 def get_tz(doc: Optional[dict] = None) -> datetime.tzinfo:
@@ -264,7 +325,8 @@ def format_month_day_time(dt: datetime, tz: datetime.tzinfo) -> str:
 
 
 def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[dict],
-                        now: Optional[datetime] = None, tz_name: Optional[str] = None) -> Tuple[datetime, str, str]:
+                        now: Optional[datetime] = None, tz_name: Optional[str] = None,
+                        lang: str = "en") -> Tuple[datetime, str, str]:
     """Window = current Antigravity weekly quota window start (weekly_resets_at − window hours),
     else billing cycle start, else last 7 days.
     Returns (window_start_dt, kind, label).
@@ -278,19 +340,19 @@ def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[d
     if isinstance(qw.get("antigravity"), dict) and qw["antigravity"].get("weekly_resets_at"):
         start = window_start(qw["antigravity"], now, tz)
         if start is not None:
-            lbl = f"Antigravity accounts · this quota week (since {format_month_day_time(start, tz)})"
+            lbl = t("accounts.title.quota_week", lang, when=format_month_day_time(start, tz))
             return start, "quota_week", lbl
 
     # 2. Antigravity billing cycle start
     if isinstance(subs.get("antigravity"), dict) and subs["antigravity"].get("cycle_start"):
         start = parse_iso_dt(subs["antigravity"]["cycle_start"], default_tz=tz)
         if start is not None:
-            lbl = f"Antigravity accounts · this billing cycle (since {format_month_day_time(start, tz)})"
+            lbl = t("accounts.title.billing_cycle", lang, when=format_month_day_time(start, tz))
             return start, "billing_cycle", lbl
 
     # 3. Fallback: last 7 days
     start = now - timedelta(days=7)
-    lbl = f"Antigravity accounts · last 7 days (since {format_month_day_time(start, tz)})"
+    lbl = t("accounts.title.last_7d", lang, when=format_month_day_time(start, tz))
     return start, "last_7d", lbl
 
 
@@ -924,6 +986,7 @@ class QuotaMeterWindow:
     percent: Optional[float]
     level: Optional[QuotaLevel]
     detail: str
+    placeholder: bool = False
 
 
 @dataclass
@@ -944,6 +1007,10 @@ class AntigravityAccountRow:
     cost_str: str
     is_current: bool
     is_unattributed: bool
+    tokens_value: float = 0.0
+    messages_str: str = "—"
+    last_seen_str: str = "—"
+    saved_login: bool = False
 
 
 @dataclass
@@ -1008,11 +1075,11 @@ class ProjectDetailViewModel:
     sparkline_peak_str: str
 
 
-def build_total_view_model(filtered: FilteredData) -> TotalViewModel:
+def build_total_view_model(filtered: FilteredData, lang: str = "en") -> TotalViewModel:
     cost_str = format_money(filtered.total_cost)
-    tok_str = f"{format_tokens(filtered.total_tokens)} tokens"
-    sess_str = f"{filtered.total_sessions} sessions"
-    proj_str = f"{filtered.projects_count} projects"
+    tok_str = t("total.tokens", lang, value=format_tokens(filtered.total_tokens, lang))
+    sess_str = t("total.sessions", lang, count=filtered.total_sessions)
+    proj_str = t("total.projects", lang, count=filtered.projects_count)
     shares = []
     for ag, lbl, c, pct in filtered.agent_shares:
         shares.append((ag, lbl, c, pct, agent_color(ag)))
@@ -1025,7 +1092,8 @@ def build_total_view_model(filtered: FilteredData) -> TotalViewModel:
     )
 
 
-def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List[SubscriptionMeter]:
+def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
+                              lang: str = "en") -> List[SubscriptionMeter]:
     """Build htop CPU-meter style subscription blocks."""
     doc = doc or {}
     tz = get_tz(doc)
@@ -1052,8 +1120,8 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
             price = None
         usage = float(usage_map.get(ag, 0.0) or 0.0)
 
-        price_str = f"${price:,.2f}/mo" if (price is not None and price > 0) else "—"
-        usage_str = f"usage {format_money(usage)}"
+        price_str = t("meter.per_month", lang, price=format_money(price)) if (price is not None and price > 0) else "—"
+        usage_str = t("meter.usage", lang, amount=format_money(usage))
         if price is not None and price > 0 and usage > 0:
             multiplier = usage / price
             mult_str = f"{multiplier:.1f}×"
@@ -1078,14 +1146,15 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
             weekly_pct = float(weekly_pct) if weekly_pct is not None else None
         except (ValueError, TypeError):
             weekly_pct = None
-        weekly_title = "Weekly" if weekly_hours == 168 else f"{int(round(weekly_hours))}-hour"
+        weekly_title = (t("meter.weekly", lang) if weekly_hours == 168
+                        else t("meter.hours", lang, hours=int(round(weekly_hours))))
 
         if weekly_reset is not None:
             now_utc = now.astimezone(timezone.utc)
             reset_utc = weekly_reset.astimezone(timezone.utc)
             ended = reset_utc <= now_utc
             pct = None if ended else weekly_pct
-            detail = "window ended" if ended else format_reset_countdown(weekly_reset, now, tz)
+            detail = t("meter.window_ended", lang) if ended else format_reset_countdown(weekly_reset, now, tz, lang)
             windows.append(QuotaMeterWindow(
                 name=weekly_title,
                 percent=pct,
@@ -1106,13 +1175,13 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
                 five_pct = float(five_pct) if five_pct is not None else None
             except (ValueError, TypeError):
                 five_pct = None
-            five_title = f"{int(round(five_hours)) if five_hours else 5}-hour"
+            five_title = t("meter.five_hour", lang) if (not five_hours or five_hours == 5) else t("meter.hours", lang, hours=int(round(five_hours)))
             if five_reset is not None:
                 now_utc = now.astimezone(timezone.utc)
                 reset_utc = five_reset.astimezone(timezone.utc)
                 ended = reset_utc <= now_utc
                 pct = None if ended else five_pct
-                detail = "window ended" if ended else format_reset_countdown(five_reset, now, tz)
+                detail = t("meter.window_ended", lang) if ended else format_reset_countdown(five_reset, now, tz, lang)
                 windows.append(QuotaMeterWindow(
                     name=five_title,
                     percent=pct,
@@ -1130,19 +1199,31 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None) -> List
                 ew_pct = float(ew_pct) if ew_pct is not None else None
             except (ValueError, TypeError):
                 ew_pct = None
-            ew_title = ew.get("title", "Extra")
+            ew_title = ew.get("title") or t("meter.extra", lang)
+            ew_title = localize_window_title(str(ew_title), lang)
             if ew_reset is not None:
                 now_utc = now.astimezone(timezone.utc)
                 reset_utc = ew_reset.astimezone(timezone.utc)
                 ended = reset_utc <= now_utc
                 pct = None if ended else ew_pct
-                detail = "window ended" if ended else format_reset_countdown(ew_reset, now, tz)
+                detail = t("meter.window_ended", lang) if ended else format_reset_countdown(ew_reset, now, tz, lang)
                 windows.append(QuotaMeterWindow(
                     name=ew_title,
                     percent=pct,
                     level=quota_level(pct),
                     detail=detail,
                 ))
+
+        if not windows:
+            # Present, but with no live quota data: show that the meter is
+            # missing rather than silently drawing nothing.
+            windows.append(QuotaMeterWindow(
+                name=t("meter.quota", lang),
+                percent=None,
+                level=None,
+                detail=t("meter.no_live_data", lang),
+                placeholder=True,
+            ))
 
         meters.append(SubscriptionMeter(
             agent=ag,
@@ -1161,7 +1242,8 @@ def build_antigravity_accounts_section(
     doc: dict,
     now: Optional[datetime] = None,
     antigravity_data: Optional[Any] = None,
-    current_account: Optional[str] = None
+    current_account: Optional[str] = None,
+    lang: str = "en",
 ) -> Optional[AntigravityAccountsSection]:
     """Build Antigravity accounts section if attribution data exists."""
     doc = doc or {}
@@ -1170,7 +1252,7 @@ def build_antigravity_accounts_section(
     qw = doc.get("quota_windows") or {}
     subs = doc.get("subscriptions") or {}
     window_start_dt, default_kind, default_header_label = get_accounts_window(
-        qw, subs, now=now, tz_name=doc.get("timezone")
+        qw, subs, now=now, tz_name=doc.get("timezone"), lang=lang
     )
 
     rows_data = antigravity_data if antigravity_data is not None else doc.get("antigravity_accounts")
@@ -1184,17 +1266,14 @@ def build_antigravity_accounts_section(
         w_kind = rows_data.get("window_kind") or default_kind
 
         if w_kind == "quota_week":
-            header_label = "Antigravity accounts · this quota week"
-            if w_start_dt:
-                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
+            header_label = t("accounts.title.quota_week", lang,
+                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
         elif w_kind == "billing_cycle":
-            header_label = "Antigravity accounts · this billing cycle"
-            if w_start_dt:
-                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
+            header_label = t("accounts.title.billing_cycle", lang,
+                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
         else:
-            header_label = "Antigravity accounts · last 7 days"
-            if w_start_dt:
-                header_label += f" (since {format_month_day_time(w_start_dt, tz)})"
+            header_label = t("accounts.title.last_7d", lang,
+                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
 
         cur_acc = rows_data.get("current") or current_account
         accounts_list = rows_data.get("accounts") or []
@@ -1209,33 +1288,45 @@ def build_antigravity_accounts_section(
                 continue
             toks = int(acc.get("tokens", 0) or 0)
             cost = float(acc.get("cost_usd") if "cost_usd" in acc else acc.get("cost", 0.0) or 0.0)
+            try:
+                msgs = int(acc.get("messages", 0) or 0)
+            except (ValueError, TypeError):
+                msgs = 0
             is_cur = False
-            if cur_acc and email.lower() == cur_acc.lower():
+            if cur_acc and str(email).lower() == str(cur_acc).lower():
                 is_cur = True
             elif acc.get("is_current"):
                 is_cur = True
             out_rows.append(AntigravityAccountRow(
-                email=email,
-                tokens_str=format_tokens(toks),
+                email=str(email),
+                tokens_str=format_tokens(toks, lang),
                 cost_str=format_money(cost),
                 is_current=is_cur,
                 is_unattributed=False,
+                tokens_value=float(toks),
+                messages_str=str(msgs),
+                last_seen_str=_format_last_seen(acc.get("last_seen"), tz, lang),
+                saved_login=bool(acc.get("saved_login")),
             ))
 
-        out_rows.sort(key=lambda r: -parse_tokens_str(r.tokens_str))
+        out_rows.sort(key=lambda r: (-r.tokens_value, r.email.lower()))
 
         u_toks = int(unknown_obj.get("tokens", 0) or 0) if isinstance(unknown_obj, dict) else 0
         u_cost = float(unknown_obj.get("cost_usd", unknown_obj.get("cost", 0.0)) or 0.0) if isinstance(unknown_obj, dict) else 0.0
         if u_toks > 0 or u_cost > 0:
             out_rows.append(AntigravityAccountRow(
-                email="unattributed",
-                tokens_str=format_tokens(u_toks),
+                email=t("accounts.unattributed", lang),
+                tokens_str=format_tokens(u_toks, lang),
                 cost_str=format_money(u_cost),
                 is_current=False,
                 is_unattributed=True,
+                tokens_value=float(u_toks),
+                messages_str="—",
+                last_seen_str="—",
+                saved_login=False,
             ))
 
-        if not out_rows or not any(parse_tokens_str(r.tokens_str) > 0 or r.cost_str not in ("$0.00", "—") for r in out_rows):
+        if not out_rows or not any(r.tokens_value > 0 or r.cost_str not in ("$0.00", "—") for r in out_rows):
             return None
 
         return AntigravityAccountsSection(header_label=header_label, rows=out_rows)
@@ -1260,27 +1351,39 @@ def build_antigravity_accounts_section(
             toks = int(r.get("tokens", 0) or 0)
             cost = float(r.get("cost_usd") if "cost_usd" in r else r.get("cost", 0.0) or 0.0)
             is_cur = r.get("is_current", False)
-            if cur_acc and acc.lower() == cur_acc.lower():
+            if cur_acc and acc.lower() == str(cur_acc).lower():
                 is_cur = True
+            try:
+                msgs = int(r.get("messages", 0) or 0)
+            except (ValueError, TypeError):
+                msgs = 0
 
             if acc.lower() in ("unknown", "unattributed", ""):
                 unattr_row = AntigravityAccountRow(
-                    email="unattributed",
-                    tokens_str=format_tokens(toks),
+                    email=t("accounts.unattributed", lang),
+                    tokens_str=format_tokens(toks, lang),
                     cost_str=format_money(cost),
                     is_current=False,
                     is_unattributed=True,
+                    tokens_value=float(toks),
+                    messages_str=str(msgs),
+                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang),
+                    saved_login=bool(r.get("saved_login")),
                 )
             else:
                 out_rows.append(AntigravityAccountRow(
                     email=acc,
-                    tokens_str=format_tokens(toks),
+                    tokens_str=format_tokens(toks, lang),
                     cost_str=format_money(cost),
                     is_current=is_cur,
                     is_unattributed=False,
+                    tokens_value=float(toks),
+                    messages_str=str(msgs),
+                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang),
+                    saved_login=bool(r.get("saved_login")),
                 ))
 
-        out_rows.sort(key=lambda r: -parse_tokens_str(r.tokens_str))
+        out_rows.sort(key=lambda r: (-r.tokens_value, r.email.lower()))
         if unattr_row is not None:
             out_rows.append(unattr_row)
 
@@ -1291,8 +1394,21 @@ def build_antigravity_accounts_section(
     return None
 
 
+def _format_last_seen(value: Optional[Any], tz: datetime.tzinfo, lang: str = "en") -> str:
+    dt = parse_iso_dt(value if isinstance(value, str) else None, default_tz=tz)
+    if dt is None:
+        return "—"
+    return format_month_day_time(dt, tz)
+
+
 def parse_tokens_str(tok_str: str) -> float:
     try:
+        if tok_str.endswith("万亿"):
+            return float(tok_str[:-2]) * 1e12
+        if tok_str.endswith("亿"):
+            return float(tok_str[:-1]) * 1e8
+        if tok_str.endswith("万"):
+            return float(tok_str[:-1]) * 1e4
         if tok_str.endswith("B"):
             return float(tok_str[:-1]) * 1e9
         if tok_str.endswith("M"):
@@ -1305,7 +1421,8 @@ def parse_tokens_str(tok_str: str) -> float:
 
 
 def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinfo,
-                       ascii_mode: bool = False, filter_query: str = "") -> List[ProjectRowViewModel]:
+                       ascii_mode: bool = False, filter_query: str = "",
+                       lang: str = "en") -> List[ProjectRowViewModel]:
     """Build row view models for the Projects view table."""
     now = ensure_aware(now, tz) or datetime.now(tz)
     rows: List[ProjectRowViewModel] = []
@@ -1320,7 +1437,7 @@ def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinf
         c_str = format_money(float(p.get("cost") or 0.0))
         toks = p.get("tokens")
         total_toks = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
-        t_str = format_tokens(total_toks)
+        t_str = format_tokens(total_toks, lang)
         s_str = str(int(p.get("sessions") or 0))
         agents = [
             a["agent"] for a in (p.get("by_agent") or [])
@@ -1349,7 +1466,7 @@ def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinf
 
 
 def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinfo,
-                              ascii_mode: bool = False) -> List[ProjectRowViewModel]:
+                              ascii_mode: bool = False, lang: str = "en") -> List[ProjectRowViewModel]:
     """Footer rows for Projects view: Unattributed, Excluded, Parse failed, Total."""
     now = ensure_aware(now, tz) or datetime.now(tz)
     footers: List[ProjectRowViewModel] = []
@@ -1362,12 +1479,12 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
     u_c = format_money(float(u.get("cost") or 0.0))
     u_toks = u.get("tokens")
     u_t_val = u_toks.get("total", 0) if isinstance(u_toks, dict) else int(u_toks or 0)
-    u_t = format_tokens(u_t_val)
+    u_t = format_tokens(u_t_val, lang)
     u_s = str(int(u.get("sessions") or 0))
     u_last = u.get("last_active") or "—"
     footers.append(ProjectRowViewModel(
         id="__unattributed__",
-        name="Unattributed",
+        name=t("row.unattributed", lang),
         cost_str=u_c,
         tokens_str=u_t,
         sessions_str=u_s,
@@ -1381,12 +1498,12 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
     e_c = format_money(float(e.get("cost") or 0.0))
     e_toks = e.get("tokens")
     e_t_val = e_toks.get("total", 0) if isinstance(e_toks, dict) else int(e_toks or 0)
-    e_t = format_tokens(e_t_val)
+    e_t = format_tokens(e_t_val, lang)
     e_s = str(int(e.get("sessions") or 0))
     e_last = e.get("last_active") or "—"
     footers.append(ProjectRowViewModel(
         id="__excluded__",
-        name="Excluded",
+        name=t("row.excluded", lang),
         cost_str=e_c,
         tokens_str=e_t,
         sessions_str=e_s,
@@ -1400,7 +1517,7 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
     if filtered and filtered.parse_failed_count > 0:
         footers.append(ProjectRowViewModel(
             id="__parse_failed__",
-            name="Parse failed",
+            name=t("row.parse_failed", lang),
             cost_str="—",
             tokens_str="—",
             sessions_str=str(filtered.parse_failed_count),
@@ -1412,12 +1529,12 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
 
     # Total
     tot_c = format_money(filtered.total_cost if filtered else 0.0)
-    tot_t = format_tokens(filtered.total_tokens if filtered else 0)
+    tot_t = format_tokens(filtered.total_tokens if filtered else 0, lang)
     tot_s = str(filtered.total_sessions if filtered else 0)
     tot_last = (filtered.last_active if filtered else None) or "—"
     footers.append(ProjectRowViewModel(
         id="__total__",
-        name="Total",
+        name=t("row.total", lang),
         cost_str=tot_c,
         tokens_str=tot_t,
         sessions_str=tot_s,
@@ -1430,7 +1547,8 @@ def build_project_footer_rows(filtered: FilteredData, now: datetime, tz: datetim
     return footers
 
 
-def build_model_rows(filtered: FilteredData, filter_query: str = "") -> List[ModelRowViewModel]:
+def build_model_rows(filtered: FilteredData, filter_query: str = "",
+                     lang: str = "en") -> List[ModelRowViewModel]:
     rows: List[ModelRowViewModel] = []
     query = filter_query.strip().lower()
     for m in (filtered.by_model if filtered else []):
@@ -1443,13 +1561,14 @@ def build_model_rows(filtered: FilteredData, filter_query: str = "") -> List[Mod
         rows.append(ModelRowViewModel(
             model=name,
             provider=prov,
-            tokens_str=format_tokens(int(m.get("tokens") or 0)),
+            tokens_str=format_tokens(int(m.get("tokens") or 0), lang),
             cost_str=format_money(float(m.get("cost") or 0.0)),
         ))
     return rows
 
 
-def build_agent_rows(filtered: FilteredData, filter_query: str = "") -> List[AgentRowViewModel]:
+def build_agent_rows(filtered: FilteredData, filter_query: str = "",
+                     lang: str = "en") -> List[AgentRowViewModel]:
     rows: List[AgentRowViewModel] = []
     query = filter_query.strip().lower()
     for a in (filtered.by_agent if filtered else []):
@@ -1463,7 +1582,7 @@ def build_agent_rows(filtered: FilteredData, filter_query: str = "") -> List[Age
             agent=ag,
             label=lbl,
             sessions_str=str(int(a.get("sessions") or 0)),
-            tokens_str=format_tokens(int(a.get("tokens") or 0)),
+            tokens_str=format_tokens(int(a.get("tokens") or 0), lang),
             cost_str=format_money(float(a.get("cost") or 0.0)),
             share_pct=float(a.get("share_pct") or 0.0),
             color=agent_color(ag),
@@ -1471,7 +1590,8 @@ def build_agent_rows(filtered: FilteredData, filter_query: str = "") -> List[Age
     return rows
 
 
-def build_day_rows(filtered: FilteredData, filter_query: str = "") -> List[DayRowViewModel]:
+def build_day_rows(filtered: FilteredData, filter_query: str = "",
+                   lang: str = "en") -> List[DayRowViewModel]:
     rows: List[DayRowViewModel] = []
     query = filter_query.strip().lower()
     peak = max((float(d.get("cost") or 0.0) for d in (filtered.by_day if filtered else []) if isinstance(d, dict)), default=0.0)
@@ -1486,14 +1606,14 @@ def build_day_rows(filtered: FilteredData, filter_query: str = "") -> List[DayRo
         rows.append(DayRowViewModel(
             date_str=d_str,
             cost_str=format_money(c),
-            tokens_str=format_tokens(int(d.get("tokens") or 0)),
+            tokens_str=format_tokens(int(d.get("tokens") or 0), lang),
             cost_ratio=ratio,
         ))
     return rows
 
 
 def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
-                         ascii_mode: bool = False) -> ProjectDetailViewModel:
+                         ascii_mode: bool = False, lang: str = "en") -> ProjectDetailViewModel:
     """Build detail pane model for a selected project."""
     project = project or {}
     now = ensure_aware(now, tz) or datetime.now(tz)
@@ -1503,7 +1623,7 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
     cost_str = format_money(float(project.get("cost") or 0.0))
     tok_val = project.get("tokens")
     tok_count = tok_val.get("total", 0) if isinstance(tok_val, dict) else int(tok_val or 0)
-    tokens_str = format_tokens(tok_count)
+    tokens_str = format_tokens(tok_count, lang)
     sessions_str = str(int(project.get("sessions") or 0))
 
     # Breakdown by agent
@@ -1514,13 +1634,13 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
             continue
         ag = str(a.get("agent") or "")
         c = float(a.get("cost") or 0.0)
-        t = a.get("tokens", {}).get("total", 0) if isinstance(a.get("tokens"), dict) else int(a.get("tokens") or 0)
+        tok_n = a.get("tokens", {}).get("total", 0) if isinstance(a.get("tokens"), dict) else int(a.get("tokens") or 0)
         s = int(a.get("sessions") or 0)
         pct = (c / tot_c) * 100.0
         by_agent.append((
             str(a.get("label") or AGENT_LABELS.get(ag, ag)),
             format_money(c),
-            format_tokens(t),
+            format_tokens(tok_n, lang),
             str(s),
             pct,
             agent_color(ag),
@@ -1535,17 +1655,17 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
         ag = str(m.get("agent") or "")
         prov = PROVIDER_LABELS.get(provider_for(m_name, ag), "Other")
         c = float(m.get("cost") or 0.0)
-        t = m.get("tokens", {}).get("total", 0) if isinstance(m.get("tokens"), dict) else int(m.get("tokens") or 0)
+        tok_n = m.get("tokens", {}).get("total", 0) if isinstance(m.get("tokens"), dict) else int(m.get("tokens") or 0)
         by_model.append((
             m_name,
             prov,
             format_money(c),
-            format_tokens(t),
+            format_tokens(tok_n, lang),
         ))
 
     # 30-day sparkline
     spark, peak = compute_30d_sparkline(project.get("by_day") or [], now, tz, ascii_mode=ascii_mode)
-    peak_str = f"{format_money(peak)}/day max"
+    peak_str = t("detail.peak", lang, money=format_money(peak))
 
     return ProjectDetailViewModel(
         id=str(project.get("id") or ""),

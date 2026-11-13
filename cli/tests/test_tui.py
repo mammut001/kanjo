@@ -1,10 +1,12 @@
 """Unit tests for Kanjo TUI (`kanjo usage` / `kanjo top`)."""
 
+import curses
 from datetime import datetime, timezone, timedelta
 import io
 import json
 import os
 import tempfile
+import time
 import unittest
 from unittest import mock
 from zoneinfo import ZoneInfo
@@ -12,12 +14,13 @@ from zoneinfo import ZoneInfo
 from kanjo.tui.model import (
     AntigravityAccountRow, AntigravityAccountsSection, FilteredData,
     QuotaLevel, RANGE_TABS, TimeRange, VIEW_MODES, ViewMode,
-    agent_color, build_agent_rows, build_antigravity_accounts_section,
-    build_day_rows, build_model_rows, build_project_detail,
-    build_project_footer_rows, build_project_rows, build_subscription_meters,
-    build_total_view_model, compute_30d_sparkline, compute_8w_strip,
-    ensure_aware, filter_report, format_money, format_reset_countdown, format_tokens,
-    get_accounts_window, get_tz, heat_level, parse_iso_dt, quota_level
+    agent_color, available_view_modes, build_agent_rows,
+    build_antigravity_accounts_section, build_day_rows, build_model_rows,
+    build_project_detail, build_project_footer_rows, build_project_rows,
+    build_subscription_meters, build_total_view_model, compute_30d_sparkline,
+    compute_8w_strip, ensure_aware, filter_report, format_money,
+    format_reset_countdown, format_tokens, get_accounts_window, get_tz,
+    heat_level, parse_iso_dt, quota_level
 )
 from kanjo.tui.render import (
     Canvas, Cell, SELECTED_ROW_BG, Style, TUIState, render_ui,
@@ -25,6 +28,7 @@ from kanjo.tui.render import (
 )
 from kanjo.tui.static import canvas_to_ansi, render_static_snapshot
 from kanjo.tui.term import run_curses_tui
+from kanjo.tui.i18n import resolve_lang, t
 from kanjo.antigravity_accounts import compute_antigravity_accounts_window
 from kanjo.sources.base import Message, Session
 from kanjo import cli
@@ -837,7 +841,10 @@ class TUIStaticTest(unittest.TestCase):
         # Key elements present in static snapshot
         self.assertIn("Kanjo", out_nocolor)
         self.assertIn("Total", out_nocolor)
-        self.assertIn("F1Help", out_nocolor)
+        # Static mode has no interactive chrome
+        self.assertNotIn("F1", out_nocolor)
+        self.assertNotIn("Help", out_nocolor)
+        self.assertEqual(out_nocolor.splitlines()[-1].strip()[:5], "Total")
 
     def test_static_colored_highlighting(self):
         doc = load_sample_fixture()
@@ -851,7 +858,39 @@ class TUIStaticTest(unittest.TestCase):
         filtered = filter_report(doc, TimeRange.ALL, now=now)
         p_rows = build_project_rows(filtered, now, tz)
         row_line = next(line for line in out.splitlines() if p_rows[0].name in line)
-        self.assertIn("\033[1;37;100m", row_line)  # selected project row: white on grey
+        # Static snapshots have no selected-row highlight.
+        self.assertNotIn("\033[1;37;100m", row_line)
+        self.assertNotIn("\033[48;5;8m", row_line)
+
+    def test_cli_usage_lang_flag_isolated(self):
+        tmp_dir = tempfile.mkdtemp(prefix="kanjo-tui-lang-test-")
+        fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+        try:
+            env = dict(os.environ)
+            env["KANJO_DATA_DIR"] = os.path.join(tmp_dir, "data")
+            env["KANJO_CACHE_DIR"] = os.path.join(tmp_dir, "cache")
+            env["KANJO_CLAUDE_DIR"] = os.path.join(fixtures_dir, "claude")
+            env["KANJO_CODEX_DIR"] = os.path.join(fixtures_dir, "codex")
+            env["KANJO_ANTIGRAVITY_DIR"] = os.path.join(fixtures_dir, "antigravity")
+            env["KANJO_TOKEI_DIR"] = fixtures_dir
+            env["COLUMNS"] = "120"
+            env["NO_COLOR"] = "1"
+
+            with mock.patch.dict(os.environ, env):
+                parser = cli.build_parser()
+                args = parser.parse_args(["usage", "--once", "--no-color", "--no-cache", "--lang", "zh"])
+                out = io.StringIO()
+                with mock.patch("sys.stdout", out):
+                    rc = cli.cmd_usage(args)
+                self.assertEqual(rc, 0)
+                output = out.getvalue()
+                self.assertIn("项目", output)
+                self.assertIn("总计", output)
+                self.assertNotIn("PROJECT", output)
+                self.assertNotIn("\033[", output)
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_cli_usage_data_flag_isolated(self):
         """Item 2: --data PATH loads an export JSON without scanning or cache writes."""
@@ -872,7 +911,8 @@ class TUIStaticTest(unittest.TestCase):
 
             with mock.patch.dict(os.environ, env):
                 parser = cli.build_parser()
-                args = parser.parse_args(["usage", "--data", sample_path, "--once", "--no-color", "--range", "7d"])
+                args = parser.parse_args(["usage", "--data", sample_path, "--once", "--no-color",
+                                          "--range", "7d", "--lang", "en"])
                 out = io.StringIO()
                 with mock.patch("sys.stdout", out):
                     rc = cli.cmd_usage(args)
@@ -905,7 +945,7 @@ class TUIStaticTest(unittest.TestCase):
 
             with mock.patch.dict(os.environ, env):
                 parser = cli.build_parser()
-                args = parser.parse_args(["usage", "--once", "--no-color", "--no-cache"])
+                args = parser.parse_args(["usage", "--once", "--no-color", "--no-cache", "--lang", "en"])
                 out = io.StringIO()
                 with mock.patch("sys.stdout", out):
                     rc = cli.cmd_usage(args)
@@ -917,6 +957,388 @@ class TUIStaticTest(unittest.TestCase):
         finally:
             import shutil
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _display_col(line, needle):
+    idx = line.find(needle)
+    if idx < 0:
+        return None
+    return str_width(line[:idx])
+
+
+class FakeSwitch:
+    def __init__(self, result=(0, {"status": "ok"})):
+        self.result = result
+        self.calls = []
+
+    def __call__(self, email):
+        self.calls.append(email)
+        return self.result
+
+
+class TUIi18nTest(unittest.TestCase):
+    def test_chinese_compact_tokens(self):
+        self.assertEqual(format_tokens(9999, "zh"), "9999")
+        self.assertEqual(format_tokens(10000, "zh"), "1万")
+        self.assertEqual(format_tokens(5584000, "zh"), "558.4万")
+        self.assertEqual(format_tokens(864000000, "zh"), "8.6亿")
+        self.assertEqual(format_tokens(1234567890, "zh"), "12.3亿")
+        self.assertEqual(format_tokens(10 ** 12, "zh"), "1万亿")
+        self.assertEqual(format_tokens(-2500, "zh"), "-2500")
+        # English stays as before
+        self.assertEqual(format_tokens(864000000, "en"), "864M")
+        # Money is always $
+        self.assertEqual(format_money(1244.2), "$1,244.20")
+
+    def test_chinese_table_strings(self):
+        self.assertEqual(t("range.all", "zh"), "全部")
+        self.assertEqual(t("range.today", "zh"), "今天")
+        self.assertEqual(t("range.7d", "zh"), "7 天")
+        self.assertEqual(t("range.30d", "zh"), "30 天")
+        self.assertEqual(t("range.reset", "zh"), "自上次重置")
+        self.assertEqual(t("range.cycle", "zh"), "本账期")
+        self.assertIn("本额度周", t("accounts.title.quota_week", "zh", when="Nov 8 16:55"))
+        self.assertEqual(t("row.unattributed", "zh"), "未归属")
+        self.assertEqual(t("row.total", "zh"), "总计")
+        self.assertEqual(t("fkey.help", "zh"), "帮助")
+        self.assertEqual(t("fkey.quit", "zh"), "退出")
+        self.assertEqual(t("meter.weekly", "zh"), "每周")
+        self.assertEqual(t("meter.five_hour", "zh"), "5 小时")
+        self.assertEqual(t("meter.no_live_data", "zh"), "（暂无实时数据）")
+        self.assertEqual(t("accounts.current", "zh"), "● 当前")
+        self.assertIn("正在加载", t("loading", "zh"))
+        self.assertEqual(t("detail.close", "zh"), "[Esc / Backspace] 关闭")
+        # Every English key also has a Chinese translation
+        from kanjo.tui import i18n
+        self.assertEqual(set(i18n._STRINGS["en"]), set(i18n._STRINGS["zh"]))
+
+    def test_resolve_lang_precedence(self):
+        # Explicit option wins over everything.
+        self.assertEqual(resolve_lang("en", environ={"LANG": "zh_CN.UTF-8"},
+                                      app_language_value="zh-Hans"), "en")
+        self.assertEqual(resolve_lang("zh", environ={"LANG": "C"},
+                                      app_language_value="en"), "zh")
+        # App setting wins over the environment.
+        self.assertEqual(resolve_lang("auto", environ={"LANG": "en_US.UTF-8"},
+                                      app_language_value="zh-Hans"), "zh")
+        self.assertEqual(resolve_lang("auto", environ={"LANG": "zh_CN.UTF-8"},
+                                      app_language_value="en"), "en")
+        # "system" follows the environment.
+        self.assertEqual(resolve_lang("auto", environ={"LC_ALL": "zh_CN.UTF-8"},
+                                      app_language_value="system"), "zh")
+        # No readable app setting -> environment.
+        self.assertEqual(resolve_lang("auto", environ={"LC_MESSAGES": "zh_CN"},
+                                      app_language_value=""), "zh")
+        self.assertEqual(resolve_lang("auto", environ={"LANG": "en_US.UTF-8"},
+                                      app_language_value=""), "en")
+        self.assertEqual(resolve_lang("auto", environ={}, app_language_value=""), "en")
+
+
+class TUIChineseLayoutTest(unittest.TestCase):
+    def setUp(self):
+        self.doc = load_sample_fixture()
+        self.tz = get_tz(self.doc)
+        self.now = parse_iso_dt(self.doc.get("generated_at"), default_tz=self.tz)
+        self.filtered = filter_report(self.doc, TimeRange.ALL, now=self.now)
+        self.total_vm = build_total_view_model(self.filtered, "zh")
+        self.meters = build_subscription_meters(self.doc, now=self.now, lang="zh")
+        self.accounts_sec = build_antigravity_accounts_section(self.doc, now=self.now, lang="zh")
+        self.proj_rows = build_project_rows(self.filtered, self.now, self.tz, lang="zh")
+        self.proj_footers = build_project_footer_rows(self.filtered, self.now, self.tz, lang="zh")
+        self.model_rows = build_model_rows(self.filtered, lang="zh")
+        self.agent_rows = build_agent_rows(self.filtered, lang="zh")
+        self.day_rows = build_day_rows(self.filtered, lang="zh")
+
+    def _render(self, w, h, view_mode=ViewMode.PROJECTS):
+        state = TUIState(version="0.9.0", lang="zh", view_mode=view_mode)
+        canvas = Canvas(w, h)
+        render_ui(
+            canvas, state, self.filtered, self.total_vm, self.meters,
+            self.accounts_sec, self.proj_rows, self.proj_footers,
+            self.model_rows, self.agent_rows, self.day_rows,
+        )
+        return canvas
+
+    def test_chinese_layout_fits_and_aligns(self):
+        for w, h in ((80, 24), (140, 40)):
+            canvas = self._render(w, h)
+            lines = [canvas.get_line_text(y) for y in range(h)]
+            for y, line in enumerate(lines):
+                self.assertLessEqual(str_width(line), w,
+                                     f"zh line {y} wider than {w} at {w}x{h}: {line!r}")
+
+            header = next(line for line in lines if "项目" in line and "花费" in line)
+            self.assertIn("TOKEN", header)
+            self.assertIn("会话", header)
+            self.assertIn("最后活跃", header)
+
+            # Cost column: all "$" start at the same display column.
+            cols = set()
+            for row in self.proj_rows:
+                line = next((ln for ln in lines if ln.startswith(row.name)), None)
+                if line is not None:
+                    start = _display_col(line, "$")
+                    cols.add(None if start is None else start + str_width(row.cost_str))
+            self.assertEqual(len(cols), 1, f"zh cost column misaligned at {w}x{h}: {cols}")
+
+            # Accounts view headers and login column alignment.
+            accounts = self._render(w, h, ViewMode.ACCOUNTS)
+            alines = [accounts.get_line_text(y) for y in range(h)]
+            for y, line in enumerate(alines):
+                self.assertLessEqual(str_width(line), w,
+                                     f"zh accounts line {y} wider than {w}: {line!r}")
+            aheader = next(line for line in alines if "账号" in line and "登录" in line)
+            self.assertIn("消息", aheader)
+            login_cols = set()
+            for row in self.accounts_sec.rows:
+                if row.is_unattributed:
+                    continue
+                line = next((ln for ln in alines if ln.startswith(row.email)), None)
+                if line is None:
+                    continue
+                needle = "是" if row.saved_login else "否"
+                login_cols.add(_display_col(line, needle))
+            self.assertEqual(len(login_cols), 1, f"zh login column misaligned at {w}x{h}: {login_cols}")
+
+    def test_chinese_terminal_too_small(self):
+        canvas = Canvas(40, 10)
+        state = TUIState(version="0.9.0", lang="zh")
+        render_ui(canvas, state, self.filtered, self.total_vm, self.meters)
+        self.assertIn("终端窗口太小", canvas.get_line_text(0))
+
+
+class TUIAntigravityAccountsViewTest(unittest.TestCase):
+    def setUp(self):
+        self.doc = load_sample_fixture()
+        self.tz = get_tz(self.doc)
+        self.now = parse_iso_dt(self.doc.get("generated_at"), default_tz=self.tz)
+
+    def _drive(self, keys, switch_fn=None, doc=None, view_mode=ViewMode.ACCOUNTS,
+               width=100, height=30):
+        doc = doc if doc is not None else self.doc
+        scr = FakeStdscr(width=width, height=height, keys=keys)
+        rc = run_curses_tui(
+            scr, initial_doc=doc, data_path="fake.json", view_mode=view_mode,
+            no_color=True, lang="en", switch_login=switch_fn,
+        )
+        self.assertEqual(rc, 0)
+        text = "".join(str(c[2]) for c in scr.captured if len(c) > 2)
+        return text
+
+    def test_extra_quota_window_titles_localized(self):
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {
+                "antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99},
+            },
+            "quota_windows": {
+                "antigravity": {
+                    "extra_windows": [
+                        {"title": "Claude/GPT Weekly", "used_percent": 26.0,
+                         "resets_at": "2026-11-20T12:00:00Z"},
+                        {"title": "Claude/GPT 5h", "used_percent": 50.0,
+                         "resets_at": "2026-11-13T18:00:00Z"},
+                    ],
+                },
+            },
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        names = [w.name for m in build_subscription_meters(doc, now=now, lang="zh")
+                 for w in m.windows]
+        self.assertIn("Claude/GPT 每周", names)
+        self.assertIn("Claude/GPT 5小时", names)
+        self.assertTrue(all("Week" not in n and "5h" not in n for n in names))
+        en_names = [w.name for m in build_subscription_meters(doc, now=now, lang="en")
+                    for w in m.windows]
+        self.assertIn("Claude/GPT Weekly", en_names)
+        self.assertIn("Claude/GPT 5h", en_names)
+
+    def test_account_rows_carry_login_metadata(self):
+        sec = build_antigravity_accounts_section(self.doc, now=self.now, lang="en")
+        self.assertIsNotNone(sec)
+        alex = next(r for r in sec.rows if r.email == "alex@example.com")
+        self.assertTrue(alex.is_current)
+        self.assertTrue(alex.saved_login)
+        self.assertEqual(alex.messages_str, "142")
+        self.assertNotEqual(alex.last_seen_str, "—")
+        backup = next(r for r in sec.rows if r.email == "backup@gmail.com")
+        self.assertFalse(backup.saved_login)
+
+    def test_accounts_view_absent_without_data(self):
+        self.assertNotIn(ViewMode.ACCOUNTS, [v for v, _ in available_view_modes(False)])
+        self.assertIn(ViewMode.ACCOUNTS, [v for v, _ in available_view_modes(True)])
+        self.assertIsNone(build_antigravity_accounts_section({}, now=self.now))
+        canvas = Canvas(80, 24)
+        state = TUIState(version="0.9.0", view_mode=ViewMode.ACCOUNTS)
+        render_ui(canvas, state)  # no crash, no rows
+        self.assertNotIn("ACCOUNT", "\n".join(canvas.get_line_text(y) for y in range(24)))
+
+    def test_confirm_box_appears_and_cancel_does_not_switch(self):
+        fake = FakeSwitch()
+        text = self._drive([curses.KEY_DOWN, 10, ord("n"), ord("q")], fake)
+        self.assertIn("Switch login", text)
+        self.assertIn("work@company.com", text)
+        self.assertIn("keep the old account until restarted", text)
+        self.assertEqual(fake.calls, [])
+
+        # Esc also cancels without calling.
+        fake2 = FakeSwitch()
+        self._drive([curses.KEY_DOWN, 10, 27, ord("q")], fake2)
+        self.assertEqual(fake2.calls, [])
+
+    def test_y_calls_switch_with_selected_email(self):
+        fake = FakeSwitch()
+        self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake)
+        self.assertEqual(fake.calls, ["work@company.com"])
+
+    def test_switch_error_messages(self):
+        fake = FakeSwitch((1, {"status": "error", "error": "unsaved_login"}))
+        text = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake)
+        self.assertEqual(fake.calls, ["work@company.com"])
+        self.assertIn("Current login is not saved yet", text)
+
+        fake_no = FakeSwitch((1, {"status": "error", "error": "no_saved_login"}))
+        text = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake_no)
+        self.assertIn("No saved login found", text)
+
+    def test_enter_without_saved_login_shows_hint(self):
+        fake = FakeSwitch()
+        # Second non-current row: backup@gmail.com has no saved login.
+        text = self._drive([curses.KEY_DOWN, curses.KEY_DOWN, 10, ord("q")], fake)
+        self.assertEqual(fake.calls, [])
+        self.assertIn("Sign in once with `agy`", text)
+
+    def test_enter_on_current_row_does_nothing(self):
+        fake = FakeSwitch()
+        text = self._drive([10, ord("q")], fake)
+        self.assertEqual(fake.calls, [])
+        self.assertNotIn("Switch login", text)
+
+    def test_non_macos_shows_macos_only(self):
+        fake = FakeSwitch()
+        with mock.patch("kanjo.tui.term.sys.platform", "linux"):
+            text = self._drive([curses.KEY_DOWN, 10, ord("q")], None)
+        self.assertIn("Switching is macOS-only", text)
+
+    def test_status_message_and_expiry(self):
+        w, h = 100, 30
+        filtered = filter_report({}, TimeRange.ALL, now=self.now)
+        state = TUIState(version="0.9.0", lang="en",
+                         status_message="hello status",
+                         status_until=time.time() + 5)
+        canvas = Canvas(w, h)
+        render_ui(canvas, state, filtered, build_total_view_model(filtered))
+        self.assertIn("hello status", canvas.get_line_text(h - 2))
+        self.assertIn("F1", canvas.get_line_text(h - 1))
+
+        expired = TUIState(version="0.9.0", lang="en",
+                           status_message="hello status",
+                           status_until=time.time() - 1)
+        canvas2 = Canvas(w, h)
+        render_ui(canvas2, expired, filtered, build_total_view_model(filtered))
+        self.assertNotIn("hello status", "\n".join(canvas2.get_line_text(y) for y in range(h)))
+
+    def test_accounts_and_confirm_styles_never_combine_colour_with_reverse(self):
+        filtered = filter_report(self.doc, TimeRange.ALL, now=self.now)
+        for view_mode in (ViewMode.ACCOUNTS, ViewMode.PROJECTS):
+            for confirm in ("", "work@company.com"):
+                canvas = Canvas(100, 30)
+                state = TUIState(version="0.9.0", lang="zh",
+                                 view_mode=view_mode,
+                                 confirm_switch_email=confirm,
+                                 status_message="status text",
+                                 status_until=time.time() + 5)
+                render_ui(
+                    canvas, state, filtered,
+                    build_total_view_model(filtered, "zh"),
+                    build_subscription_meters(self.doc, now=self.now, lang="zh"),
+                    build_antigravity_accounts_section(self.doc, now=self.now, lang="zh"),
+                    build_project_rows(filtered, self.now, self.tz, lang="zh"),
+                    build_project_footer_rows(filtered, self.now, self.tz, lang="zh"),
+                    build_model_rows(filtered, lang="zh"),
+                    build_agent_rows(filtered, lang="zh"),
+                    build_day_rows(filtered, lang="zh"),
+                )
+                for y in range(canvas.height):
+                    for x in range(canvas.width):
+                        style = canvas.grid[y][x].style
+                        self.assertFalse(
+                            style.inverse and (style.fg is not None or style.bg is not None),
+                            f"cell ({x},{y}) combines colour and reverse: {style!r}",
+                        )
+
+    def test_confirm_box_fits_zh_narrow(self):
+        state = TUIState(version="0.9.0", lang="zh",
+                         confirm_switch_email="a-very-long-account-name@example.com")
+        canvas = Canvas(72, 24)
+        filtered = filter_report({}, TimeRange.ALL, now=self.now)
+        render_ui(canvas, state, filtered, build_total_view_model(filtered, "zh"))
+        for y in range(24):
+            self.assertLessEqual(str_width(canvas.get_line_text(y)), 72)
+        all_text = "\n".join(canvas.get_line_text(y) for y in range(24))
+        self.assertIn("切换登录", all_text)
+
+
+class TUIMissingQuotaAndStaticTest(unittest.TestCase):
+    def test_subscription_without_quota_shows_placeholder(self):
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {"claude": {"plan_label": "Claude Max", "monthly_price_usd": 100.0}},
+            "quota_windows": {},
+            "totals": {"cost": 0.0, "tokens": {"total": 0}, "sessions": 0},
+            "projects": [],
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        meters = build_subscription_meters(doc, now=now, lang="en")
+        self.assertEqual(len(meters), 1)
+        self.assertEqual(len(meters[0].windows), 1)
+        placeholder = meters[0].windows[0]
+        self.assertTrue(placeholder.placeholder)
+        self.assertEqual(placeholder.name, "quota")
+        self.assertIn("no live data", placeholder.detail)
+
+        zh = build_subscription_meters(doc, now=now, lang="zh")[0].windows[0]
+        self.assertEqual(zh.name, "额度")
+        self.assertIn("暂无实时数据", zh.detail)
+
+        out = render_static_snapshot(doc, width=100, no_color=True, now=now, lang="en")
+        self.assertIn("quota", out)
+        self.assertIn("(no live data)", out)
+
+    def test_static_shows_top_15_projects_and_no_chrome(self):
+        projects = []
+        for i in range(20):
+            projects.append({
+                "id": "p%d" % i,
+                "name": "proj%02d" % i,
+                "cost": float(100 - i),
+                "tokens": {"total": 1000 + i},
+                "sessions": 1,
+                "by_day": [],
+                "by_agent": [],
+                "sessions_detail": [],
+            })
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "totals": {"cost": sum(p["cost"] for p in projects),
+                       "tokens": {"total": sum(p["tokens"]["total"] for p in projects)},
+                       "sessions": 20},
+            "projects": projects,
+            "quota_windows": {},
+            "subscriptions": {},
+        }
+        out = render_static_snapshot(doc, width=100, no_color=True, lang="en")
+        self.assertIn("proj00", out)
+        self.assertIn("proj14", out)
+        self.assertNotIn("proj15", out)
+        self.assertNotIn("F1", out)
+        self.assertNotIn("F10", out)
+        # No selected-row highlight and no trailing blank padding.
+        self.assertNotIn("\033[", out)
+        self.assertTrue(out.rstrip("\n").splitlines()[-1].startswith("Total"))
 
 
 if __name__ == "__main__":
