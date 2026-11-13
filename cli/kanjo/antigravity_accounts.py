@@ -10,7 +10,7 @@ Antigravity logs each launch into ``~/.gemini/antigravity-cli/log/cli-YYYYMMDD_H
 Attribution rule (per message):
 a. launches that used this conversation and whose [start-60s, end+60s] covers ts
    -> if exactly one distinct email, return it;
-b. else launches with no conversation IDs (print mode) covering ts
+b. else all launches whose [start-60s, end+60s] covers ts (regardless of conversation evidence)
    -> if exactly one distinct email among them, return it;
 c. else None (unknown). Never guess between two different emails.
 """
@@ -29,7 +29,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from .cache import _cache_dir
 from .sources.base import Message, Session, iso_utc, local_zone
 
-LOGS_CACHE_VERSION = 2
+LOGS_CACHE_VERSION = 3
 _FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})")
 _GLOG_LINE_RE = re.compile(r"^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?")
 _EMAIL_RE = re.compile(r"\bemail=([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})")
@@ -43,6 +43,7 @@ _CONV_PATTERNS = [
     re.compile(r"Sending user message to conversation\s+([0-9a-fA-F-]{36})"),
     re.compile(r"Forwarding user message to conversation\s+([0-9a-fA-F-]{36})"),
     re.compile(r"Stream completed for\s+([0-9a-fA-F-]{36})"),
+    re.compile(r"Stream goroutine exited for\s+([0-9a-fA-F-]{36})"),
 ]
 
 
@@ -172,7 +173,6 @@ class AntigravityAccountIndex:
         self.known_conversations = known_conversations
         self.spans: List[LaunchSpan] = []
         self._spans_by_conv: Dict[str, List[LaunchSpan]] = {}
-        self._spans_without_convs: List[LaunchSpan] = []
         self._build_index()
 
     def _cache_path(self) -> str:
@@ -269,9 +269,8 @@ class AntigravityAccountIndex:
                     if span.conversations:
                         for cid in span.conversations:
                             self._spans_by_conv.setdefault(cid, []).append(span)
-                    else:
-                        self._spans_without_convs.append(span)
 
+        self.spans.sort(key=lambda s: s.start)
         if dirty:
             self._save_cache(new_cached_files)
 
@@ -280,7 +279,7 @@ class AntigravityAccountIndex:
 
         a. launches that used this conversation and whose [start-60s, end+60s] covers ts
            -> if exactly one distinct email, return it;
-        b. else launches with no conversation IDs (print mode) covering ts
+        b. else all launches whose [start-60s, end+60s] covers ts (regardless of conversation evidence)
            -> if exactly one distinct email among them, return it;
         c. else None (unknown). Never guess between two different emails.
         """
@@ -297,11 +296,14 @@ class AntigravityAccountIndex:
                 return next(iter(emails_a))
             return None
 
-        # b. else launches with no conversation IDs (print mode) covering ts
-        matches_b = [
-            span for span in self._spans_without_convs
-            if (span.start - 60.0) <= ts <= (span.end + 60.0)
-        ]
+        # b. else all launch spans covering ts (regardless of conversation evidence)
+        matches_b = []
+        for span in self.spans:
+            if (span.start - 60.0) > ts:
+                break
+            if ts <= (span.end + 60.0):
+                matches_b.append(span)
+
         if matches_b:
             emails_b = {e for span in matches_b for e in span.emails}
             if len(emails_b) == 1:
@@ -313,7 +315,7 @@ class AntigravityAccountIndex:
 
     def get_current_account(self) -> Optional[str]:
         """Return the signed-in Google email from the most recent launch span."""
-        for span in sorted(self.spans, key=lambda s: s.start, reverse=True):
+        for span in reversed(self.spans):
             if len(span.emails) == 1:
                 return next(iter(span.emails))
         return None

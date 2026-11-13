@@ -251,10 +251,73 @@ I1112 12:08:00.000000 1 server.go:500] Exit
         # B's messages must go to Y, not X, and not unknown
         self.assertEqual(idx.attribute(cid_b, ts_b), "y@gmail.com")
 
-        # Launch X has no conversation IDs, so print-mode time-window fallback applies to it
+        # Launch X has no conversation IDs, so fallback applies to it
         # For a conversation without evidence at 12:09:30 (covered only by X), attributes to X
         ts_c = datetime(2026, 11, 12, 12, 9, 30, tzinfo=tz).timestamp()
         self.assertEqual(idx.attribute(cid_c, ts_c), "x@gmail.com")
+
+    def test_real_case_stream_goroutine_exited_and_fallback_to_x(self):
+        # Real case: conversation B produced messages 16:59-17:38 in a print-mode launch
+        # signed in as X. That launch's log mentions B only as
+        # "Stream goroutine exited for <ID>, sending completion...", and it has trusted
+        # evidence for other conversations ("Created conversation A").
+        cid_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        cid_other = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        cid_no_evidence = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+
+        # Launch X: 16:50 to 17:45, signed in as x@gmail.com
+        lx = os.path.join(self.log_dir, "cli-20261112_165000.log")
+        write_log(lx, f"""I1112 16:50:01.000000 1 server_oauth.go:221] applyAuthResult: email=x@gmail.com
+I1112 16:55:00.000000 1 server.go:1233] Created conversation {cid_other}
+I1112 17:38:00.000000 1 server.go:2000] Stream goroutine exited for {cid_b}, sending completion...
+I1112 17:45:00.000000 1 server.go:500] Exit
+""")
+
+        idx = AntigravityAccountIndex(dirs=[self.log_dir], cache_dir=self.tmp)
+
+        tz = local_zone()
+        # Message for B between 16:59 and 17:38 (e.g. 17:15)
+        ts_b = datetime(2026, 11, 12, 17, 15, 0, tzinfo=tz).timestamp()
+
+        # Attributed to x@gmail.com via trusted pattern in step a
+        self.assertEqual(idx.attribute(cid_b, ts_b), "x@gmail.com")
+
+        # Also test fallback step b: conversation D has NO evidence in any log,
+        # but Launch X was the only launch alive at 17:20 -> attributes to x@gmail.com
+        ts_d = datetime(2026, 11, 12, 17, 20, 0, tzinfo=tz).timestamp()
+        self.assertEqual(idx.attribute(cid_no_evidence, ts_d), "x@gmail.com")
+
+    def test_two_concurrent_launches_different_emails_neither_has_evidence_returns_none(self):
+        # Two launches alive at ts with different emails
+        # Launch 1: Alice, has evidence for conversation A1
+        cid_a1 = "11111111-1111-1111-1111-111111111111"
+        l1 = os.path.join(self.log_dir, "cli-20261112_120000.log")
+        write_log(l1, f"""I1112 12:00:01.000000 1 server_oauth.go:221] applyAuthResult: email=alice@gmail.com
+I1112 12:05:00.000000 1 server.go:1233] Created conversation {cid_a1}
+I1112 12:30:00.000000 1 server.go:500] Exit
+""")
+
+        # Launch 2: Bob, has evidence for conversation B1
+        cid_b1 = "22222222-2222-2222-2222-222222222222"
+        l2 = os.path.join(self.log_dir, "cli-20261112_121000.log")
+        write_log(l2, f"""I1112 12:10:01.000000 1 server_oauth.go:221] applyAuthResult: email=bob@gmail.com
+I1112 12:15:00.000000 1 server.go:1233] Created conversation {cid_b1}
+I1112 12:40:00.000000 1 server.go:500] Exit
+""")
+
+        idx = AntigravityAccountIndex(dirs=[self.log_dir], cache_dir=self.tmp)
+
+        tz = local_zone()
+        # ts = 12:20:00, when both Alice and Bob are alive
+        ts_overlap = datetime(2026, 11, 12, 12, 20, 0, tzinfo=tz).timestamp()
+
+        # Conversation C has no evidence in either launch -> must return None (cannot guess between Alice and Bob)
+        cid_c = "33333333-3333-3333-3333-333333333333"
+        self.assertIsNone(idx.attribute(cid_c, ts_overlap))
+
+        # But conversations WITH evidence still attribute correctly to their respective accounts
+        self.assertEqual(idx.attribute(cid_a1, ts_overlap), "alice@gmail.com")
+        self.assertEqual(idx.attribute(cid_b1, ts_overlap), "bob@gmail.com")
 
     def test_no_log_dir_returns_none_everywhere(self):
         idx = AntigravityAccountIndex(dirs=[os.path.join(self.tmp, "nonexistent")], cache_dir=self.tmp)
@@ -365,6 +428,8 @@ class KanjoAccountsCommandTest(unittest.TestCase):
     "Sending user message to conversation {cid}",
     "Forwarding user message to conversation {cid}",
     "Stream completed for {cid}",
+    "Stream goroutine exited for {cid}",
+    "Stream goroutine exited for {cid}, sending completion...",
     "GetConversationDetail: found conversation {cid} (active=true)",
 ])
 def test_new_trust_patterns_attribution(pattern_template, tmp_path):
