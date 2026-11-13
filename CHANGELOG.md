@@ -6,28 +6,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-
-- **`kanjo usage` mouse support (htop-style).** Click a range tab in the header, an F-key in the bottom bar, a
-  table row (a second click on the selected row opens it, like a double-click) or a column header to sort
-  (click the same header again to flip the direction); the mouse wheel scrolls the table by three rows.
-  Terminals without mouse support simply never report mouse events. `--no-mouse` turns it all off so the
-  terminal can select and copy text as usual. The renderer returns the clickable regions, so the whole
-  mapping is unit-tested without a terminal.
-
-### Fixed
-
-- **Chinese dates in `kanjo usage`.** Every date and time the terminal UI showed was English (`Oct 14 00:00
-  起`, last seen `Nov 13 13:00`). Chinese now reads `10月14日 00:00`, and `今天 13:00` where English says
-  "today"; the totals line and column headers say `Token` instead of `TOKEN`; `LAST ACTIVE` columns keep
-  their ISO `2026-11-13` in both languages.
-- **The help overlay wrapped in the middle of words** ("Mo dels", "clo se"). It now wraps at word
-  boundaries using display width; Chinese text may still break between any two characters.
-- **`kanjo usage` crashed when sorting the Projects table by tokens, sessions or name** (`s` / `F6`, now
-  also a header click): the sort key helper referenced a view model that was never imported.
-- **The Chinese Accounts view overlapped its `LOGIN` column**: `10月28日 02:25` is one column wider than
-  `Oct 28 02:25`, so the column is one wider in Chinese.
-
 ## [0.6.0] - 2026-11-13
 
 ### Added
@@ -39,7 +17,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `s` sorts, `1`–`6` switch the time range, `?` shows help. Refreshes in the background every 60 s
   (`--interval`). English and Chinese (`--lang`, follows the app language or `LANG`; Chinese uses 万/亿).
   `--once`, or piping the output, prints a single snapshot; on Windows it always prints a snapshot.
-  Pure Python, no dependencies.
+  Pure Python, no dependencies. Mouse works like htop: click a range tab, an F-key, a row (click again to
+  open it) or a column header to sort; the wheel scrolls; `--no-mouse` keeps normal text selection.
 - **Antigravity accounts.** Kanjo works out which Google account each Antigravity CLI message was sent
   from (from the CLI's launch logs) and lists every account with its usage this quota week: in the Mac app
   (click the Antigravity row of the Subscription value card), in `kanjo usage` (Accounts view) and with
