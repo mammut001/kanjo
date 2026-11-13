@@ -390,6 +390,7 @@ private struct SubscriptionValueCard: View {
     @State private var hoverTask: Task<Void, Never>?
     @State private var isExpanded = false
     @State private var targetedAgent: String?
+    @State private var userPinnedAgent: String? = nil
     @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
     @AppStorage(SettingsKeys.subscriptionOrder, store: AppDefaults.store) private var subscriptionOrderRaw = ""
 
@@ -399,7 +400,8 @@ private struct SubscriptionValueCard: View {
         let defaultRows = SubscriptionValue.rows(of: report)
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
-        let autoExpandForPinned = pinnedQuotaAgent != nil && orderedRows.contains(where: { $0.agent == pinnedQuotaAgent })
+        let effectivePinnedAgent = userPinnedAgent ?? pinnedQuotaAgent
+        let autoExpandForPinned = effectivePinnedAgent != nil && orderedRows.contains(where: { $0.agent == effectivePinnedAgent })
         let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded || autoExpandForPinned, limit: 3)
 
         return PanelSection(L10n.tr("overview.section.subscription_value"), flat: true) {
@@ -562,16 +564,43 @@ private struct SubscriptionValueCard: View {
     }
 
     /// 悬停 0.35 秒后在行下方（放不下时在上方）浮出额度卡；移出即收起。没有额度数据的 agent 不出卡片。
+    /// Antigravity 行支持点击固定展开，以便操作账号切换。
     private func quotaHover(_ content: some View, row: SubscriptionRow) -> some View {
         let quota = SubscriptionValue.quotaRows(report.quotaWindows?[row.agent],
                                                 timezone: RangeEngine.timezone(of: report))
         let quotaId = "overview:quota:\(row.agent)"
-        let isPinned = (pinnedQuotaAgent == row.agent)
+        let isPinned = (pinnedQuotaAgent == row.agent) || (userPinnedAgent == row.agent)
+        let isAgy = (row.agent == "antigravity")
+        let hasAgyAccounts = isAgy && report.antigravityAccounts != nil
+        let hasContent = !quota.isEmpty || hasAgyAccounts
+
         return Group {
-            if !quota.isEmpty {
-                content.hoverCard(id: quotaId, isPinned: isPinned) {
-                    QuotaCard(agent: row.agent, planLabel: row.planLabel, rows: quota)
-                }
+            if hasContent {
+                content
+                    .hoverCard(id: quotaId, isPinned: isPinned, onDismiss: {
+                        if userPinnedAgent == row.agent {
+                            userPinnedAgent = nil
+                        }
+                    }) {
+                        QuotaCard(
+                            agent: row.agent,
+                            planLabel: row.planLabel,
+                            rows: quota,
+                            antigravityAccounts: isAgy ? report.antigravityAccounts : nil,
+                            currency: cur
+                        )
+                    }
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            if isAgy {
+                                if isPinned {
+                                    userPinnedAgent = nil
+                                } else {
+                                    userPinnedAgent = "antigravity"
+                                }
+                            }
+                        }
+                    )
             } else {
                 content
             }

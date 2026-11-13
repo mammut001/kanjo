@@ -55,6 +55,13 @@ def cmd_export(args) -> int:
         print("kanjo: --family-report cannot be combined with --mobile or --public-summary", file=sys.stderr)
         return 2
     cfg = _config(args)
+    if sys.platform == "darwin":
+        if not (os.environ.get("KANJO_DATA_DIR") and not os.environ.get("KANJO_AGY_LOGIN_SYNC")):
+            try:
+                from .agy_login import sync
+                sync()
+            except Exception:
+                pass
     raw_accounts = getattr(args, "accounts", None)
     if raw_accounts:
         from .config import _validate_family_accounts
@@ -334,6 +341,82 @@ def cmd_accounts(args) -> int:
     return 0
 
 
+def cmd_agy_account(args) -> int:
+    from . import agy_login
+    backend = agy_login.get_backend()
+    if backend is None and sys.platform != "darwin":
+        output = {"status": "error", "message": "only supported on macOS"}
+        print(json.dumps(output))
+        return 1
+
+    action = getattr(args, "agy_action", None) or "list"
+    use_json = getattr(args, "json", False)
+
+    if action == "sync":
+        res = agy_login.sync(backend)
+        status = 0 if res.get("status") == "ok" else 1
+        if use_json:
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        else:
+            if status == 0:
+                acc = res.get("account")
+                if res.get("synced"):
+                    print(f"Synced active login for {acc}")
+                else:
+                    print(f"Active login up to date ({res.get('reason', '')})")
+            else:
+                print(f"Sync error: {res.get('message', 'unknown')}", file=sys.stderr)
+        return status
+
+    elif action == "switch":
+        email = getattr(args, "email", "")
+        code, res = agy_login.switch(email, backend)
+        if use_json:
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        else:
+            if code == 0:
+                print(f"Switched to {res['account']}. Note: {res['note']}")
+            else:
+                print(f"Error: {res.get('message', 'switch failed')}", file=sys.stderr)
+        return code
+
+    elif action == "forget":
+        email = getattr(args, "email", "")
+        code, res = agy_login.forget(email, backend)
+        if use_json:
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        else:
+            if code == 0:
+                print(f"Forgot saved login for {res['account']}")
+            else:
+                print(f"Error: {res.get('message', 'forget failed')}", file=sys.stderr)
+        return code
+
+    elif action == "list":
+        code, res = agy_login.list_accounts_login(backend)
+        if use_json:
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        else:
+            if code == 0:
+                table_rows = [["Account", "Saved Login", "Current"]]
+                for a in res.get("accounts", []):
+                    saved_str = "yes" if a["saved_login"] else "no"
+                    curr_str = "● yes" if a["current"] else "no"
+                    table_rows.append([a["email"], saved_str, curr_str])
+                print(_table(table_rows, "lll"))
+            else:
+                print(f"Error: {res.get('message', 'list failed')}", file=sys.stderr)
+        return code
+
+    else:
+        output = {"status": "error", "message": f"unknown action: {action}"}
+        if use_json:
+            print(json.dumps(output))
+        else:
+            print(f"Error: unknown action {action}", file=sys.stderr)
+        return 1
+
+
 def _format_disk(doc: dict) -> str:
     rows = [["Agent", "Entry", "Size", "Files", "Newest", "Deletable"]]
     errors = 0
@@ -535,6 +618,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="output as JSON")
     common(p, threshold=False)
     p.set_defaults(func=cmd_accounts)
+
+    p = sub.add_parser("agy-account", help="manage Antigravity CLI Google account logins and switch")
+    p.add_argument("--json", action="store_true", help="output as JSON")
+    p.set_defaults(func=cmd_agy_account, agy_action="list")
+    agy_sub = p.add_subparsers(dest="agy_action", required=False)
+
+    c = agy_sub.add_parser("list", help="list accounts and saved logins")
+    c.add_argument("--json", action="store_true", help="output as JSON")
+    c.set_defaults(func=cmd_agy_account, agy_action="list")
+
+    c = agy_sub.add_parser("sync", help="sync slot token to saved copy for slot owner")
+    c.add_argument("--json", action="store_true", help="output as JSON")
+    c.set_defaults(func=cmd_agy_account, agy_action="sync")
+
+    c = agy_sub.add_parser("switch", help="switch active login to email")
+    c.add_argument("email", metavar="EMAIL", help="account email to switch to")
+    c.add_argument("--json", action="store_true", help="output as JSON")
+    c.set_defaults(func=cmd_agy_account, agy_action="switch")
+
+    c = agy_sub.add_parser("forget", help="remove saved login for email")
+    c.add_argument("email", metavar="EMAIL", help="account email to forget")
+    c.add_argument("--json", action="store_true", help="output as JSON")
+    c.set_defaults(func=cmd_agy_account, agy_action="forget")
 
     p = sub.add_parser("report-family", help="report usage summary to family server")
     p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.example.com)")

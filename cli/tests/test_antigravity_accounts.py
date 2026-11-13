@@ -470,3 +470,135 @@ I1112 10:05:00.000000 1 server.go:500] Exit
                         reset_account_index()
 
 
+class AntigravityExportAccountsTest(unittest.TestCase):
+    def setUp(self):
+        reset_account_index()
+
+    def tearDown(self):
+        from kanjo.agy_login import set_backend
+        set_backend(None)
+        reset_account_index()
+
+    def test_antigravity_accounts_export_structure_and_window_kinds(self):
+        from datetime import timezone, timedelta
+        from kanjo.export import build_export, mobile_document, build_public_summary, build_family_report, ScanResult
+        from kanjo.agy_login import set_backend
+        from kanjo.pricing import default_book
+        from tests.test_agy_login import FakeKeychainBackend, FakeAccountIndex
+
+        now = datetime(2026, 11, 13, 12, 0, 0, tzinfo=timezone.utc)
+        now_ts = now.timestamp()
+        window_start_ts = now_ts - 7 * 86400
+
+        # Message 1: Alice, inside window
+        m1 = Message(ts=now_ts - 3600, model="gemini-2.5-pro", input=1000, output=500, cache_read=0, cache_write=0)
+        m1.account = "alice@example.com"
+
+        # Message 2: Bob, 10 days ago (outside window)
+        m2 = Message(ts=now_ts - 10 * 86400, model="gemini-2.5-flash", input=2000, output=1000, cache_read=0, cache_write=0)
+        m2.account = "bob@example.com"
+
+        # Message 3: Unattributed, inside window
+        m3 = Message(ts=now_ts - 1800, model="gemini-2.5-flash", input=300, output=100, cache_read=0, cache_write=0)
+        m3.account = None
+
+        s_ag = Session(
+            id="ag-sess-1",
+            agent="antigravity",
+            file="fake.db",
+            cwd="/repo",
+            messages=[m1, m2, m3],
+        )
+
+        scan_result = ScanResult(sessions=[s_ag], failed_files=[], stats={})
+
+        # Fake backend with saved login for Charlie (who has 0 messages)
+        backend = FakeKeychainBackend(
+            slot=b"alice_tok",
+            slot_mdat=now_ts - 7200,
+            saved={"alice@example.com": b"alice_tok", "charlie@example.com": b"charlie_tok"},
+        )
+        set_backend(backend)
+
+        span_alice = LaunchSpan(path="cli-1.log", start=now_ts - 7000, end=now_ts - 3000, emails={"alice@example.com"})
+        fake_idx = FakeAccountIndex(spans=[span_alice], current="alice@example.com")
+
+        with mock.patch("kanjo.antigravity_accounts.get_account_index", return_value=fake_idx):
+            # 1. Test quota_week window kind
+            doc = build_export(
+                scan_result=scan_result,
+                now=now,
+            )
+
+            self.assertIn("antigravity_accounts", doc)
+            agy_data = doc["antigravity_accounts"]
+            self.assertEqual(agy_data["window_kind"], "last_7_days")
+            self.assertEqual(agy_data["current"], "alice@example.com")
+
+            accounts = agy_data["accounts"]
+            emails = [a["email"] for a in accounts]
+            self.assertEqual(emails, ["alice@example.com", "bob@example.com", "charlie@example.com"])
+
+            # Alice has usage
+            a_alice = accounts[0]
+            self.assertEqual(a_alice["email"], "alice@example.com")
+            self.assertEqual(a_alice["tokens"], 1500)
+            self.assertGreater(a_alice["cost_usd"], 0.0)
+            self.assertEqual(a_alice["messages"], 1)
+            self.assertTrue(a_alice["saved_login"])
+
+            # Bob was active 10 days ago (outside window) -> tokens = 0, messages = 0, cost_usd = 0
+            a_bob = accounts[1]
+            self.assertEqual(a_bob["email"], "bob@example.com")
+            self.assertEqual(a_bob["tokens"], 0)
+            self.assertEqual(a_bob["cost_usd"], 0.0)
+            self.assertEqual(a_bob["messages"], 0)
+            self.assertIsNotNone(a_bob["last_seen"])
+            self.assertFalse(a_bob["saved_login"])
+
+            # Charlie only has saved login -> tokens = 0, messages = 0, last_seen = None
+            a_charlie = accounts[2]
+            self.assertEqual(a_charlie["email"], "charlie@example.com")
+            self.assertEqual(a_charlie["tokens"], 0)
+            self.assertEqual(a_charlie["cost_usd"], 0.0)
+            self.assertEqual(a_charlie["messages"], 0)
+            self.assertIsNone(a_charlie["last_seen"])
+            self.assertTrue(a_charlie["saved_login"])
+
+            # Unknown bucket
+            self.assertEqual(agy_data["unknown"]["tokens"], 400)
+            self.assertGreater(agy_data["unknown"]["cost_usd"], 0.0)
+
+            # Invariants: mobile export must NOT have antigravity_accounts
+            mob = mobile_document(doc)
+            self.assertNotIn("antigravity_accounts", mob)
+
+            # Public summary must NOT have antigravity_accounts
+            pub = build_public_summary(scan_result=scan_result, now=now)
+            self.assertNotIn("antigravity_accounts", pub)
+
+            # Family report must NOT have antigravity_accounts and NO '@' in payload
+            fam = build_family_report(scan_result=scan_result, now=now)
+            self.assertNotIn("antigravity_accounts", fam)
+            fam_json = json.dumps(fam)
+            self.assertNotIn("@", fam_json, f"Email leaked in family report: {fam_json}")
+
+    def test_antigravity_accounts_omitted_when_no_accounts(self):
+        from datetime import timezone
+        from kanjo.export import build_export, ScanResult
+        from tests.test_agy_login import FakeKeychainBackend, FakeAccountIndex
+
+        now = datetime(2026, 11, 13, 12, 0, 0, tzinfo=timezone.utc)
+        s_claude = Session(id="c-1", agent="claude", file="fake.db", cwd="/repo", messages=[])
+        scan_result = ScanResult(sessions=[s_claude], failed_files=[], stats={})
+
+        backend = FakeKeychainBackend(saved={})
+        fake_idx = FakeAccountIndex(spans=[], current=None)
+
+        with mock.patch("kanjo.agy_login.get_backend", return_value=backend):
+            with mock.patch("kanjo.antigravity_accounts.get_account_index", return_value=fake_idx):
+                doc = build_export(scan_result=scan_result, now=now)
+                self.assertNotIn("antigravity_accounts", doc)
+
+
+

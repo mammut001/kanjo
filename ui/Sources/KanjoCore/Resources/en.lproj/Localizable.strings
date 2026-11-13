@@ -497,3 +497,18 @@
 "ios.empty.step1" = "Install Kanjo on your Mac (free & open-source on GitHub)";
 "ios.empty.step2" = "Open Kanjo Settings → General and turn on iCloud sync";
 "ios.empty.step3" = "Make sure both devices are signed in to the same Apple ID";
+
+/* Antigravity account management */
+"overview.agy.title_quota_week" = "Antigravity accounts · this quota week (since %@)";
+"overview.agy.title_billing_cycle" = "Antigravity accounts · this billing cycle (since %@)";
+"overview.agy.title_last_7_days" = "Antigravity accounts · last 7 days (since %@)";
+"overview.agy.current_badge" = "● Current";
+"overview.agy.switch" = "Switch";
+"overview.agy.sign_in_once" = "Sign in once with agy";
+"overview.agy.sign_in_once_tip" = "Run agy and sign in with this account once, then refresh";
+"overview.agy.unattributed" = "Unattributed (desktop app etc.)";
+"overview.agy.switched_note" = "Switched — restart running agy sessions";
+"overview.agy.no_saved_login" = "No saved login found";
+"overview.agy.unsaved_login" = "Current login is not saved yet; run agy once and refresh Kanjo";
+"overview.agy.switch_failed" = "Switch failed";
+

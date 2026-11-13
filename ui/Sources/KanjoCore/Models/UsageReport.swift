@@ -18,6 +18,8 @@ public struct UsageReport: Codable, Equatable {
     public var quotaWindows: [String: QuotaWindow]? = nil
     /// 各 agent 的订阅档位（「Subscription value」卡和「Billing cycle」范围用）；旧数据没有这个字段。
     public var subscriptions: [String: Subscription]? = nil
+    /// Antigravity 账号本额度周用量与登录状态；旧数据没有这个字段。
+    public var antigravityAccounts: AntigravityAccounts? = nil
     public var totals: Aggregate
     public var projects: [Project]
     public var buckets: Buckets
@@ -32,6 +34,7 @@ public struct UsageReport: Codable, Equatable {
         case config
         case quotaWindows = "quota_windows"
         case subscriptions
+        case antigravityAccounts = "antigravity_accounts"
         case totals, projects, buckets
     }
 
@@ -47,6 +50,7 @@ public struct UsageReport: Codable, Equatable {
             ?? ReportConfig(dominantThreshold: 0.8)
         quotaWindows = try c.decodeIfPresent([String: QuotaWindow].self, forKey: .quotaWindows)
         subscriptions = try c.decodeIfPresent([String: Subscription].self, forKey: .subscriptions)
+        antigravityAccounts = try c.decodeIfPresent(AntigravityAccounts.self, forKey: .antigravityAccounts)
         totals = try c.decode(Aggregate.self, forKey: .totals)
         projects = try c.decode([Project].self, forKey: .projects)
         buckets = try c.decode(Buckets.self, forKey: .buckets)
@@ -175,6 +179,86 @@ public struct SubscriptionAccount: Codable, Equatable, Sendable {
     public init(email: String, name: String? = nil) {
         self.email = email
         self.name = name
+    }
+}
+
+public struct AntigravityAccounts: Codable, Equatable, Sendable {
+    public var windowStart: String
+    public var windowKind: String
+    public var current: String?
+    public var accounts: [AntigravityAccount]
+    public var unknown: AntigravityUnknown
+
+    enum CodingKeys: String, CodingKey {
+        case windowStart = "window_start"
+        case windowKind = "window_kind"
+        case current
+        case accounts
+        case unknown
+    }
+
+    public init(
+        windowStart: String,
+        windowKind: String,
+        current: String? = nil,
+        accounts: [AntigravityAccount] = [],
+        unknown: AntigravityUnknown = AntigravityUnknown(tokens: 0, costUsd: 0.0)
+    ) {
+        self.windowStart = windowStart
+        self.windowKind = windowKind
+        self.current = current
+        self.accounts = accounts
+        self.unknown = unknown
+    }
+}
+
+public struct AntigravityAccount: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { email }
+    public var email: String
+    public var tokens: Int
+    public var costUsd: Double
+    public var messages: Int
+    public var lastSeen: String?
+    public var savedLogin: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case email
+        case tokens
+        case costUsd = "cost_usd"
+        case messages
+        case lastSeen = "last_seen"
+        case savedLogin = "saved_login"
+    }
+
+    public init(
+        email: String,
+        tokens: Int,
+        costUsd: Double,
+        messages: Int,
+        lastSeen: String? = nil,
+        savedLogin: Bool = false
+    ) {
+        self.email = email
+        self.tokens = tokens
+        self.costUsd = costUsd
+        self.messages = messages
+        self.lastSeen = lastSeen
+        self.savedLogin = savedLogin
+    }
+}
+
+public struct AntigravityUnknown: Codable, Equatable, Sendable {
+    public var tokens: Int
+    public var costUsd: Double
+
+    enum CodingKeys: String, CodingKey {
+        case tokens
+        case costUsd = "cost_usd"
+    }
+
+    public init(tokens: Int, costUsd: Double) {
+        self.tokens = tokens
+        self.costUsd = costUsd
     }
 }
 
