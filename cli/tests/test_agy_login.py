@@ -76,10 +76,10 @@ class AgyLoginTest(unittest.TestCase):
         # span 2: start 200, unauthenticated (no email)
         # span 3: start 300, authenticated bob
         # span 4: start 400, authenticated charlie
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
-        s2 = LaunchSpan(path="cli-2.log", start=200.0, end=210.0, emails=set())
-        s3 = LaunchSpan(path="cli-3.log", start=300.0, end=310.0, emails={"bob@example.com"})
-        s4 = LaunchSpan(path="cli-4.log", start=400.0, end=410.0, emails={"charlie@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
+        s2 = LaunchSpan(path="cli-2.log", start=200.0, end=210.0, emails=set(), auth_ts=200.5)
+        s3 = LaunchSpan(path="cli-3.log", start=300.0, end=310.0, emails={"bob@example.com"}, auth_ts=300.5)
+        s4 = LaunchSpan(path="cli-4.log", start=400.0, end=410.0, emails={"charlie@example.com"}, auth_ts=400.5)
 
         idx = FakeAccountIndex(spans=[s1, s2, s3, s4])
 
@@ -100,13 +100,13 @@ class AgyLoginTest(unittest.TestCase):
         self.assertIsNone(get_slot_owner(backend, idx))
 
         # Ambiguous span with multiple emails -> returns None (never guess)
-        s_amb = LaunchSpan(path="cli-amb.log", start=250.0, end=260.0, emails={"x@a.com", "y@b.com"})
+        s_amb = LaunchSpan(path="cli-amb.log", start=250.0, end=260.0, emails={"x@a.com", "y@b.com"}, auth_ts=250.5)
         idx_amb = FakeAccountIndex(spans=[s1, s_amb, s3])
         backend = FakeKeychainBackend(slot_mdat=150.0)
         self.assertIsNone(get_slot_owner(backend, idx_amb))
 
     def test_sync_writes_only_when_changed(self):
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
 
         # 1. Slot owner is alice, slot has new bytes b"token_v2", saved has b"token_v1"
@@ -133,7 +133,7 @@ class AgyLoginTest(unittest.TestCase):
 
     def test_switch_happy_path(self):
         # Alice is current in slot with refreshed token
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
         backend = FakeKeychainBackend(
             slot=b"alice_new_token",
@@ -155,7 +155,7 @@ class AgyLoginTest(unittest.TestCase):
 
     def test_switch_refuses_to_clobber_unsaved_login(self):
         # Slot owner is unknown, slot has b"unsaved_secret", no saved copy matches it
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
         backend = FakeKeychainBackend(
             slot=b"unsaved_secret",
@@ -173,7 +173,7 @@ class AgyLoginTest(unittest.TestCase):
 
     def test_switch_allows_when_unknown_owner_matches_a_saved_copy(self):
         # Slot owner unknown, but slot bytes match an existing saved copy (e.g. earlier switch)
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
         backend = FakeKeychainBackend(
             slot=b"alice_secret",
@@ -186,7 +186,7 @@ class AgyLoginTest(unittest.TestCase):
         self.assertEqual(backend.read_slot(), b"bob_secret")
 
     def test_switch_missing_saved_copy(self):
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
         backend = FakeKeychainBackend(
             slot=b"alice_secret",
@@ -200,7 +200,7 @@ class AgyLoginTest(unittest.TestCase):
         self.assertIn("no saved login for carol@example.com", res["message"])
 
     def test_read_back_mismatch_restores_previous(self):
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1])
 
         class FlakyBackend(FakeKeychainBackend):
@@ -220,7 +220,7 @@ class AgyLoginTest(unittest.TestCase):
         self.assertIn("read-back mismatch after writing slot; restored previous login", res["message"])
 
     def test_list_and_forget(self):
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         idx = FakeAccountIndex(spans=[s1], current="alice@example.com")
         backend = FakeKeychainBackend(
             saved={"alice@example.com": b"t1", "bob@example.com": b"t2"}
@@ -300,7 +300,7 @@ class AgyLoginTest(unittest.TestCase):
         )
         set_backend(backend)
 
-        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"})
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
         with patch("kanjo.antigravity_accounts.get_account_index", return_value=FakeAccountIndex(spans=[s1], current="alice@example.com")):
             # Test list --json
             buf = io.StringIO()
@@ -320,6 +320,97 @@ class AgyLoginTest(unittest.TestCase):
             self.assertEqual(data["status"], "ok")
             self.assertEqual(data["account"], "bob@example.com")
             self.assertEqual(backend.read_slot(), b"bob_secret")
+
+    def test_same_second_race(self):
+        # 1. Span start in mdat second with old email, but auth_ts < mdat (loaded before write):
+        # Later span has auth_ts >= mdat + 1.0 with new email -> owner = new email.
+        backend = FakeKeychainBackend(slot_mdat=100.0)
+        s1 = LaunchSpan(path="cli-1.log", start=100.2, end=110.0, emails={"alice@example.com"}, auth_ts=99.8)
+        s2 = LaunchSpan(path="cli-2.log", start=102.0, end=112.0, emails={"bob@example.com"}, auth_ts=102.5)
+        idx = FakeAccountIndex(spans=[s1, s2])
+        self.assertEqual(get_slot_owner(backend, idx), "bob@example.com")
+
+        # 2. Span auth inside mdat second with same email as qualifying span -> owner = new email
+        s1_same = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"bob@example.com"}, auth_ts=100.5)
+        idx_same = FakeAccountIndex(spans=[s1_same, s2])
+        self.assertEqual(get_slot_owner(backend, idx_same), "bob@example.com")
+
+        # 3. Span auth inside mdat second with old email (different from qualifying span):
+        # Per rule 2: "Spans with auth_ts inside [mdat, mdat+1) are ambiguous: if any such
+        # span exists with a DIFFERENT email than the first qualifying span, return None. Never guess."
+        s1_amb = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
+        idx_amb = FakeAccountIndex(spans=[s1_amb, s2])
+        self.assertIsNone(get_slot_owner(backend, idx_amb))
+
+    def test_only_ambiguous_spans(self):
+        # Only spans with auth_ts inside [mdat, mdat + 1.0) and no span >= mdat + 1.0 -> None
+        backend = FakeKeychainBackend(slot_mdat=100.0)
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=100.5)
+        idx = FakeAccountIndex(spans=[s1])
+        self.assertIsNone(get_slot_owner(backend, idx))
+
+    def test_sync_refuses_when_slot_equals_another_account(self):
+        # Slot owner is alice, slot bytes match bob's saved copy -> sync refuses
+        s1 = LaunchSpan(path="cli-1.log", start=100.0, end=110.0, emails={"alice@example.com"}, auth_ts=102.0)
+        idx = FakeAccountIndex(spans=[s1])
+        backend = FakeKeychainBackend(
+            slot=b"bob_secret",
+            slot_mdat=100.0,
+            saved={"alice@example.com": b"alice_old", "bob@example.com": b"bob_secret"},
+        )
+        res = sync(backend, idx)
+        self.assertEqual(res["status"], "ok")
+        self.assertFalse(res["synced"])
+        self.assertEqual(res["reason"], "slot matches another account")
+        # Alice's saved copy must NOT be overwritten with Bob's secret
+        self.assertEqual(backend.read_saved("alice@example.com"), b"alice_old")
+
+    def test_non_keyring_auth_spans_ignored(self):
+        # Spans whose email came from another auth path (auth_ts is None) are ignored for slot ownership
+        backend = FakeKeychainBackend(slot_mdat=100.0)
+        s_oauth = LaunchSpan(path="cli-1.log", start=102.0, end=110.0, emails={"alice@example.com"}, auth_ts=None)
+        idx = FakeAccountIndex(spans=[s_oauth])
+        self.assertIsNone(get_slot_owner(backend, idx))
+
+    def test_switch_no_op_when_slot_already_matches_target(self):
+        backend = FakeKeychainBackend(
+            slot=b"bob_secret",
+            slot_mdat=100.0,
+            saved={"bob@example.com": b"bob_secret"},
+        )
+        code, res = switch("bob@example.com", backend, FakeAccountIndex())
+        self.assertEqual(code, 0)
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(len(backend.write_slot_calls), 0)
+
+    def test_parse_log_file_keyring_auth_ts(self):
+        from kanjo.antigravity_accounts import parse_log_file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 1. Has keyringAuth line -> auth_ts is sub-second timestamp of that line
+            log1 = os.path.join(tmpdir, "cli-20261112_120000.log")
+            with open(log1, "w") as f:
+                f.write("I1112 12:00:01.123456 1 auth.go:100] keyringAuth: loaded token\n")
+                f.write("I1112 12:00:02.654321 1 server_oauth.go:221] applyAuthResult: email=alice@example.com\n")
+            span1 = parse_log_file(log1)
+            self.assertIsNotNone(span1.auth_ts)
+            self.assertEqual(span1.emails, {"alice@example.com"})
+
+            # 2. Has keyringAuth without glog ts -> falls back to applyAuthResult ts
+            log2 = os.path.join(tmpdir, "cli-20261112_130000.log")
+            with open(log2, "w") as f:
+                f.write("keyringAuth: loaded token\n")
+                f.write("I1112 13:00:05.500000 1 server_oauth.go:221] applyAuthResult: email=bob@example.com\n")
+            span2 = parse_log_file(log2)
+            self.assertIsNotNone(span2.auth_ts)
+            self.assertEqual(span2.emails, {"bob@example.com"})
+
+            # 3. No keyringAuth line (another auth path, e.g. web oauth) -> auth_ts is None
+            log3 = os.path.join(tmpdir, "cli-20261112_140000.log")
+            with open(log3, "w") as f:
+                f.write("I1112 14:00:05.500000 1 server_oauth.go:221] applyAuthResult: email=charlie@example.com\n")
+            span3 = parse_log_file(log3)
+            self.assertIsNone(span3.auth_ts)
+            self.assertEqual(span3.emails, {"charlie@example.com"})
 
 
 if __name__ == "__main__":

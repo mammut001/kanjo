@@ -194,9 +194,11 @@ def set_backend(backend: Optional[KeychainBackend]) -> None:
 def get_slot_owner(backend: KeychainBackend, index=None) -> Optional[str]:
     """Determine the account in the slot.
 
-    The email of the earliest launch span that STARTED after the slot's mdat
-    and authenticated (has an email). If no such launch exists, the slot owner
-    is unknown. Never guess.
+    Owner = email of the earliest span with auth_ts >= mdat + 1.0 (strictly
+    after the whole mdat second) that loaded from the keyring and has exactly
+    one email. Spans with auth_ts inside [mdat, mdat+1) are ambiguous: if any
+    such span exists with a DIFFERENT email than the first qualifying span,
+    return None. Never guess.
     """
     mdat = backend.slot_modified_at()
     if mdat is None:
@@ -206,17 +208,31 @@ def get_slot_owner(backend: KeychainBackend, index=None) -> Optional[str]:
         from .antigravity_accounts import get_account_index
         index = get_account_index()
 
-    # Spans are kept sorted by start timestamp
-    for span in index.spans:
-        if span.start < mdat:
+    keyring_spans = [s for s in index.spans if s.auth_ts is not None]
+    keyring_spans.sort(key=lambda s: s.auth_ts)
+
+    first_qualifying_email = None
+    for s in keyring_spans:
+        if s.auth_ts < (mdat + 1.0):
             continue
-        if len(span.emails) == 1:
-            return next(iter(span.emails)).lower()
-        if len(span.emails) > 1:
-            # Ambiguous: multiple emails in span, never guess
+        if len(s.emails) == 1:
+            first_qualifying_email = next(iter(s.emails)).lower()
+            break
+        elif len(s.emails) > 1:
             return None
 
-    return None
+    if first_qualifying_email is None:
+        return None
+
+    for s in keyring_spans:
+        if mdat <= s.auth_ts < (mdat + 1.0):
+            if not s.emails:
+                continue
+            s_emails = {e.lower() for e in s.emails}
+            if len(s_emails) != 1 or next(iter(s_emails)) != first_qualifying_email:
+                return None
+
+    return first_qualifying_email
 
 
 def sync(backend: Optional[KeychainBackend] = None, index=None) -> dict:
@@ -235,6 +251,10 @@ def sync(backend: Optional[KeychainBackend] = None, index=None) -> dict:
 
     saved_bytes = backend.read_saved(owner)
     if saved_bytes != slot_bytes:
+        for other_email in backend.list_saved():
+            if other_email.lower() != owner.lower():
+                if backend.read_saved(other_email) == slot_bytes:
+                    return {"status": "ok", "synced": False, "reason": "slot matches another account"}
         backend.write_saved(owner, slot_bytes)
         return {"status": "ok", "synced": True, "account": owner}
 
@@ -253,6 +273,16 @@ def switch(email: str, backend: Optional[KeychainBackend] = None, index=None) ->
 
     # 1. run sync first (keeps the outgoing account's refreshed token)
     sync(backend, index)
+
+    # After step 1 sync, if slot bytes equal target's saved copy already, return ok without writing
+    target_bytes = backend.read_saved(target)
+    slot_bytes = backend.read_slot()
+    if target_bytes and slot_bytes == target_bytes:
+        return 0, {
+            "status": "ok",
+            "account": target,
+            "note": "running agy sessions keep their old account until restarted",
+        }
 
     # 2. if slot owner is unknown and slot is non-empty and differs from every saved copy, refuse
     slot_bytes = backend.read_slot()
