@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import sys
 import tempfile
 import time
 from collections import defaultdict
@@ -392,10 +393,172 @@ class ProjectAgg(Agg):
 
 
 # ---- main entry -------------------------------------------------------------------
+def _build_antigravity_accounts(sessions: List[Session],
+                                quota_windows: Optional[dict],
+                                subscriptions: Optional[dict],
+                                prices: PriceBook,
+                                now: datetime) -> Optional[dict]:
+    """Build the antigravity_accounts section for export."""
+    agy_qw = quota_windows.get("antigravity") if isinstance(quota_windows, dict) else None
+    window_start_dt = None
+    window_kind = None
+
+    if agy_qw and isinstance(agy_qw, dict) and agy_qw.get("weekly_resets_at"):
+        try:
+            reset_str = agy_qw["weekly_resets_at"]
+            reset_iso = reset_str[:-1] + "+00:00" if reset_str.endswith(("Z", "z")) else reset_str
+            reset_dt = datetime.fromisoformat(reset_iso)
+            if reset_dt.tzinfo is None:
+                reset_dt = reset_dt.replace(tzinfo=timezone.utc)
+            else:
+                reset_dt = reset_dt.astimezone(timezone.utc)
+            if reset_dt > now:
+                hours = agy_qw.get("weekly_window_hours") or 168
+                window_start_dt = reset_dt - timedelta(hours=hours)
+                window_kind = "quota_week"
+        except (ValueError, TypeError):
+            window_start_dt = None
+
+    if window_start_dt is None:
+        agy_sub = subscriptions.get("antigravity") if isinstance(subscriptions, dict) else None
+        if agy_sub and isinstance(agy_sub, dict) and agy_sub.get("cycle_start"):
+            try:
+                cycle_str = agy_sub["cycle_start"]
+                cycle_iso = cycle_str[:-1] + "+00:00" if cycle_str.endswith(("Z", "z")) else cycle_str
+                cycle_dt = datetime.fromisoformat(cycle_iso)
+                if cycle_dt.tzinfo is None:
+                    cycle_dt = cycle_dt.replace(tzinfo=timezone.utc)
+                else:
+                    cycle_dt = cycle_dt.astimezone(timezone.utc)
+                window_start_dt = cycle_dt
+                window_kind = "billing_cycle"
+            except (ValueError, TypeError):
+                window_start_dt = None
+
+    if window_start_dt is None:
+        window_start_dt = now - timedelta(days=7)
+        window_kind = "last_7_days"
+
+    window_start_iso = window_start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    window_start_ts = window_start_dt.timestamp()
+    now_ts = now.timestamp()
+
+    saved_accounts: Set[str] = set()
+    try:
+        from .agy_login import get_backend
+        backend = get_backend()
+        if backend is not None:
+            saved_accounts = set(backend.list_saved())
+    except Exception:
+        saved_accounts = set()
+
+    try:
+        from .antigravity_accounts import get_account_index
+        agy_index = get_account_index()
+    except Exception:
+        agy_index = None
+
+    all_emails: Set[str] = set(saved_accounts)
+    if agy_index is not None:
+        for span in agy_index.spans:
+            for em in span.emails:
+                if em:
+                    all_emails.add(em.lower())
+
+    for s in sessions:
+        if s.agent == "antigravity":
+            for m in s.messages:
+                if m.account:
+                    all_emails.add(m.account.lower())
+
+    # Omit key entirely when no account has ever been seen and nothing is saved
+    if not all_emails:
+        return None
+
+    account_stats = {
+        em: {
+            "email": em,
+            "tokens": 0,
+            "cost_usd": 0.0,
+            "messages": 0,
+            "last_seen_ts": None,
+            "saved_login": em in saved_accounts,
+        }
+        for em in all_emails
+    }
+    unknown_tokens = 0
+    unknown_cost = 0.0
+
+    for s in sessions:
+        if s.agent != "antigravity":
+            continue
+        for m in s.messages:
+            acc = m.account.lower() if m.account else None
+            if acc and acc in account_stats:
+                if account_stats[acc]["last_seen_ts"] is None or m.ts > account_stats[acc]["last_seen_ts"]:
+                    account_stats[acc]["last_seen_ts"] = m.ts
+
+            # Check window [window_start, now]
+            if window_start_ts <= m.ts <= now_ts:
+                m_tokens = m.input + m.output + m.cache_read + m.cache_write
+                m_cost, _ = prices.cost(m.model, "antigravity", m.input, m.output, m.cache_read,
+                                        m.cache_write, m.cache_write_1h)
+                if acc:
+                    account_stats[acc]["tokens"] += m_tokens
+                    account_stats[acc]["cost_usd"] += m_cost
+                    account_stats[acc]["messages"] += 1
+                else:
+                    unknown_tokens += m_tokens
+                    unknown_cost += m_cost
+
+    # Update last_seen from launch spans if newer
+    if agy_index is not None:
+        for span in agy_index.spans:
+            for em in span.emails:
+                em_clean = em.lower()
+                if em_clean in account_stats:
+                    if account_stats[em_clean]["last_seen_ts"] is None or span.end > account_stats[em_clean]["last_seen_ts"]:
+                        account_stats[em_clean]["last_seen_ts"] = span.end
+
+    accounts_rows = []
+    for em, st in account_stats.items():
+        accounts_rows.append({
+            "email": em,
+            "tokens": st["tokens"],
+            "cost_usd": round(st["cost_usd"], 4),
+            "messages": st["messages"],
+            "last_seen": iso_utc(st["last_seen_ts"]) if st["last_seen_ts"] is not None else None,
+            "saved_login": st["saved_login"],
+        })
+
+    # Sort: tokens desc, then email
+    accounts_rows.sort(key=lambda a: (-a["tokens"], a["email"]))
+
+    current_account = agy_index.get_current_account() if agy_index is not None else None
+
+    return {
+        "window_start": window_start_iso,
+        "window_kind": window_kind,
+        "current": current_account,
+        "accounts": accounts_rows,
+        "unknown": {
+            "tokens": unknown_tokens,
+            "cost_usd": round(unknown_cost, 4),
+        },
+    }
+
+
 def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
                  prices: Optional[PriceBook] = None, home: Optional[str] = None,
                  now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
                  cache=None, repo_cache=None, fs_root: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
+    if sys.platform == "darwin":
+        if not (os.environ.get("KANJO_DATA_DIR") and not os.environ.get("KANJO_AGY_LOGIN_SYNC")):
+            try:
+                from .agy_login import sync
+                sync()
+            except Exception:
+                pass
     config = config or Config()
     prices = prices or default_book()
     result = scan_result or scan(dirs, cache=cache)
@@ -973,6 +1136,15 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         },
         "ledger": ledger_doc,
     }
+    agy_accs = _build_antigravity_accounts(
+        sessions=sessions,
+        quota_windows=doc["quota_windows"],
+        subscriptions=doc["subscriptions"],
+        prices=prices,
+        now=now,
+    )
+    if agy_accs is not None:
+        doc["antigravity_accounts"] = agy_accs
     if cache is not None:
         cache.save()
     return doc
@@ -1140,6 +1312,18 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
                                 items.append((entry.path, None, None))
             except OSError:
                 pass
+    except Exception:
+        pass
+
+    try:
+        if sys.platform == "darwin" and not (os.environ.get("KANJO_DATA_DIR") and not os.environ.get("KANJO_AGY_LOGIN_SYNC")):
+            from .agy_login import get_backend
+            agy_be = get_backend()
+            if agy_be is not None:
+                slot_m = agy_be.slot_modified_at()
+                items.append(("__agy_slot_mtime__", str(slot_m), 0))
+                saved_list = agy_be.list_saved()
+                items.append(("__agy_saved_logins__", ",".join(sorted(saved_list)), 0))
     except Exception:
         pass
     items.sort(key=lambda x: str(x[0]))

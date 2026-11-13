@@ -396,11 +396,49 @@ subscriptions = {
         "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "manual",
     },
 }
+agy_window_start = (now_live - timedelta(days=4, hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+antigravity_accounts = {
+    "window_start": agy_window_start,
+    "window_kind": "quota_week",
+    "current": "alex@example.com",
+    "accounts": [
+        {
+            "email": "alex@example.com",
+            "tokens": 482000,
+            "cost_usd": 3.856,
+            "messages": 142,
+            "last_seen": (now_live - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "saved_login": True,
+        },
+        {
+            "email": "work@company.com",
+            "tokens": 125000,
+            "cost_usd": 1.25,
+            "messages": 38,
+            "last_seen": (now_live - timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "saved_login": True,
+        },
+        {
+            "email": "backup@gmail.com",
+            "tokens": 0,
+            "cost_usd": 0.0,
+            "messages": 0,
+            "last_seen": (now_live - timedelta(days=12)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "saved_login": False,
+        },
+    ],
+    "unknown": {
+        "tokens": 12000,
+        "cost_usd": 0.096,
+    },
+}
+
 out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "generated_by": "generate_sample.py",
        "timezone": "Asia/Shanghai", "currency": "USD",
        "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
        "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
        "subscriptions": subscriptions,
+       "antigravity_accounts": antigravity_accounts,
        "totals": totals, "projects": projects, "buckets": buckets}
 dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample.json")
 json.dump(out, open(dest, "w"), indent=2, ensure_ascii=False)

@@ -76,6 +76,25 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       }
     }
   },
+  "antigravity_accounts": {                   // 可选：Antigravity 账号使用量与登录状态；无历史账号且无保存登录时不出现；--mobile 导出不含该字段
+    "window_start": "2026-11-06T10:00:00Z",   // 本额度周起点（优先取 live quota window 下 weekly_resets_at - weekly_window_hours；无有效额度周则取 subscriptions 账期起点；否则为 now - 7 天）
+    "window_kind": "quota_week",              // "quota_week" | "billing_cycle" | "last_7_days"
+    "current": "alex@example.com",            // 最新 launch span 检测到的当前账号，或 null
+    "accounts": [                             // 所有历史记录中见过的账号（全周期），加上已保存登录的账号；用量指标覆盖 [window_start, now]
+      {
+        "email": "alex@example.com",
+        "tokens": 482000,
+        "cost_usd": 3.856,
+        "messages": 142,
+        "last_seen": "2026-11-13T11:45:00Z",  // 全周期最后活跃时间，ISO UTC 或 null
+        "saved_login": true                   // 是否在 Keychain 中有已保存登录副本供一键切换
+      }
+    ],
+    "unknown": {                              // 本窗口未归属到账号的 Antigravity 消息用量（桌面版等）
+      "tokens": 12000,
+      "cost_usd": 0.096
+    }
+  },
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
   "buckets": {

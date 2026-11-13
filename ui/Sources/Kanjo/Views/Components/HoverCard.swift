@@ -57,9 +57,11 @@ struct HoverCardPayload: Equatable {
     let id: String
     let anchor: Anchor<CGRect>
     let content: AnyView
+    var isPinned: Bool = false
+    var onDismiss: (() -> Void)? = nil
 
     public static func == (lhs: HoverCardPayload, rhs: HoverCardPayload) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id && lhs.isPinned == rhs.isPinned
     }
 }
 
@@ -87,7 +89,15 @@ extension EnvironmentValues {
 private struct HoverCardModifier<CardContent: View>: ViewModifier {
     let id: String?
     let isPinned: Bool
+    let onDismiss: (() -> Void)?
     let cardContent: () -> CardContent
+
+    init(id: String?, isPinned: Bool, onDismiss: (() -> Void)? = nil, cardContent: @escaping () -> CardContent) {
+        self.id = id
+        self.isPinned = isPinned
+        self.onDismiss = onDismiss
+        self.cardContent = cardContent
+    }
 
     @Environment(\.pinnedHoverId) private var envPinnedId
     @State private var isShowing = false
@@ -128,7 +138,9 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
                 return HoverCardPayload(
                     id: id ?? autoId,
                     anchor: anchor,
-                    content: AnyView(cardContent())
+                    content: AnyView(cardContent()),
+                    isPinned: effectivePinned,
+                    onDismiss: onDismiss
                 )
             }
     }
@@ -139,9 +151,10 @@ extension View {
     func hoverCard<Content: View>(
         id: String? = nil,
         isPinned: Bool = false,
+        onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        modifier(HoverCardModifier(id: id, isPinned: isPinned, cardContent: content))
+        modifier(HoverCardModifier(id: id, isPinned: isPinned, onDismiss: onDismiss, cardContent: content))
     }
 
     /// 注册纯文本悬停卡，无缝替代系统 .help / helpIfPresent。
@@ -167,6 +180,8 @@ struct HoverCardOverlayHost: View {
     let payload: HoverCardPayload?
     let containerSize: CGSize
 
+    @State private var escMonitor: Any?
+
     init(payload: HoverCardPayload?, containerSize: CGSize) {
         self.payload = payload
         self.containerSize = containerSize
@@ -174,18 +189,55 @@ struct HoverCardOverlayHost: View {
 
     var body: some View {
         if let payload {
-            GeometryReader { rootGeo in
-                let anchorRect = rootGeo[payload.anchor]
-                if anchorRect.intersects(CGRect(origin: .zero, size: containerSize)) {
-                    HoverCardPresenter(
-                        anchorRect: anchorRect,
-                        containerSize: containerSize,
-                        content: payload.content
-                    )
-                    .id(payload.id)
+            ZStack {
+                if payload.isPinned {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            payload.onDismiss?()
+                        }
+                }
+                GeometryReader { rootGeo in
+                    let anchorRect = rootGeo[payload.anchor]
+                    if anchorRect.intersects(CGRect(origin: .zero, size: containerSize)) {
+                        HoverCardPresenter(
+                            anchorRect: anchorRect,
+                            containerSize: containerSize,
+                            content: payload.content
+                        )
+                        .id(payload.id)
+                    }
                 }
             }
-            .allowsHitTesting(false)
+            .allowsHitTesting(payload.isPinned)
+            .onAppear {
+                updateEscMonitor(pinned: payload.isPinned, onDismiss: payload.onDismiss)
+            }
+            .onChange(of: payload.isPinned) { pinned in
+                updateEscMonitor(pinned: pinned, onDismiss: payload.onDismiss)
+            }
+            .onDisappear {
+                removeEscMonitor()
+            }
+        }
+    }
+
+    private func updateEscMonitor(pinned: Bool, onDismiss: (() -> Void)?) {
+        removeEscMonitor()
+        guard pinned, let onDismiss else { return }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 {
+                onDismiss()
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeEscMonitor() {
+        if let m = escMonitor {
+            NSEvent.removeMonitor(m)
+            escMonitor = nil
         }
     }
 }
@@ -205,7 +257,7 @@ private struct HoverCardPresenter: View {
             gap: 4
         )
         content
-            .frame(maxWidth: 300)
+            .frame(maxWidth: 320)
             .fixedSize(horizontal: false, vertical: true)
             .background(
                 GeometryReader { c in
@@ -244,15 +296,30 @@ struct PlainHoverCard: View {
 // MARK: - 彩色富文本悬停卡组件
 
 /// 额度卡：agent 色点 + 档位名做标题；每个窗口一行：细进度条、右对齐百分比、重置时间。
+/// 对于 Antigravity，卡片下方追加本额度周各账号用量明细与一键切换按钮。
 struct QuotaCard: View {
     let agent: String
     let planLabel: String
     let rows: [QuotaRow]
+    var antigravityAccounts: AntigravityAccounts? = nil
+    var currency: String = "USD"
 
-    init(agent: String, planLabel: String, rows: [QuotaRow]) {
+    @State private var switchingEmail: String? = nil
+    @State private var statusMessage: String? = nil
+    @State private var isSuccess: Bool = false
+
+    init(
+        agent: String,
+        planLabel: String,
+        rows: [QuotaRow],
+        antigravityAccounts: AntigravityAccounts? = nil,
+        currency: String = "USD"
+    ) {
         self.agent = agent
         self.planLabel = planLabel
         self.rows = rows
+        self.antigravityAccounts = antigravityAccounts
+        self.currency = currency
     }
 
     var body: some View {
@@ -280,10 +347,203 @@ struct QuotaCard: View {
                         .minimumScaleFactor(0.85)
                 }
             }
+            if agent == "antigravity", let agy = antigravityAccounts {
+                antigravityAccountsSection(agy)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .monospacedDigit()
         .hoverCard()
+    }
+
+    @ViewBuilder
+    private func antigravityAccountsSection(_ agy: AntigravityAccounts) -> some View {
+        if !rows.isEmpty {
+            Divider().opacity(0.3).padding(.vertical, 2)
+        }
+        let formattedDate = Fmt.shortDateTime(agy.windowStart)
+        let title = AntigravityAccountLogic.sectionTitle(windowKind: agy.windowKind, windowStartFormatted: formattedDate)
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(agy.accounts) { acc in
+                    accountRow(acc, currentEmail: agy.current)
+                }
+                if agy.unknown.tokens > 0 {
+                    unknownRow(agy.unknown)
+                }
+            }
+
+            if let statusMessage {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Image(systemName: isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(isSuccess ? AgentPalette.good : AgentPalette.bad)
+                        .font(.system(size: 10))
+                    Text(statusMessage)
+                        .font(.system(size: 10))
+                        .foregroundStyle(isSuccess ? .secondary : AgentPalette.bad)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 2)
+            }
+        }
+    }
+
+    private func accountRow(_ acc: AntigravityAccount, currentEmail: String?) -> some View {
+        let isCurrent = (acc.email.lowercased() == (currentEmail ?? "").lowercased())
+        let localPart = AntigravityAccountLogic.localPart(of: acc.email)
+        let state = AntigravityAccountLogic.buttonState(for: acc, currentEmail: currentEmail)
+
+        return HStack(alignment: .center, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(localPart)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .hoverTip(acc.email)
+
+                if isCurrent {
+                    Text(L10n.tr("overview.agy.current_badge"))
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(AgentPalette.color(for: "antigravity"))
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 3) {
+                Text(Fmt.tokens(acc.tokens))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(acc.tokens == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                Text("·")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                Text(Fmt.money(acc.costUsd, currency: currency))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(acc.costUsd == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+            }
+
+            actionButton(for: acc, state: state)
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(for acc: AntigravityAccount, state: AntigravityAccountButtonState) -> some View {
+        switch state {
+        case .current:
+            EmptyView()
+        case .canSwitch:
+            if switchingEmail == acc.email {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.65)
+                    .frame(width: 38, height: 16)
+            } else {
+                Button(L10n.tr("overview.agy.switch")) {
+                    switchAccount(acc.email)
+                }
+                .buttonStyle(.bordered)
+                .font(.system(size: 9.5, weight: .medium))
+                .controlSize(.mini)
+            }
+        case .needSignInOnce:
+            Button(L10n.tr("overview.agy.sign_in_once")) {}
+                .buttonStyle(.bordered)
+                .font(.system(size: 9.5))
+                .controlSize(.mini)
+                .disabled(true)
+                .hoverTip(L10n.tr("overview.agy.sign_in_once_tip"))
+        }
+    }
+
+    private func unknownRow(_ unk: AntigravityUnknown) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            Text(L10n.tr("overview.agy.unattributed"))
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 3) {
+                Text(Fmt.tokens(unk.tokens))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Text("·")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                Text(Fmt.money(unk.costUsd, currency: currency))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func switchAccount(_ email: String) {
+        switchingEmail = email
+        statusMessage = nil
+        Task { @MainActor in
+            let defaults = AppDefaults.store
+            let baseCli = CLILaunch.command(defaults: defaults)
+            let workingDir = CLILaunch.workingDirectory(defaults: defaults)
+            do {
+                let command: String
+                if let derived = try? AgyAccountCommand.switchCommand(from: baseCli, email: email) {
+                    command = derived
+                } else {
+                    command = "python3 -m kanjo agy-account switch '\(email)' --json"
+                }
+                let (status, outData, errData, timedOut) = try await Task.detached(priority: .userInitiated) {
+                    try CLIDataSource.run(
+                        command: command,
+                        cwd: workingDir,
+                        timeout: 30,
+                        qualityOfService: .userInitiated
+                    )
+                }.value
+
+                switchingEmail = nil
+                if timedOut {
+                    statusMessage = "Command timed out after 30s"
+                    isSuccess = false
+                    return
+                }
+
+                let outStr = String(decoding: outData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                let errStr = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                var parsedJson: [String: Any]? = nil
+                if let d = outStr.data(using: .utf8), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                    parsedJson = j
+                } else if let d = errStr.data(using: .utf8), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                    parsedJson = j
+                }
+
+                if status == 0 && parsedJson?["status"] as? String == "ok" {
+                    isSuccess = true
+                    statusMessage = L10n.tr("overview.agy.switched_note")
+                    ReportStore.shared.refresh()
+                } else {
+                    isSuccess = false
+                    let errCode = parsedJson?["error"] as? String
+                    let rawMsg = (parsedJson?["message"] as? String) ?? (!errStr.isEmpty ? errStr : outStr)
+                    if errCode == "no_saved_login" {
+                        statusMessage = L10n.tr("overview.agy.no_saved_login")
+                    } else if errCode == "unsaved_login" || rawMsg.contains("current login is not saved yet") {
+                        statusMessage = L10n.tr("overview.agy.unsaved_login")
+                    } else {
+                        statusMessage = rawMsg.isEmpty ? L10n.tr("overview.agy.switch_failed") : rawMsg
+                    }
+                }
+            } catch {
+                switchingEmail = nil
+                isSuccess = false
+                statusMessage = error.localizedDescription
+            }
+        }
     }
 
     private func barColor(_ pct: Double?) -> Color {

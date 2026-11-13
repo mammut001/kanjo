@@ -497,3 +497,18 @@
 "ios.empty.step1" = "在 Mac 上安装 Kanjo（GitHub 免费开源）";
 "ios.empty.step2" = "打开 Kanjo 设置 → 通用，开启 iCloud 同步";
 "ios.empty.step3" = "确保两台设备登录同一个 Apple ID";
+
+/* Antigravity 账号管理 */
+"overview.agy.title_quota_week" = "Antigravity 账号 · 本额度周（%@ 起）";
+"overview.agy.title_billing_cycle" = "Antigravity 账号 · 本账期（%@ 起）";
+"overview.agy.title_last_7_days" = "Antigravity 账号 · 最近 7 天（%@ 起）";
+"overview.agy.current_badge" = "● 当前";
+"overview.agy.switch" = "切换";
+"overview.agy.sign_in_once" = "需先登录一次";
+"overview.agy.sign_in_once_tip" = "运行 agy 并登录此账号一次，然后刷新 Kanjo";
+"overview.agy.unattributed" = "未识别（桌面版等）";
+"overview.agy.switched_note" = "已切换，正在运行的 agy 需重开";
+"overview.agy.no_saved_login" = "未找到已保存的登录信息";
+"overview.agy.unsaved_login" = "当前登录尚未保存；请运行一次 agy 并刷新 Kanjo";
+"overview.agy.switch_failed" = "切换失败";
+

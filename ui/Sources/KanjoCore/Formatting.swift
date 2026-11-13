@@ -253,6 +253,18 @@ public enum Fmt {
         return dateTime.string(from: d)
     }
 
+    /// ISO 时间戳 → 本地简短日期时间（短日期 + 短时间）。
+    public static func shortDateTime(_ s: String, timezone: TimeZone? = nil, language: String? = nil) -> String {
+        guard let d = ReportDates.parseTimestamp(s) else { return s }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: language ?? L10n.currentLanguage)
+        f.calendar = Calendar(identifier: .gregorian)
+        if let timezone { f.timeZone = timezone }
+        f.dateStyle = .short
+        f.timeStyle = .short
+        return f.string(from: d)
+    }
+
     public static func clock(_ d: Date) -> String { time.string(from: d) }
 }
 

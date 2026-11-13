@@ -8,6 +8,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Antigravity accounts breakdown this quota week and one-click account switcher (`kanjo agy-account`, macOS app).**
+  - Added `antigravity_accounts` top-level block in `kanjo export` JSON, reporting all historical accounts and saved logins, with usage figures (`tokens`, `cost_usd`, `messages`) scoped to the current quota week / billing cycle / last 7 days, sorted by tokens descending then email. Strictly omitted from mobile export, publish summary, and family reports.
+  - Added `cli/kanjo/agy_login.py` and `kanjo agy-account` command (`list`, `sync`, `switch`, `forget`) on macOS using `/usr/bin/security`. Secrets are fed strictly on stdin via `security -i` (never in `argv`), read back and verified, refusing to overwrite unsaved logins. Automatically syncs refreshed credentials on export.
+  - In the macOS app Overview, clicking the Antigravity subscription row pins the quota card open, showing an accounts breakdown for the current quota week with compact token counts and costs, "● Current" indicator, and one-click "Switch" buttons with inline spinner and status notes. Unpins on click, Esc or outside click.
 - **Family usage reporting on Linux.** `scripts/install-family-linux.sh` is an interactive installer for
   servers and desktops (no root): it checks for Python 3.9+, installs the Kanjo CLI under
   `~/.local/share/kanjo-family`, asks for the server URL, the report token (hidden input, stored in

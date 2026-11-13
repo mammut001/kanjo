@@ -50,7 +50,7 @@ KANJO_DEFAULTS_SUITE=kanjo-test swift run Kanjo
 `settings:subscriptions:<agent>` (Settings scrolled to that agent's Subscriptions row),
 `settings:subscriptions:<agent>:edit` (Settings scrolled to that agent's Subscriptions row and put into editing mode with the plan picker loaded).
 Pinned hover-card routes for screenshots:
-- Overview: `overview:quota:<agent>`, `overview:tile:<n>`, `overview:hover:legend`, `overview:hover:heat:<projectIndex>:<weekIndex>`, `overview:hover:dots:<projectIndex>`, `overview:hover:model:<i>`.
+- Overview: `overview:quota:<agent>` (`overview:quota:antigravity` renders the pinned Antigravity quota card with weekly account breakdown and switcher), `overview:tile:<n>`, `overview:hover:legend`, `overview:hover:heat:<projectIndex>:<weekIndex>`, `overview:hover:dots:<projectIndex>`, `overview:hover:model:<i>`.
 - Project detail: `project:<i>:hover:tokens`, `project:<i>:hover:model:<j>`, `project:<i>:hover:branch:<j>`, `project:<i>:hover:day` (most recent active day), `project:<i>:hover:session:<j>`.
 
 `--disk-data <path>` loads that disk-report JSON instead of running the CLI. It does not change the usage source (`--data` / Settings).

@@ -370,4 +370,43 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertNil(DefaultPaths.cliDirectory)
         #endif
     }
+
+    func testAntigravityAccountsDecodesFromSampleFixture() throws {
+        let r = try loadFixture()
+        let agy = try XCTUnwrap(r.antigravityAccounts)
+        XCTAssertEqual(agy.windowKind, "quota_week")
+        XCTAssertFalse(agy.windowStart.isEmpty)
+        XCTAssertEqual(agy.current, "alex@example.com")
+        XCTAssertEqual(agy.accounts.count, 3)
+
+        let alex = agy.accounts[0]
+        XCTAssertEqual(alex.email, "alex@example.com")
+        XCTAssertEqual(alex.tokens, 482000)
+        XCTAssertEqual(alex.costUsd, 3.856)
+        XCTAssertEqual(alex.messages, 142)
+        XCTAssertTrue(alex.savedLogin)
+        XCTAssertNotNil(alex.lastSeen)
+
+        let backup = agy.accounts[2]
+        XCTAssertEqual(backup.email, "backup@gmail.com")
+        XCTAssertEqual(backup.tokens, 0)
+        XCTAssertEqual(backup.costUsd, 0.0)
+        XCTAssertEqual(backup.messages, 0)
+        XCTAssertFalse(backup.savedLogin)
+
+        XCTAssertEqual(agy.unknown.tokens, 12000)
+        XCTAssertEqual(agy.unknown.costUsd, 0.096)
+    }
+
+    func testAntigravityAccountsTolerantOfAbsence() throws {
+        // Remove antigravity_accounts from sample json and verify it decodes with nil
+        let data = try Data(contentsOf: DefaultPaths.sampleFixture)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "antigravity_accounts")
+        let strippedData = try JSONSerialization.data(withJSONObject: json)
+
+        let r = try ReportDecoder.decode(strippedData)
+        XCTAssertNil(r.antigravityAccounts)
+        XCTAssertEqual(r.schemaVersion, 1)
+    }
 }
