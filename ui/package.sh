@@ -7,6 +7,10 @@
 #   --icon   重新生成 Resources/Kanjo.png 和 Kanjo.icns（缺失时也会自动生成）
 #   --notarize [profile]  公证产物（默认 keychain profile 为 'kanjo-notary'，亦可设环境变量 KANJO_NOTARY_PROFILE）
 #   --profile <path>  嵌入 Developer ID 描述文件并加 iCloud entitlements（亦可设环境变量 KANJO_PROVISION_PROFILE）
+#
+# 应用内更新用 Sparkle：Resources/sparkle-public-ed-key.txt 里是 EdDSA 公钥
+# （generate_keys --account kanjo 生成）。还是占位符时本地构建不写 SU 键（更新关闭），
+# 而 --notarize 会直接拒绝。发布走 scripts/make-appcast.sh 生成 appcast.xml。
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -120,6 +124,30 @@ if [[ -n "$NOTARY_PROFILE" && "$IDENTITY" == "-" ]]; then
     exit 1
 fi
 
+# Sparkle 的 EdDSA 公钥（由 generate_keys --account kanjo 生成后写进这个文件）。
+# 占位符还在时：本地构建照常，但不写 SU 键，应用内更新保持关闭；公证构建直接拒绝。
+SPARKLE_KEY_FILE="Resources/sparkle-public-ed-key.txt"
+SPARKLE_PUBLIC_KEY_PLACEHOLDER="REPLACE_WITH_KANJO_SPARKLE_PUBLIC_KEY"
+SPARKLE_FEED_URL="https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml"
+SPARKLE_PUBLIC_KEY=""
+if [[ -f "$SPARKLE_KEY_FILE" ]]; then
+    SPARKLE_PUBLIC_KEY="$(tr -d '[:space:]' < "$SPARKLE_KEY_FILE")"
+fi
+SPARKLE_ENABLED=0
+if [[ -n "$SPARKLE_PUBLIC_KEY" && "$SPARKLE_PUBLIC_KEY" != "$SPARKLE_PUBLIC_KEY_PLACEHOLDER" ]]; then
+    SPARKLE_ENABLED=1
+fi
+if [[ -n "$NOTARY_PROFILE" && "$SPARKLE_ENABLED" == 0 ]]; then
+    echo "notarized builds need a real Sparkle public key: run 'generate_keys --account kanjo'" >&2
+    echo "and put the printed key in $SPARKLE_KEY_FILE (it still holds the placeholder)." >&2
+    exit 1
+fi
+
+# Sparkle 比较 CFBundleVersion，每次发布必须变大。这里用版本号派生一个单调递增的整数：
+# 0.5.2 -> 502，0.6.0 -> 600，1.2.3 -> 10203（major*10000 + minor*100 + patch）。
+IFS=. read -r VERSION_MAJOR VERSION_MINOR VERSION_PATCH <<< "$VERSION"
+BUILD_NUMBER=$((10#$VERSION_MAJOR * 10000 + 10#$VERSION_MINOR * 100 + 10#$VERSION_PATCH))
+
 if [[ -z "$PROFILE" && -f "Resources/$APP_NAME.provisionprofile" ]]; then
     PROFILE="Resources/$APP_NAME.provisionprofile"
 fi
@@ -198,11 +226,28 @@ done
 
 echo "==> assembling $APP"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 lipo -create "${SLICES[@]}" -output "$APP/Contents/MacOS/$APP_NAME"
 for arch in "${ARCHS[@]}"; do
     lipo "$APP/Contents/MacOS/$APP_NAME" -verify_arch "$arch"
 done
+# 让 dyld 在 Contents/Frameworks 里找 Sparkle（SwiftPM 的 rpath 指着构建目录，不能发布）。
+if ! otool -l "$APP/Contents/MacOS/$APP_NAME" | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/$APP_NAME"
+fi
+# Sparkle.framework 直接取 SwiftPM 解出来的 xcframework 里的那一份（本身已是 arm64 + x86_64 通用）。
+# ditto 会保留 framework 版本目录里的符号链接和可执行权限。
+SPARKLE_FRAMEWORK_SRC="$BUILD_DIR/swiftpm-${ARCHS[0]}/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK_SRC" ]]; then
+    SPARKLE_FRAMEWORK_SRC="$(find "$BUILD_DIR" -path '*/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework' -type d 2>/dev/null | head -n 1)"
+fi
+[[ -d "$SPARKLE_FRAMEWORK_SRC" ]] || { echo "Sparkle.framework not found under $BUILD_DIR" >&2; exit 1; }
+if [[ ${#ARCHS[@]} -gt 1 ]]; then
+    for arch in "${ARCHS[@]}"; do
+        lipo "$SPARKLE_FRAMEWORK_SRC/Versions/B/Sparkle" -verify_arch "$arch"
+    done
+fi
+ditto "$SPARKLE_FRAMEWORK_SRC" "$APP/Contents/Frameworks/Sparkle.framework"
 CLI="$APP/Contents/Resources/cli"
 mkdir -p "$CLI"
 cp -R ../cli/kanjo "$CLI/kanjo"
@@ -221,6 +266,20 @@ for b in "$BIN_DIR"/*.bundle; do
     fi
 done
 
+# Sparkle 的 Info.plist 键。公钥是占位符时整段省略，应用内更新保持关闭（本地构建照常可用）。
+sparkle_info_plist_keys() {
+    if [[ "$SPARKLE_ENABLED" == 0 ]]; then
+        return 0
+    fi
+    cat <<KEYS
+    <key>SUFeedURL</key><string>${SPARKLE_FEED_URL}</string>
+    <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
+    <key>SUAllowsAutomaticUpdates</key><false/>
+KEYS
+}
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -233,7 +292,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-    <key>CFBundleVersion</key><string>${VERSION}</string>
+    <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
     <key>CFBundleIconFile</key><string>${APP_NAME}</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleLocalizations</key>
@@ -246,6 +305,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+$(sparkle_info_plist_keys)
 </dict>
 </plist>
 PLIST
@@ -269,6 +329,20 @@ for b in "$APP/Contents/Resources"/*.bundle; do
         codesign "${SIGN_FLAGS[@]}" "$b"
     fi
 done
+
+# Sparkle 的嵌套组件必须由内向外先签，再用同一身份 / 同一选项签 framework 和 app
+# （SwiftPM 解出来的那份带的是 Sparkle 自己的签名，换身份后必须重签）。
+SPARKLE_FW="$APP/Contents/Frameworks/Sparkle.framework"
+if [[ -d "$SPARKLE_FW" ]]; then
+    echo "==> codesigning Sparkle.framework (inside-out)"
+    for xpc in "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc"; do
+        [[ -d "$xpc" ]] && codesign "${SIGN_FLAGS[@]}" "$xpc"
+    done
+    codesign "${SIGN_FLAGS[@]}" "$SPARKLE_FW/Versions/B/Autoupdate"
+    codesign "${SIGN_FLAGS[@]}" "$SPARKLE_FW/Versions/B/Updater.app"
+    codesign "${SIGN_FLAGS[@]}" "$SPARKLE_FW"
+fi
+
 codesign "${MAIN_SIGN_FLAGS[@]}" "$APP/Contents/MacOS/$APP_NAME"
 codesign "${MAIN_SIGN_FLAGS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
@@ -389,6 +463,12 @@ fi
 
 echo "Architectures: ${ARCHS[*]}"
 echo "Signing identity: $IDENTITY"
+echo "Version: $VERSION (CFBundleVersion $BUILD_NUMBER)"
+if [[ "$SPARKLE_ENABLED" == 1 ]]; then
+    echo "Updater: Sparkle enabled (feed $SPARKLE_FEED_URL)"
+else
+    echo "Updater: disabled (placeholder Sparkle key in $SPARKLE_KEY_FILE; not for notarized builds)"
+fi
 if [[ -n "$PROFILE" ]]; then
     echo "Provisioning profile: $PROFILE"
     echo "iCloud container: $ICLOUD_CONTAINER (Production)"

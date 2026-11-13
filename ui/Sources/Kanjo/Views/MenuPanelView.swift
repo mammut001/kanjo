@@ -97,6 +97,7 @@ struct MenuPanelView: View {
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
     @State private var editingSubscriptionAgent: String?
+    @StateObject private var updates = UpdateController.shared
     var initialRoute: Route? = nil
     var initialAnchor: String? = nil
     var initialEditingAgent: String? = nil
@@ -126,6 +127,7 @@ struct MenuPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             banners
+            updateReminder
             content
                 .scrollDisabled(isTall)
                 .frame(maxWidth: .infinity, maxHeight: isTall ? nil : .infinity, alignment: .top)
@@ -192,6 +194,33 @@ struct MenuPanelView: View {
                 }
             }
             .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
+        }
+    }
+
+    /// 定时检查发现的更新：Sparkle 的窗口在菜单栏应用里会被压到别的 app 后面，
+    /// 所以先在这里显示一行，点它再把 Sparkle 的窗口带到前台（Install → 重启）。
+    @ViewBuilder private var updateReminder: some View {
+        if let version = updates.pendingUpdateVersion {
+            Button {
+                updates.showPendingUpdate()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.down.circle.fill")
+                    Text(UpdateFormatting.pendingUpdateTitle(version: version, appName: "Kanjo"))
+                        .fontWeight(.semibold)
+                    Spacer(minLength: 6)
+                    Text(L10n.tr("menu.update.action"))
+                }
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(AgentPalette.good)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AgentPalette.goodFill))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverTip(L10n.tr("menu.update.help"))
+            .padding(.horizontal, 10).padding(.top, 10)
         }
     }
 

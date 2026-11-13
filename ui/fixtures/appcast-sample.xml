@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fixture for UpdateTests: the shape scripts/make-appcast.sh writes for 0.6.0 (build 600). -->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Kanjo</title>
+    <link>https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml</link>
+    <description>Kanjo for macOS — in-app updates.</description>
+    <language>en</language>
+    <item>
+      <title>Version 0.6.0</title>
+      <pubDate>Wed, 12 Nov 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>600</sparkle:version>
+      <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/mammut001/kanjo/releases/tag/v0.6.0</sparkle:releaseNotesLink>
+      <link>https://github.com/mammut001/kanjo/releases/tag/v0.6.0</link>
+      <enclosure
+        url="https://github.com/mammut001/kanjo/releases/download/v0.6.0/Kanjo-0.6.0-macos.zip"
+        length="12345678"
+        sparkle:edSignature="MEUCIQDx4mS9V0m4W5g2lq0N0yWq2b3sV5jZ3S4c1kQ7mWn0yZ2pQIgW8l1mK3nJ5hG7fD9sA1bC3dE5fG7hI9jK1lM3nO5pQ7rS="
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

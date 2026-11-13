@@ -35,6 +35,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.familyReportURL, store: AppDefaults.store) private var familyReportURL = ""
     @AppStorage(SettingsKeys.familyReportMemberLabel, store: AppDefaults.store) private var familyReportMemberLabel = ""
     @StateObject private var familyReportStore = FamilyReportStore.shared
+    @StateObject private var updates = UpdateController.shared
     @State private var showingTokenPopover = false
     @State private var tokenInput = ""
 
@@ -427,6 +428,26 @@ struct SettingsView: View {
                             .disabled(hidden == 0)
                     }
                     note(L10n.tr("settings.projects_note"))
+                }
+
+                if updates.isActive {
+                    PanelSection(L10n.tr("settings.section.updates"), inset: true) {
+                        Text(L10n.tr("settings.updates.version", updates.formattedCurrentVersion))
+                            .font(.system(size: 12).monospacedDigit())
+                        Toggle(L10n.tr("settings.updates.automatic"), isOn: $updates.automaticallyChecksForUpdates)
+                            .font(.system(size: 12))
+                        HStack(spacing: 8) {
+                            Button(L10n.tr("settings.updates.check_now")) { updates.checkForUpdates() }
+                                .font(.system(size: 11))
+                                .disabled(!updates.canCheckForUpdates)
+                            if updates.isChecking {
+                                ProgressView().controlSize(.small)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        note(L10n.tr("settings.updates.last_check", updates.formattedLastCheckDate))
+                        note(L10n.tr("settings.updates.note"))
+                    }
                 }
 
                 quotaSection

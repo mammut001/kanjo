@@ -99,6 +99,12 @@
 "settings.hidden_projects_count" = "已隐藏项目：%d";
 "settings.unhide_all" = "全部取消隐藏";
 "settings.projects_note" = "在总览的项目行中悬停或右键，可置顶或隐藏项目。";
+"settings.section.updates" = "更新";
+"settings.updates.version" = "Kanjo %@";
+"settings.updates.automatic" = "自动检查更新";
+"settings.updates.check_now" = "检查更新…";
+"settings.updates.last_check" = "上次检查：%@";
+"settings.updates.note" = "更新会就地安装并重新启动 Kanjo。只有发现新版本时才会提示。";
 "settings.section.quota_reset" = "额度重置";
 "settings.grid.agent" = "Agent";
 "settings.grid.next_reset" = "下次每周重置";
@@ -227,6 +233,13 @@
 "menu.refreshing" = "正在刷新…";
 "menu.updated_at" = "已更新 %@";
 "menu.not_refreshed_yet" = "尚未刷新";
+"menu.update.available" = "%@ %@ 可供更新";
+"menu.update.action" = "更新";
+"menu.update.help" = "打开更新窗口。点「安装」即可安装并重新启动 Kanjo。";
+"updates.never_checked" = "从未检查";
+"updates.just_now" = "刚刚";
+"updates.minutes_ago" = "%d 分钟前";
+"updates.hours_ago" = "%d 小时前";
 "menu.disk" = "磁盘";
 "menu.settings" = "设置";
 "menu.quit" = "退出 Kanjo";

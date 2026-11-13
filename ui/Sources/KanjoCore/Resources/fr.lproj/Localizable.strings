@@ -99,6 +99,12 @@
 "settings.hidden_projects_count" = "Projets masqués : %d";
 "settings.unhide_all" = "Tout afficher";
 "settings.projects_note" = "Masquez ou épinglez un projet depuis sa ligne dans l'aperçu (survol ou clic droit).";
+"settings.section.updates" = "Mises à jour";
+"settings.updates.version" = "Kanjo %@";
+"settings.updates.automatic" = "Vérifier automatiquement les mises à jour";
+"settings.updates.check_now" = "Rechercher les mises à jour…";
+"settings.updates.last_check" = "Dernière vérification : %@";
+"settings.updates.note" = "Les mises à jour s'installent sur place et Kanjo redémarre. Vous n'êtes averti que lorsqu'une nouvelle version existe.";
 "settings.section.quota_reset" = "Réinitialisation des quotas";
 "settings.grid.agent" = "Agent";
 "settings.grid.next_reset" = "Prochaine réinit. hebdomadaire";
@@ -227,6 +233,13 @@
 "menu.refreshing" = "Actualisation…";
 "menu.updated_at" = "Mis à jour à %@";
 "menu.not_refreshed_yet" = "Pas encore actualisé";
+"menu.update.available" = "%@ %@ est disponible";
+"menu.update.action" = "Mettre à jour";
+"menu.update.help" = "Ouvre la fenêtre de mise à jour. « Installer » l’installe et redémarre Kanjo.";
+"updates.never_checked" = "Jamais vérifié";
+"updates.just_now" = "À l’instant";
+"updates.minutes_ago" = "Il y a %d min";
+"updates.hours_ago" = "Il y a %d h";
 "menu.disk" = "Disque";
 "menu.settings" = "Réglages";
 "menu.quit" = "Quitter Kanjo";

@@ -3,7 +3,9 @@
 Menu bar app that answers "how much AI money has this git repo cost?" by rendering
 the JSON produced by `kanjo export` (format: [`../CONTRACT.md`](../CONTRACT.md)).
 
-- Swift 5.9+, macOS 13+, SwiftUI `MenuBarExtra` + Swift Charts. SwiftPM only, no Xcode project, no dependencies, no network.
+- Swift 5.9+, macOS 13+, SwiftUI `MenuBarExtra` + Swift Charts. SwiftPM only, no Xcode project. The
+  only dependency is [Sparkle 2](https://sparkle-project.org) in the `Kanjo` executable (in-app updates);
+  `KanjoCore` stays dependency-free so the iOS app can reuse it.
 
 ## Build / run / test
 
@@ -179,7 +181,16 @@ pricing files, VERSION, and fallback sample JSON.
 
 Signing uses `KANJO_CODESIGN_IDENTITY` when set; otherwise it detects a Developer ID Application
 identity, falling back to ad-hoc (`-`). Developer ID signing uses hardened runtime and timestamps;
-the binary, app, and DMG are signed and verified. Releases are not notarized yet.
+the binary, app, and DMG are signed and verified.
+
+`package.sh` copies `Sparkle.framework` into `Kanjo.app/Contents/Frameworks` (and adds an
+`@executable_path/../Frameworks` rpath to the binary), then signs Sparkle's nested code inside-out —
+`Installer.xpc`, `Downloader.xpc`, `Autoupdate`, `Updater.app`, `Sparkle.framework` — before the app itself,
+all with the same identity and options. Ad-hoc local builds work the same way.
+
+`CFBundleShortVersionString` is the release version (`X.Y.Z`) and `CFBundleVersion` is a monotonic
+integer derived from it — `major * 10000 + minor * 100 + patch`, so `0.5.2` → `502` and `1.2.3` → `10203`.
+Sparkle compares `CFBundleVersion`, so every release must raise it.
 
 To build a notarized release, store credentials once in your macOS keychain (using an app-specific password):
 
@@ -198,6 +209,45 @@ KANJO_NOTARY_PROFILE=kanjo-notary ./package.sh
 When a profile is configured, `package.sh` notarizes the `.app` zip, staples the `.app`, rebuilds the zip
 and DMG from the stapled app, signs the DMG, notarizes the DMG, and staples it. If no profile is
 configured, notarization is skipped.
+
+### In-app updates (Sparkle 2)
+
+Kanjo updates itself in place with [Sparkle 2](https://sparkle-project.org). The feed is
+`https://github.com/mammut001/kanjo/releases/latest/download/appcast.xml`; the zip for the latest release
+is the update archive.
+
+One-time setup, on the machine that signs releases:
+
+```bash
+# Generate the EdDSA key pair; the private key goes into the login keychain (account "kanjo")
+ui/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account kanjo
+# Paste the printed public key into ui/Resources/sparkle-public-ed-key.txt
+```
+
+While that file still holds `REPLACE_WITH_KANJO_SPARKLE_PUBLIC_KEY`, local builds work but the app omits
+the `SU` keys, so the updater stays off, and `package.sh --notarize` refuses to run.
+
+Per release:
+
+```bash
+cd ui && ./package.sh --notarize        # build/Kanjo-<ver>-macos.zip (notarized, stapled)
+cd .. && ./scripts/make-appcast.sh 0.6.0   # writes ui/build/appcast.xml, signed with sign_update
+gh release create v0.6.0 ui/build/Kanjo-0.6.0-macos.zip ui/build/appcast.xml \
+  ui/build/Kanjo-0.6.0-macos.dmg --title "Kanjo 0.6.0" --notes "…"
+```
+
+`appcast.xml` must be a release asset: `SUFeedURL` points at the `latest` redirect, so the newest release's
+feed is the one Sparkle reads. `scripts/make-appcast.sh` reads the version and `CFBundleVersion` out of the
+packaged app, signs the zip with `sign_update --account kanjo`, and validates the result with
+`scripts/validate-appcast.sh` (version, build, length, signature, enclosure URL).
+
+The updater only starts from a packaged `.app` whose `Info.plist` has both `SUFeedURL` and
+`SUPublicEDKey`; `swift run`, `--snapshot`, `--window` and `--data` keep it off. Automatic checks run daily
+(`SUScheduledCheckInterval` 86400) and automatic installation is off (`SUAllowsAutomaticUpdates` false):
+Kanjo is a menu-bar app, so a scheduled check that finds an update shows a "Kanjo X is available — Update"
+row at the top of the popover instead of a window behind everything else; clicking it brings Sparkle's
+window forward, where Install installs and relaunches Kanjo. Settings → Updates shows the current version,
+the automatic-check toggle, a "Check for Updates…" button and the last check time.
 
 ### Building with iCloud sync
 
@@ -223,9 +273,10 @@ The icon is drawn by `Resources/make_icon.swift` (AppKit, offscreen); the PNG an
 Package.swift
 Sources/KanjoCore/       contract models (Codable), data sources, formatting, reconciliation,
                           treemap / heat strip / project prefs pure functions (no UI)
-Sources/Kanjo/           SwiftUI app: KanjoApp, Store/ReportStore, Views/…
+Sources/Kanjo/           SwiftUI app: KanjoApp, Store/ReportStore, Views/…, UpdateController (Sparkle)
 Tests/KanjoTests/        decoding + invariant tests on fixtures/sample.json, formatting, treemap, heat strip, prefs tests
 fixtures/sample.json     test data (8 projects, 9 agents, split/cwd sessions, estimated models, buckets)
+fixtures/appcast-sample.xml   appcast shape the release script writes (used by UpdateTests)
 fixtures/generate_sample.py   regenerates sample.json deterministically and asserts the invariants
 fixtures/disk-sample.json     disk page sample (10 agents); fixtures/generate_disk_sample.py regenerates it
 Resources/                Kanjo.png / Kanjo.icns app icon and make_icon.swift that draws it
