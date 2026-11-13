@@ -318,9 +318,16 @@ def window_start(quota_entry: Optional[dict], now: datetime, tz: datetime.tzinfo
     return reset_utc + timedelta(seconds=k * period_sec)
 
 
-def format_month_day_time(dt: datetime, tz: datetime.tzinfo) -> str:
-    """Format e.g. Nov 8 16:55."""
+def format_month_day_time(dt: datetime, tz: datetime.tzinfo, lang: str = "en",
+                          now: Optional[datetime] = None) -> str:
+    """Format e.g. ``Nov 8 16:55`` (en) or ``11月8日 16:55`` / ``今天 16:55`` (zh)."""
     local_dt = (ensure_aware(dt, tz) or datetime.now(tz)).astimezone(tz)
+    if normalize_lang(lang) == "zh":
+        now_dt = ensure_aware(now, tz) or datetime.now(tz)
+        now_local = now_dt.astimezone(tz)
+        if local_dt.date() == now_local.date():
+            return t("time.today", lang, time=local_dt.strftime("%H:%M"))
+        return f"{local_dt.month}月{local_dt.day}日 {local_dt.strftime('%H:%M')}"
     return f"{local_dt.strftime('%b')} {local_dt.day} {local_dt.strftime('%H:%M')}"
 
 
@@ -340,19 +347,19 @@ def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[d
     if isinstance(qw.get("antigravity"), dict) and qw["antigravity"].get("weekly_resets_at"):
         start = window_start(qw["antigravity"], now, tz)
         if start is not None:
-            lbl = t("accounts.title.quota_week", lang, when=format_month_day_time(start, tz))
+            lbl = t("accounts.title.quota_week", lang, when=format_month_day_time(start, tz, lang, now))
             return start, "quota_week", lbl
 
     # 2. Antigravity billing cycle start
     if isinstance(subs.get("antigravity"), dict) and subs["antigravity"].get("cycle_start"):
         start = parse_iso_dt(subs["antigravity"]["cycle_start"], default_tz=tz)
         if start is not None:
-            lbl = t("accounts.title.billing_cycle", lang, when=format_month_day_time(start, tz))
+            lbl = t("accounts.title.billing_cycle", lang, when=format_month_day_time(start, tz, lang, now))
             return start, "billing_cycle", lbl
 
     # 3. Fallback: last 7 days
     start = now - timedelta(days=7)
-    lbl = t("accounts.title.last_7d", lang, when=format_month_day_time(start, tz))
+    lbl = t("accounts.title.last_7d", lang, when=format_month_day_time(start, tz, lang, now))
     return start, "last_7d", lbl
 
 
@@ -1267,13 +1274,13 @@ def build_antigravity_accounts_section(
 
         if w_kind == "quota_week":
             header_label = t("accounts.title.quota_week", lang,
-                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
+                             when=format_month_day_time(w_start_dt, tz, lang, now) if w_start_dt else "—")
         elif w_kind == "billing_cycle":
             header_label = t("accounts.title.billing_cycle", lang,
-                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
+                             when=format_month_day_time(w_start_dt, tz, lang, now) if w_start_dt else "—")
         else:
             header_label = t("accounts.title.last_7d", lang,
-                             when=format_month_day_time(w_start_dt, tz) if w_start_dt else "—")
+                             when=format_month_day_time(w_start_dt, tz, lang, now) if w_start_dt else "—")
 
         cur_acc = rows_data.get("current") or current_account
         accounts_list = rows_data.get("accounts") or []
@@ -1305,7 +1312,7 @@ def build_antigravity_accounts_section(
                 is_unattributed=False,
                 tokens_value=float(toks),
                 messages_str=str(msgs),
-                last_seen_str=_format_last_seen(acc.get("last_seen"), tz, lang),
+                last_seen_str=_format_last_seen(acc.get("last_seen"), tz, lang, now),
                 saved_login=bool(acc.get("saved_login")),
             ))
 
@@ -1367,7 +1374,7 @@ def build_antigravity_accounts_section(
                     is_unattributed=True,
                     tokens_value=float(toks),
                     messages_str=str(msgs),
-                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang),
+                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang, now),
                     saved_login=bool(r.get("saved_login")),
                 )
             else:
@@ -1379,7 +1386,7 @@ def build_antigravity_accounts_section(
                     is_unattributed=False,
                     tokens_value=float(toks),
                     messages_str=str(msgs),
-                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang),
+                    last_seen_str=_format_last_seen(r.get("last_seen"), tz, lang, now),
                     saved_login=bool(r.get("saved_login")),
                 ))
 
@@ -1394,11 +1401,12 @@ def build_antigravity_accounts_section(
     return None
 
 
-def _format_last_seen(value: Optional[Any], tz: datetime.tzinfo, lang: str = "en") -> str:
+def _format_last_seen(value: Optional[Any], tz: datetime.tzinfo, lang: str = "en",
+                      now: Optional[datetime] = None) -> str:
     dt = parse_iso_dt(value if isinstance(value, str) else None, default_tz=tz)
     if dt is None:
         return "—"
-    return format_month_day_time(dt, tz)
+    return format_month_day_time(dt, tz, lang, now)
 
 
 def parse_tokens_str(tok_str: str) -> float:
