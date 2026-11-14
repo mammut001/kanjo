@@ -23,6 +23,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Antigravity switch note.** `kanjo agy-account switch`/`list` now report `running_agy` (how many `agy`
   processes are running), and the app and `kanjo usage` warn that running sessions must be quit or
   restarted or they will switch the account back at their next token refresh.
+- **`kanjo usage` look.** The project detail pane has one solid background (no grey gaps behind the
+  text), Command Code and a few other dark agent colours are lighter on dark terminals, and the meter
+  label column is sized to the longest label, so "Claude/GPT weekly" is no longer cut to "Week…".
 
 ## [0.6.0] - 2026-11-13
 

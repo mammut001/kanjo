@@ -16,24 +16,27 @@ from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
 
-# Agent colours from ui/Sources/KanjoCore/AgentColors.swift
+# Agent colours from ui/Sources/KanjoCore/AgentColors.swift, except that the TUI
+# lightens the few entries that were too dark on a black terminal (commandcode,
+# qwen, qodercli_cn, workbuddy_ai, omp; their 256-colour index sat near black and
+# the 8-colour fallback was dark blue). The Mac app keeps the original colours.
 AGENT_COLORS: Dict[str, Tuple[int, int, int]] = {
     "claude": (0xD9, 0x77, 0x57),
     "codex": (0x3E, 0x79, 0xD6),
     "antigravity": (0x7A, 0x6A, 0xD8),
     "grok": (0x0C, 0x7E, 0x86),
     "minimax": (0xD6, 0x3A, 0x8A),
-    "qwen": (0x08, 0x2D, 0xFF),
-    "commandcode": (0x2E, 0x1B, 0x9C),
+    "qwen": (0x3B, 0x5B, 0xFF),
+    "commandcode": (0x8C, 0x7A, 0xE6),
     "opencode": (0xB0, 0x8A, 0x1E),
     "copilot": (0x1F, 0x88, 0x3D),
     "pi": (0xC4, 0x1E, 0x3A),
     "workbuddy": (0xB6, 0x62, 0xCA),
-    "workbuddy_ai": (0x00, 0x5E, 0x52),
+    "workbuddy_ai": (0x3A, 0x96, 0x86),
     "grok_bot": (0xDC, 0x3C, 0x00),
     "qoderwork": (0x82, 0x3D, 0x44),
     "qodercli": (0x6E, 0x7F, 0x15),
-    "qodercli_cn": (0x87, 0x2B, 0x83),
+    "qodercli_cn": (0x9C, 0x3F, 0x9A),
     "zcode": (0x3C, 0x5A, 0x31),
     "kimicode": (0x98, 0x5C, 0x26),
     "musecode": (0xC7, 0x7C, 0x80),
@@ -44,7 +47,7 @@ AGENT_COLORS: Dict[str, Tuple[int, int, int]] = {
     "devin": (0x00, 0x66, 0x94),
     "mimocode": (0xC2, 0x7C, 0x38),
     "prime_agent": (0x8F, 0x32, 0xD0),
-    "omp": (0x00, 0x54, 0x62),
+    "omp": (0x34, 0x8F, 0x9E),
     "deepseek_harness": (0x00, 0x44, 0xA0),
     "qwenwork": (0x00, 0xA0, 0x6B),
 }

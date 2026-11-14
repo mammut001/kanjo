@@ -145,7 +145,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "meter.reset.in_dh": "resets in {days}d {hours}h",
         "meter.quota": "quota",
         "meter.extra": "Extra",
-        "meter.claude_gpt_weekly": "Claude/GPT Weekly",
+        "meter.claude_gpt_weekly": "Claude/GPT weekly",
         "meter.claude_gpt_five_hour": "Claude/GPT 5-hour",
         "meter.no_live_data": "(no live data)",
 

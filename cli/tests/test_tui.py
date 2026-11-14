@@ -182,6 +182,32 @@ def reverse_cells(scr) -> set:
 
 
 class TUIModelTest(unittest.TestCase):
+    def test_agent_colours_readable_on_black(self):
+        """Every agent colour must stay visible on a dark terminal, both in the
+        256-colour mapping and in the 8-colour fallback (not dark blue)."""
+        from kanjo.tui.model import AGENT_COLORS
+        from kanjo.tui.static import rgb_to_256
+
+        levels = [0, 95, 135, 175, 215, 255]
+
+        def contrast_on_black(rgb):
+            idx = rgb_to_256(*rgb) - 16
+            cube = (levels[idx // 36], levels[(idx // 6) % 6], levels[idx % 6])
+
+            def lin(v):
+                v = v / 255
+                return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+            lum = 0.2126 * lin(cube[0]) + 0.7152 * lin(cube[1]) + 0.0722 * lin(cube[2])
+            return (lum + 0.05) / 0.05
+
+        for name, rgb in AGENT_COLORS.items():
+            # devin and openclaw sit right at ~3:1; the floor catches the rest.
+            self.assertGreaterEqual(contrast_on_black(rgb), 2.9, name)
+
+        # 8-colour fallback: the bitmask of the RGB channels; blue-only (4) is dark.
+        cc = AGENT_COLORS["commandcode"]
+        self.assertNotEqual(sum(1 << k for k, v in enumerate(cc) if v > 128), 4)
+
     def test_compact_number_formats(self):
         # format_tokens
         self.assertEqual(format_tokens(0), "0")
@@ -715,6 +741,38 @@ class TUIRenderTest(unittest.TestCase):
         self.assertIn("By Agent:", all_text)
         self.assertIn("By Model:", all_text)
         self.assertIn("Close", all_text)
+
+    def test_detail_pane_background_is_solid_inside_border(self):
+        from kanjo.tui.render import DETAIL_PANE_BG
+        state = TUIState(version="0.9.0", detail_open=True)
+        p0 = self.filtered.projects[0]
+        detail_vm = build_project_detail(p0, self.now, self.tz)
+
+        canvas = Canvas(100, 30)
+        render_ui(
+            canvas, state, self.filtered, self.total_vm, self.meters,
+            self.accounts_sec, self.proj_rows, self.proj_footers,
+            self.model_rows, self.agent_rows, self.day_rows,
+            detail_vm=detail_vm
+        )
+        # Locate the box by its top-left and bottom-right corners.
+        top_y = next(y for y in range(canvas.height) if "┌" in canvas.get_line_text(y))
+        x0 = canvas.get_line_text(top_y).index("┌")
+        x1 = canvas.get_line_text(top_y).index("┐", x0)
+        bottom_y = next(y for y in range(top_y + 1, canvas.height)
+                        if canvas.get_line_text(y)[x0] == "└")
+        self.assertGreater(x1 - x0, 10)
+        self.assertGreater(bottom_y - top_y, 5)
+
+        # Every cell inside the border (text, gaps, blank and header rows)
+        # carries the same pane background.
+        for y in range(top_y + 1, bottom_y):
+            for x in range(x0 + 1, x1):
+                cell = canvas.grid[y][x]
+                self.assertEqual(
+                    cell.style.bg, DETAIL_PANE_BG,
+                    f"cell ({x},{y}) {cell.char!r} has bg {cell.style.bg!r}",
+                )
 
     def test_help_overlay_rendering(self):
         state = TUIState(version="0.9.0", show_help=True)
@@ -1400,7 +1458,7 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         self.assertTrue(all("Week" not in n and "5h" not in n for n in names))
         en_names = [w.name for m in build_subscription_meters(doc, now=now, lang="en")
                     for w in m.windows]
-        self.assertIn("Claude/GPT Weekly", en_names)
+        self.assertIn("Claude/GPT weekly", en_names)
         self.assertIn("Claude/GPT 5-hour", en_names)
         # The non-3p id keeps its (localized) title rather than being remapped.
         self.assertIn("Weekly Limit Remaining", en_names)
@@ -1831,6 +1889,51 @@ class TUIMouseTest(unittest.TestCase):
         self.assertEqual(state.selected_index, 0)
 
 class TUIMissingQuotaAndStaticTest(unittest.TestCase):
+    def test_claude_gpt_meter_labels_are_not_truncated_at_120_columns(self):
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {
+                "antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99},
+            },
+            "quota_windows": {
+                "antigravity": {
+                    "extra_windows": [
+                        {"id": "3p-weekly", "title": "Weekly Limit Remaining",
+                         "used_percent": 26.0, "resets_at": "2026-11-20T12:00:00Z"},
+                        {"id": "3p-5h", "title": "Five Hour Limit Remaining",
+                         "used_percent": 50.0, "resets_at": "2026-11-13T18:00:00Z"},
+                    ],
+                },
+            },
+            "totals": {"cost": 0.0, "tokens": {"total": 0}, "sessions": 0},
+            "projects": [],
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        out = render_static_snapshot(doc, width=120, no_color=True, now=now, lang="en")
+        self.assertIn("Claude/GPT weekly", out)
+        self.assertIn("Claude/GPT 5-hour", out)
+
+    def test_meter_label_width_fits_label_and_keeps_bar_room(self):
+        from kanjo.tui.render import _meter_label_width
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {"antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99}},
+            "quota_windows": {"antigravity": {"extra_windows": [
+                {"id": "3p-weekly", "title": "x", "used_percent": 1.0,
+                 "resets_at": "2026-11-20T12:00:00Z"},
+            ]}},
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        meters = build_subscription_meters(doc, now=now, lang="en")
+        # Full-width column at 120 cols: the whole label fits.
+        self.assertEqual(_meter_label_width(meters, "full", 118), len("Claude/GPT weekly"))
+        # At 80 columns the label column still leaves the bar >= 10 cells.
+        w80 = _meter_label_width(meters, "full", 80)
+        self.assertLessEqual(w80 + 2 + 1 + 8 + 16 + 10, 80)
+        self.assertEqual(w80, len("Claude/GPT weekly"))
+
     def test_subscription_without_quota_shows_placeholder(self):
         doc = {
             "timezone": "UTC",
