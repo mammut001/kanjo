@@ -58,6 +58,15 @@ def load_sample_fixture() -> dict:
         return json.load(f)
 
 
+
+def _has_zone(name):
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
 class FakeStdscr:
     """Mock curses stdscr for headless testing."""
     def __init__(self, width: int = 80, height: int = 24, keys=None):
@@ -1278,6 +1287,7 @@ class TUIChineseDatesTest(unittest.TestCase):
         self.assertIn("11月8日 16:55 起", label)
         self.assertNotIn("Nov", label)
 
+    @unittest.skipUnless(_has_zone("Asia/Shanghai"), "no tz database (Windows without tzdata)")
     def test_accounts_last_seen_is_chinese(self):
         doc = load_sample_fixture()
         tz = get_tz(doc)
