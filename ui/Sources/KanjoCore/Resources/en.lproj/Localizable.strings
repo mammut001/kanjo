@@ -302,6 +302,8 @@
 "overview.quota.hours" = "%d-hour";
 "overview.quota.resets_in" = "Resets in %@ · %@";
 "overview.quota.ended" = "Window ended";
+"overview.quota.claude_gpt_weekly" = "Claude/GPT · Weekly";
+"overview.quota.claude_gpt_five_hour" = "Claude/GPT · 5-hour";
 "overview.quota.rel_m" = "%d min";
 "overview.quota.rel_hm" = "%dh %dm";
 "overview.quota.rel_dh" = "%dd %dh";
@@ -507,7 +509,8 @@
 "overview.agy.sign_in_once" = "Sign in once with agy";
 "overview.agy.sign_in_once_tip" = "Run agy and sign in with this account once, then refresh";
 "overview.agy.unattributed" = "Unattributed (desktop app etc.)";
-"overview.agy.switched_note" = "Switched — restart running agy sessions";
+"overview.agy.switched_note" = "Switched — running agy sessions write their login back at their next token refresh";
+"overview.agy.running_note" = "%d agy sessions running — quit and reopen them or they will switch back within about an hour";
 "overview.agy.no_saved_login" = "No saved login found";
 "overview.agy.unsaved_login" = "Current login is not saved yet; run agy once and refresh Kanjo";
 "overview.agy.switch_failed" = "Switch failed";

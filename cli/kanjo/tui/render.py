@@ -345,6 +345,8 @@ SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 ASCII_SPINNER = "|/-\\"
 
 SELECTED_ROW_BG = "gray"
+# Background of the project detail overlay (solid over the whole pane).
+DETAIL_PANE_BG = "black"
 
 
 def _selected_row_style(state: "TUIState") -> Style:
@@ -492,12 +494,18 @@ def _compact_meter_body(m: SubscriptionMeter, ascii_mode: bool, lang: str = "en"
     return "  ".join(parts)
 
 
-def _meter_label_width(meters: List[SubscriptionMeter], mode: str) -> int:
+def _meter_label_width(meters: List[SubscriptionMeter], mode: str, col_w: int) -> int:
+    """Width of the label column: the longest label shown, capped so the bar
+    keeps at least ~10 cells in a column of ``col_w`` cells (the reserve covers
+    the ``[ ]``, the percentage and the detail text). Only longer labels are
+    truncated, and only when they really do not fit."""
     longest = 1
     for m in meters:
         for w in _meter_mode_windows(m, mode):
             longest = max(longest, str_width(w.name))
-    return max(1, min(16, longest))
+    # 2 (indent) + 1 (gap) + 8 (brackets, pct) + 16 (detail) + 10 (bar)
+    cap = max(8, col_w - 2 - 1 - 8 - 16 - 10)
+    return max(1, min(cap, longest))
 
 
 def _draw_full_meter_block(canvas: Canvas, x: int, y: int, width: int,
@@ -776,7 +784,8 @@ def render_ui(
     meter_mode = _choose_meter_mode(meters, meter_budget, two_col, state.meters_expanded)
 
     if meter_mode in ("full", "weekly"):
-        label_w = _meter_label_width(meters, meter_mode)
+        label_w = _meter_label_width(meters, meter_mode,
+                                     (width - 2) // 2 if two_col else width)
         if two_col:
             split = (len(meters) + 1) // 2
             cols = [meters[:split], meters[split:]]
@@ -1293,64 +1302,71 @@ def render_ui(
         dx = (width - dw) // 2
         dy = (height - dh) // 2
 
+        # One background for the whole pane: every cell inside the border gets
+        # it (including gaps between text runs), and all text drawn below keeps
+        # it, so the pane reads as a solid block.
+        def pane(fg=None, bold=False, dim=False) -> Style:
+            return Style(fg=fg, bg=DETAIL_PANE_BG, bold=bold, dim=dim)
+
         canvas.draw_box(dx, dy, dw, dh, title=t("detail.title", lang, name=detail_vm.name),
-                        style=Style(bg="black", fg="white"),
+                        style=pane(fg="white"),
                         border_style=Style(fg="cyan", bold=True),
                         ascii_mode=state.ascii_mode)
+        canvas.fill_rect(dx + 1, dy + 1, dw - 2, dh - 2, " ", pane(fg="white"))
 
         cy = dy + 1
         if detail_vm.remote:
-            canvas.draw_text(dx + 2, cy, t("detail.remote", lang, remote=detail_vm.remote), Style(fg="gray"), max_width=dw - 4)
+            canvas.draw_text(dx + 2, cy, t("detail.remote", lang, remote=detail_vm.remote), pane(fg="gray"), max_width=dw - 4)
             cy += 1
         if detail_vm.paths:
             p_str = ", ".join(detail_vm.paths)
-            canvas.draw_text(dx + 2, cy, t("detail.paths", lang, paths=p_str), Style(fg="gray"), max_width=dw - 4)
+            canvas.draw_text(dx + 2, cy, t("detail.paths", lang, paths=p_str), pane(fg="gray"), max_width=dw - 4)
             cy += 1
 
         stats_line = t("detail.stats", lang, cost=detail_vm.cost_str,
                        tokens=detail_vm.tokens_str, sessions=detail_vm.sessions_str)
-        canvas.draw_text(dx + 2, cy, stats_line, Style(bold=True), max_width=dw - 4)
+        canvas.draw_text(dx + 2, cy, stats_line, pane(bold=True), max_width=dw - 4)
         cy += 1
 
         spark_line = t("detail.sparkline", lang, spark=detail_vm.sparkline_30d,
                        peak=detail_vm.sparkline_peak_str)
-        canvas.draw_text(dx + 2, cy, spark_line, Style(fg="cyan"), max_width=dw - 4)
+        canvas.draw_text(dx + 2, cy, spark_line, pane(fg="cyan"), max_width=dw - 4)
         cy += 1
 
         # Divider
-        canvas.draw_hline(dx + 1, cy, dw - 2, "─" if not state.ascii_mode else "-", Style(dim=True))
+        canvas.draw_hline(dx + 1, cy, dw - 2, "─" if not state.ascii_mode else "-", pane(dim=True))
         cy += 1
 
         # By Agent
-        canvas.draw_text(dx + 2, cy, t("detail.by_agent", lang), Style(bold=True))
+        canvas.draw_text(dx + 2, cy, t("detail.by_agent", lang), pane(bold=True))
         cy += 1
         for lbl, c, tok_str, sess_str, pct, rgb in detail_vm.by_agent[:4]:
             if cy >= dy + dh - 7:
                 break
             dot = "*" if state.ascii_mode else "●"
             ag_line = f"  {dot} {pad_str(lbl, 16)}  {pad_str(c, 10, align='right')}  {pad_str(tok_str, 8, align='right')}  {pad_str(sess_str, 4, align='right')}  ({pct:.1f}%)"
-            canvas.draw_text(dx + 2, cy, f"  {dot} ", Style(fg=rgb, bold=True))
-            canvas.draw_text(dx + 6, cy, ag_line[4:], Style())
+            canvas.draw_text(dx + 2, cy, f"  {dot} ", pane(fg=rgb, bold=True))
+            canvas.draw_text(dx + 6, cy, ag_line[4:], pane())
             cy += 1
 
         # Divider
-        canvas.draw_hline(dx + 1, cy, dw - 2, "─" if not state.ascii_mode else "-", Style(dim=True))
+        canvas.draw_hline(dx + 1, cy, dw - 2, "─" if not state.ascii_mode else "-", pane(dim=True))
         cy += 1
 
         # By Model
-        canvas.draw_text(dx + 2, cy, t("detail.by_model", lang), Style(bold=True))
+        canvas.draw_text(dx + 2, cy, t("detail.by_model", lang), pane(bold=True))
         cy += 1
         for m_name, prov, c, tok_str in detail_vm.by_model[:4]:
             if cy >= dy + dh - 3:
                 break
             m_line = f"  {pad_str(truncate_str(m_name, 22), 22)}  {pad_str(prov, 12)}  {pad_str(c, 10, align='right')}  {pad_str(tok_str, 8, align='right')}"
-            canvas.draw_text(dx + 2, cy, m_line, Style())
+            canvas.draw_text(dx + 2, cy, m_line, pane())
             cy += 1
 
         # Close note at bottom of detail pane
         close_note = t("detail.close", lang)
         canvas.draw_text(dx + max(1, (dw - str_width(close_note)) // 2), dy + dh - 2,
-                         truncate_str(close_note, dw - 2), Style(dim=True))
+                         truncate_str(close_note, dw - 2), pane(dim=True))
 
     # 10. Help Overlay
     if state.show_help:

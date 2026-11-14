@@ -1,6 +1,9 @@
 """Unit tests for Kanjo TUI (`kanjo usage` / `kanjo top`)."""
 
-import curses
+try:
+    import curses
+except ImportError:  # Windows has no _curses; guard so the module still imports.
+    curses = None
 from datetime import datetime, timezone, timedelta
 import io
 import json
@@ -54,6 +57,15 @@ def load_sample_fixture() -> dict:
     with open(fixture_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+
+def _has_zone(name):
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
 
 class FakeStdscr:
     """Mock curses stdscr for headless testing."""
@@ -179,6 +191,32 @@ def reverse_cells(scr) -> set:
 
 
 class TUIModelTest(unittest.TestCase):
+    def test_agent_colours_readable_on_black(self):
+        """Every agent colour must stay visible on a dark terminal, both in the
+        256-colour mapping and in the 8-colour fallback (not dark blue)."""
+        from kanjo.tui.model import AGENT_COLORS
+        from kanjo.tui.static import rgb_to_256
+
+        levels = [0, 95, 135, 175, 215, 255]
+
+        def contrast_on_black(rgb):
+            idx = rgb_to_256(*rgb) - 16
+            cube = (levels[idx // 36], levels[(idx // 6) % 6], levels[idx % 6])
+
+            def lin(v):
+                v = v / 255
+                return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+            lum = 0.2126 * lin(cube[0]) + 0.7152 * lin(cube[1]) + 0.0722 * lin(cube[2])
+            return (lum + 0.05) / 0.05
+
+        for name, rgb in AGENT_COLORS.items():
+            # devin and openclaw sit right at ~3:1; the floor catches the rest.
+            self.assertGreaterEqual(contrast_on_black(rgb), 2.9, name)
+
+        # 8-colour fallback: the bitmask of the RGB channels; blue-only (4) is dark.
+        cc = AGENT_COLORS["commandcode"]
+        self.assertNotEqual(sum(1 << k for k, v in enumerate(cc) if v > 128), 4)
+
     def test_compact_number_formats(self):
         # format_tokens
         self.assertEqual(format_tokens(0), "0")
@@ -713,6 +751,38 @@ class TUIRenderTest(unittest.TestCase):
         self.assertIn("By Model:", all_text)
         self.assertIn("Close", all_text)
 
+    def test_detail_pane_background_is_solid_inside_border(self):
+        from kanjo.tui.render import DETAIL_PANE_BG
+        state = TUIState(version="0.9.0", detail_open=True)
+        p0 = self.filtered.projects[0]
+        detail_vm = build_project_detail(p0, self.now, self.tz)
+
+        canvas = Canvas(100, 30)
+        render_ui(
+            canvas, state, self.filtered, self.total_vm, self.meters,
+            self.accounts_sec, self.proj_rows, self.proj_footers,
+            self.model_rows, self.agent_rows, self.day_rows,
+            detail_vm=detail_vm
+        )
+        # Locate the box by its top-left and bottom-right corners.
+        top_y = next(y for y in range(canvas.height) if "┌" in canvas.get_line_text(y))
+        x0 = canvas.get_line_text(top_y).index("┌")
+        x1 = canvas.get_line_text(top_y).index("┐", x0)
+        bottom_y = next(y for y in range(top_y + 1, canvas.height)
+                        if canvas.get_line_text(y)[x0] == "└")
+        self.assertGreater(x1 - x0, 10)
+        self.assertGreater(bottom_y - top_y, 5)
+
+        # Every cell inside the border (text, gaps, blank and header rows)
+        # carries the same pane background.
+        for y in range(top_y + 1, bottom_y):
+            for x in range(x0 + 1, x1):
+                cell = canvas.grid[y][x]
+                self.assertEqual(
+                    cell.style.bg, DETAIL_PANE_BG,
+                    f"cell ({x},{y}) {cell.char!r} has bg {cell.style.bg!r}",
+                )
+
     def test_help_overlay_rendering(self):
         state = TUIState(version="0.9.0", show_help=True)
         canvas = Canvas(100, 30)
@@ -887,6 +957,7 @@ class TUIRenderTest(unittest.TestCase):
                             self.assertIn("F1", last_line, f"F1 missing on line {h-1} for {w}x{h}")
                             self.assertIn("F10", last_line, f"F10 missing on line {h-1} for {w}x{h}")
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_interactive_curses_tui_fake_stdscr(self):
         """Item 3 & 4: Drive run_curses_tui with fake stdscr across all views and interactive key sequences."""
         doc = load_sample_fixture()
@@ -1082,6 +1153,7 @@ class TUIMouseCliTest(unittest.TestCase):
         self.assertFalse(parser.parse_args(["top"]).no_mouse)
         self.assertTrue(parser.parse_args(["usage", "--no-mouse"]).no_mouse)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_no_mouse_flag_reaches_the_loop(self):
         doc = load_sample_fixture()
         seen = {}
@@ -1215,6 +1287,7 @@ class TUIChineseDatesTest(unittest.TestCase):
         self.assertIn("11月8日 16:55 起", label)
         self.assertNotIn("Nov", label)
 
+    @unittest.skipUnless(_has_zone("Asia/Shanghai"), "no tz database (Windows without tzdata)")
     def test_accounts_last_seen_is_chinese(self):
         doc = load_sample_fixture()
         tz = get_tz(doc)
@@ -1375,10 +1448,14 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
             "quota_windows": {
                 "antigravity": {
                     "extra_windows": [
-                        {"title": "Claude/GPT Weekly", "used_percent": 26.0,
-                         "resets_at": "2026-11-20T12:00:00Z"},
-                        {"title": "Claude/GPT 5h", "used_percent": 50.0,
-                         "resets_at": "2026-11-13T18:00:00Z"},
+                        # 3p buckets: localized by id, regardless of the raw title.
+                        {"id": "3p-weekly", "title": "Claude/GPT weekly",
+                         "used_percent": 26.0, "resets_at": "2026-11-20T12:00:00Z"},
+                        {"id": "3p-5h", "title": "Claude/GPT 5-hour",
+                         "used_percent": 50.0, "resets_at": "2026-11-13T18:00:00Z"},
+                        # Any other id keeps the (localized) supplied title.
+                        {"id": "something-else", "title": "Weekly Limit Remaining",
+                         "used_percent": 12.0, "resets_at": "2026-11-20T12:00:00Z"},
                     ],
                 },
             },
@@ -1387,12 +1464,14 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         names = [w.name for m in build_subscription_meters(doc, now=now, lang="zh")
                  for w in m.windows]
         self.assertIn("Claude/GPT 每周", names)
-        self.assertIn("Claude/GPT 5小时", names)
+        self.assertIn("Claude/GPT 5 小时", names)
         self.assertTrue(all("Week" not in n and "5h" not in n for n in names))
         en_names = [w.name for m in build_subscription_meters(doc, now=now, lang="en")
                     for w in m.windows]
-        self.assertIn("Claude/GPT Weekly", en_names)
-        self.assertIn("Claude/GPT 5h", en_names)
+        self.assertIn("Claude/GPT weekly", en_names)
+        self.assertIn("Claude/GPT 5-hour", en_names)
+        # The non-3p id keeps its (localized) title rather than being remapped.
+        self.assertIn("Weekly Limit Remaining", en_names)
 
     def test_account_rows_carry_login_metadata(self):
         sec = build_antigravity_accounts_section(self.doc, now=self.now, lang="en")
@@ -1414,12 +1493,13 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         render_ui(canvas, state)  # no crash, no rows
         self.assertNotIn("ACCOUNT", "\n".join(canvas.get_line_text(y) for y in range(24)))
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_confirm_box_appears_and_cancel_does_not_switch(self):
         fake = FakeSwitch()
         text = self._drive([curses.KEY_DOWN, 10, ord("n"), ord("q")], fake)
         self.assertIn("Switch login", text)
         self.assertIn("work@company.com", text)
-        self.assertIn("keep the old account until restarted", text)
+        self.assertIn("write their own login back at their next token refresh", text)
         self.assertEqual(fake.calls, [])
 
         # Esc also cancels without calling.
@@ -1427,11 +1507,13 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         self._drive([curses.KEY_DOWN, 10, 27, ord("q")], fake2)
         self.assertEqual(fake2.calls, [])
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_y_calls_switch_with_selected_email(self):
         fake = FakeSwitch()
         self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake)
         self.assertEqual(fake.calls, ["work@company.com"])
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_switch_error_messages(self):
         fake = FakeSwitch((1, {"status": "error", "error": "unsaved_login"}))
         text = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake)
@@ -1442,6 +1524,22 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         text = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake_no)
         self.assertIn("No saved login found", text)
 
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_switch_success_note_and_running_agy_message(self):
+        # Success with no running agy -> the base note.
+        fake = FakeSwitch((0, {"status": "ok", "running_agy": 0}))
+        text = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake)
+        self.assertEqual(fake.calls, ["work@company.com"])
+        self.assertIn("write their login back", text)
+        self.assertNotIn("agy sessions running", text)
+
+        # Success with running agy sessions -> the urgent count message.
+        fake_run = FakeSwitch((0, {"status": "ok", "running_agy": 3}))
+        text2 = self._drive([curses.KEY_DOWN, 10, ord("y")] + [-1] * 25 + [ord("q")], fake_run)
+        self.assertIn("3 agy sessions running", text2)
+        self.assertIn("switch back within about an hour", text2)
+
+    @unittest.skipIf(curses is None, "requires curses")
     def test_enter_without_saved_login_shows_hint(self):
         fake = FakeSwitch()
         # Second non-current row: backup@gmail.com has no saved login.
@@ -1449,12 +1547,14 @@ class TUIAntigravityAccountsViewTest(unittest.TestCase):
         self.assertEqual(fake.calls, [])
         self.assertIn("Sign in once with `agy`", text)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_enter_on_current_row_does_nothing(self):
         fake = FakeSwitch()
         text = self._drive([10, ord("q")], fake)
         self.assertEqual(fake.calls, [])
         self.assertNotIn("Switch login", text)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_non_macos_shows_macos_only(self):
         fake = FakeSwitch()
         with mock.patch("kanjo.tui.term.sys.platform", "linux"):
@@ -1653,6 +1753,7 @@ class TUIMouseTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         return scr
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_click_on_range_tab_switches_range(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         _y, clicked_x, _x1, _action = self._box(hit_boxes, "range:7d")
@@ -1663,6 +1764,7 @@ class TUIMouseTest(unittest.TestCase):
         self.assertIn((0, clicked_x + 1), cells)
         self.assertNotIn((0, all_x + 1), cells)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_click_on_fkey_bar_acts_like_the_key(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         bar_y = 23
@@ -1683,6 +1785,7 @@ class TUIMouseTest(unittest.TestCase):
         scr = self._drive([(x0, bar_y, BUTTON1_BITS)], keys=[ord("q")])
         self.assertIn("Today", screen_text(scr))
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_click_on_row_selects_and_second_click_opens_detail(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         rows = self._view_models()["project_rows"]
@@ -1704,6 +1807,7 @@ class TUIMouseTest(unittest.TestCase):
         self.assertIn("Project: %s" % rows[4].name, text)
         self.assertNotIn("Project: %s" % rows[0].name, text)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_wheel_scrolls_the_table_by_three_rows(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         row_y = self._box(hit_boxes, "row:0")[0]
@@ -1721,6 +1825,7 @@ class TUIMouseTest(unittest.TestCase):
         scr = self._drive([(3, 1, WHEEL_DOWN_BITS)], keys=[10, ord("q")])
         self.assertIn("Project: %s" % rows[0].name, screen_text(scr))
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_click_on_header_sorts_and_toggles_direction(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         header_y, x0, _x1, _action = self._box(hit_boxes, "sort:tokens")
@@ -1740,6 +1845,7 @@ class TUIMouseTest(unittest.TestCase):
         self.assertTrue(first_row.startswith(smallest.name),
                         "expected %s first, got %r" % (smallest.name, first_row))
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_no_mouse_leaves_the_terminal_alone(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         rows = self._view_models()["project_rows"]
@@ -1750,6 +1856,7 @@ class TUIMouseTest(unittest.TestCase):
         self.assertIn("Project: %s" % rows[0].name, text)
         self.assertNotIn("Project: %s" % rows[2].name, text)
 
+    @unittest.skipIf(curses is None, "requires curses")
     def test_mouse_click_dismisses_help(self):
         _canvas, _state, hit_boxes = self._render(80, 24)
         row_y = self._box(hit_boxes, "row:2")[0]
@@ -1792,6 +1899,51 @@ class TUIMouseTest(unittest.TestCase):
         self.assertEqual(state.selected_index, 0)
 
 class TUIMissingQuotaAndStaticTest(unittest.TestCase):
+    def test_claude_gpt_meter_labels_are_not_truncated_at_120_columns(self):
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {
+                "antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99},
+            },
+            "quota_windows": {
+                "antigravity": {
+                    "extra_windows": [
+                        {"id": "3p-weekly", "title": "Weekly Limit Remaining",
+                         "used_percent": 26.0, "resets_at": "2026-11-20T12:00:00Z"},
+                        {"id": "3p-5h", "title": "Five Hour Limit Remaining",
+                         "used_percent": 50.0, "resets_at": "2026-11-13T18:00:00Z"},
+                    ],
+                },
+            },
+            "totals": {"cost": 0.0, "tokens": {"total": 0}, "sessions": 0},
+            "projects": [],
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        out = render_static_snapshot(doc, width=120, no_color=True, now=now, lang="en")
+        self.assertIn("Claude/GPT weekly", out)
+        self.assertIn("Claude/GPT 5-hour", out)
+
+    def test_meter_label_width_fits_label_and_keeps_bar_room(self):
+        from kanjo.tui.render import _meter_label_width
+        doc = {
+            "timezone": "UTC",
+            "generated_at": "2026-11-13T12:00:00Z",
+            "subscriptions": {"antigravity": {"plan_label": "Google AI Pro", "monthly_price_usd": 19.99}},
+            "quota_windows": {"antigravity": {"extra_windows": [
+                {"id": "3p-weekly", "title": "x", "used_percent": 1.0,
+                 "resets_at": "2026-11-20T12:00:00Z"},
+            ]}},
+        }
+        now = parse_iso_dt(doc["generated_at"])
+        meters = build_subscription_meters(doc, now=now, lang="en")
+        # Full-width column at 120 cols: the whole label fits.
+        self.assertEqual(_meter_label_width(meters, "full", 118), len("Claude/GPT weekly"))
+        # At 80 columns the label column still leaves the bar >= 10 cells.
+        w80 = _meter_label_width(meters, "full", 80)
+        self.assertLessEqual(w80 + 2 + 1 + 8 + 16 + 10, 80)
+        self.assertEqual(w80, len("Claude/GPT weekly"))
+
     def test_subscription_without_quota_shows_placeholder(self):
         doc = {
             "timezone": "UTC",

@@ -302,6 +302,8 @@
 "overview.quota.hours" = "%d 小时";
 "overview.quota.resets_in" = "%@后重置 · %@";
 "overview.quota.ended" = "窗口已结束";
+"overview.quota.claude_gpt_weekly" = "Claude/GPT · 每周";
+"overview.quota.claude_gpt_five_hour" = "Claude/GPT · 5 小时";
 "overview.quota.rel_m" = "%d 分钟";
 "overview.quota.rel_hm" = "%d 小时 %d 分";
 "overview.quota.rel_dh" = "%d 天 %d 小时";
@@ -507,7 +509,8 @@
 "overview.agy.sign_in_once" = "需先登录一次";
 "overview.agy.sign_in_once_tip" = "运行 agy 并登录此账号一次，然后刷新 Kanjo";
 "overview.agy.unattributed" = "未识别（桌面版等）";
-"overview.agy.switched_note" = "已切换，正在运行的 agy 需重开";
+"overview.agy.switched_note" = "已切换——正在运行的 agy 会在下次令牌刷新时写回自己的登录";
+"overview.agy.running_note" = "%d 个 agy 正在运行，需退出后重开，否则约一小时内会被切回";
 "overview.agy.no_saved_login" = "未找到已保存的登录信息";
 "overview.agy.unsaved_login" = "当前登录尚未保存；请运行一次 agy 并刷新 Kanjo";
 "overview.agy.switch_failed" = "切换失败";

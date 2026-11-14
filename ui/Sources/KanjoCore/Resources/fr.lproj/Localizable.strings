@@ -302,6 +302,8 @@
 "overview.quota.hours" = "%d heures";
 "overview.quota.resets_in" = "Réinit. dans %@ · %@";
 "overview.quota.ended" = "Fenêtre terminée";
+"overview.quota.claude_gpt_weekly" = "Claude/GPT · Hebdomadaire";
+"overview.quota.claude_gpt_five_hour" = "Claude/GPT · 5 heures";
 "overview.quota.rel_m" = "%d min";
 "overview.quota.rel_hm" = "%d h %d min";
 "overview.quota.rel_dh" = "%d j %d h";
@@ -507,7 +509,8 @@
 "overview.agy.sign_in_once" = "Connectez-vous avec agy";
 "overview.agy.sign_in_once_tip" = "Lancez agy et connectez-vous avec ce compte une fois, puis actualisez";
 "overview.agy.unattributed" = "Non attribué (app de bureau etc.)";
-"overview.agy.switched_note" = "Basculé — redémarrez les sessions agy actives";
+"overview.agy.switched_note" = "Basculé — les sessions agy actives réinscriront leur connexion au prochain rafraîchissement de jeton";
+"overview.agy.running_note" = "%d sessions agy en cours — quittez-les et rouvrez-les, sinon elles rebasculeront dans environ une heure";
 "overview.agy.no_saved_login" = "Aucune connexion enregistrée trouvée";
 "overview.agy.unsaved_login" = "La connexion actuelle n'est pas encore enregistrée ; lancez agy une fois et actualisez Kanjo";
 "overview.agy.switch_failed" = "Échec du basculement";

@@ -6,6 +6,23 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-14
+
+### Fixed
+
+- **Antigravity account switching works while agy is running.** Kanjo now tells which account is in the
+  Antigravity CLI login from the CLI's login and token-refresh log lines, so each account you sign in
+  with is saved and can be switched to. Before, nothing was ever saved while an agy session was open.
+- **Switch warning.** Running agy sessions write their own login back at their next token refresh. After a
+  switch, the app and `kanjo usage` say how many agy sessions are running and that they need restarting.
+- **No more phantom Antigravity accounts.** Two log lines written on top of each other no longer produce a
+  bogus second account (e.g. `name@gmail.ci`).
+- **Antigravity quota labels.** The Claude/GPT weekly and 5-hour windows are labelled "Claude/GPT ·
+  Weekly / 5-hour" instead of repeating "Weekly Limit Remaining" next to the Gemini rows.
+- **`kanjo usage` look.** The project detail pane has a solid background, dark agent colours (Command Code
+  and a few others) are lighter on dark terminals, and meter labels are no longer cut off.
+- **Windows CI.** The TUI tests no longer fail to import on Windows, which has no `curses`.
+
 ## [0.6.0] - 2026-11-13
 
 ### Added

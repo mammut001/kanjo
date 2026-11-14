@@ -318,6 +318,23 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
     return None
 
 
+def _three_p_title(is_3p: bool, cadence: str, raw_title: str) -> str:
+    """Title for a Claude/GPT (3p) group bucket.
+
+    Antigravity now labels these buckets with the generic English
+    "Weekly Limit Remaining" / "Five Hour Limit Remaining", which reads as a
+    duplicate of the Gemini rows. Derive a stable title from the cadence
+    instead; fall back to the raw displayName for anything unrecognised.
+    """
+    if not is_3p:
+        return raw_title
+    if any(k in cadence for k in ("weekly", "week", "7d")):
+        return "Claude/GPT weekly"
+    if any(k in cadence for k in ("5h", "5-hour", "five hour", "five-hour")):
+        return "Claude/GPT 5-hour"
+    return raw_title
+
+
 def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] = None,
                               email: Optional[str] = None) -> Optional[dict]:
     """Parse RetrieveUserQuotaSummary JSON into standard quota_windows fields + extra_windows."""
@@ -379,7 +396,8 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
                     }
             elif is_3p or not is_gemini:
                 bid = str(bucket.get("bucketId") or bucket.get("id") or "extra")
-                btitle = str(bucket.get("displayName") or bucket.get("title") or bid)
+                raw_title = str(bucket.get("displayName") or bucket.get("title") or bid)
+                btitle = _three_p_title(is_3p or "3p" in bid.lower(), cadence, raw_title)
                 extra_windows.append({
                     "id": bid,
                     "title": btitle,

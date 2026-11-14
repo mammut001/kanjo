@@ -70,6 +70,28 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(agyRows[3].detail, "Window ended")
     }
 
+    func testExtraWindowTitleLocalizes3pBuckets() {
+        let weekly = ExtraQuotaWindow(id: "3p-weekly", title: "Claude/GPT weekly")
+        let five = ExtraQuotaWindow(id: "3p-5h", title: "Claude/GPT 5-hour")
+        let other = ExtraQuotaWindow(id: "antigravity-3p-weekly", title: "Claude/GPT 周")
+        let plain = ExtraQuotaWindow(id: "whatever", title: "Weekly Limit Remaining")
+
+        // English
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(weekly, language: "en"), "Claude/GPT · Weekly")
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(five, language: "en"), "Claude/GPT · 5-hour")
+        // Non-3p ids keep the supplied title.
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(other, language: "en"), "Claude/GPT 周")
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(plain, language: "en"), "Weekly Limit Remaining")
+
+        // Simplified Chinese
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(weekly, language: "zh-Hans"), "Claude/GPT · 每周")
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(five, language: "zh-Hans"), "Claude/GPT · 5 小时")
+
+        // French
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(weekly, language: "fr"), "Claude/GPT · Hebdomadaire")
+        XCTAssertEqual(SubscriptionValue.extraWindowTitle(five, language: "fr"), "Claude/GPT · 5 heures")
+    }
+
     func testExtraWindowsDecoding() throws {
         // Backward compatibility: decoding without extra_windows
         let jsonWithout = """

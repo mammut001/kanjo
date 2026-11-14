@@ -494,7 +494,11 @@ def run_curses_tui(
             if pending is not None:
                 email, code, payload = pending
                 if code == 0:
-                    set_status(t("accounts.switched", lang, email=email))
+                    running = payload.get("running_agy") if isinstance(payload, dict) else None
+                    if isinstance(running, int) and running > 0:
+                        set_status(t("accounts.switched_running", lang, count=running))
+                    else:
+                        set_status(t("accounts.switched", lang, email=email))
                 else:
                     err = payload.get("error") if isinstance(payload, dict) else None
                     if err == "no_saved_login":

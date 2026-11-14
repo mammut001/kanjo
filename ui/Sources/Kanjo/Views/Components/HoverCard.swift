@@ -371,7 +371,8 @@ struct QuotaCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(agy.accounts) { acc in
-                    accountRow(acc, currentEmail: agy.current)
+                    accountRow(acc, currentEmail: agy.current,
+                               displayName: AntigravityAccountLogic.displayName(for: acc, among: agy.accounts))
                 }
                 if agy.unknown.tokens > 0 {
                     unknownRow(agy.unknown)
@@ -393,14 +394,13 @@ struct QuotaCard: View {
         }
     }
 
-    private func accountRow(_ acc: AntigravityAccount, currentEmail: String?) -> some View {
+    private func accountRow(_ acc: AntigravityAccount, currentEmail: String?, displayName: String) -> some View {
         let isCurrent = (acc.email.lowercased() == (currentEmail ?? "").lowercased())
-        let localPart = AntigravityAccountLogic.localPart(of: acc.email)
         let state = AntigravityAccountLogic.buttonState(for: acc, currentEmail: currentEmail)
 
         return HStack(alignment: .center, spacing: 6) {
             HStack(spacing: 4) {
-                Text(localPart)
+                Text(displayName)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .hoverTip(acc.email)
@@ -524,7 +524,11 @@ struct QuotaCard: View {
 
                 if status == 0 && parsedJson?["status"] as? String == "ok" {
                     isSuccess = true
-                    statusMessage = L10n.tr("overview.agy.switched_note")
+                    if let running = parsedJson?["running_agy"] as? Int, running > 0 {
+                        statusMessage = L10n.tr("overview.agy.running_note", running)
+                    } else {
+                        statusMessage = L10n.tr("overview.agy.switched_note")
+                    }
                     ReportStore.shared.refresh()
                 } else {
                     isSuccess = false
