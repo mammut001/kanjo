@@ -145,6 +145,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "meter.reset.in_dh": "resets in {days}d {hours}h",
         "meter.quota": "quota",
         "meter.extra": "Extra",
+        "meter.claude_gpt_weekly": "Claude/GPT Weekly",
+        "meter.claude_gpt_five_hour": "Claude/GPT 5-hour",
         "meter.no_live_data": "(no live data)",
 
         # accounts section / view
@@ -154,9 +156,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "accounts.current": "● current",
         "accounts.ascii_current": "* current",
         "accounts.unattributed": "unattributed",
-        "accounts.confirm": "Switch the Antigravity CLI login to {email}? Running agy sessions keep the old account until restarted. [y/N]",
+        "accounts.confirm": "Switch the Antigravity CLI login to {email}? Running agy sessions write their own login back at their next token refresh — quit them (or restart them) after switching. [y/N]",
         "accounts.confirm_title": "Switch login",
-        "accounts.switched": "Switched to {email} — restart running agy sessions",
+        "accounts.switched": "Switched to {email} — running agy sessions write their login back at their next token refresh",
+        "accounts.switched_running": "{count} agy sessions running — quit and reopen them or they will switch back within about an hour",
         "accounts.no_saved_login": "Sign in once with `agy` using this account, then refresh",
         "accounts.macos_only": "Switching is macOS-only",
         "accounts.error.no_saved_login": "No saved login found",
@@ -277,6 +280,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "meter.reset.in_dh": "{days} 天 {hours} 小时后重置",
         "meter.quota": "额度",
         "meter.extra": "额外",
+        "meter.claude_gpt_weekly": "Claude/GPT 每周",
+        "meter.claude_gpt_five_hour": "Claude/GPT 5 小时",
         "meter.no_live_data": "（暂无实时数据）",
 
         # accounts section / view
@@ -286,9 +291,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "accounts.current": "● 当前",
         "accounts.ascii_current": "* 当前",
         "accounts.unattributed": "未归属",
-        "accounts.confirm": "将 Antigravity CLI 登录切换为 {email}？正在运行的 agy 会话在重启前仍使用旧账号。[y/N]",
+        "accounts.confirm": "将 Antigravity CLI 登录切换为 {email}？正在运行的 agy 会在下次令牌刷新时写回自己的登录——切换后请退出（或重开）它们。[y/N]",
         "accounts.confirm_title": "切换登录",
-        "accounts.switched": "已切换到 {email}，正在运行的 agy 需重开",
+        "accounts.switched": "已切换到 {email}——正在运行的 agy 会在下次令牌刷新时写回自己的登录",
+        "accounts.switched_running": "{count} 个 agy 正在运行，需退出后重开，否则约一小时内会被切回",
         "accounts.no_saved_login": "先用 agy 以该账号登录一次，然后刷新",
         "accounts.macos_only": "仅 macOS 支持切换",
         "accounts.error.no_saved_login": "未找到已保存的登录信息",

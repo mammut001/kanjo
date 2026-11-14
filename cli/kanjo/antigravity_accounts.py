@@ -6,6 +6,12 @@ Antigravity logs each launch into ``~/.gemini/antigravity-cli/log/cli-YYYYMMDD_H
 - end: max(last glog line time, file mtime), handling year rollover
 - emails: set of distinct Google account emails observed in ``email=...`` lines
 - conversations: conversation IDs created or active during the launch
+- auth_events: timestamped ``(ts, email, via)`` events; ``via`` is ``keyring``
+  when the email directly follows a ``keyringAuth: loaded token`` line, else
+  ``login``. A file's active email at time ``t`` is the email of its latest
+  auth event at or before ``t`` (``LaunchSpan.active_email_at``).
+- refresh_events: timestamps of ``token refreshed, new expiry=`` lines (each
+  one rewrites the keychain slot, so they are slot-writing events).
 
 Attribution rule (per message):
 a. launches that used this conversation and whose [start-60s, end+60s] covers ts
@@ -29,10 +35,17 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from .cache import _cache_dir
 from .sources.base import Message, Session, iso_utc, local_zone
 
-LOGS_CACHE_VERSION = 5
+LOGS_CACHE_VERSION = 6
 _FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})")
 _GLOG_LINE_RE = re.compile(r"^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?")
-_EMAIL_RE = re.compile(r"\bemail=([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})")
+# The email must end at a boundary. Concurrent writers sometimes interleave two
+# glog lines (``email=bob@gmail.cI1108 17:35:...``); without the lookahead the
+# domain greedily swallows the next line's prefix and yields a fake account
+# (``bob@gmail.ci``). Require whitespace, ``,`` / ``;`` / a quote / ``)`` / ``]``
+# / ``}`` or end of line right after the address.
+_EMAIL_RE = re.compile(
+    r"\bemail=([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?=[\s,;'\")\]}]|$)"
+)
 _CONV_PATTERNS = [
     re.compile(r"Created conversation\s+([0-9a-fA-F-]{36})"),
     re.compile(r"(?:GetConversationDetail:\s+)?found conversation\s+([0-9a-fA-F-]{36})\s+\(active=true\)"),
@@ -55,7 +68,23 @@ class LaunchSpan:
     emails: Set[str] = field(default_factory=set)
     conversations: Set[str] = field(default_factory=set)
     auth_ts: Optional[float] = None
-    auth_events: List[Tuple[float, str]] = field(default_factory=list)
+    # Timestamped log events (see module docstring / CHANGELOG):
+    #   auth_events: (ts, email, via) with via in {"keyring", "login"}.
+    #     "keyring" when the email directly follows a ``keyringAuth: loaded
+    #     token`` line, otherwise "login" (an in-session /login or web oauth).
+    #   refresh_events: ts of each ``token refreshed, new expiry=`` line.
+    auth_events: List[Tuple[float, str, str]] = field(default_factory=list)
+    refresh_events: List[float] = field(default_factory=list)
+
+    def active_email_at(self, t: float) -> Optional[str]:
+        """Email of the latest auth event at or before ``t`` (any kind)."""
+        best_ts: Optional[float] = None
+        best_email: Optional[str] = None
+        for ts, email, _via in self.auth_events:
+            if ts <= t and (best_ts is None or ts > best_ts):
+                best_ts = ts
+                best_email = email
+        return best_email
 
 
 def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
@@ -85,7 +114,11 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
     has_keyring_load: bool = False
     keyring_auth_ts: Optional[float] = None
     apply_auth_ts: Optional[float] = None
-    auth_events: List[Tuple[float, str]] = []
+    auth_events: List[Tuple[float, str, str]] = []
+    refresh_events: List[float] = []
+    # The most recent ``keyringAuth: loaded token`` line makes the *next* email
+    # line a ``keyring`` auth event; every later email is a ``login`` event.
+    pending_keyring = False
 
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -120,8 +153,14 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
                 # Keyring auth detection
                 if "keyringAuth: loaded token" in line:
                     has_keyring_load = True
+                    pending_keyring = True
                     if current_line_ts is not None and keyring_auth_ts is None:
                         keyring_auth_ts = current_line_ts
+
+                # Silent token refresh: rewrites the keychain slot.
+                if "token refreshed, new expiry=" in line:
+                    ts_refresh = current_line_ts if current_line_ts is not None else (last_glog_ts if last_glog_ts is not None else start_ts)
+                    refresh_events.append(ts_refresh)
 
                 if "applyAuthResult: email=" in line:
                     if current_line_ts is not None and apply_auth_ts is None:
@@ -132,8 +171,10 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
                 for em in _EMAIL_RE.findall(line):
                     clean_em = em.strip().lower()
                     if clean_em:
+                        via = "keyring" if pending_keyring else "login"
                         emails.add(clean_em)
-                        auth_events.append((ts_for_email, clean_em))
+                        auth_events.append((ts_for_email, clean_em, via))
+                        pending_keyring = False
 
                 # 3. Conversation detection (created, active, streaming)
                 for pat in _CONV_PATTERNS:
@@ -172,6 +213,7 @@ def parse_log_file(path: str, known_conversations: Optional[Set[str]] = None,
         conversations=conversations,
         auth_ts=auth_ts,
         auth_events=auth_events,
+        refresh_events=refresh_events,
     )
 
 
@@ -279,7 +321,8 @@ class AntigravityAccountIndex:
                             emails=set(cached_entry.get("emails") or []),
                             conversations=set(cached_entry.get("conversations") or []),
                             auth_ts=float(cached_entry["auth_ts"]) if cached_entry.get("auth_ts") is not None else None,
-                            auth_events=[(float(ev[0]), str(ev[1])) for ev in cached_entry.get("auth_events") or []],
+                            auth_events=[(float(ev[0]), str(ev[1]), str(ev[2])) for ev in cached_entry.get("auth_events") or []],
+                            refresh_events=[float(ts) for ts in cached_entry.get("refresh_events") or []],
                         )
                         new_cached_files[path] = cached_entry
                     except (KeyError, ValueError, TypeError):
@@ -295,7 +338,8 @@ class AntigravityAccountIndex:
                             "auth_ts": span.auth_ts,
                             "emails": sorted(span.emails),
                             "conversations": sorted(span.conversations),
-                            "auth_events": [(ev[0], ev[1]) for ev in span.auth_events],
+                            "auth_events": [[ev[0], ev[1], ev[2]] for ev in span.auth_events],
+                            "refresh_events": list(span.refresh_events),
                         }
                         dirty = True
 
@@ -349,10 +393,38 @@ class AntigravityAccountIndex:
         return None
 
     def get_current_account(self) -> Optional[str]:
-        """Return the signed-in Google email from the most recent launch span."""
-        for span in reversed(self.spans):
-            if len(span.emails) == 1:
-                return next(iter(span.emails))
+        """Active email at the most recent slot-writing event (login or refresh)
+        across all files; else the latest auth event of any kind. Never pick
+        between two emails at the same instant."""
+        # Slot-writing events: in-session logins and token refreshes.
+        slot_events: List[Tuple[float, str]] = []
+        for span in self.spans:
+            for ts, email, via in span.auth_events:
+                if via == "login":
+                    slot_events.append((ts, email.lower()))
+            for ts in span.refresh_events:
+                em = span.active_email_at(ts)
+                if em:
+                    slot_events.append((ts, em.lower()))
+        owner = self._latest_unique_email(slot_events)
+        if owner is not None or slot_events:
+            return owner
+
+        # Fall back to the latest auth event of any kind (e.g. keyring-only).
+        auth_all: List[Tuple[float, str]] = []
+        for span in self.spans:
+            for ts, email, _via in span.auth_events:
+                auth_all.append((ts, email.lower()))
+        return self._latest_unique_email(auth_all)
+
+    @staticmethod
+    def _latest_unique_email(events: List[Tuple[float, str]]) -> Optional[str]:
+        if not events:
+            return None
+        max_ts = max(ts for ts, _e in events)
+        emails = {e for ts, e in events if ts == max_ts}
+        if len(emails) == 1:
+            return next(iter(emails))
         return None
 
 

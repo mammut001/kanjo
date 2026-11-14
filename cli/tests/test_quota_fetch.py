@@ -53,15 +53,15 @@ class QuotaFetchTest(unittest.TestCase):
                     "displayName": "Claude and GPT Models",
                     "buckets": [
                         {
-                            "bucketId": "antigravity-3p-weekly",
-                            "displayName": "Claude/GPT 周",
+                            "bucketId": "3p-weekly",
+                            "displayName": "Weekly Limit Remaining",
                             "remainingFraction": 0.90,
                             "resetTime": now + 50000,
                             "windowMinutes": 10080,
                         },
                         {
-                            "bucketId": "antigravity-3p-5h",
-                            "displayName": "Claude/GPT 5h",
+                            "bucketId": "3p-5h",
+                            "displayName": "Five Hour Limit Remaining",
                             "remainingFraction": 0.50,
                             "resetTime": now + 1800,
                             "windowMinutes": 300,
@@ -79,11 +79,37 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertEqual(res["weekly_window_hours"], 168)
         self.assertEqual(res["five_hour_window_hours"], 5)
         self.assertEqual(len(res["extra_windows"]), 2)
-        self.assertEqual(res["extra_windows"][0]["id"], "antigravity-3p-weekly")
-        self.assertEqual(res["extra_windows"][0]["title"], "Claude/GPT 周")
+        # Claude/GPT (3p) buckets get a cadence-derived title, not the raw
+        # "... Limit Remaining" displayName.
+        self.assertEqual(res["extra_windows"][0]["id"], "3p-weekly")
+        self.assertEqual(res["extra_windows"][0]["title"], "Claude/GPT weekly")
         self.assertEqual(res["extra_windows"][0]["used_percent"], 10.0)
-        self.assertEqual(res["extra_windows"][1]["id"], "antigravity-3p-5h")
+        self.assertEqual(res["extra_windows"][1]["id"], "3p-5h")
+        self.assertEqual(res["extra_windows"][1]["title"], "Claude/GPT 5-hour")
         self.assertEqual(res["extra_windows"][1]["used_percent"], 50.0)
+
+    def test_parse_antigravity_summary_3p_fallback_title(self):
+        now = 1730000000.0
+        data = {
+            "groups": [
+                {
+                    "displayName": "Claude and GPT Models",
+                    "buckets": [
+                        {
+                            "bucketId": "3p-mystery",
+                            "displayName": "Some Other Limit",
+                            "remainingFraction": 0.30,
+                            "resetTime": now + 50000,
+                        },
+                    ],
+                },
+            ]
+        }
+        res = quota_fetch.parse_antigravity_summary(data, now=now)
+        self.assertIsNotNone(res)
+        self.assertEqual(len(res["extra_windows"]), 1)
+        # Unrecognised cadence -> keep the raw displayName.
+        self.assertEqual(res["extra_windows"][0]["title"], "Some Other Limit")
 
     def test_parse_codex_usage(self):
         now = 1730000000.0

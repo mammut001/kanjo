@@ -103,6 +103,76 @@ I0101 00:00:05.200000       1 server.go:2] New Year started
         self.assertEqual(span.start, expected_start)
         self.assertEqual(span.end, expected_end)
 
+    def test_corrupted_interleaved_line_yields_no_fake_email(self):
+        # Concurrent writers interleave two glog lines; without a boundary
+        # lookahead the email domain greedily swallows the next line's prefix
+        # and 0.6.0 showed a fake "bob@gmail.ci" account.
+        corrupted = os.path.join(self.tmp, "cli-20261108_173528.log")
+        write_log(corrupted, (
+            "I1108 17:35:28.940791       1 server_oauth.go:221] applyAuthResult: "
+            "email=bob@gmail.cI1108 17:35:28.940739       1 server_oa"
+            "I1108 17:35:28.940700       1 server_oauth.go:221] applyAuthResult: "
+            "email=bob@gmail.cI1108 17:35:28.940650       1 server_oa\n"
+        ))
+        span = parse_log_file(corrupted)
+        self.assertIsNotNone(span)
+        self.assertEqual(span.emails, set())
+        self.assertEqual(span.auth_events, [])
+
+    def test_email_boundary_accepts_clean_terminators(self):
+        # A clean trailing applyAuthResult on the same corrupted line still
+        # parses, proving the boundary lookahead is not over-eager.
+        log_path = os.path.join(self.tmp, "cli-20261108_173529.log")
+        write_log(log_path, (
+            "I1108 17:35:28.940791       1 server_oauth.go:221] applyAuthResult: "
+            "email=bob@gmail.cI1108 17:35:28.940739 x email=carol@example.com, "
+            "authMethod=consumer\n"
+        ))
+        span = parse_log_file(log_path)
+        self.assertIsNotNone(span)
+        self.assertEqual(span.emails, {"carol@example.com"})
+
+    def test_log_events_model_auth_via_and_refresh(self):
+        log_path = os.path.join(self.tmp, "cli-20261112_120000.log")
+        write_log(log_path, (
+            "I1112 12:00:01.000000 1 auth.go:100] keyringAuth: loaded token\n"
+            "I1112 12:00:02.000000 1 server_oauth.go:221] applyAuthResult: email=a@example.com\n"
+            "I1112 12:05:00.000000 1 browser.go:265] token refreshed, new expiry=2026-11-13 23:54:20 -0500 EST m=+90059\n"
+            "I1112 12:10:00.000000 1 server_oauth.go:221] applyAuthResult: email=b@example.com\n"
+        ))
+        span = parse_log_file(log_path)
+        self.assertIsNotNone(span)
+        # a is loaded via keyring (directly after keyringAuth), b via login.
+        self.assertEqual([(e[1], e[2]) for e in span.auth_events],
+                         [("a@example.com", "keyring"), ("b@example.com", "login")])
+        self.assertEqual(len(span.refresh_events), 1)
+        tz = local_zone()
+        t_before = datetime(2026, 11, 12, 12, 0, 3, tzinfo=tz).timestamp()
+        t_refresh = datetime(2026, 11, 12, 12, 5, 0, tzinfo=tz).timestamp()
+        t_after = datetime(2026, 11, 12, 12, 10, 1, tzinfo=tz).timestamp()
+        self.assertEqual(span.active_email_at(t_before), "a@example.com")
+        self.assertEqual(span.active_email_at(t_refresh), "a@example.com")
+        self.assertEqual(span.active_email_at(t_after), "b@example.com")
+        self.assertIsNone(span.active_email_at(datetime(2026, 11, 12, 11, 59, 0, tzinfo=tz).timestamp()))
+
+    def test_get_current_account_uses_latest_slot_writing_event(self):
+        log_dir = os.path.join(self.tmp, "log")
+        os.makedirs(log_dir, exist_ok=True)
+        # A long-running process (keyring A) that refreshes at 12:30 ...
+        write_log(os.path.join(log_dir, "cli-20261112_120000.log"), (
+            "I1112 12:00:01.000000 1 auth.go:100] keyringAuth: loaded token\n"
+            "I1112 12:00:02.000000 1 server_oauth.go:221] applyAuthResult: email=a@example.com\n"
+            "I1112 12:30:00.000000 1 browser.go:265] token refreshed, new expiry=2026-11-13 23:54:20 -0500\n"
+        ))
+        # ... and a fresh keyring-only launch at 13:00 (reads the slot, does not write).
+        write_log(os.path.join(log_dir, "cli-20261112_130000.log"), (
+            "I1112 13:00:01.000000 1 auth.go:100] keyringAuth: loaded token\n"
+            "I1112 13:00:02.000000 1 server_oauth.go:221] applyAuthResult: email=b@example.com\n"
+        ))
+        idx = AntigravityAccountIndex(dirs=[log_dir], cache_dir=self.tmp)
+        # The most recent slot-writing event is the 12:30 refresh -> active a.
+        self.assertEqual(idx.get_current_account(), "a@example.com")
+
 
 class AntigravityAttributionRulesTest(unittest.TestCase):
     def setUp(self):

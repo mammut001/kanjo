@@ -6,6 +6,24 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Antigravity accounts: no more phantom accounts from interleaved log lines.** When two `agy` log
+  lines get written on top of each other, the email is now only accepted up to a boundary, so a torn
+  line no longer shows up as a bogus second account. The account cache is re-parsed automatically.
+- **Antigravity account switching actually finds the current login.** Slot ownership now comes from the
+  launch logs' login and token-refresh events (and a keychain reload by a freshly launched `agy`), so
+  `kanjo agy-account sync`/`switch` save and switch the right account instead of always reporting
+  "Sign in once with agy". Ambiguous evidence is never guessed.
+- **Antigravity quota: Claude/GPT windows are labelled, not duplicated.** The Claude/GPT weekly and
+  5-hour buckets get their own label ("Claude/GPT · Weekly" / "Claude/GPT · 5-hour", localized) instead
+  of echoing the generic "… Limit Remaining" text next to the Gemini rows.
+- **Windows CI: the TUI test module imports without `curses`.** Tests that drive the interactive UI are
+  skipped when `curses` is unavailable; everything else still runs on the Windows Python jobs.
+- **Antigravity switch note.** `kanjo agy-account switch`/`list` now report `running_agy` (how many `agy`
+  processes are running), and the app and `kanjo usage` warn that running sessions must be quit or
+  restarted or they will switch the account back at their next token refresh.
+
 ## [0.6.0] - 2026-11-13
 
 ### Added

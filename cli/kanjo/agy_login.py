@@ -33,6 +33,14 @@ SLOT_ACCOUNT = "antigravity"
 SAVED_SERVICE = "com.lanshuagent.kanjo.agy-login"
 SLOT_WRITE_STATE_FILE = "agy-slot-write.json"
 
+# Surfaced by `agy-account switch` / `list` JSON and localized by the app/TUI.
+# Running agy processes rewrite the slot at their next token refresh, so the
+# user must quit (or restart) them after switching.
+_SWITCH_NOTE = (
+    "running agy sessions write their own login back at their next token "
+    "refresh — quit them (or restart them) after switching"
+)
+
 
 def _slot_write_state_path(cache_dir: Optional[str] = None) -> str:
     cdir = cache_dir or _cache_dir()
@@ -244,6 +252,35 @@ def get_backend() -> Optional[KeychainBackend]:
     return None
 
 
+def count_running_agy() -> Optional[int]:
+    """Number of running processes named exactly ``agy``.
+
+    Uses ``pgrep -x agy`` (one PID per line). Returns 0 when none are running,
+    and ``None`` when the count cannot be determined (pgrep missing / error).
+    Injectable for tests via patching ``kanjo.agy_login.count_running_agy``.
+    """
+    try:
+        res = subprocess.run(
+            ["pgrep", "-x", "agy"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+    except Exception:
+        return None
+    if res.returncode not in (0, 1):
+        return None
+    return len([line for line in (res.stdout or "").splitlines() if line.strip()])
+
+
+def _running_agy_field(running_agy: Optional[int]) -> Optional[int]:
+    """Resolve the ``running_agy`` value: explicit override, else a live count."""
+    if running_agy is not None:
+        return running_agy
+    return count_running_agy()
+
+
 def set_backend(backend: Optional[KeychainBackend]) -> None:
     global _BACKEND
     _BACKEND = backend
@@ -255,19 +292,17 @@ def get_slot_owner(
     slot_bytes: Optional[bytes] = None,
     cache_dir: Optional[str] = None,
 ) -> Optional[str]:
-    """Determine the account in the slot.
+    """Determine the account currently in the slot.
 
-    1. Kanjo-write hash match: if sha256(current slot bytes) equals the recorded
-       hash from a Kanjo switch, owner = recorded email.
-    2. Evidence rule: email of earliest span with auth_ts >= mdat + 1.0 that loaded
-       from keyring and has exactly one email. Spans with auth_ts in [mdat, mdat+1)
-       are ambiguous: if any such span exists with a different email, return None.
-    3. Alive-at-mdat refresh rule: if evidence rule finds nothing, look at
-       keyring-loaded spans alive at mdat (start <= mdat+1 and end >= mdat-1).
-       If there is at least one, they all have exactly one and the same email X,
-       and none of them logged any auth/email line with a different email at or
-       after mdat-1, owner = X.
-    4. Otherwise None.
+    1. Kanjo-write hash match: if sha256(current slot bytes) equals the hash
+       recorded by a Kanjo switch, owner = recorded email.
+    2. Candidate slot-writing events: every ``login`` auth event and every
+       ``refresh`` event, across all files, with ``mdat - 5s <= ts <= mdat + 2s``.
+       The owner of such an event is the file's active email at that event.
+       If the candidates agree on exactly one email, that is the owner.
+    3. Keyring-launch evidence: otherwise, if a launch that *started after mdat*
+       loaded the token via keyring (``via == "keyring"``), its email is the owner.
+    4. If the two rules disagree, or the candidates disagree, -> None. Never guess.
     """
     if slot_bytes is None:
         slot_bytes = backend.read_slot()
@@ -293,65 +328,42 @@ def get_slot_owner(
         from .antigravity_accounts import get_account_index
         index = get_account_index()
 
-    keyring_spans = [s for s in index.spans if s.auth_ts is not None]
-    keyring_spans.sort(key=lambda s: s.auth_ts)
+    # 2. Candidate slot-writing events (logins + refreshes) near mdat.
+    lo = mdat - 5.0
+    hi = mdat + 2.0
+    candidate_emails: Set[str] = set()
+    for span in index.spans:
+        for ts, email, via in getattr(span, "auth_events", []):
+            if via == "login" and lo <= ts <= hi:
+                candidate_emails.add(str(email).strip().lower())
+        for ts in getattr(span, "refresh_events", []):
+            if lo <= ts <= hi:
+                em = span.active_email_at(ts)
+                if em:
+                    candidate_emails.add(str(em).strip().lower())
 
-    # 2. Evidence rule
-    first_qualifying_email = None
-    for s in keyring_spans:
-        if s.auth_ts < (mdat + 1.0):
-            continue
-        if len(s.emails) == 1:
-            first_qualifying_email = next(iter(s.emails)).lower()
-            break
-        elif len(s.emails) > 1:
-            return None
+    if len(candidate_emails) > 1:
+        # Candidates disagree -> unknown.
+        return None
+    rule_a = next(iter(candidate_emails)) if candidate_emails else None
 
-    if first_qualifying_email is not None:
-        for s in keyring_spans:
-            if mdat <= s.auth_ts < (mdat + 1.0):
-                if not s.emails:
-                    continue
-                s_emails = {e.lower() for e in s.emails}
-                if len(s_emails) != 1 or next(iter(s_emails)) != first_qualifying_email:
-                    return None
-        return first_qualifying_email
+    # 3. Keyring-launch evidence: a launch that started after mdat and loaded
+    #    the token from the keychain owns whatever was in the slot.
+    keyring_emails: Set[str] = set()
+    for span in index.spans:
+        if span.start > mdat:
+            for _ts, email, via in getattr(span, "auth_events", []):
+                if via == "keyring":
+                    keyring_emails.add(str(email).strip().lower())
+    if len(keyring_emails) > 1:
+        rule_b: Optional[str] = None
+    else:
+        rule_b = next(iter(keyring_emails)) if keyring_emails else None
 
-    # Spans with auth_ts in [mdat, mdat+1) are ambiguous; if any exists with no qualifying span >= mdat+1, return None
-    for s in keyring_spans:
-        if mdat <= s.auth_ts < (mdat + 1.0):
-            return None
-
-    # 3. Alive-at-mdat refresh rule
-    # Look at keyring-loaded spans that were ALIVE at mdat (start <= mdat+1 and end >= mdat-1)
-    # and loaded keyring before mdat (auth_ts < mdat)
-    live_spans = [
-        s for s in keyring_spans
-        if s.start <= (mdat + 1.0) and s.end >= (mdat - 1.0) and s.auth_ts < mdat
-    ]
-    if live_spans:
-        distinct_emails: Set[str] = set()
-        all_single = True
-        for s in live_spans:
-            if len(s.emails) != 1:
-                all_single = False
-                break
-            distinct_emails.add(next(iter(s.emails)).lower())
-        if all_single and len(distinct_emails) == 1:
-            candidate = next(iter(distinct_emails))
-            # none of them logged any auth/email line with a different email at or after mdat - 1
-            has_different_auth = False
-            for s in live_spans:
-                for event_ts, event_email in getattr(s, "auth_events", []):
-                    if event_ts >= (mdat - 1.0) and str(event_email).strip().lower() != candidate:
-                        has_different_auth = True
-                        break
-                if has_different_auth:
-                    break
-            if not has_different_auth:
-                return candidate
-
-    return None
+    # 4. Reconcile the two rules; never guess between disagreement.
+    if rule_a is not None and rule_b is not None:
+        return rule_a if rule_a == rule_b else None
+    return rule_a if rule_a is not None else rule_b
 
 
 def sync(
@@ -389,6 +401,7 @@ def switch(
     backend: Optional[KeychainBackend] = None,
     index=None,
     cache_dir: Optional[str] = None,
+    running_agy: Optional[int] = None,
 ) -> Tuple[int, dict]:
     """Switch active login slot to target email."""
     backend = backend or get_backend()
@@ -409,7 +422,8 @@ def switch(
         return 0, {
             "status": "ok",
             "account": target,
-            "note": "running agy sessions keep their old account until restarted",
+            "note": _SWITCH_NOTE,
+            "running_agy": _running_agy_field(running_agy),
         }
 
     # 2. if slot owner is unknown and slot is non-empty and differs from every saved copy, refuse
@@ -458,7 +472,8 @@ def switch(
     return 0, {
         "status": "ok",
         "account": target,
-        "note": "running agy sessions keep their old account until restarted",
+        "note": _SWITCH_NOTE,
+        "running_agy": _running_agy_field(running_agy),
     }
 
 
@@ -486,7 +501,12 @@ def list_accounts_login(backend: Optional[KeychainBackend] = None, index=None) -
             "current": em == current_account,
         })
 
-    return 0, {"status": "ok", "current": current_account, "accounts": accounts}
+    return 0, {
+        "status": "ok",
+        "current": current_account,
+        "running_agy": count_running_agy(),
+        "accounts": accounts,
+    }
 
 
 def forget(email: str, backend: Optional[KeychainBackend] = None, cache_dir: Optional[str] = None) -> Tuple[int, dict]:

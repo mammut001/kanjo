@@ -238,6 +238,20 @@ def localize_window_title(title: str, lang: Optional[str]) -> str:
     return out
 
 
+def _extra_window_title(ew_id: str, raw_title, lang: str) -> str:
+    """Localized title for an Antigravity ``extra_windows`` entry.
+
+    The Claude/GPT (3p) buckets share the ids ``3p-weekly`` / ``3p-5h`` and get
+    a dedicated localized label; every other id keeps the (localized) title
+    the CLI supplied.
+    """
+    if ew_id == "3p-weekly":
+        return t("meter.claude_gpt_weekly", lang)
+    if ew_id == "3p-5h":
+        return t("meter.claude_gpt_five_hour", lang)
+    return localize_window_title(str(raw_title or t("meter.extra", lang)), lang)
+
+
 def format_reset_countdown(reset_dt: Optional[datetime], now: datetime, tz: datetime.tzinfo,
                            lang: str = "en") -> str:
     """Format relative countdown to reset_dt: resets in 2d 4h, resets 18:40, resets in 35m."""
@@ -1206,8 +1220,8 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
                 ew_pct = float(ew_pct) if ew_pct is not None else None
             except (ValueError, TypeError):
                 ew_pct = None
-            ew_title = ew.get("title") or t("meter.extra", lang)
-            ew_title = localize_window_title(str(ew_title), lang)
+            ew_id = str(ew.get("id") or "")
+            ew_title = _extra_window_title(ew_id, ew.get("title"), lang)
             if ew_reset is not None:
                 now_utc = now.astimezone(timezone.utc)
                 reset_utc = ew_reset.astimezone(timezone.utc)

@@ -53,6 +53,22 @@ final class AntigravityAccountLogicTests: KanjoTestCase {
         XCTAssertEqual(AntigravityAccountLogic.localPart(of: "plain_user"), "plain_user")
     }
 
+    func testDisplayNameDisambiguatesSharedLocalPart() {
+        let alex1 = AntigravityAccount(email: "alex@example.com", tokens: 1, costUsd: 0, messages: 1)
+        let alex2 = AntigravityAccount(email: "alex@work.com", tokens: 2, costUsd: 0, messages: 1)
+        let bob = AntigravityAccount(email: "bob@example.com", tokens: 3, costUsd: 0, messages: 1)
+        let accounts = [alex1, alex2, bob]
+
+        // Distinct local parts -> show the local part.
+        XCTAssertEqual(AntigravityAccountLogic.displayName(for: bob, among: accounts), "bob")
+        // Two accounts share "alex" -> show the full email for both.
+        XCTAssertEqual(AntigravityAccountLogic.displayName(for: alex1, among: accounts), "alex@example.com")
+        XCTAssertEqual(AntigravityAccountLogic.displayName(for: alex2, among: accounts), "alex@work.com")
+
+        // On its own, alex shows just the local part.
+        XCTAssertEqual(AntigravityAccountLogic.displayName(for: alex1, among: [alex1]), "alex")
+    }
+
     func testSectionTitlesLocalization() {
         let dateStr = "11/6/26, 10:00 AM"
 

@@ -80,7 +80,7 @@ public enum SubscriptionValue {
                 let reset = ew.resetsAt.flatMap(ReportDates.parseTimestamp).flatMap { $0 > now ? $0 : nil }
                 rows.append(QuotaRow(
                     id: ew.id,
-                    title: ew.title,
+                    title: extraWindowTitle(ew, language: language),
                     percent: reset == nil ? nil : clampPercent(ew.usedPercent),
                     detail: reset.map { resetText($0, timezone: timezone, now: now, language: language) }
                         ?? L10n.tr("overview.quota.ended")
@@ -88,6 +88,20 @@ public enum SubscriptionValue {
             }
         }
         return rows
+    }
+
+    /// Localized title for an ``extra_windows`` entry. The Claude/GPT (3p)
+    /// buckets (ids ``3p-weekly`` / ``3p-5h``) get a dedicated localized label;
+    /// every other id keeps the title the CLI supplied.
+    public static func extraWindowTitle(_ ew: ExtraQuotaWindow, language: String? = nil) -> String {
+        switch ew.id {
+        case "3p-weekly":
+            return L10n.tr("overview.quota.claude_gpt_weekly", language: language)
+        case "3p-5h":
+            return L10n.tr("overview.quota.claude_gpt_five_hour", language: language)
+        default:
+            return ew.title
+        }
     }
 
     public static func windowName(hours: Int) -> String {
