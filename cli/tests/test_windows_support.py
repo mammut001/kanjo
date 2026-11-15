@@ -160,7 +160,7 @@ class ReportFamilyWindowsFallbackTest(unittest.TestCase):
                 def read(self):
                     return b'{"status":"ok","received_at":12345}'
 
-            def mock_urlopen(req, timeout=30):
+            def mock_urlopen(req, timeout=30, **kwargs):
                 captured_headers.update(req.headers)
                 return MockResponse()
 

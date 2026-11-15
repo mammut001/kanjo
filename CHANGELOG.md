@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`kanjo report-family` certificate errors on macOS.** Kanjo now trusts the macOS system root certificates (and `/etc/ssl/cert.pem`, plus certifi when installed), so a python.org Python without its certificate bundle can reach the family server. If a certificate error still happens with a python.org build, the message says to run "Install Certificates.command".
+
 ## [0.6.1] - 2026-11-14
 
 ### Fixed

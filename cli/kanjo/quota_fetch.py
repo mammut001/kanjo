@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from . import winsupport
+from .net import ssl_context
 from .quota_claude_cache import scan_claude_desktop_cache
 
 CACHE_VERSION = 1
@@ -494,7 +495,7 @@ def fetch_codex_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[di
         req.add_unredirected_header("ChatGPT-Account-Id", account_id)
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "chatgpt.com":
                 _debug_log("codex", "parse_error")
@@ -691,7 +692,7 @@ def fetch_claude_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[d
             req.add_unredirected_header("Authorization", f"Bearer {token}")
 
             try:
-                with urllib.request.urlopen(req, timeout=timeout) as res:
+                with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
                     parsed = urllib.parse.urlparse(res.geturl())
                     if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
                         _debug_log("claude", "parse_error")
@@ -812,7 +813,7 @@ def fetch_grok_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dic
     req.add_unredirected_header("Authorization", f"Bearer {token}")
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "cli-chat-proxy.grok.com":
                 _debug_log("grok", "parse_error")

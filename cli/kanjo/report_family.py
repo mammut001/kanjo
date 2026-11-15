@@ -14,6 +14,7 @@ import urllib.request
 from typing import Optional
 
 from . import __version__, winsupport
+from .net import cert_hint, ssl_context
 from .config import Config, ConfigError, load as load_config
 from .export import (
     build_family_report,
@@ -32,6 +33,11 @@ def _cache(args):
         return None
     from .cache import SessionCache
     return SessionCache()
+
+
+def _with_hint(message: str, exc: BaseException) -> str:
+    hint = cert_hint(exc)
+    return f"{message} {hint}" if hint else message
 
 
 def cmd_report_family(args) -> int:
@@ -103,7 +109,7 @@ def cmd_report_family(args) -> int:
 
     # 5. POST to server with 30s timeout, no retries
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context()) as resp:
             resp_body = resp.read().decode("utf-8")
             resp_json = json.loads(resp_body) if resp_body else {}
             output = {"status": "sent"}
@@ -125,10 +131,10 @@ def cmd_report_family(args) -> int:
         print(json.dumps(output))
         return 1
     except urllib.error.URLError as exc:
-        output = {"status": "error", "message": str(exc.reason)}
+        output = {"status": "error", "message": _with_hint(str(exc.reason), exc)}
         print(json.dumps(output))
         return 1
     except Exception as exc:
-        output = {"status": "error", "message": str(exc)}
+        output = {"status": "error", "message": _with_hint(str(exc), exc)}
         print(json.dumps(output))
         return 1
