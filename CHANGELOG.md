@@ -6,10 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-16
+
 ### Added
 
-- **One family token across multiple computers.** `kanjo report-family` and `kanjo export --family-report` now attach a hashed `device` identity (`id`, `name`, `os`, configurable via `--device-name` or `family.device_name`) without sending raw machine IDs or usernames.
-- **Per-device aggregation and device management on `family-server`.** The server tracks reports per `(member_id, device_id)`, sums every device's latest summary per member on the dashboard with a collapsible per-computer breakdown (excluding superseded legacy reports), prunes per device, and adds `python -m family_server device list|remove`.
+- **One family member, several computers.** Family reports now carry a device identity (a hash of the
+  machine id and OS user, never the raw values; name defaults to the computer name, override with
+  `--device-name`). A family server from this release keeps each computer's latest report and shows the
+  member's total across all of them, with a per-computer list. Before, two computers using the same token
+  overwrote each other.
 
 ## [0.6.2] - 2026-11-15
 
