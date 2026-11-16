@@ -447,6 +447,11 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
   "schema_version": 1,
   "kind": "kanjo-family-report",
   "member_label": "Alice (MacBook)", // 命令行 `--member-label` 指定；未指定时为 null
+  "device": {                        // 可选；用于区分同一成员名下的多台电脑，聚合时按设备最新上报相加
+    "id": "a1b2c3d4e5f60718",        // 16 位小写十六进制；sha256("kanjo-device-v1:" + machine_id + ":" + os_username)[:16]，无系统 ID 时回退到配置目录 device-id
+    "name": "MacBook-Pro",           // `--device-name` / `family.device_name` / 短主机名；去 `@`、最多 40 个可打印字符
+    "os": "macos"                    // "macos" | "linux" | "windows"
+  },
   "generated_at": "2026-11-09T18:00:00Z",
   "timezone": "America/Toronto",
   "generated_by": "kanjo 0.4.0",
@@ -481,6 +486,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 ```
 
 - `Period` 结构与公开汇总（第 12 节）完全一致。
+- `device`：用于识别上报电脑的脱敏标识（绝不包含原始机器 UUID 或系统用户名）。`id` 为固定 16 位十六进制摘要；`name` 优先取 `--device-name`，其次 `family.device_name`，默认取主机名第一段（`@` 替换为 `-`，最长 40 字符）。
 - `days` 包含最近 62 天内有数据的天，`period` 为 `YYYY-MM-DD`，`first_day` 和 `last_day` 均为对应日期。
 - `scope`: 汇总统计范围。`agents` 列出纳入统计的 agent（未配置时默认 `["antigravity"]`；值为 `"all"` 时代表全部 agent）；`since` 为统计起始时间（ISO 字符串，未配置时为 `null` 代表无起始下界）；`accounts_filter` 为纳入过滤的 Google 账号数量（整数，未配置账号过滤时为 `null`）。报文全文绝不包含账号邮箱明文。
 - **消息级过滤**：仅纳入 `agent` 属于 `scope.agents` 且消息时间戳 `timestamp >= scope.since` 的消息。若配置了账号过滤（`family.accounts`），Antigravity 消息还必须归属于过滤列表中的账号（未知账号/未归属账号消息予以排除）；其他 agent 不受账号过滤影响。在消息级别过滤后再聚合，使 `summary`（all_time/months/weeks/days、by_provider、by_agent、models）均反映过滤后的范围。

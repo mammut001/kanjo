@@ -148,6 +148,20 @@ Reports older than 90 days and intermediate reports on the same day are automati
 docker exec family-app python -m family_server prune
 ```
 
+### 5. Multiple Computers per Member
+
+Each member receives **one token** and can use that same token on any number of computers (Mac, Linux, Windows). Kanjo attaches a stable, privacy-preserving `device` identity (`sha256` prefix of machine ID + OS user, plus a short sanitized device name) to every report, and the dashboard sums each computer's latest snapshot per member.
+
+When a computer is retired or replaced, list and remove its reports so its old usage is no longer counted:
+
+```bash
+# List devices currently reporting under a member
+docker exec family-app python -m family_server device list --member "Alice"
+
+# Remove all reports for a retired device
+docker exec family-app python -m family_server device remove --member "Alice" --device <16-hex-id>
+```
+
 ---
 
 ## Billing Cycle & Admin Settings

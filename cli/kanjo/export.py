@@ -19,6 +19,7 @@ from . import attribution as attr
 from . import quota
 from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
+from .device import build_device_info
 from .ledger import Ledger, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
@@ -1296,6 +1297,7 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     items.append(("__cfg_family_since__", str(cfg.family_since), 0))
     items.append(("__cfg_family_agents__", str(cfg.family_agents), 0))
     items.append(("__cfg_family_accounts__", str(sorted(cfg.family_accounts) if cfg.family_accounts else None), 0))
+    items.append(("__cfg_family_device_name__", str(cfg.family_device_name), 0))
 
     try:
         from .antigravity_accounts import log_dirs as get_agy_log_dirs
@@ -1703,7 +1705,8 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
                         prices: Optional[PriceBook] = None, home: Optional[str] = None,
                         now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
                         cache=None, repo_cache=None, fs_root: Optional[str] = None,
-                        member_label: Optional[str] = None, tokei_dir: Optional[str] = None) -> dict:
+                        member_label: Optional[str] = None, tokei_dir: Optional[str] = None,
+                        device_name: Optional[str] = None) -> dict:
     config = config or Config()
     if config.family_agents is None:
         included_agents = {"antigravity"}
@@ -1785,10 +1788,13 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         and agent in included_agents
     }
 
+    device = build_device_info(device_name=device_name, config=config)
+
     return {
         "schema_version": 1,
         "kind": "kanjo-family-report",
         "member_label": member_label if member_label else None,
+        "device": device,
         "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timezone": tz_name,
         "generated_by": "kanjo " + __version__,
@@ -2009,12 +2015,26 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
             if not isinstance(scope["accounts_filter"], int) or scope["accounts_filter"] < 0:
                 problems.append("scope.accounts_filter must be a non-negative integer or null")
 
+    if "device" in doc:
+        dev = doc["device"]
+        if not isinstance(dev, dict):
+            problems.append("device must be an object")
+        else:
+            dev_id = dev.get("id")
+            if not isinstance(dev_id, str) or not re.fullmatch(r"[0-9a-f]{16}", dev_id):
+                problems.append("device.id must be 16 lowercase hex chars")
+            dev_name = dev.get("name")
+            if not isinstance(dev_name, str) or not dev_name.strip() or len(dev_name) > 40 or "@" in dev_name:
+                problems.append("device.name must be 1..40 chars without '@'")
+            if dev.get("os") not in ("macos", "linux", "windows"):
+                problems.append("device.os must be one of macos, linux, windows")
+
     return problems
 
 
 def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
                             now: Optional[float] = None, member_label: Optional[str] = None,
-                            scope: Optional[dict] = None) -> Optional[dict]:
+                            scope: Optional[dict] = None, device: Optional[dict] = None) -> Optional[dict]:
     cdir = directory or _cache_dir()
     path = os.path.join(cdir, "family-report-last.json")
     try:
@@ -2026,6 +2046,8 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
             return None
         if scope is not None and payload.get("scope") != scope:
             return None
+        if device is not None and payload.get("device") != device:
+            return None
         scanned_at = payload.get("scanned_at")
         if not isinstance(scanned_at, (int, float)):
             return None
@@ -2036,6 +2058,8 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
         if isinstance(doc, dict):
             if scope is not None and doc.get("scope") != scope:
                 return None
+            if device is not None and doc.get("device") != device:
+                return None
             doc["member_label"] = member_label if member_label else None
             return doc
     except (OSError, ValueError):
@@ -2045,16 +2069,23 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
 
 def save_fast_family_report(fingerprint: str, doc: dict, directory: Optional[str] = None,
                             now: Optional[float] = None, member_label: Optional[str] = None,
-                            scope: Optional[dict] = None) -> None:
+                            scope: Optional[dict] = None, device: Optional[dict] = None) -> None:
     cdir = directory or _cache_dir()
     path = os.path.join(cdir, "family-report-last.json")
     current = time.time() if now is None else now
     tmp = None
     saved_scope = scope if scope is not None else doc.get("scope")
+    saved_device = device if device is not None else doc.get("device")
     try:
         os.makedirs(cdir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".family-report-last-", dir=cdir)
-        payload = {"fingerprint": fingerprint, "scanned_at": current, "doc": doc, "scope": saved_scope}
+        payload = {
+            "fingerprint": fingerprint,
+            "scanned_at": current,
+            "doc": doc,
+            "scope": saved_scope,
+            "device": saved_device,
+        }
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(data)

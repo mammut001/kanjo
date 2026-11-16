@@ -669,5 +669,218 @@ class TestFamilyReportAccountsFilter(unittest.TestCase):
                 self.assertIn("antigravity", doc["quota_windows"])
 
 
+class TestFamilyReportDevice(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-family-device-test-")
+        self.data_dir = os.path.join(self.tmp, "data")
+        self.cache_dir = os.path.join(self.tmp, "cache")
+        self.config_dir = os.path.join(self.tmp, "config")
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
+
+        self.env = {
+            "KANJO_DATA_DIR": self.data_dir,
+            "KANJO_CACHE_DIR": self.cache_dir,
+            "KANJO_CONFIG_DIR": self.config_dir,
+            "KANJO_CLAUDE_DIR": FIXTURE_DIRS["claude"][0],
+            "KANJO_ANTIGRAVITY_DIR": FIXTURE_DIRS["antigravity"][0],
+            "KANJO_CODEX_DIR": FIXTURE_DIRS["codex"][0],
+            "KANJO_GROK_DIR": self.tmp,
+            "KANJO_QWEN_DIR": self.tmp,
+            "KANJO_COMMANDCODE_DIR": self.tmp,
+            "KANJO_MINIMAX_DIR": self.tmp,
+            "KANJO_OPENCODE_DIR": self.tmp,
+            "KANJO_COPILOT_DIR": self.tmp,
+            "KANJO_PI_DIR": self.tmp,
+        }
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run_cli(self, *args, extra_env=None):
+        out = io.StringIO()
+        err = io.StringIO()
+        env = dict(self.env)
+        if extra_env:
+            env.update(extra_env)
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            code = cli.main(list(args))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_device_id_stability_and_uniqueness(self):
+        from kanjo import device
+
+        with mock.patch("kanjo.device._machine_id", return_value="MACHINE-UUID-1111"), \
+             mock.patch("kanjo.device._os_username", return_value="alice_user"):
+            id1 = device.resolve_device_id()
+            id2 = device.resolve_device_id()
+        self.assertEqual(id1, id2)
+        self.assertRegex(id1, r"^[0-9a-f]{16}$")
+
+        with mock.patch("kanjo.device._machine_id", return_value="MACHINE-UUID-1111"), \
+             mock.patch("kanjo.device._os_username", return_value="bob_user"):
+            id_diff_user = device.resolve_device_id()
+        self.assertNotEqual(id1, id_diff_user)
+
+        with mock.patch("kanjo.device._machine_id", return_value="MACHINE-UUID-2222"), \
+             mock.patch("kanjo.device._os_username", return_value="alice_user"):
+            id_diff_machine = device.resolve_device_id()
+        self.assertNotEqual(id1, id_diff_machine)
+
+    def test_device_id_platform_readers(self):
+        from kanjo import device
+
+        # macOS ioreg
+        fake_proc = mock.Mock(
+            returncode=0,
+            stdout='    |   "IOPlatformUUID" = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"\n',
+        )
+        with mock.patch("kanjo.device.device_os", return_value="macos"), \
+             mock.patch("subprocess.run", return_value=fake_proc) as mock_run:
+            mid = device._machine_id()
+            self.assertEqual(mid, "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
+            self.assertEqual(mock_run.call_args.kwargs.get("timeout"), 5)
+
+        # Linux /etc/machine-id then /var/lib/dbus/machine-id
+        etc_path = os.path.join(self.tmp, "etc_machine_id")
+        dbus_path = os.path.join(self.tmp, "dbus_machine_id")
+        with open(dbus_path, "w", encoding="utf-8") as f:
+            f.write("dbus-mid-999\n")
+        orig_open = open
+
+        def fake_open(p, *a, **kw):
+            if p == "/etc/machine-id":
+                return orig_open(etc_path, *a, **kw)
+            if p == "/var/lib/dbus/machine-id":
+                return orig_open(dbus_path, *a, **kw)
+            return orig_open(p, *a, **kw)
+
+        with mock.patch("kanjo.device.device_os", return_value="linux"), \
+             mock.patch("builtins.open", side_effect=fake_open):
+            self.assertEqual(device._machine_id(), "dbus-mid-999")
+            with orig_open(etc_path, "w", encoding="utf-8") as f:
+                f.write("etc-mid-111\n")
+            self.assertEqual(device._machine_id(), "etc-mid-111")
+
+        # Windows winreg
+        fake_key = mock.MagicMock()
+        fake_key.__enter__.return_value = fake_key
+        fake_winreg = mock.MagicMock()
+        fake_winreg.HKEY_LOCAL_MACHINE = 1
+        fake_winreg.OpenKey.return_value = fake_key
+        fake_winreg.QueryValueEx.return_value = ("win-guid-777", 1)
+        with mock.patch("kanjo.device.device_os", return_value="windows"), \
+             mock.patch.dict(sys.modules, {"winreg": fake_winreg}):
+            self.assertEqual(device._machine_id(), "win-guid-777")
+
+    def test_fallback_device_id_created_once_and_reused(self):
+        from kanjo import device
+
+        fallback_file = os.path.join(self.config_dir, "device-id")
+        self.assertFalse(os.path.exists(fallback_file))
+
+        with mock.patch.dict(os.environ, self.env), \
+             mock.patch("kanjo.device._machine_id", return_value=None):
+            id1 = device.resolve_device_id()
+            self.assertRegex(id1, r"^[0-9a-f]{16}$")
+            self.assertTrue(os.path.exists(fallback_file))
+            with open(fallback_file, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), id1)
+
+            id2 = device.resolve_device_id()
+            self.assertEqual(id1, id2)
+
+    def test_raw_machine_id_and_username_never_in_payload(self):
+        raw_mid = "SECRET-HW-UUID-99887766"
+        raw_user = "secret_os_user_xyz"
+        with mock.patch("kanjo.device._machine_id", return_value=raw_mid), \
+             mock.patch("kanjo.device._os_username", return_value=raw_user):
+            code, out, err = self._run_cli("export", "--family-report", "--no-cache")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn(raw_mid, out)
+        self.assertNotIn(raw_user, out)
+        doc = json.loads(out)
+        self.assertRegex(doc["device"]["id"], r"^[0-9a-f]{16}$")
+        self.assertIn(doc["device"]["os"], ("macos", "linux", "windows"))
+        self.assertIsNone(validate_report_payload(doc))
+        self.assertIsNone(check_privacy_backstop(out.encode("utf-8")))
+
+    def test_device_name_sources_and_sanitization(self):
+        # 1. Default short hostname (stripped at first dot)
+        with mock.patch("socket.gethostname", return_value="macbook-pro.local"), \
+             mock.patch("kanjo.device._machine_id", return_value="mid-1"), \
+             mock.patch("kanjo.device._os_username", return_value="u1"):
+            code, out, err = self._run_cli("export", "--family-report", "--no-cache")
+            self.assertEqual(code, 0, err)
+            doc = json.loads(out)
+            self.assertEqual(doc["device"]["name"], "macbook-pro")
+
+        # 2. Config family.device_name
+        code, _, err = self._run_cli("config", "set", "family.device_name", "Home Studio")
+        self.assertEqual(code, 0, err)
+        with mock.patch("kanjo.device._machine_id", return_value="mid-1"), \
+             mock.patch("kanjo.device._os_username", return_value="u1"):
+            code, out, err = self._run_cli("export", "--family-report", "--no-cache")
+            self.assertEqual(code, 0, err)
+            doc = json.loads(out)
+            self.assertEqual(doc["device"]["name"], "Home Studio")
+
+        # 3. --device-name overrides config, sanitizes '@' and trims to 40 chars
+        long_at_name = "alice@example.com-" + ("x" * 40)
+        MockFamilyServerHandler.received_requests = []
+        MockFamilyServerHandler.response_status = 200
+        MockFamilyServerHandler.response_body = {"status": "ok", "received_at": "2026-11-09T19:00:00Z"}
+        server = HTTPServer(("127.0.0.1", 0), MockFamilyServerHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.handle_request)
+        thread.daemon = True
+        thread.start()
+        try:
+            with mock.patch("kanjo.device._machine_id", return_value="mid-1"), \
+                 mock.patch("kanjo.device._os_username", return_value="u1"):
+                code, out, err = self._run_cli(
+                    "report-family",
+                    "--url", f"http://127.0.0.1:{port}",
+                    "--device-name", long_at_name,
+                    "--no-cache",
+                    extra_env={"KANJO_FAMILY_TOKEN": "tok-123"},
+                )
+        finally:
+            server.server_close()
+            thread.join(timeout=2)
+        self.assertEqual(code, 0, err)
+        req_body = MockFamilyServerHandler.received_requests[0]["body"]
+        sent_doc = json.loads(req_body.decode("utf-8"))
+        dev_name = sent_doc["device"]["name"]
+        self.assertNotIn("@", dev_name)
+        self.assertLessEqual(len(dev_name), 40)
+        self.assertTrue(dev_name.startswith("alice-example.com-"))
+        self.assertIsNone(validate_report_payload(sent_doc))
+        self.assertIsNone(check_privacy_backstop(req_body))
+
+    def test_fast_cache_invalidated_when_device_changes(self):
+        with mock.patch("kanjo.device._machine_id", return_value="mid-1"), \
+             mock.patch("kanjo.device._os_username", return_value="u1"):
+            code, out1, err = self._run_cli("export", "--family-report", "--device-name", "Box A")
+            self.assertEqual(code, 0, err)
+            doc1 = json.loads(out1)
+            self.assertEqual(doc1["device"]["name"], "Box A")
+
+            # Change device name -> cache must miss and return updated device
+            code, out2, err = self._run_cli("export", "--family-report", "--device-name", "Box B")
+            self.assertEqual(code, 0, err)
+            doc2 = json.loads(out2)
+            self.assertEqual(doc2["device"]["name"], "Box B")
+
+        # Change device id -> cache must miss and return updated id
+        with mock.patch("kanjo.device._machine_id", return_value="mid-2"), \
+             mock.patch("kanjo.device._os_username", return_value="u1"):
+            code, out3, err = self._run_cli("export", "--family-report", "--device-name", "Box B")
+            self.assertEqual(code, 0, err)
+            doc3 = json.loads(out3)
+            self.assertNotEqual(doc3["device"]["id"], doc2["device"]["id"])
+
+
 if __name__ == "__main__":
     unittest.main()

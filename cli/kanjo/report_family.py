@@ -14,6 +14,7 @@ import urllib.request
 from typing import Optional
 
 from . import __version__, winsupport
+from .device import build_device_info
 from .net import cert_hint, ssl_context
 from .config import Config, ConfigError, load as load_config
 from .export import (
@@ -74,6 +75,7 @@ def cmd_report_family(args) -> int:
     doc = None
     fp = None
     member_label = getattr(args, "member_label", None)
+    device_name = getattr(args, "device_name", None)
     use_cache = not getattr(args, "no_cache", False)
     expected_scope = {
         "agents": (
@@ -83,15 +85,22 @@ def cmd_report_family(args) -> int:
         "since": cfg.family_since or None,
         "accounts_filter": len(cfg.family_accounts) if cfg.family_accounts is not None else None,
     }
+    expected_device = build_device_info(device_name=device_name, config=cfg) if use_cache else None
     if use_cache:
         fp = source_fingerprint(config=cfg)
-        doc = load_fast_family_report(fp, member_label=member_label, scope=expected_scope)
+        doc = load_fast_family_report(
+            fp, member_label=member_label, scope=expected_scope, device=expected_device,
+        )
     if doc is None:
-        doc = build_family_report(config=cfg, cache=_cache(args), member_label=member_label)
+        doc = build_family_report(
+            config=cfg, cache=_cache(args), member_label=member_label, device_name=device_name,
+        )
         if use_cache:
             if fp is None:
                 fp = source_fingerprint(config=cfg)
-            save_fast_family_report(fp, doc, member_label=member_label, scope=expected_scope)
+            save_fast_family_report(
+                fp, doc, member_label=member_label, scope=expected_scope, device=expected_device,
+            )
 
     # 4. Prepare HTTP request
     endpoint = raw_url.strip().rstrip("/") + "/api/report"

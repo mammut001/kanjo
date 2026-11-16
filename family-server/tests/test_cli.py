@@ -61,6 +61,62 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Pruned 0 report(s)", out)
 
+    def test_device_list_and_remove_via_cli(self):
+        with db.get_connection(self.db_path) as conn:
+            _, m_id = db.add_member(conn, "Alice")
+            db.insert_report(
+                conn,
+                m_id,
+                "2026-11-10T10:00:00Z",
+                '{"device":{"id":"1111222233334444","name":"OldMac","os":"macos"}}',
+                received_at="2026-11-10T10:00:00Z",
+                device_id="1111222233334444",
+                device_name="OldMac",
+            )
+            db.insert_report(
+                conn,
+                m_id,
+                "2026-11-11T10:00:00Z",
+                '{"device":{"id":"aaaa5555bbbb6666","name":"LinuxBox","os":"linux"}}',
+                received_at="2026-11-11T10:00:00Z",
+                device_id="aaaa5555bbbb6666",
+                device_name="LinuxBox",
+            )
+
+        # List devices
+        code, out, _ = self.run_cli(["device", "list", "--member", "Alice"])
+        self.assertEqual(code, 0)
+        self.assertIn("1111222233334444", out)
+        self.assertIn("OldMac", out)
+        self.assertIn("macos", out)
+        self.assertIn("aaaa5555bbbb6666", out)
+        self.assertIn("LinuxBox", out)
+
+        # Unknown member fails
+        code, _, err = self.run_cli(["device", "list", "--member", "Nobody"])
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+
+        # Remove retired device
+        code, out, _ = self.run_cli(
+            ["device", "remove", "--member", "Alice", "--device", "1111222233334444"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("Removed 1 report(s)", out)
+
+        # Verify only LinuxBox remains
+        code, out, _ = self.run_cli(["device", "list", "--member", "Alice"])
+        self.assertEqual(code, 0)
+        self.assertNotIn("1111222233334444", out)
+        self.assertIn("aaaa5555bbbb6666", out)
+
+        # Removing nonexistent device returns 1
+        code, _, err = self.run_cli(
+            ["device", "remove", "--member", "Alice", "--device", "deadbeefdeadbeef"]
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("No reports found", err)
+
 
 if __name__ == "__main__":
     unittest.main()

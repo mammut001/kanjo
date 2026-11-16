@@ -64,5 +64,44 @@ class TestScopeValidation(unittest.TestCase):
             self.assertIn(expected_sub, err)
 
 
+class TestDeviceValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "report.json")
+        with open(fixture_path, "r", encoding="utf-8") as f:
+            cls.base_payload = json.load(f)
+
+    def test_valid_device_and_optional_legacy(self):
+        # Legacy without device
+        legacy = copy.deepcopy(self.base_payload)
+        legacy.pop("device", None)
+        self.assertIsNone(validate_report_payload(legacy))
+
+        for os_name in ("macos", "linux", "windows"):
+            payload = copy.deepcopy(self.base_payload)
+            payload["device"] = {"id": "0123456789abcdef", "name": "Alice MacBook", "os": os_name}
+            self.assertIsNone(validate_report_payload(payload))
+
+    def test_invalid_device(self):
+        bad_cases = (
+            ("not_a_dict", "device must be an object"),
+            ({"id": "short", "name": "Mac", "os": "macos"}, "device.id"),
+            ({"id": "0123456789ABCDEF", "name": "Mac", "os": "macos"}, "device.id"),
+            ({"id": "0123456789abcdef\n", "name": "Mac", "os": "macos"}, "device.id"),
+            ({"id": "0123456789abcdeg", "name": "Mac", "os": "macos"}, "device.id"),
+            ({"id": "0123456789abcdef", "name": "", "os": "macos"}, "device.name"),
+            ({"id": "0123456789abcdef", "name": "   ", "os": "macos"}, "device.name"),
+            ({"id": "0123456789abcdef", "name": "x" * 41, "os": "macos"}, "device.name"),
+            ({"id": "0123456789abcdef", "name": "Mac\nBox", "os": "macos"}, "device.name"),
+            ({"id": "0123456789abcdef", "name": "Mac", "os": "freebsd"}, "device.os"),
+        )
+        for bad_dev, expected in bad_cases:
+            payload = copy.deepcopy(self.base_payload)
+            payload["device"] = bad_dev
+            err = validate_report_payload(payload)
+            self.assertIsNotNone(err, f"Expected failure for {bad_dev}")
+            self.assertIn(expected, err)
+
+
 if __name__ == "__main__":
     unittest.main()

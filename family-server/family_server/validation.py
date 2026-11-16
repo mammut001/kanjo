@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/")
 FORBIDDEN_KEYS = frozenset({"sessions_detail", "account", "paths", "title", "sessions"})
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+DEVICE_ID_REGEX = re.compile(r"[0-9a-f]{16}")
+VALID_DEVICE_OS = frozenset({"macos", "linux", "windows"})
 
 
 def _check_privacy_violations(obj: Any) -> Optional[str]:
@@ -177,6 +179,25 @@ def validate_report_payload(data: Any) -> Optional[str]:
         if "since" in scope and scope["since"] is not None:
             if not isinstance(scope["since"], str) or len(scope["since"]) > 64:
                 return "scope.since must be a string or null"
+
+    # device validation (optional)
+    if "device" in data and data["device"] is not None:
+        dev = data["device"]
+        if not isinstance(dev, dict):
+            return "device must be an object"
+        dev_id = dev.get("id")
+        if not isinstance(dev_id, str) or not DEVICE_ID_REGEX.fullmatch(dev_id):
+            return "device.id must be 16 lowercase hexadecimal characters"
+        dev_name = dev.get("name")
+        if (
+            not isinstance(dev_name, str)
+            or not dev_name.strip()
+            or len(dev_name) > 40
+            or not dev_name.isprintable()
+        ):
+            return "device.name must be 1 to 40 printable characters"
+        if dev.get("os") not in VALID_DEVICE_OS:
+            return "device.os must be one of 'macos', 'linux', 'windows'"
 
     return None
 

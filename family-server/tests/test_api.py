@@ -309,6 +309,49 @@ class TestAPIEndpoint(unittest.TestCase):
         )
         self.assertEqual(status_bob, 200)
 
+    def test_200_stores_device_fields_and_legacy_without_device(self):
+        # 1. With device object
+        dev_payload = copy.deepcopy(self.fixture_data)
+        dev_payload["device"] = {"id": "abcdef0123456789", "name": "MacBook-Pro", "os": "macos"}
+        status, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(dev_payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_alice}"},
+        )
+        self.assertEqual(status, 200)
+
+        # 2. Without device object (legacy)
+        legacy_payload = copy.deepcopy(self.fixture_data)
+        legacy_payload.pop("device", None)
+        status_bob, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(legacy_payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_bob}"},
+        )
+        self.assertEqual(status_bob, 200)
+
+        with db.get_connection(self.db_path) as conn:
+            rep_a = db.get_member_latest_report(conn, self.m_alice)
+            self.assertEqual(rep_a["device_id"], "abcdef0123456789")
+            self.assertEqual(rep_a["device_name"], "MacBook-Pro")
+
+            rep_b = db.get_member_latest_report(conn, self.m_bob)
+            self.assertEqual(rep_b["device_id"], "")
+            self.assertIsNone(rep_b["device_name"])
+
+    def test_400_rejects_invalid_device(self):
+        bad_payload = copy.deepcopy(self.fixture_data)
+        bad_payload["device"] = {"id": "not-hex", "name": "Mac", "os": "macos"}
+        status, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(bad_payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_alice}"},
+        )
+        self.assertEqual(status, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

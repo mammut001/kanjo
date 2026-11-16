@@ -88,6 +88,7 @@ class Config:
     family_since: Optional[str] = None
     family_agents: Optional[Any] = None
     family_accounts: Optional[List[str]] = None
+    family_device_name: Optional[str] = None
     family_origins: Dict[str, str] = field(default_factory=dict)
     source: Optional[str] = None
 
@@ -275,6 +276,9 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         if "accounts" in fam:
             cfg.family_accounts = fam["accounts"]
             cfg.family_origins["accounts"] = "toml"
+        if "device_name" in fam:
+            cfg.family_device_name = fam["device_name"]
+            cfg.family_origins["device_name"] = "toml"
     return cfg
 
 
@@ -430,6 +434,12 @@ def _validate_family_accounts(val) -> List[str]:
     raise ConfigError("family.accounts must be a list of non-empty strings")
 
 
+def _validate_family_device_name(val) -> str:
+    if not isinstance(val, str) or not val.strip():
+        raise ConfigError("family.device_name must be a non-empty string")
+    return val.strip()
+
+
 def _family(raw) -> dict:
     if not isinstance(raw, dict):
         raise ConfigError("[family] must be a table")
@@ -440,6 +450,8 @@ def _family(raw) -> dict:
         out["agents"] = _validate_family_agents(raw["agents"])
     if "accounts" in raw:
         out["accounts"] = _validate_family_accounts(raw["accounts"])
+    if "device_name" in raw:
+        out["device_name"] = _validate_family_device_name(raw["device_name"])
     return out
 
 
@@ -528,6 +540,9 @@ def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config
     if "accounts" in raw_fam:
         cfg.family_accounts = _validate_family_accounts(raw_fam["accounts"])
         cfg.family_origins["accounts"] = "overrides"
+    if "device_name" in raw_fam:
+        cfg.family_device_name = _validate_family_device_name(raw_fam["device_name"])
+        cfg.family_origins["device_name"] = "overrides"
 
     return cfg
 
@@ -541,6 +556,8 @@ def family_value(cfg: Config, key: str):
         return val, cfg.family_origins.get("agents", "default")
     if key == "accounts":
         return cfg.family_accounts, cfg.family_origins.get("accounts", "default")
+    if key == "device_name":
+        return cfg.family_device_name, cfg.family_origins.get("device_name", "default")
     return None, "default"
 
 

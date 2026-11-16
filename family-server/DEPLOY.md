@@ -145,6 +145,15 @@ IMPORTANT: Store this token now. It will NEVER be shown again.
 docker exec family-app python -m family_server member revoke "Alice"
 ```
 
+### Multiple computers & removing a retired device
+
+One token works across all computers belonging to the same person; the server sums the latest report per device. To remove a retired computer:
+
+```bash
+docker exec family-app python -m family_server device list --member "Alice"
+docker exec family-app python -m family_server device remove --member "Alice" --device <DEVICE_ID>
+```
+
 ### What to send to a family member
 
 Send the member:
@@ -326,6 +335,15 @@ IMPORTANT: Store this token now. It will NEVER be shown again.
 
 ```bash
 docker exec family-app python -m family_server member revoke "Alice"
+```
+
+### 同一成员多台电脑与移除旧设备
+
+每位成员只需一个令牌即可在多台电脑上使用，服务端会自动按设备累加各电脑的最新用量。若某台电脑已退役，可列出并移除其上报记录：
+
+```bash
+docker exec family-app python -m family_server device list --member "Alice"
+docker exec family-app python -m family_server device remove --member "Alice" --device <DEVICE_ID>
 ```
 
 ### 发送给成员的信息

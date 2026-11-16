@@ -1,6 +1,7 @@
-"""CLI entrypoint for family_server: serve, member, prune."""
+"""CLI entrypoint for family_server: serve, member, device, prune."""
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -91,6 +92,17 @@ def main(argv=None):
 
     revoke_parser = member_subs.add_parser("revoke", help="Revoke a member's access token", parents=[parent_parser])
     revoke_parser.add_argument("name", help="Name of member to revoke")
+
+    # device
+    device_parser = subparsers.add_parser("device", help="Manage member devices", parents=[parent_parser])
+    device_subs = device_parser.add_subparsers(dest="device_action", required=True)
+
+    dev_list_parser = device_subs.add_parser("list", help="List devices for a member", parents=[parent_parser])
+    dev_list_parser.add_argument("--member", required=True, help="Member name")
+
+    dev_remove_parser = device_subs.add_parser("remove", help="Remove a device's reports for a member", parents=[parent_parser])
+    dev_remove_parser.add_argument("--member", required=True, help="Member name")
+    dev_remove_parser.add_argument("--device", required=True, help="Device ID (16 hex chars, or 'legacy')")
 
     # prune
     prune_parser = subparsers.add_parser("prune", help="Prune old and duplicate reports", parents=[parent_parser])
@@ -184,6 +196,52 @@ def main(argv=None):
                 except ValueError as err:
                     print(f"Error: {err}", file=sys.stderr)
                     return 1
+
+    elif args.subcommand == "device":
+        if args.device_action == "list":
+            with db.get_connection(db_path) as conn:
+                try:
+                    devices = db.list_member_devices(conn, args.member)
+                except ValueError as err:
+                    print(f"Error: {err}", file=sys.stderr)
+                    return 1
+                if not devices:
+                    print(f"No devices found for member '{args.member}'.")
+                    return 0
+                print(f"{'Device ID':<18} {'Name':<24} {'OS':<10} {'Reports':<8} {'Last Report'}")
+                print("-" * 82)
+                for dev in devices:
+                    dev_id = dev["device_id"] or "(legacy)"
+                    dev_name = dev.get("device_name") or "-"
+                    dev_os = "-"
+                    try:
+                        payload = json.loads(dev["payload_json"])
+                        if isinstance(payload.get("device"), dict) and payload["device"].get("os"):
+                            dev_os = payload["device"]["os"]
+                    except Exception:
+                        pass
+                    last_rec = (dev.get("received_at") or "")[:19]
+                    print(f"{dev_id:<18} {dev_name:<24} {dev_os:<10} {dev['report_count']:<8} {last_rec}")
+                return 0
+
+        elif args.device_action == "remove":
+            target_id = "" if args.device in ("", "legacy", "(legacy)") else args.device
+            with db.get_connection(db_path) as conn:
+                try:
+                    deleted = db.remove_member_device(conn, args.member, target_id)
+                except ValueError as err:
+                    print(f"Error: {err}", file=sys.stderr)
+                    return 1
+                if deleted == 0:
+                    print(
+                        f"No reports found for device '{args.device}' under member '{args.member}'.",
+                        file=sys.stderr,
+                    )
+                    return 1
+                print(
+                    f"Removed {deleted} report(s) for device '{args.device}' of member '{args.member}'."
+                )
+                return 0
 
     elif args.subcommand == "prune":
         with db.get_connection(db_path) as conn:

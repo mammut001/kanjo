@@ -13,6 +13,7 @@ from typing import List, Optional
 from . import __version__, disk_cache, winsupport
 from .config import Config, ConfigError, load as load_config, subscription_value
 from .config_cmd import cmd_config
+from .device import build_device_info
 from .disk import clean as disk_clean, parse_older_than, report as disk_report
 from .export import (
     COST_NOTE, SOURCES, build_export, build_public_summary, build_family_report,
@@ -73,6 +74,7 @@ def cmd_export(args) -> int:
     use_cache = not getattr(args, "no_cache", False)
 
     if getattr(args, "family_report", False):
+        device_name = getattr(args, "device_name", None)
         expected_scope = {
             "agents": (
                 ["all"] if cfg.family_agents == "all" or cfg.family_agents == ["all"]
@@ -81,15 +83,22 @@ def cmd_export(args) -> int:
             "since": cfg.family_since or None,
             "accounts_filter": len(cfg.family_accounts) if cfg.family_accounts is not None else None,
         }
+        expected_device = build_device_info(device_name=device_name, config=cfg) if use_cache else None
         if use_cache:
             fp = source_fingerprint(config=cfg)
-            doc = load_fast_family_report(fp, member_label=args.member_label, scope=expected_scope)
+            doc = load_fast_family_report(
+                fp, member_label=args.member_label, scope=expected_scope, device=expected_device,
+            )
         if doc is None:
-            doc = build_family_report(config=cfg, cache=_cache(args), member_label=args.member_label)
+            doc = build_family_report(
+                config=cfg, cache=_cache(args), member_label=args.member_label, device_name=device_name,
+            )
             if use_cache:
                 if fp is None:
                     fp = source_fingerprint(config=cfg)
-                save_fast_family_report(fp, doc, member_label=args.member_label, scope=expected_scope)
+                save_fast_family_report(
+                    fp, doc, member_label=args.member_label, scope=expected_scope, device=expected_device,
+                )
     elif getattr(args, "public_summary", False):
         if use_cache:
             fp = source_fingerprint(config=cfg)
@@ -689,6 +698,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="export family usage report document (CONTRACT.md section 13)")
     p.add_argument("--member-label", metavar="NAME",
                    help="display name for member in family report (optional)")
+    p.add_argument("--device-name", metavar="NAME",
+                   help="display name for this computer in family report (optional)")
     p.add_argument("--account", action="append", dest="accounts", metavar="EMAIL",
                    help="Google account email to include in report (repeatable, overrides config)")
     p.add_argument("--hide-project-names", action="store_true",
@@ -779,6 +790,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("report-family", help="report usage summary to family server")
     p.add_argument("--url", required=True, metavar="URL", help="family server URL (e.g. https://usage.example.com)")
     p.add_argument("--member-label", metavar="NAME", help="display name for member (optional)")
+    p.add_argument("--device-name", metavar="NAME", help="display name for this computer (optional)")
     p.add_argument("--account", action="append", dest="accounts", metavar="EMAIL",
                    help="Google account email to include in report (repeatable, overrides config)")
     common(p, threshold=False)

@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from . import auth
 from . import db
+from .aggregate import merge_member_reports
 from .rate_limit import RateLimiter
 
 logger = logging.getLogger("family_server.dashboard")
@@ -338,6 +339,20 @@ def render_svg_chart(dates: List[str], member_data: List[dict], max_tokens: int)
     return "\n".join(lines)
 
 
+_OS_LABELS = {
+    "macos": "macOS",
+    "linux": "Linux",
+    "windows": "Windows",
+}
+
+
+def format_os(os_name: str) -> str:
+    """Format normalized OS name for display."""
+    if not os_name:
+        return "未知系统"
+    return _OS_LABELS.get(os_name, os_name)
+
+
 def generate_dashboard_html(
     db_path: str,
     now: Optional[datetime] = None,
@@ -345,7 +360,7 @@ def generate_dashboard_html(
 ) -> str:
     """Render the full single-page dashboard HTML."""
     with db.get_connection(db_path) as conn:
-        records = db.get_all_latest_reports(conn)
+        records = db.get_all_latest_device_reports(conn)
         server_settings = db.get_all_settings(conn)
 
     tz_name = server_settings.get("timezone") or os.environ.get("FAMILY_TIMEZONE", "America/Toronto")
@@ -392,7 +407,7 @@ def generate_dashboard_html(
 
     for idx, rec in enumerate(records):
         m = rec["member"]
-        rep = rec["report"]
+        reports = rec["reports"]
         color = PALETTE[idx % len(PALETTE)]
 
         member_info = {
@@ -414,49 +429,59 @@ def generate_dashboard_html(
             "cycle_pool_tokens": 0,
             "scope": None,
             "scope_str": None,
+            "devices": [],
+            "legacy_excluded": False,
         }
 
-        if rep:
+        merged = merge_member_reports(reports)
+        if merged is not None:
+            meta = merged["_meta"]
             member_info["has_report"] = True
-            rec_dt = parse_iso(rep["received_at"])
+            rec_dt = meta.get("latest_received_at")
             member_info["received_at"] = rec_dt
             if rec_dt:
                 diff_sec = (now - rec_dt).total_seconds()
                 member_info["is_stale"] = diff_sec > 86400.0
 
-            try:
-                payload = json.loads(rep["payload_json"])
-            except Exception:
-                payload = {}
+            member_info["label"] = merged.get("member_label")
+            member_info["scope"] = merged.get("scope")
+            member_info["scope_str"] = format_scope(merged.get("scope"))
+            member_info["devices"] = meta.get("devices", [])
+            member_info["legacy_excluded"] = bool(meta.get("legacy_excluded"))
 
-            member_info["label"] = payload.get("member_label")
-            member_info["scope"] = payload.get("scope")
-            member_info["scope_str"] = format_scope(payload.get("scope"))
+            # Quota windows: feed per-device entries into the pool logic
+            for dev in member_info["devices"]:
+                qw = dev.get("quota_windows") or {}
+                dev_plans = dev.get("plans") or merged.get("plans") or {}
+                ag_qw = qw.get("antigravity")
+                if isinstance(ag_qw, dict):
+                    pct = _as_float(ag_qw.get("weekly_used_percent")) or 0.0
+                    resets_at = ag_qw.get("weekly_resets_at")
+                    plan_name = dev_plans.get("antigravity", "Google AI Ultra") if isinstance(dev_plans, dict) else "Google AI Ultra"
+                    dev_quota = {
+                        "weekly_used_percent": pct,
+                        "weekly_resets_at": resets_at,
+                        "plan": plan_name,
+                    }
+                    if member_info["antigravity_quota"] is None:
+                        member_info["antigravity_quota"] = dev_quota
 
-            # Quota windows
-            qw = payload.get("quota_windows", {})
-            plans = payload.get("plans", {})
-            ag_qw = qw.get("antigravity")
-            if isinstance(ag_qw, dict):
-                pct = _as_float(ag_qw.get("weekly_used_percent")) or 0.0
-                resets_at = ag_qw.get("weekly_resets_at")
-                plan_name = plans.get("antigravity", "Google AI Ultra") if isinstance(plans, dict) else "Google AI Ultra"
-                member_info["antigravity_quota"] = {
-                    "weekly_used_percent": pct,
-                    "weekly_resets_at": resets_at,
-                    "plan": plan_name,
-                }
-                quota_pool_entries.append({
-                    "member_name": m["name"],
-                    "member_label": member_info["label"],
-                    "color": color,
-                    "quota": member_info["antigravity_quota"],
-                    "windows": pool_windows_from_quota(ag_qw),
-                    "weekly_resets_at": resets_at,
-                    "received_at": rec_dt,
-                })
+                    dev_label = member_info["label"]
+                    if len(member_info["devices"]) > 1 and dev.get("device_name"):
+                        dev_label = dev["device_name"] if not dev_label else f"{dev_label} · {dev['device_name']}"
 
-            summary = payload.get("summary", {})
+                    quota_pool_entries.append({
+                        "member_name": m["name"],
+                        "member_label": dev_label,
+                        "device_name": dev.get("device_name") if not dev.get("is_legacy") else None,
+                        "color": color,
+                        "quota": dev_quota,
+                        "windows": pool_windows_from_quota(ag_qw),
+                        "weekly_resets_at": resets_at,
+                        "received_at": dev.get("received_at") or rec_dt,
+                    })
+
+            summary = merged.get("summary", {})
             days = summary.get("days", [])
             cycle_models = {}
 
@@ -736,6 +761,54 @@ def generate_dashboard_html(
         .models-table tr:last-child td { border-bottom: none; }
         .text-right { text-align: right !important; }
 
+        /* Devices collapsible list */
+        .legacy-note {
+          font-size: 0.78rem;
+          color: var(--amber);
+          margin-top: 0.2rem;
+        }
+        .devices-details {
+          margin-top: 0.85rem;
+          border-top: 1px solid var(--card-border);
+          padding-top: 0.6rem;
+        }
+        .devices-summary {
+          cursor: pointer;
+          font-size: 0.8rem;
+          color: var(--text-secondary);
+          user-select: none;
+        }
+        .devices-summary:hover { color: var(--text-primary); }
+        .device-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          margin-top: 0.55rem;
+        }
+        .device-item {
+          background: var(--bg);
+          border: 1px solid var(--card-border);
+          border-radius: 6px;
+          padding: 0.5rem 0.65rem;
+          font-size: 0.78rem;
+        }
+        .device-item-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+        .device-name { font-weight: 600; color: var(--text-primary); }
+        .device-totals { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+        .device-item-meta {
+          color: var(--text-muted);
+          margin-top: 0.15rem;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+        }
+
         /* Pool Share Bar */
         .share-list { display: flex; flex-direction: column; gap: 0.75rem; }
         .share-row { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -797,8 +870,9 @@ def generate_dashboard_html(
         doc.append('      <div class="empty-state">暂无成员上报 Google AI Ultra 额度数据</div>')
     else:
         src_name = html.escape(pool_latest["member_name"])
+        src_dev = f"（{html.escape(pool_latest['device_name'])}）" if pool_latest.get("device_name") else ""
         src_time = format_dt(pool_latest["received_at"], tz) if pool_latest.get("received_at") else "—"
-        doc.append(f'      <div class="pool-source">数据来自 {src_name} 的最新上报 · {html.escape(src_time)}</div>')
+        doc.append(f'      <div class="pool-source">数据来自 {src_name} 的最新上报{src_dev} · {html.escape(src_time)}</div>')
         doc.append('      <div class="pool-windows">')
         for w in pool_latest["windows"]:
             pct = max(0.0, min(100.0, w["used_percent"]))
@@ -968,6 +1042,8 @@ def generate_dashboard_html(
             doc.append(f'              <div class="member-label">上次上报：{html.escape(rec_str)}{lbl}</div>')
             if m.get("scope_str"):
                 doc.append(f'              <div class="member-scope" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem;">{html.escape(m["scope_str"])}</div>')
+            if m.get("legacy_excluded"):
+                doc.append('              <div class="legacy-note">1 台电脑使用旧版 Kanjo 未计入 — 请更新客户端以合并统计</div>')
             doc.append('            </div>')
             doc.append(f'            {badge_html}')
             doc.append('          </div>')
@@ -1011,6 +1087,34 @@ def generate_dashboard_html(
                 doc.append('          </table>')
             else:
                 doc.append('          <div class="empty-state" style="padding: 1rem 0 0.5rem 0;">本周期暂无模型用量明细</div>')
+
+            devices = m.get("devices") or []
+            if devices:
+                doc.append('          <details class="devices-details">')
+                doc.append(f'            <summary class="devices-summary">{len(devices)} 台电脑</summary>')
+                doc.append('            <div class="device-list">')
+                for dev in devices:
+                    d_name = html.escape(str(dev.get("device_name") or "—"))
+                    d_os = html.escape(format_os(str(dev.get("os") or "")))
+                    d_ver = html.escape(str(dev.get("generated_by") or "—"))
+                    d_tz = html.escape(str(dev.get("timezone") or "—"))
+                    d_rec = html.escape(format_dt(dev.get("received_at"), tz))
+                    d_tok = format_tokens(int(dev.get("all_time_tokens") or 0))
+                    d_cost = format_cost(float(dev.get("all_time_cost") or 0.0))
+                    doc.append('              <div class="device-item">')
+                    doc.append('                <div class="device-item-top">')
+                    doc.append(f'                  <span class="device-name">{d_name}</span>')
+                    doc.append(f'                  <span class="device-totals">{d_tok} ({d_cost})</span>')
+                    doc.append('                </div>')
+                    doc.append('                <div class="device-item-meta">')
+                    doc.append(f'                  <span>{d_os}</span>')
+                    doc.append(f'                  <span>{d_ver}</span>')
+                    doc.append(f'                  <span>{d_tz}</span>')
+                    doc.append(f'                  <span>上次上报：{d_rec}</span>')
+                    doc.append('                </div>')
+                    doc.append('              </div>')
+                doc.append('            </div>')
+                doc.append('          </details>')
 
             doc.append('        </div>')
         doc.append('      </div>')

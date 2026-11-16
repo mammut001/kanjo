@@ -35,7 +35,9 @@ def init_db(db_path: str) -> None:
                 member_id INTEGER NOT NULL REFERENCES members(id),
                 received_at TEXT NOT NULL,
                 generated_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL
+                payload_json TEXT NOT NULL,
+                device_id TEXT NOT NULL DEFAULT '',
+                device_name TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_reports_member_received ON reports(member_id, received_at);
@@ -60,6 +62,16 @@ def init_db(db_path: str) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
             """
+        )
+        # Idempotent migration for existing databases without device columns.
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
+        if "device_id" not in cols:
+            conn.execute("ALTER TABLE reports ADD COLUMN device_id TEXT NOT NULL DEFAULT ''")
+        if "device_name" not in cols:
+            conn.execute("ALTER TABLE reports ADD COLUMN device_name TEXT")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reports_member_device_received "
+            "ON reports(member_id, device_id, received_at)"
         )
         conn.commit()
 
@@ -151,15 +163,19 @@ def insert_report(
     generated_at: str,
     payload_json: str,
     received_at: Optional[str] = None,
+    device_id: str = "",
+    device_name: Optional[str] = None,
 ) -> int:
     """Insert a report record."""
     if received_at is None:
         received_at = datetime.now(timezone.utc).isoformat()
 
+    dev_id = device_id or ""
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO reports (member_id, received_at, generated_at, payload_json) VALUES (?, ?, ?, ?)",
-        (member_id, received_at, generated_at, payload_json),
+        "INSERT INTO reports (member_id, received_at, generated_at, payload_json, device_id, device_name) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (member_id, received_at, generated_at, payload_json, dev_id, device_name),
     )
     report_id = cur.lastrowid
     conn.commit()
@@ -170,8 +186,8 @@ def get_member_latest_report(conn: sqlite3.Connection, member_id: int) -> Option
     """Fetch the latest report for a given member."""
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, member_id, received_at, generated_at, payload_json FROM reports "
-        "WHERE member_id = ? ORDER BY received_at DESC, id DESC LIMIT 1",
+        "SELECT id, member_id, received_at, generated_at, payload_json, device_id, device_name "
+        "FROM reports WHERE member_id = ? ORDER BY received_at DESC, id DESC LIMIT 1",
         (member_id,),
     )
     row = cur.fetchone()
@@ -180,9 +196,26 @@ def get_member_latest_report(conn: sqlite3.Connection, member_id: int) -> Option
     return None
 
 
+def get_member_latest_reports_by_device(conn: sqlite3.Connection, member_id: int) -> List[Dict]:
+    """Fetch the latest report for each distinct device_id of a member."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT r.id, r.member_id, r.received_at, r.generated_at, r.payload_json, r.device_id, r.device_name "
+        "FROM reports r "
+        "WHERE r.member_id = ? "
+        "AND r.id = ("
+        "    SELECT r2.id FROM reports r2 "
+        "    WHERE r2.member_id = r.member_id AND r2.device_id = r.device_id "
+        "    ORDER BY r2.received_at DESC, r2.id DESC LIMIT 1"
+        ") "
+        "ORDER BY r.received_at DESC, r.id DESC",
+        (member_id,),
+    )
+    return [dict(r) for r in cur.fetchall()]
+
+
 def get_all_latest_reports(conn: sqlite3.Connection) -> List[Dict]:
     """Fetch the latest report for all active members."""
-    cur = conn.cursor()
     members = list_members(conn)
     result = []
     for m in members:
@@ -191,12 +224,63 @@ def get_all_latest_reports(conn: sqlite3.Connection) -> List[Dict]:
     return result
 
 
+def get_all_latest_device_reports(conn: sqlite3.Connection) -> List[Dict]:
+    """Fetch the latest report per device for all registered members."""
+    members = list_members(conn)
+    return [
+        {"member": m, "reports": get_member_latest_reports_by_device(conn, m["id"])}
+        for m in members
+    ]
+
+
+def list_member_devices(conn: sqlite3.Connection, member_name: str) -> List[Dict]:
+    """List distinct devices (with latest report info and report count) for a member."""
+    name = member_name.strip()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM members WHERE name = ?", (name,))
+    m_row = cur.fetchone()
+    if not m_row:
+        raise ValueError(f"Member '{name}' not found.")
+    member_id = m_row["id"]
+
+    cur.execute(
+        "SELECT device_id, COUNT(*) AS report_count "
+        "FROM reports WHERE member_id = ? GROUP BY device_id",
+        (member_id,),
+    )
+    counts = {row["device_id"]: row["report_count"] for row in cur.fetchall()}
+
+    latest = get_member_latest_reports_by_device(conn, member_id)
+    for rep in latest:
+        rep["report_count"] = counts.get(rep["device_id"], 1)
+    return latest
+
+
+def remove_member_device(conn: sqlite3.Connection, member_name: str, device_id: str) -> int:
+    """Remove all reports for a specific device of a member. Returns deleted row count."""
+    name = member_name.strip()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM members WHERE name = ?", (name,))
+    m_row = cur.fetchone()
+    if not m_row:
+        raise ValueError(f"Member '{name}' not found.")
+    member_id = m_row["id"]
+
+    cur.execute(
+        "DELETE FROM reports WHERE member_id = ? AND device_id = ?",
+        (member_id, device_id),
+    )
+    deleted = cur.rowcount
+    conn.commit()
+    return deleted
+
+
 def prune_reports(conn: sqlite3.Connection, now: Optional[datetime] = None) -> int:
-    """Prune reports according to retention policy:
-    - Latest report per member is always kept.
-    - Last report per member per day is kept for up to 90 days.
-    - Intermediate reports on the same day are deleted.
-    - Reports older than 90 days (not being the latest) are deleted.
+    """Prune reports according to per-(member_id, device_id) retention policy:
+    - Latest report per (member_id, device_id) is always kept.
+    - Last report per (member_id, device_id) per day is kept for up to 90 days.
+    - Intermediate reports on the same day for the same device are deleted.
+    - Reports older than 90 days (not being the latest for that device) are deleted.
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -210,27 +294,32 @@ def prune_reports(conn: sqlite3.Connection, now: Optional[datetime] = None) -> i
     for m_row in member_rows:
         member_id = m_row["id"]
         cur.execute(
-            "SELECT id, received_at FROM reports WHERE member_id = ? ORDER BY received_at ASC, id ASC",
+            "SELECT id, device_id, received_at FROM reports WHERE member_id = ? "
+            "ORDER BY received_at ASC, id ASC",
             (member_id,),
         )
         reports = cur.fetchall()
         if not reports:
             continue
 
-        keep_ids = set()
-        # 1. Overall latest report for this member
-        latest_id = reports[-1]["id"]
-        keep_ids.add(latest_id)
-
-        # 2. Last report per day within 90 days
-        day_groups: Dict[str, List[int]] = {}
+        by_device: Dict[str, List] = {}
         for r in reports:
-            day_str = r["received_at"][:10]
-            day_groups.setdefault(day_str, []).append(r["id"])
+            by_device.setdefault(r["device_id"] or "", []).append(r)
 
-        for day_str, ids in day_groups.items():
-            if day_str >= cutoff_date:
-                keep_ids.add(ids[-1])
+        keep_ids = set()
+        for dev_reports in by_device.values():
+            # 1. Overall latest report for this (member_id, device_id)
+            keep_ids.add(dev_reports[-1]["id"])
+
+            # 2. Last report per day within 90 days for this device
+            day_groups: Dict[str, List[int]] = {}
+            for r in dev_reports:
+                day_str = r["received_at"][:10]
+                day_groups.setdefault(day_str, []).append(r["id"])
+
+            for day_str, ids in day_groups.items():
+                if day_str >= cutoff_date:
+                    keep_ids.add(ids[-1])
 
         to_delete = [r["id"] for r in reports if r["id"] not in keep_ids]
         if to_delete:

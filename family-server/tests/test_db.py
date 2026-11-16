@@ -143,6 +143,111 @@ class TestDatabaseAndPrune(unittest.TestCase):
             self.assertIsNone(db.get_setting(conn, "tracking_start"))
             self.assertNotIn("tracking_start", db.get_all_settings(conn))
 
+    def test_migration_on_old_schema_db(self):
+        import sqlite3
+
+        old_db = os.path.join(self.tmp_dir.name, "old_schema.db")
+        with sqlite3.connect(old_db) as conn:
+            conn.executescript(
+                """
+                CREATE TABLE members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    token_sha256 TEXT UNIQUE NOT NULL,
+                    created_at TEXT NOT NULL,
+                    revoked_at TEXT
+                );
+                CREATE TABLE reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    member_id INTEGER NOT NULL REFERENCES members(id),
+                    received_at TEXT NOT NULL,
+                    generated_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                INSERT INTO members (name, token_sha256, created_at) VALUES ('OldUser', 'hash123', '2026-10-01T00:00:00Z');
+                INSERT INTO reports (member_id, received_at, generated_at, payload_json)
+                    VALUES (1, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z', '{"summary":{}}');
+                """
+            )
+
+        # Idempotent migration on startup
+        db.init_db(old_db)
+        db.init_db(old_db)
+
+        with db.get_connection(old_db) as conn:
+            cols = {row["name"] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
+            self.assertIn("device_id", cols)
+            self.assertIn("device_name", cols)
+            idxs = {row["name"] for row in conn.execute("PRAGMA index_list(reports)").fetchall()}
+            self.assertIn("idx_reports_member_device_received", idxs)
+            row = conn.execute("SELECT device_id, device_name FROM reports WHERE id = 1").fetchone()
+            self.assertEqual(row["device_id"], "")
+            self.assertIsNone(row["device_name"])
+
+    def test_prune_retention_per_device(self):
+        now = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)
+        dev_a = "aaaa1111bbbb2222"
+        dev_b = "cccc3333dddd4444"
+
+        with db.get_connection(self.db_path) as conn:
+            _, m1 = db.add_member(conn, "MultiDeviceUser")
+
+            # Device A: 120 days old (latest for dev_a -> MUST be kept!)
+            d120 = now - timedelta(days=120)
+            id_a_old = db.insert_report(
+                conn, m1, d120.isoformat(), '{"dev":"a"}',
+                received_at=d120.isoformat(), device_id=dev_a, device_name="OldMac",
+            )
+
+            # Device B: 2 reports today -> first deleted, second kept
+            id_b_t1 = db.insert_report(
+                conn, m1, now.isoformat(), '{"dev":"b1"}',
+                received_at=(now - timedelta(hours=2)).isoformat(), device_id=dev_b, device_name="LinuxBox",
+            )
+            id_b_t2 = db.insert_report(
+                conn, m1, now.isoformat(), '{"dev":"b2"}',
+                received_at=now.isoformat(), device_id=dev_b, device_name="LinuxBox",
+            )
+
+            deleted = db.prune_reports(conn, now=now)
+            self.assertEqual(deleted, 1)
+
+            rows = conn.execute("SELECT id FROM reports ORDER BY id ASC").fetchall()
+            self.assertEqual({r["id"] for r in rows}, {id_a_old, id_b_t2})
+            self.assertNotIn(id_b_t1, {r["id"] for r in rows})
+
+    def test_get_member_latest_reports_by_device_and_remove(self):
+        with db.get_connection(self.db_path) as conn:
+            _, m1 = db.add_member(conn, "Alice")
+            db.insert_report(
+                conn, m1, "2026-11-01T10:00:00Z", '{"v":1}',
+                received_at="2026-11-01T10:00:00Z", device_id="1111222233334444", device_name="Mac",
+            )
+            db.insert_report(
+                conn, m1, "2026-11-02T10:00:00Z", '{"v":2}',
+                received_at="2026-11-02T10:00:00Z", device_id="1111222233334444", device_name="Mac",
+            )
+            db.insert_report(
+                conn, m1, "2026-11-03T10:00:00Z", '{"v":3}',
+                received_at="2026-11-03T10:00:00Z", device_id="aaaa5555bbbb6666", device_name="Linux",
+            )
+
+            latest = db.get_member_latest_reports_by_device(conn, m1)
+            self.assertEqual(len(latest), 2)
+            self.assertEqual(latest[0]["device_id"], "aaaa5555bbbb6666")
+            self.assertEqual(latest[1]["device_id"], "1111222233334444")
+            self.assertIn('"v":2', latest[1]["payload_json"])
+
+            devices = db.list_member_devices(conn, "Alice")
+            self.assertEqual(len(devices), 2)
+            counts = {d["device_id"]: d["report_count"] for d in devices}
+            self.assertEqual(counts["1111222233334444"], 2)
+            self.assertEqual(counts["aaaa5555bbbb6666"], 1)
+
+            removed = db.remove_member_device(conn, "Alice", "1111222233334444")
+            self.assertEqual(removed, 2)
+            self.assertEqual(len(db.get_member_latest_reports_by_device(conn, m1)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

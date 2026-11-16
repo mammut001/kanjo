@@ -279,6 +279,144 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("&lt;script&gt;alert(&#x27;scope-agent&#x27;)&lt;/script&gt;", html)
         self.assertIn("&lt;img src=x onerror=alert(3)&gt;", html)
 
+    def test_dashboard_sums_multiple_devices_and_renders_device_list(self):
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(timezone.utc)
+        today_str = now.astimezone(ZoneInfo("America/Toronto")).date().isoformat()
+
+        def make_dev_payload(dev_id, dev_name, dev_os, tz_name, ver, day_tok, day_cost, all_tok, all_cost, weekly_pct=None):
+            p = copy.deepcopy(self.fixture_data)
+            p["device"] = {"id": dev_id, "name": dev_name, "os": dev_os}
+            p["timezone"] = tz_name
+            p["generated_by"] = ver
+            p["summary"]["all_time"]["tokens"]["total"] = all_tok
+            p["summary"]["all_time"]["cost_usd"] = all_cost
+            p["summary"]["days"] = [
+                {
+                    "period": today_str,
+                    "first_day": today_str,
+                    "last_day": today_str,
+                    "tokens": {"input": day_tok, "output": 0, "cache_read": 0, "cache_write": 0, "total": day_tok},
+                    "cost_usd": day_cost,
+                    "by_provider": [{"provider": "google", "label": "Google", "tokens": {"input": day_tok, "output": 0, "cache_read": 0, "cache_write": 0, "total": day_tok}, "cost_usd": day_cost, "models": []}],
+                    "by_agent": [{"agent": "antigravity", "label": "Antigravity", "tokens_total": day_tok, "cost_usd": day_cost}],
+                    "top_models": [{"model": "gemini-3.8-pro", "provider": "google", "tokens_total": day_tok, "cost_usd": day_cost}],
+                }
+            ]
+            if weekly_pct is not None:
+                p["quota_windows"] = {
+                    "antigravity": {
+                        "weekly_resets_at": (now + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "weekly_window_hours": 168,
+                        "weekly_used_percent": weekly_pct,
+                    }
+                }
+            else:
+                p["quota_windows"] = {}
+            return p
+
+        rec_mac = now - timedelta(hours=1)
+        rec_linux = now - timedelta(minutes=10)
+        mac_p = make_dev_payload(
+            "1111222233334444", "Shanghai-Mac", "macos", "Asia/Shanghai", "kanjo 0.6.3",
+            60000, 3.00, 64_000_000, 120.00, weekly_pct=22.0,
+        )
+        linux_p = make_dev_payload(
+            "aaaa5555bbbb6666", "UTC-Linux", "linux", "UTC", "kanjo 0.6.4",
+            40000, 2.00, 27_000_000, 50.00, weekly_pct=55.5,
+        )
+        bob_p = make_dev_payload(
+            "9999888877776666", "Bob-PC", "windows", "America/New_York", "kanjo 0.6.3",
+            10000, 0.50, 10_000_000, 20.00, weekly_pct=None,
+        )
+
+        with db.get_connection(self.db_path) as conn:
+            _, m_alice = db.add_member(conn, "Alice")
+            _, m_bob = db.add_member(conn, "Bob")
+            # Legacy report older than Alice's device reports -> excluded + note shown
+            legacy_p = copy.deepcopy(self.fixture_data)
+            legacy_p.pop("device", None)
+            db.insert_report(
+                conn, m_alice, legacy_p["generated_at"], json.dumps(legacy_p),
+                received_at=(now - timedelta(hours=5)).isoformat(), device_id="", device_name=None,
+            )
+            db.insert_report(
+                conn, m_alice, mac_p["generated_at"], json.dumps(mac_p),
+                received_at=rec_mac.isoformat(), device_id="1111222233334444", device_name="Shanghai-Mac",
+            )
+            db.insert_report(
+                conn, m_alice, linux_p["generated_at"], json.dumps(linux_p),
+                received_at=rec_linux.isoformat(), device_id="aaaa5555bbbb6666", device_name="UTC-Linux",
+            )
+            db.insert_report(
+                conn, m_bob, bob_p["generated_at"], json.dumps(bob_p),
+                received_at=rec_mac.isoformat(), device_id="9999888877776666", device_name="Bob-PC",
+            )
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+
+        # Alice summed cycle total: 60000 + 40000 = 100.0k, $5.00
+        self.assertIn("100.0k", html)
+        self.assertIn("$5.00", html)
+
+        # Pool card picks freshest device (UTC-Linux at 55.5%)
+        self.assertIn("已用 <strong>55.5%</strong>", html)
+        self.assertIn("数据来自 Alice 的最新上报（UTC-Linux）", html)
+
+        # Device counts & details
+        self.assertIn("2 台电脑", html)
+        self.assertIn("1 台电脑", html)
+        self.assertIn("Shanghai-Mac", html)
+        self.assertIn("macOS", html)
+        self.assertIn("Asia/Shanghai", html)
+        self.assertIn("kanjo 0.6.3", html)
+        self.assertIn("64.00M", html)
+        self.assertIn("$120.00", html)
+        self.assertIn("UTC-Linux", html)
+        self.assertIn("Linux", html)
+        self.assertIn("kanjo 0.6.4", html)
+        self.assertIn("27.00M", html)
+        self.assertIn("$50.00", html)
+        self.assertIn("Bob-PC", html)
+        self.assertIn("Windows", html)
+
+        # Last report time shown in dashboard's configured timezone (America/Toronto)
+        local_linux = rec_linux.astimezone(ZoneInfo("America/Toronto")).strftime("%Y-%m-%d %H:%M")
+        self.assertIn(local_linux, html)
+
+        # Legacy excluded note shown for Alice
+        self.assertIn("旧版 Kanjo 未计入", html)
+
+    def test_dashboard_escapes_html_in_device_fields(self):
+        malicious = copy.deepcopy(self.fixture_data)
+        malicious["device"] = {
+            "id": "1234567890abcdef",
+            "name": "<script>alert(1)</script>",
+            "os": "linux",
+        }
+        malicious["generated_by"] = "<img src=x onerror=alert(2)>"
+        malicious["timezone"] = "<b>UTC</b>"
+
+        with db.get_connection(self.db_path) as conn:
+            _, m_id = db.add_member(conn, "Eve")
+            db.insert_report(
+                conn, m_id, malicious["generated_at"], json.dumps(malicious),
+                received_at=datetime.now(timezone.utc).isoformat(),
+                device_id="1234567890abcdef",
+                device_name="<script>alert(1)</script>",
+            )
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertNotIn("<img src=x onerror=alert(2)>", html)
+        self.assertNotIn("<b>UTC</b>", html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+        self.assertIn("&lt;img src=x onerror=alert(2)&gt;", html)
+        self.assertIn("&lt;b&gt;UTC&lt;/b&gt;", html)
+
 
 if __name__ == "__main__":
     unittest.main()

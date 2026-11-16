@@ -165,7 +165,22 @@ class APIHandler(BaseHTTPRequestHandler):
             # 8. Store report in SQLite
             now_iso = datetime.now(timezone.utc).isoformat()
             generated_at = payload.get("generated_at", now_iso)
-            db.insert_report(conn, member_id, generated_at, body_str, received_at=now_iso)
+            device = payload.get("device")
+            if isinstance(device, dict):
+                device_id = device.get("id") or ""
+                device_name = device.get("name")
+            else:
+                device_id = ""
+                device_name = None
+            db.insert_report(
+                conn,
+                member_id,
+                generated_at,
+                body_str,
+                received_at=now_iso,
+                device_id=device_id,
+                device_name=device_name,
+            )
 
             # Trigger hourly prune check on insert
             db.maybe_prune_hourly(conn)
