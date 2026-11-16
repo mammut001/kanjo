@@ -170,7 +170,9 @@ class APIHandler(BaseHTTPRequestHandler):
                 device_id = device.get("id") or ""
                 device_name = device.get("name")
             else:
-                device_id = ""
+                # Old client (no device): keep reports from a token merged in from another
+                # member in that member's legacy slot, so they don't overwrite this member's own.
+                device_id = db.legacy_device_id_for_token(conn, token_hash, member_id)
                 device_name = None
             db.insert_report(
                 conn,

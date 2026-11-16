@@ -395,6 +395,24 @@ class TestAPIEndpoint(unittest.TestCase):
             self.assertEqual(rep_alice["device_id"], "fedcba9876543210")
             self.assertEqual(rep_alice["device_name"], "Windows-VM")
 
+    def test_old_client_with_merged_token_keeps_its_own_legacy_slot(self):
+        with db.get_connection(self.db_path) as conn:
+            db.merge_members(conn, self.m_bob, self.m_alice)
+
+        body = json.dumps(self.fixture_data).encode("utf-8")  # no "device": old client
+        for token in (self.token_bob, self.token_alice):
+            status, _, _ = self._api_request(
+                "POST", "/api/report", data=body,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(status, 200)
+
+        with db.get_connection(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT device_id FROM reports WHERE member_id = ? ORDER BY id", (self.m_alice,)
+            ).fetchall()
+        self.assertEqual([r[0] for r in rows], [f"legacy:{self.m_bob}", ""])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -281,6 +281,19 @@ def list_member_tokens(conn: sqlite3.Connection, member_name: str) -> List[Dict]
     ]
 
 
+def legacy_device_id_for_token(conn: sqlite3.Connection, token_sha256: str, member_id: int) -> str:
+    """Device id for a report from an old client (no ``device`` in the payload).
+
+    A token that was moved here by ``merge_members`` still lists its original member in
+    ``members.token_sha256``; its old-client reports go to ``legacy:<original member id>``
+    (the same slot its pre-merge reports were moved to). Otherwise ``''``.
+    """
+    row = conn.execute("SELECT id FROM members WHERE token_sha256 = ?", (token_sha256,)).fetchone()
+    if row is not None and row[0] != member_id:
+        return f"legacy:{row[0]}"
+    return ""
+
+
 def merge_members(conn: sqlite3.Connection, from_id: int, into_id: int) -> Dict[str, int]:
     """Merge FROM member's active tokens and reports into INTO member in one transaction."""
     if from_id == into_id:
