@@ -31,7 +31,7 @@ def device_os() -> str:
 def _macos_machine_id() -> Optional[str]:
     try:
         proc = subprocess.run(
-            ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+            ["/usr/sbin/ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
             capture_output=True,
             text=True,
             timeout=5,
