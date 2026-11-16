@@ -93,6 +93,13 @@ def main(argv=None):
     revoke_parser = member_subs.add_parser("revoke", help="Revoke a member's access token", parents=[parent_parser])
     revoke_parser.add_argument("name", help="Name of member to revoke")
 
+    merge_parser = member_subs.add_parser("merge", help="Merge one member into another", parents=[parent_parser])
+    merge_parser.add_argument("--from", dest="from_name", required=True, help="Source member name to merge from")
+    merge_parser.add_argument("--into", dest="into_name", required=True, help="Target member name to merge into")
+
+    tokens_parser = member_subs.add_parser("tokens", help="List tokens for a member", parents=[parent_parser])
+    tokens_parser.add_argument("--member", required=True, help="Member name")
+
     # device
     device_parser = subparsers.add_parser("device", help="Manage member devices", parents=[parent_parser])
     device_subs = device_parser.add_subparsers(dest="device_action", required=True)
@@ -174,10 +181,15 @@ def main(argv=None):
                 if not members:
                     print("No members found.")
                     return 0
+                id_to_name = {m["id"]: m["name"] for m in members}
                 print(f"{'ID':<4} {'Name':<20} {'Created At':<26} {'Status'}")
                 print("-" * 65)
                 for m in members:
-                    if m["revoked_at"]:
+                    if m.get("merged_into") is not None:
+                        target = id_to_name.get(m["merged_into"], f"#{m['merged_into']}")
+                        ts = (m["revoked_at"] or "")[:19]
+                        status = f"Merged into {target} ({ts})"
+                    elif m["revoked_at"]:
                         status = f"Revoked ({m['revoked_at'][:19]})"
                     else:
                         status = "Active"
@@ -196,6 +208,45 @@ def main(argv=None):
                 except ValueError as err:
                     print(f"Error: {err}", file=sys.stderr)
                     return 1
+
+        elif args.member_action == "merge":
+            with db.get_connection(db_path) as conn:
+                try:
+                    from_m = db.get_member_by_name(conn, args.from_name)
+                    if not from_m:
+                        raise ValueError(f"Member '{args.from_name.strip()}' not found.")
+                    into_m = db.get_member_by_name(conn, args.into_name)
+                    if not into_m:
+                        raise ValueError(f"Member '{args.into_name.strip()}' not found.")
+                    res = db.merge_members(conn, from_m["id"], into_m["id"])
+                    print(
+                        f"Successfully merged '{from_m['name']}' into '{into_m['name']}': "
+                        f"{res['tokens_moved']} token(s) moved, {res['reports_moved']} report(s) moved."
+                    )
+                    return 0
+                except ValueError as err:
+                    print(f"Error: {err}", file=sys.stderr)
+                    return 1
+
+        elif args.member_action == "tokens":
+            with db.get_connection(db_path) as conn:
+                try:
+                    tokens = db.list_member_tokens(conn, args.member)
+                except ValueError as err:
+                    print(f"Error: {err}", file=sys.stderr)
+                    return 1
+                if not tokens:
+                    print(f"No tokens found for member '{args.member}'.")
+                    return 0
+                print(f"{'ID':<4} {'Prefix':<10} {'Created At':<26} {'Status'}")
+                print("-" * 65)
+                for t in tokens:
+                    if t["revoked_at"]:
+                        status = f"Revoked ({t['revoked_at'][:19]})"
+                    else:
+                        status = "Active"
+                    print(f"{t['id']:<4} {t['token_prefix']:<10} {t['created_at'][:19]:<26} {status}")
+                return 0
 
     elif args.subcommand == "device":
         if args.device_action == "list":

@@ -215,14 +215,39 @@ def _merge_periods(periods: List[dict], default_period: str = "all") -> dict:
     return merged
 
 
-def merge_member_reports(reports: List[dict]) -> Optional[dict]:
+def is_legacy_device_id(device_id: Optional[str]) -> bool:
+    """Return True if device_id represents a legacy (untagged or merged-legacy) report."""
+    if not device_id:
+        return True
+    return str(device_id).startswith("legacy:")
+
+
+def _legacy_display_name(device_id: str, member_names: Optional[Dict[int, str]]) -> str:
+    if device_id.startswith("legacy:") and member_names:
+        raw_id = device_id[len("legacy:"):]
+        try:
+            orig_id = int(raw_id)
+        except ValueError:
+            orig_id = None
+        if orig_id is not None and orig_id in member_names:
+            return f"旧版客户端 ({member_names[orig_id]})"
+    return "旧版客户端"
+
+
+def merge_member_reports(
+    reports: List[dict],
+    member_names: Optional[Dict[int, str]] = None,
+) -> Optional[dict]:
     """Merge the latest per-device reports for a single member into a payload-like dict.
 
     Legacy rule:
-    - A legacy report (device_id == '') is included only while there is no
-      device-tagged report strictly newer than it.
-    - Once any device-tagged report is newer than the legacy report, the legacy
-      report is excluded and ``_meta['legacy_excluded']`` is True.
+    - Both ``''`` and any ``device_id`` starting with ``'legacy:'`` are treated as
+      legacy pseudo-devices, grouped separately by ``device_id``.
+    - A legacy group is included only while there is no device-tagged (real 16-hex id)
+      report strictly newer than that legacy group's latest report.
+    - Once any device-tagged report is newer than a legacy group's latest report,
+      that legacy group is excluded, ``_meta['legacy_excluded']`` is True, and
+      ``_meta['legacy_excluded_count']`` counts the excluded legacy groups.
     """
     if not reports:
         return None
@@ -277,20 +302,26 @@ def merge_member_reports(reports: List[dict]) -> Optional[dict]:
     if not parsed:
         return None
 
-    tagged = [item for item in parsed if item["device_id"]]
-    legacy = [item for item in parsed if not item["device_id"]]
+    tagged = [item for item in parsed if not is_legacy_device_id(item["device_id"])]
+    legacy = [item for item in parsed if is_legacy_device_id(item["device_id"])]
 
-    legacy_excluded = False
-    if legacy and tagged:
-        max_tagged_dt = max(item["sort_dt"] for item in tagged)
-        max_legacy_dt = max(item["sort_dt"] for item in legacy)
-        if max_tagged_dt > max_legacy_dt:
-            active = list(tagged)
-            legacy_excluded = True
+    legacy_groups: Dict[str, List[dict]] = {}
+    for item in legacy:
+        legacy_groups.setdefault(item["device_id"], []).append(item)
+
+    max_tagged_dt = max((item["sort_dt"] for item in tagged), default=None)
+    included_legacy: List[dict] = []
+    legacy_excluded_count = 0
+    for group_items in legacy_groups.values():
+        group_items.sort(key=lambda item: item["sort_dt"], reverse=True)
+        latest_group_item = group_items[0]
+        if max_tagged_dt is not None and max_tagged_dt > latest_group_item["sort_dt"]:
+            legacy_excluded_count += 1
         else:
-            active = tagged + legacy
-    else:
-        active = tagged + legacy
+            included_legacy.append(latest_group_item)
+
+    legacy_excluded = legacy_excluded_count > 0
+    active = tagged + included_legacy
 
     # Order active reports newest-first
     active.sort(key=lambda item: item["sort_dt"], reverse=True)
@@ -354,11 +385,11 @@ def merge_member_reports(reports: List[dict]) -> Optional[dict]:
         all_t = all_t if isinstance(all_t, dict) else {}
         all_tokens = _as_int((all_t.get("tokens") or {}).get("total"))
         all_cost = round(_as_float(all_t.get("cost_usd")), 2)
-        is_legacy = not bool(item["device_id"])
+        is_legacy = is_legacy_device_id(item["device_id"])
         display_name = (
             item["device_name"]
             or dev.get("name")
-            or ("旧版客户端" if is_legacy else item["device_id"][:8])
+            or (_legacy_display_name(item["device_id"], member_names) if is_legacy else item["device_id"][:8])
         )
         devices_meta.append(
             {
@@ -391,6 +422,7 @@ def merge_member_reports(reports: List[dict]) -> Optional[dict]:
         "_meta": {
             "devices": devices_meta,
             "legacy_excluded": legacy_excluded,
+            "legacy_excluded_count": legacy_excluded_count,
             "latest_received_at": newest["received_dt"] or newest["sort_dt"],
         },
     }

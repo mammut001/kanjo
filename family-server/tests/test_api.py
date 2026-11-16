@@ -352,6 +352,49 @@ class TestAPIEndpoint(unittest.TestCase):
         )
         self.assertEqual(status, 400)
 
+    def test_rotated_token_rejected_and_new_token_accepted(self):
+        with db.get_connection(self.db_path) as conn:
+            new_token = db.rotate_member_token(conn, self.m_alice)
+
+        body = json.dumps(self.fixture_data).encode("utf-8")
+        status_old, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=body,
+            headers={"Authorization": f"Bearer {self.token_alice}"},
+        )
+        self.assertEqual(status_old, 401)
+
+        status_new, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=body,
+            headers={"Authorization": f"Bearer {new_token}"},
+        )
+        self.assertEqual(status_new, 200)
+
+    def test_merged_member_token_reports_under_target_member(self):
+        with db.get_connection(self.db_path) as conn:
+            db.merge_members(conn, self.m_bob, self.m_alice)
+
+        dev_payload = copy.deepcopy(self.fixture_data)
+        dev_payload["device"] = {"id": "fedcba9876543210", "name": "Windows-VM", "os": "windows"}
+        status, _, _ = self._api_request(
+            "POST",
+            "/api/report",
+            data=json.dumps(dev_payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token_bob}"},
+        )
+        self.assertEqual(status, 200)
+
+        with db.get_connection(self.db_path) as conn:
+            # Stored under Alice, NOT Bob
+            self.assertIsNone(db.get_member_latest_report(conn, self.m_bob))
+            rep_alice = db.get_member_latest_report(conn, self.m_alice)
+            self.assertIsNotNone(rep_alice)
+            self.assertEqual(rep_alice["device_id"], "fedcba9876543210")
+            self.assertEqual(rep_alice["device_name"], "Windows-VM")
+
 
 if __name__ == "__main__":
     unittest.main()

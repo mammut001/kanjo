@@ -162,6 +162,20 @@ docker exec family-app python -m family_server device list --member "Alice"
 docker exec family-app python -m family_server device remove --member "Alice" --device <16-hex-id>
 ```
 
+### 6. Merge Two Members (One Person, Several Computers)
+
+If one person already configured different tokens on two computers (for example `"Windows VM"` and `"Payton Mac"`), merge them on the server without re-entering tokens on either computer:
+
+```bash
+docker exec family-app python -m family_server member merge --from "Windows VM" --into "Payton Mac"
+```
+
+This moves all active tokens and historical reports from `"Windows VM"` onto `"Payton Mac"`, marks `"Windows VM"` as merged (so it disappears from the dashboard), and keeps `"Windows VM"`'s existing token working for future reports. To inspect a member's tokens (showing only 8-character hash prefixes):
+
+```bash
+docker exec family-app python -m family_server member tokens --member "Payton Mac"
+```
+
 ---
 
 ## Billing Cycle & Admin Settings

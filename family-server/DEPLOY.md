@@ -154,6 +154,15 @@ docker exec family-app python -m family_server device list --member "Alice"
 docker exec family-app python -m family_server device remove --member "Alice" --device <DEVICE_ID>
 ```
 
+### Merge two members (one person, several computers)
+
+If one person already has separate member tokens on different computers (e.g. `"Windows VM"` and `"Payton Mac"`), merge them on the server—no need to re-enter tokens on any computer:
+
+```bash
+docker exec family-app python -m family_server member merge --from "Windows VM" --into "Payton Mac"
+docker exec family-app python -m family_server member tokens --member "Payton Mac"
+```
+
 ### What to send to a family member
 
 Send the member:
@@ -344,6 +353,15 @@ docker exec family-app python -m family_server member revoke "Alice"
 ```bash
 docker exec family-app python -m family_server device list --member "Alice"
 docker exec family-app python -m family_server device remove --member "Alice" --device <DEVICE_ID>
+```
+
+### 合并两个成员（同一人的多台电脑）
+
+如果同一人的多台电脑此前分别使用了不同的令牌（例如 `"Windows VM"` 和 `"Payton Mac"`），无需在客户端重新配置令牌，直接在服务端合并即可：
+
+```bash
+docker exec family-app python -m family_server member merge --from "Windows VM" --into "Payton Mac"
+docker exec family-app python -m family_server member tokens --member "Payton Mac"
 ```
 
 ### 发送给成员的信息

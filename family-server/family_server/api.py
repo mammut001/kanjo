@@ -70,7 +70,7 @@ class APIHandler(BaseHTTPRequestHandler):
         token_hash = db.hash_token(raw_token)
         with db.get_connection(self.db_path) as conn:
             member = db.get_member_by_token_hash(conn, token_hash)
-            if not member or member["revoked_at"] is not None:
+            if not member or member["revoked_at"] is not None or member.get("merged_into") is not None:
                 logger.warning("Rejected report: unrecognized or revoked token")
                 self._send_json_response(HTTPStatus.UNAUTHORIZED, {"status": "error", "error": "Unauthorized"})
                 return

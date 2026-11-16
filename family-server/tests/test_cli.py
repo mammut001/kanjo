@@ -117,6 +117,66 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("No reports found", err)
 
+    def test_member_merge_and_tokens_via_cli(self):
+        with db.get_connection(self.db_path) as conn:
+            tok_win, id_win = db.add_member(conn, "Windows VM")
+            tok_mac, id_mac = db.add_member(conn, "Payton Mac")
+            _, _ = db.add_member(conn, "RevokedGuy")
+            db.revoke_member(conn, "RevokedGuy")
+            db.insert_report(
+                conn, id_win, "2026-11-10T10:00:00Z", '{"summary":{}}',
+                received_at="2026-11-10T10:00:00Z", device_id="", device_name=None,
+            )
+
+        # Refusal: unknown names, same member, revoked
+        code, _, err = self.run_cli(["member", "merge", "--from", "Ghost", "--into", "Payton Mac"])
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+
+        code, _, err = self.run_cli(["member", "merge", "--from", "Windows VM", "--into", "Ghost"])
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+
+        code, _, err = self.run_cli(["member", "merge", "--from", "Payton Mac", "--into", "Payton Mac"])
+        self.assertEqual(code, 1)
+        self.assertIn("itself", err)
+
+        code, _, err = self.run_cli(["member", "merge", "--from", "RevokedGuy", "--into", "Payton Mac"])
+        self.assertEqual(code, 1)
+        self.assertIn("revoked", err)
+
+        # Happy path merge
+        code, out, _ = self.run_cli(["member", "merge", "--from", "Windows VM", "--into", "Payton Mac"])
+        self.assertEqual(code, 0)
+        self.assertIn("1 token(s) moved", out)
+        self.assertIn("1 report(s) moved", out)
+
+        # Refusal: already merged
+        code, _, err = self.run_cli(["member", "merge", "--from", "Windows VM", "--into", "Payton Mac"])
+        self.assertEqual(code, 1)
+        self.assertIn("already merged", err)
+
+        # member list shows Merged into Payton Mac
+        code, out, _ = self.run_cli(["member", "list"])
+        self.assertEqual(code, 0)
+        self.assertIn("Merged into Payton Mac", out)
+
+        # member tokens lists both active tokens for Payton Mac without full hash
+        code, out, _ = self.run_cli(["member", "tokens", "--member", "Payton Mac"])
+        self.assertEqual(code, 0)
+        hash_win = db.hash_token(tok_win)
+        hash_mac = db.hash_token(tok_mac)
+        self.assertIn(hash_win[:8], out)
+        self.assertIn(hash_mac[:8], out)
+        self.assertNotIn(hash_win, out)
+        self.assertNotIn(hash_mac, out)
+        self.assertEqual(out.count("Active"), 2)
+
+        # member tokens for unknown member fails
+        code, _, err = self.run_cli(["member", "tokens", "--member", "Nobody"])
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+
 
 if __name__ == "__main__":
     unittest.main()

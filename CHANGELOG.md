@@ -6,6 +6,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Family server: merge two members.** A member can now have several tokens, and
+  `python -m family_server member merge --from NAME --into NAME` moves one member's tokens and past
+  reports onto another, so one person's computers count together without re-entering tokens.
+  `member tokens --member NAME` lists a member's tokens.
+
 ## [0.6.3] - 2026-11-16
 
 ### Added

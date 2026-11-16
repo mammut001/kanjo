@@ -27,8 +27,19 @@ def init_db(db_path: str) -> None:
                 name TEXT UNIQUE NOT NULL,
                 token_sha256 TEXT UNIQUE NOT NULL,
                 created_at TEXT NOT NULL,
+                revoked_at TEXT,
+                merged_into INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS member_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_id INTEGER NOT NULL REFERENCES members(id),
+                token_sha256 TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
                 revoked_at TEXT
             );
+
+            CREATE INDEX IF NOT EXISTS idx_member_tokens_member ON member_tokens(member_id);
 
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +84,18 @@ def init_db(db_path: str) -> None:
             "CREATE INDEX IF NOT EXISTS idx_reports_member_device_received "
             "ON reports(member_id, device_id, received_at)"
         )
+
+        # Idempotent migration for members.merged_into and member_tokens backfill.
+        member_cols = {row["name"] for row in conn.execute("PRAGMA table_info(members)").fetchall()}
+        if "merged_into" not in member_cols:
+            conn.execute("ALTER TABLE members ADD COLUMN merged_into INTEGER")
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO member_tokens (member_id, token_sha256, created_at, revoked_at)
+            SELECT id, token_sha256, created_at, revoked_at
+            FROM members
+            """
+        )
         conn.commit()
 
 
@@ -105,25 +128,37 @@ def add_member(conn: sqlite3.Connection, name: str) -> Tuple[str, int]:
     created_at = datetime.now(timezone.utc).isoformat()
 
     cur.execute(
-        "INSERT INTO members (name, token_sha256, created_at, revoked_at) VALUES (?, ?, ?, NULL)",
+        "INSERT INTO members (name, token_sha256, created_at, revoked_at, merged_into) VALUES (?, ?, ?, NULL, NULL)",
         (name, token_sha256, created_at),
     )
     member_id = cur.lastrowid
+    cur.execute(
+        "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at) VALUES (?, ?, ?, NULL)",
+        (member_id, token_sha256, created_at),
+    )
     conn.commit()
     return token, member_id
 
 
 def get_member_by_token(conn: sqlite3.Connection, token: str) -> Optional[Dict]:
-    """Look up a member by raw bearer token."""
+    """Look up an active owning member by raw bearer token."""
     token_sha256 = hash_token(token)
     return get_member_by_token_hash(conn, token_sha256)
 
 
 def get_member_by_token_hash(conn: sqlite3.Connection, token_sha256: str) -> Optional[Dict]:
-    """Look up a member by token SHA-256."""
+    """Look up an active owning member by an active token SHA-256."""
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, name, created_at, revoked_at FROM members WHERE token_sha256 = ?",
+        """
+        SELECT m.id, m.name, m.created_at, m.revoked_at, m.merged_into
+        FROM member_tokens mt
+        JOIN members m ON m.id = mt.member_id
+        WHERE mt.token_sha256 = ?
+          AND mt.revoked_at IS NULL
+          AND m.revoked_at IS NULL
+          AND m.merged_into IS NULL
+        """,
         (token_sha256,),
     )
     row = cur.fetchone()
@@ -132,15 +167,39 @@ def get_member_by_token_hash(conn: sqlite3.Connection, token_sha256: str) -> Opt
     return None
 
 
-def list_members(conn: sqlite3.Connection) -> List[Dict]:
-    """List all registered members in order of creation."""
+def get_member_by_name(conn: sqlite3.Connection, name: str) -> Optional[Dict]:
+    """Look up a member by trimmed name."""
+    clean = name.strip()
+    if not clean:
+        return None
     cur = conn.cursor()
-    cur.execute("SELECT id, name, created_at, revoked_at FROM members ORDER BY id ASC")
+    cur.execute(
+        "SELECT id, name, created_at, revoked_at, merged_into FROM members WHERE name = ?",
+        (clean,),
+    )
+    row = cur.fetchone()
+    if row:
+        return dict(row)
+    return None
+
+
+def list_members(conn: sqlite3.Connection, include_merged: bool = True) -> List[Dict]:
+    """List registered members in order of creation."""
+    cur = conn.cursor()
+    if include_merged:
+        cur.execute(
+            "SELECT id, name, created_at, revoked_at, merged_into FROM members ORDER BY id ASC"
+        )
+    else:
+        cur.execute(
+            "SELECT id, name, created_at, revoked_at, merged_into FROM members "
+            "WHERE merged_into IS NULL ORDER BY id ASC"
+        )
     return [dict(r) for r in cur.fetchall()]
 
 
 def revoke_member(conn: sqlite3.Connection, name: str) -> bool:
-    """Revoke a member by name. Returns True if revoked, False if already revoked."""
+    """Revoke a member and all of its active tokens by name. Returns True if revoked, False if already revoked."""
     name = name.strip()
     cur = conn.cursor()
     cur.execute("SELECT id, revoked_at FROM members WHERE name = ?", (name,))
@@ -153,8 +212,138 @@ def revoke_member(conn: sqlite3.Connection, name: str) -> bool:
 
     revoked_at = datetime.now(timezone.utc).isoformat()
     cur.execute("UPDATE members SET revoked_at = ? WHERE id = ?", (revoked_at, row["id"]))
+    cur.execute(
+        "UPDATE member_tokens SET revoked_at = ? WHERE member_id = ? AND revoked_at IS NULL",
+        (revoked_at, row["id"]),
+    )
     conn.commit()
     return True
+
+
+def rotate_member_token(conn: sqlite3.Connection, member_id: int) -> str:
+    """Revoke all active tokens for a member and issue a new active token."""
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (member_id,))
+    row = cur.fetchone()
+    if not row:
+        raise ValueError(f"Member ID {member_id} not found.")
+    if row["merged_into"] is not None:
+        raise ValueError(f"Member '{row['name']}' is merged and cannot rotate tokens.")
+    if row["revoked_at"] is not None:
+        raise ValueError(f"Member '{row['name']}' is revoked and cannot rotate tokens.")
+
+    new_token = secrets.token_urlsafe(32)
+    new_hash = hash_token(new_token)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        if not conn.in_transaction:
+            conn.execute("BEGIN")
+        cur.execute(
+            "UPDATE member_tokens SET revoked_at = ? WHERE member_id = ? AND revoked_at IS NULL",
+            (now_iso, member_id),
+        )
+        cur.execute(
+            "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at) VALUES (?, ?, ?, NULL)",
+            (member_id, new_hash, now_iso),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return new_token
+
+
+def list_member_tokens(conn: sqlite3.Connection, member_name: str) -> List[Dict]:
+    """List token metadata (id, 8-char hash prefix, created_at, revoked_at) for a member."""
+    clean = member_name.strip()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM members WHERE name = ?", (clean,))
+    m_row = cur.fetchone()
+    if not m_row:
+        raise ValueError(f"Member '{clean}' not found.")
+
+    cur.execute(
+        "SELECT id, member_id, token_sha256, created_at, revoked_at "
+        "FROM member_tokens WHERE member_id = ? ORDER BY id ASC",
+        (m_row["id"],),
+    )
+    return [
+        {
+            "id": r["id"],
+            "member_id": r["member_id"],
+            "token_prefix": r["token_sha256"][:8],
+            "created_at": r["created_at"],
+            "revoked_at": r["revoked_at"],
+        }
+        for r in cur.fetchall()
+    ]
+
+
+def merge_members(conn: sqlite3.Connection, from_id: int, into_id: int) -> Dict[str, int]:
+    """Merge FROM member's active tokens and reports into INTO member in one transaction."""
+    if from_id == into_id:
+        raise ValueError("Cannot merge a member into itself.")
+
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (from_id,))
+    from_row = cur.fetchone()
+    if not from_row:
+        raise ValueError(f"Source member ID {from_id} not found.")
+
+    cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (into_id,))
+    into_row = cur.fetchone()
+    if not into_row:
+        raise ValueError(f"Target member ID {into_id} not found.")
+
+    if from_row["merged_into"] is not None:
+        raise ValueError(f"Member '{from_row['name']}' is already merged.")
+    if from_row["revoked_at"] is not None:
+        raise ValueError(f"Member '{from_row['name']}' is already revoked.")
+    if into_row["merged_into"] is not None:
+        raise ValueError(f"Target member '{into_row['name']}' is already merged.")
+    if into_row["revoked_at"] is not None:
+        raise ValueError(f"Target member '{into_row['name']}' is already revoked.")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    legacy_dev_id = f"legacy:{from_id}"
+
+    try:
+        if not conn.in_transaction:
+            conn.execute("BEGIN")
+
+        cur.execute(
+            "UPDATE member_tokens SET member_id = ? WHERE member_id = ? AND revoked_at IS NULL",
+            (into_id, from_id),
+        )
+        tokens_moved = cur.rowcount
+
+        cur.execute(
+            "UPDATE reports SET member_id = ?, device_id = ? WHERE member_id = ? AND device_id = ''",
+            (into_id, legacy_dev_id, from_id),
+        )
+        legacy_moved = cur.rowcount
+
+        cur.execute(
+            "UPDATE reports SET member_id = ? WHERE member_id = ? AND device_id != ''",
+            (into_id, from_id),
+        )
+        tagged_moved = cur.rowcount
+
+        cur.execute(
+            "UPDATE members SET merged_into = ?, revoked_at = ? WHERE id = ?",
+            (into_id, now_iso, from_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return {
+        "tokens_moved": tokens_moved,
+        "reports_moved": legacy_moved + tagged_moved,
+    }
 
 
 def insert_report(
@@ -215,8 +404,8 @@ def get_member_latest_reports_by_device(conn: sqlite3.Connection, member_id: int
 
 
 def get_all_latest_reports(conn: sqlite3.Connection) -> List[Dict]:
-    """Fetch the latest report for all active members."""
-    members = list_members(conn)
+    """Fetch the latest report for all non-merged members."""
+    members = list_members(conn, include_merged=False)
     result = []
     for m in members:
         rep = get_member_latest_report(conn, m["id"])
@@ -225,8 +414,8 @@ def get_all_latest_reports(conn: sqlite3.Connection) -> List[Dict]:
 
 
 def get_all_latest_device_reports(conn: sqlite3.Connection) -> List[Dict]:
-    """Fetch the latest report per device for all registered members."""
-    members = list_members(conn)
+    """Fetch the latest report per device for all non-merged members."""
+    members = list_members(conn, include_merged=False)
     return [
         {"member": m, "reports": get_member_latest_reports_by_device(conn, m["id"])}
         for m in members

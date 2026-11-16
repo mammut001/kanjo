@@ -361,7 +361,9 @@ def generate_dashboard_html(
     """Render the full single-page dashboard HTML."""
     with db.get_connection(db_path) as conn:
         records = db.get_all_latest_device_reports(conn)
+        all_members = db.list_members(conn, include_merged=True)
         server_settings = db.get_all_settings(conn)
+    member_names = {m["id"]: m["name"] for m in all_members}
 
     tz_name = server_settings.get("timezone") or os.environ.get("FAMILY_TIMEZONE", "America/Toronto")
     try:
@@ -431,9 +433,10 @@ def generate_dashboard_html(
             "scope_str": None,
             "devices": [],
             "legacy_excluded": False,
+            "legacy_excluded_count": 0,
         }
 
-        merged = merge_member_reports(reports)
+        merged = merge_member_reports(reports, member_names=member_names)
         if merged is not None:
             meta = merged["_meta"]
             member_info["has_report"] = True
@@ -448,6 +451,9 @@ def generate_dashboard_html(
             member_info["scope_str"] = format_scope(merged.get("scope"))
             member_info["devices"] = meta.get("devices", [])
             member_info["legacy_excluded"] = bool(meta.get("legacy_excluded"))
+            member_info["legacy_excluded_count"] = int(
+                meta.get("legacy_excluded_count") or (1 if member_info["legacy_excluded"] else 0)
+            )
 
             # Quota windows: feed per-device entries into the pool logic
             for dev in member_info["devices"]:
@@ -1042,8 +1048,9 @@ def generate_dashboard_html(
             doc.append(f'              <div class="member-label">上次上报：{html.escape(rec_str)}{lbl}</div>')
             if m.get("scope_str"):
                 doc.append(f'              <div class="member-scope" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem;">{html.escape(m["scope_str"])}</div>')
-            if m.get("legacy_excluded"):
-                doc.append('              <div class="legacy-note">1 台电脑使用旧版 Kanjo 未计入 — 请更新客户端以合并统计</div>')
+            legacy_cnt = m.get("legacy_excluded_count") or (1 if m.get("legacy_excluded") else 0)
+            if legacy_cnt > 0:
+                doc.append(f'              <div class="legacy-note">{legacy_cnt} 台电脑使用旧版 Kanjo 未计入 — 请更新客户端以合并统计</div>')
             doc.append('            </div>')
             doc.append(f'            {badge_html}')
             doc.append('          </div>')

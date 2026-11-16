@@ -39,10 +39,13 @@ class TestDatabaseAndPrune(unittest.TestCase):
             with self.assertRaises(ValueError):
                 db.revoke_member(conn, "Ghost")
 
-            # Member lookup reflects revocation
-            m = db.get_member_by_token(conn, token)
-            self.assertIsNotNone(m)
-            self.assertIsNotNone(m["revoked_at"])
+            # Revoked member cannot authenticate via token lookup
+            self.assertIsNone(db.get_member_by_token(conn, token))
+            members = {m["name"]: m for m in db.list_members(conn)}
+            self.assertIsNotNone(members["Member1"]["revoked_at"])
+            tokens = db.list_member_tokens(conn, "Member1")
+            self.assertEqual(len(tokens), 1)
+            self.assertIsNotNone(tokens[0]["revoked_at"])
 
     def test_prune_retention_policy(self):
         """Retention policy:
@@ -147,9 +150,13 @@ class TestDatabaseAndPrune(unittest.TestCase):
         import sqlite3
 
         old_db = os.path.join(self.tmp_dir.name, "old_schema.db")
+        old_token = "old-secret-token-xyz"
+        old_hash = db.hash_token(old_token)
+        revoked_token = "revoked-secret-token-abc"
+        revoked_hash = db.hash_token(revoked_token)
         with sqlite3.connect(old_db) as conn:
             conn.executescript(
-                """
+                f"""
                 CREATE TABLE members (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
@@ -164,9 +171,12 @@ class TestDatabaseAndPrune(unittest.TestCase):
                     generated_at TEXT NOT NULL,
                     payload_json TEXT NOT NULL
                 );
-                INSERT INTO members (name, token_sha256, created_at) VALUES ('OldUser', 'hash123', '2026-10-01T00:00:00Z');
+                INSERT INTO members (name, token_sha256, created_at, revoked_at)
+                    VALUES ('OldUser', '{old_hash}', '2026-10-01T00:00:00Z', NULL);
+                INSERT INTO members (name, token_sha256, created_at, revoked_at)
+                    VALUES ('OldRevoked', '{revoked_hash}', '2026-10-01T00:00:00Z', '2026-10-05T00:00:00Z');
                 INSERT INTO reports (member_id, received_at, generated_at, payload_json)
-                    VALUES (1, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z', '{"summary":{}}');
+                    VALUES (1, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z', '{{"summary":{{}}}}');
                 """
             )
 
@@ -178,11 +188,31 @@ class TestDatabaseAndPrune(unittest.TestCase):
             cols = {row["name"] for row in conn.execute("PRAGMA table_info(reports)").fetchall()}
             self.assertIn("device_id", cols)
             self.assertIn("device_name", cols)
+            member_cols = {row["name"] for row in conn.execute("PRAGMA table_info(members)").fetchall()}
+            self.assertIn("merged_into", member_cols)
             idxs = {row["name"] for row in conn.execute("PRAGMA index_list(reports)").fetchall()}
             self.assertIn("idx_reports_member_device_received", idxs)
             row = conn.execute("SELECT device_id, device_name FROM reports WHERE id = 1").fetchone()
             self.assertEqual(row["device_id"], "")
             self.assertIsNone(row["device_name"])
+
+            # Tokens copied once into member_tokens (idempotent across two init_db calls)
+            mt_rows = conn.execute(
+                "SELECT member_id, token_sha256, revoked_at FROM member_tokens ORDER BY id ASC"
+            ).fetchall()
+            self.assertEqual(len(mt_rows), 2)
+            self.assertEqual(mt_rows[0]["member_id"], 1)
+            self.assertEqual(mt_rows[0]["token_sha256"], old_hash)
+            self.assertIsNone(mt_rows[0]["revoked_at"])
+            self.assertEqual(mt_rows[1]["member_id"], 2)
+            self.assertEqual(mt_rows[1]["token_sha256"], revoked_hash)
+            self.assertEqual(mt_rows[1]["revoked_at"], "2026-10-05T00:00:00Z")
+
+            # Old active token authenticates via member_tokens; old revoked token rejected
+            found = db.get_member_by_token(conn, old_token)
+            self.assertIsNotNone(found)
+            self.assertEqual(found["name"], "OldUser")
+            self.assertIsNone(db.get_member_by_token(conn, revoked_token))
 
     def test_prune_retention_per_device(self):
         now = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)
@@ -247,6 +277,130 @@ class TestDatabaseAndPrune(unittest.TestCase):
             removed = db.remove_member_device(conn, "Alice", "1111222233334444")
             self.assertEqual(removed, 2)
             self.assertEqual(len(db.get_member_latest_reports_by_device(conn, m1)), 1)
+
+    def test_token_rotation_rejects_old_token(self):
+        with db.get_connection(self.db_path) as conn:
+            old_token, m_id = db.add_member(conn, "Alice")
+            self.assertEqual(db.get_member_by_token(conn, old_token)["id"], m_id)
+
+            new_token = db.rotate_member_token(conn, m_id)
+            self.assertNotEqual(new_token, old_token)
+            self.assertIsNone(db.get_member_by_token(conn, old_token))
+            self.assertEqual(db.get_member_by_token(conn, new_token)["id"], m_id)
+
+            tokens = db.list_member_tokens(conn, "Alice")
+            self.assertEqual(len(tokens), 2)
+            self.assertIsNotNone(tokens[0]["revoked_at"])
+            self.assertIsNone(tokens[1]["revoked_at"])
+
+        # Re-running init_db must stay idempotent and not resurrect the rotated old token
+        db.init_db(self.db_path)
+        with db.get_connection(self.db_path) as conn:
+            self.assertIsNone(db.get_member_by_token(conn, old_token))
+            self.assertEqual(db.get_member_by_token(conn, new_token)["id"], m_id)
+            self.assertEqual(len(db.list_member_tokens(conn, "Alice")), 2)
+
+    def test_merge_members_and_legacy_retagging(self):
+        with db.get_connection(self.db_path) as conn:
+            tok_win, id_win = db.add_member(conn, "Windows VM")
+            tok_mac, id_mac = db.add_member(conn, "Payton Mac")
+
+            # Both have legacy (device_id='') reports and tagged reports
+            db.insert_report(
+                conn, id_win, "2026-11-01T10:00:00Z", '{"win_legacy":1}',
+                received_at="2026-11-01T10:00:00Z", device_id="", device_name=None,
+            )
+            db.insert_report(
+                conn, id_win, "2026-11-02T10:00:00Z", '{"win_tagged":1}',
+                received_at="2026-11-02T10:00:00Z", device_id="1111222233334444", device_name="WinVM",
+            )
+            db.insert_report(
+                conn, id_mac, "2026-11-01T11:00:00Z", '{"mac_legacy":1}',
+                received_at="2026-11-01T11:00:00Z", device_id="", device_name=None,
+            )
+
+            res = db.merge_members(conn, id_win, id_mac)
+            self.assertEqual(res["tokens_moved"], 1)
+            self.assertEqual(res["reports_moved"], 2)
+
+            # Both tokens now authenticate as Payton Mac
+            self.assertEqual(db.get_member_by_token(conn, tok_win)["id"], id_mac)
+            self.assertEqual(db.get_member_by_token(conn, tok_mac)["id"], id_mac)
+
+            # Windows VM is marked merged & revoked
+            members = {m["name"]: m for m in db.list_members(conn)}
+            self.assertEqual(members["Windows VM"]["merged_into"], id_mac)
+            self.assertIsNotNone(members["Windows VM"]["revoked_at"])
+
+            # Dashboard listing excludes merged member
+            visible = db.get_all_latest_device_reports(conn)
+            self.assertEqual([rec["member"]["name"] for rec in visible], ["Payton Mac"])
+
+            # Legacy rows retagged to legacy:<id_win> without colliding with Payton Mac's ''
+            by_dev = {r["device_id"]: r for r in db.get_member_latest_reports_by_device(conn, id_mac)}
+            self.assertEqual(set(by_dev.keys()), {"", f"legacy:{id_win}", "1111222233334444"})
+            self.assertIn('"win_legacy":1', by_dev[f"legacy:{id_win}"]["payload_json"])
+            self.assertIn('"mac_legacy":1', by_dev[""]["payload_json"])
+
+        # Re-running init_db must not restore Windows VM's token to Windows VM
+        db.init_db(self.db_path)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(db.get_member_by_token(conn, tok_win)["id"], id_mac)
+            self.assertEqual(len(db.list_member_tokens(conn, "Windows VM")), 0)
+            self.assertEqual(len(db.list_member_tokens(conn, "Payton Mac")), 2)
+
+    def test_merge_members_refusal_cases(self):
+        with db.get_connection(self.db_path) as conn:
+            _, id_a = db.add_member(conn, "Alice")
+            _, id_b = db.add_member(conn, "Bob")
+            _, id_rev = db.add_member(conn, "RevokedUser")
+            db.revoke_member(conn, "RevokedUser")
+
+            # Same member
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_a, id_a)
+
+            # Unknown IDs
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, 9999, id_b)
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_a, 9999)
+
+            # Revoked FROM or INTO
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_rev, id_b)
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_a, id_rev)
+
+            # Successful merge A -> B, then refuse already merged FROM or INTO
+            _, id_c = db.add_member(conn, "Charlie")
+            db.merge_members(conn, id_a, id_b)
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_a, id_c)
+            with self.assertRaises(ValueError):
+                db.merge_members(conn, id_c, id_a)
+
+    def test_prune_after_merge(self):
+        now = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)
+        with db.get_connection(self.db_path) as conn:
+            _, id_from = db.add_member(conn, "OldPC")
+            _, id_into = db.add_member(conn, "MainMac")
+
+            # FROM has 2 legacy reports today + 1 old (>90d) legacy report
+            d120 = now - timedelta(days=120)
+            db.insert_report(conn, id_from, d120.isoformat(), '{"f":"old"}', received_at=d120.isoformat(), device_id="")
+            db.insert_report(conn, id_from, now.isoformat(), '{"f":"t1"}', received_at=(now - timedelta(hours=2)).isoformat(), device_id="")
+            id_f_keep = db.insert_report(conn, id_from, now.isoformat(), '{"f":"t2"}', received_at=now.isoformat(), device_id="")
+
+            # INTO has 1 legacy report today
+            id_i_keep = db.insert_report(conn, id_into, now.isoformat(), '{"i":"t1"}', received_at=(now - timedelta(hours=1)).isoformat(), device_id="")
+
+            db.merge_members(conn, id_from, id_into)
+            deleted = db.prune_reports(conn, now=now)
+            # Only FROM's old (>90d) and intermediate same-day report are deleted
+            self.assertEqual(deleted, 2)
+            remaining = {r["id"]: r["device_id"] for r in conn.execute("SELECT id, device_id FROM reports").fetchall()}
+            self.assertEqual(remaining, {id_f_keep: f"legacy:{id_from}", id_i_keep: ""})
 
 
 if __name__ == "__main__":

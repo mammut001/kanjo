@@ -262,8 +262,82 @@ class TestMergeMemberReports(unittest.TestCase):
 
         merged = merge_member_reports([tagged, legacy])
         self.assertFalse(merged["_meta"]["legacy_excluded"])
+        self.assertEqual(merged["_meta"]["legacy_excluded_count"], 0)
         self.assertEqual(len(merged["_meta"]["devices"]), 2)
         self.assertEqual(merged["summary"]["all_time"]["tokens"]["total"], 4000)
+
+    def test_legacy_rule_two_legacy_groups_and_one_tagged_device(self):
+        # legacy '' (Nov 8), tagged device (Nov 10), legacy:3 (Nov 11)
+        # -> '' is excluded (older than tagged), legacy:3 is included (newer than tagged)
+        leg_own = _make_report(
+            device_id="",
+            device_name="",
+            device_os="",
+            received_at="2026-11-08T10:00:00+00:00",
+            timezone="UTC",
+            generated_by="kanjo 0.6.2",
+            all_time=_make_period("all", "2026-11-01", "2026-11-08", 5000, 0, 5.0),
+        )
+        tagged = _make_report(
+            device_id="1111222233334444",
+            device_name="Payton-Mac",
+            device_os="macos",
+            received_at="2026-11-10T10:00:00+00:00",
+            timezone="UTC",
+            generated_by="kanjo 0.6.3",
+            all_time=_make_period("all", "2026-11-01", "2026-11-10", 6000, 0, 6.0),
+        )
+        leg_merged_newer = _make_report(
+            device_id="legacy:3",
+            device_name="",
+            device_os="",
+            received_at="2026-11-11T10:00:00+00:00",
+            timezone="UTC",
+            generated_by="kanjo 0.6.2",
+            all_time=_make_period("all", "2026-11-01", "2026-11-11", 2500, 0, 2.5),
+        )
+        leg_merged_newer["device_name"] = None
+
+        merged = merge_member_reports(
+            [leg_own, tagged, leg_merged_newer],
+            member_names={3: "Windows VM"},
+        )
+        self.assertTrue(merged["_meta"]["legacy_excluded"])
+        self.assertEqual(merged["_meta"]["legacy_excluded_count"], 1)
+        # Only tagged (6000) + legacy:3 (2500) = 8500
+        self.assertEqual(merged["summary"]["all_time"]["tokens"]["total"], 8500)
+        self.assertEqual(len(merged["_meta"]["devices"]), 2)
+        names = {d["device_id"]: d["device_name"] for d in merged["_meta"]["devices"]}
+        self.assertEqual(names["legacy:3"], "旧版客户端 (Windows VM)")
+        self.assertEqual(names["1111222233334444"], "Payton-Mac")
+
+        # Now make legacy:3 ALSO older than tagged (Nov 9 < Nov 10) -> both legacy groups excluded
+        leg_merged_older = _make_report(
+            device_id="legacy:3",
+            device_name="",
+            device_os="",
+            received_at="2026-11-09T10:00:00+00:00",
+            timezone="UTC",
+            generated_by="kanjo 0.6.2",
+            all_time=_make_period("all", "2026-11-01", "2026-11-09", 2500, 0, 2.5),
+        )
+        leg_merged_older["device_name"] = None
+
+        merged_both_excluded = merge_member_reports([leg_own, tagged, leg_merged_older])
+        self.assertTrue(merged_both_excluded["_meta"]["legacy_excluded"])
+        self.assertEqual(merged_both_excluded["_meta"]["legacy_excluded_count"], 2)
+        self.assertEqual(merged_both_excluded["summary"]["all_time"]["tokens"]["total"], 6000)
+        self.assertEqual(len(merged_both_excluded["_meta"]["devices"]), 1)
+
+        # Without any tagged devices -> both legacy groups included and summed
+        merged_no_tagged = merge_member_reports([leg_own, leg_merged_older])
+        self.assertFalse(merged_no_tagged["_meta"]["legacy_excluded"])
+        self.assertEqual(merged_no_tagged["_meta"]["legacy_excluded_count"], 0)
+        self.assertEqual(merged_no_tagged["summary"]["all_time"]["tokens"]["total"], 7500)
+        self.assertEqual(len(merged_no_tagged["_meta"]["devices"]), 2)
+        names_no_map = {d["device_id"]: d["device_name"] for d in merged_no_tagged["_meta"]["devices"]}
+        self.assertEqual(names_no_map[""], "旧版客户端")
+        self.assertEqual(names_no_map["legacy:3"], "旧版客户端")
 
 
 if __name__ == "__main__":

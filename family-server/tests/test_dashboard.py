@@ -417,6 +417,134 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("&lt;img src=x onerror=alert(2)&gt;", html)
         self.assertIn("&lt;b&gt;UTC&lt;/b&gt;", html)
 
+    def test_dashboard_after_merge_sums_computers_and_hides_merged_member(self):
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(timezone.utc)
+        today_str = now.astimezone(ZoneInfo("America/Toronto")).date().isoformat()
+
+        def make_payload(dev_id, dev_name, dev_os, day_tok, day_cost):
+            p = copy.deepcopy(self.fixture_data)
+            if dev_id:
+                p["device"] = {"id": dev_id, "name": dev_name, "os": dev_os}
+            else:
+                p.pop("device", None)
+            p["quota_windows"] = {}
+            p["summary"]["all_time"]["tokens"]["total"] = day_tok
+            p["summary"]["all_time"]["cost_usd"] = day_cost
+            p["summary"]["days"] = [
+                {
+                    "period": today_str,
+                    "first_day": today_str,
+                    "last_day": today_str,
+                    "tokens": {"input": day_tok, "output": 0, "cache_read": 0, "cache_write": 0, "total": day_tok},
+                    "cost_usd": day_cost,
+                    "by_provider": [{"provider": "google", "label": "Google", "tokens": {"input": day_tok, "output": 0, "cache_read": 0, "cache_write": 0, "total": day_tok}, "cost_usd": day_cost, "models": []}],
+                    "by_agent": [{"agent": "antigravity", "label": "Antigravity", "tokens_total": day_tok, "cost_usd": day_cost}],
+                    "top_models": [{"model": "gemini-3.8-pro", "provider": "google", "tokens_total": day_tok, "cost_usd": day_cost}],
+                }
+            ]
+            return p
+
+        mac_p = make_payload("1111222233334444", "Payton-MBP", "macos", 70000, 3.50)
+        win_p = make_payload("aaaa5555bbbb6666", "Win-Workstation", "windows", 30000, 1.50)
+
+        with db.get_connection(self.db_path) as conn:
+            _, id_mac = db.add_member(conn, "Payton Mac")
+            _, id_win = db.add_member(conn, "Windows VM")
+            db.insert_report(
+                conn, id_mac, mac_p["generated_at"], json.dumps(mac_p),
+                received_at=(now - timedelta(minutes=10)).isoformat(),
+                device_id="1111222233334444", device_name="Payton-MBP",
+            )
+            db.insert_report(
+                conn, id_win, win_p["generated_at"], json.dumps(win_p),
+                received_at=(now - timedelta(minutes=5)).isoformat(),
+                device_id="aaaa5555bbbb6666", device_name="Win-Workstation",
+            )
+            db.merge_members(conn, id_win, id_mac)
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        self.assertIn("Payton Mac", html)
+        self.assertNotIn("Windows VM", html)
+        # Summed cycle tokens: 70000 + 30000 = 100.0k, $5.00
+        self.assertIn("100.0k", html)
+        self.assertIn("$5.00", html)
+        self.assertIn("2 台电脑", html)
+        self.assertIn("Payton-MBP", html)
+        self.assertIn("Win-Workstation", html)
+
+    def test_dashboard_legacy_merged_group_label_and_excluded_count(self):
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(timezone.utc)
+        today_str = now.astimezone(ZoneInfo("America/Toronto")).date().isoformat()
+
+        def make_legacy_payload(day_tok):
+            p = copy.deepcopy(self.fixture_data)
+            p.pop("device", None)
+            p["quota_windows"] = {}
+            p["summary"]["all_time"]["tokens"]["total"] = day_tok
+            p["summary"]["days"] = [
+                {
+                    "period": today_str,
+                    "first_day": today_str,
+                    "last_day": today_str,
+                    "tokens": {"input": day_tok, "output": 0, "cache_read": 0, "cache_write": 0, "total": day_tok},
+                    "cost_usd": 1.0,
+                    "by_provider": [],
+                    "by_agent": [],
+                    "top_models": [],
+                }
+            ]
+            return p
+
+        with db.get_connection(self.db_path) as conn:
+            _, id_mac = db.add_member(conn, "Payton Mac")
+            _, id_win = db.add_member(conn, "Windows VM")
+            # Windows VM legacy report is NEWER than Payton Mac's tagged report -> included with original name
+            db.insert_report(
+                conn, id_win, now.isoformat(), json.dumps(make_legacy_payload(25000)),
+                received_at=now.isoformat(), device_id="", device_name=None,
+            )
+            mac_tagged = copy.deepcopy(self.fixture_data)
+            mac_tagged["device"] = {"id": "1111222233334444", "name": "Payton-MBP", "os": "macos"}
+            mac_tagged["quota_windows"] = {}
+            mac_tagged["summary"]["days"] = make_legacy_payload(50000)["summary"]["days"]
+            db.insert_report(
+                conn, id_mac, now.isoformat(), json.dumps(mac_tagged),
+                received_at=(now - timedelta(hours=1)).isoformat(),
+                device_id="1111222233334444", device_name="Payton-MBP",
+            )
+            # Payton Mac's own legacy report is OLDER than tagged -> 1 excluded
+            db.insert_report(
+                conn, id_mac, now.isoformat(), json.dumps(make_legacy_payload(10000)),
+                received_at=(now - timedelta(hours=3)).isoformat(),
+                device_id="", device_name=None,
+            )
+            db.merge_members(conn, id_win, id_mac)
+
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        self.assertIn("旧版客户端 (Windows VM)", html)
+        self.assertIn("1 台电脑使用旧版 Kanjo 未计入", html)
+        # 50000 + 25000 = 75.0k
+        self.assertIn("75.0k", html)
+
+        # Now add a fresher tagged report so BOTH legacy groups are excluded -> "2 台电脑使用旧版 Kanjo 未计入"
+        with db.get_connection(self.db_path) as conn:
+            mac_tagged2 = copy.deepcopy(mac_tagged)
+            db.insert_report(
+                conn, id_mac, (now + timedelta(minutes=10)).isoformat(), json.dumps(mac_tagged2),
+                received_at=(now + timedelta(minutes=10)).isoformat(),
+                device_id="1111222233334444", device_name="Payton-MBP",
+            )
+
+        status2, html2 = self._dash_request("/")
+        self.assertEqual(status2, 200)
+        self.assertIn("2 台电脑使用旧版 Kanjo 未计入", html2)
+
 
 if __name__ == "__main__":
     unittest.main()
