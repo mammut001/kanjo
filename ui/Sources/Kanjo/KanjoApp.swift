@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 import KanjoCore
 
@@ -79,12 +80,48 @@ final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
+    private static let logger = Logger(subsystem: "com.lanshuagent.kanjo", category: "cli-sync")
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 纯菜单栏应用：不占 Dock。
         NSApp.setActivationPolicy(.accessory)
         // 应用内更新要在启动时就跑起来，否则第一次定时检查得等用户打开面板才发生。
         // 不是打包的 .app（或缺 SU 键）时 UpdateController 自己就是空转的。
         _ = UpdateController.shared
+        syncTerminalCLIIfNeeded()
+    }
+
+    private func syncTerminalCLIIfNeeded() {
+        guard !SnapshotConfig.isSnapshotMode,
+              !CommandLine.arguments.contains(AppDefaults.windowArgument),
+              AppDefaults.suiteName() == nil,
+              let bundledCLI = DefaultPaths.bundledCLIDirectory else {
+            return
+        }
+
+        let installDir = DefaultPaths.installedCLIDirectories()[0]
+        let launcher = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/bin/kanjo")
+
+        DispatchQueue.global(qos: .utility).async {
+            let result = TerminalCLISync.sync(
+                bundledCLI: bundledCLI,
+                installDir: installDir,
+                launcher: launcher
+            )
+            switch result {
+            case .updated(let from, let to):
+                Self.logger.info("terminal CLI updated: \(from, privacy: .public) -> \(to, privacy: .public)")
+            case .upToDate:
+                Self.logger.info("terminal CLI up to date")
+            case .notInstalled:
+                Self.logger.info("terminal CLI not installed")
+            case .notOurs:
+                Self.logger.info("terminal CLI skipped: launcher not managed by install.sh")
+            case .failed(let message):
+                Self.logger.error("terminal CLI sync failed: \(message, privacy: .public)")
+            }
+        }
     }
 }
 

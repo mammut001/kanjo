@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The Mac app now updates a terminal `kanjo` installed with `install.sh` to its own version when it starts, so `kanjo usage` and other new commands are there after an app update.
+
 ## [0.6.4] - 2026-11-17
 
 ### Changed
