@@ -111,8 +111,14 @@ def cmd_export(args) -> int:
                 save_fast_public_summary(fp, doc)
     else:
         if use_cache:
-            fp = source_fingerprint(config=cfg)
-            doc = load_fast_export(fp)
+            reuse_within = getattr(args, "reuse_within", None)
+            if reuse_within is not None and reuse_within > 0:
+                doc = load_fast_export(
+                    None, max_age=float(reuse_within), ignore_fingerprint=True,
+                )
+            if doc is None:
+                fp = source_fingerprint(config=cfg)
+                doc = load_fast_export(fp)
         if doc is None:
             doc = build_export(config=cfg, cache=_cache(args))
             if use_cache:
@@ -671,6 +677,16 @@ def _max_age(text: str) -> float:
     return value
 
 
+def _non_negative_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("--reuse-within must be a non-negative integer")
+    if value < 0:
+        raise argparse.ArgumentTypeError("--reuse-within must be a non-negative integer")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kanjo",
@@ -706,6 +722,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hide-project-names", action="store_true",
                    help="with --mobile, replace project names and ids with opaque values")
     p.add_argument("--gzip", action="store_true", help="write gzip-compressed JSON to stdout")
+    p.add_argument("--reuse-within", type=_non_negative_int, metavar="SECONDS",
+                   help="reuse cached export from the last SECONDS even if logs changed")
     common(p)
     p.set_defaults(func=cmd_export)
 

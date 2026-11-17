@@ -22,7 +22,7 @@ final class RefreshSchedulerTests: XCTestCase {
 
     func testMinimumInterval120SecondsBetweenRefreshes() {
         let lastRefresh = Date(timeIntervalSince1970: 1000)
-        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh, isPanelVisible: true)
 
         // Event happens 30s after last refresh. Debounce would be +60 (1090), but min interval is +120 (1120).
         let t1 = Date(timeIntervalSince1970: 1030)
@@ -33,7 +33,7 @@ final class RefreshSchedulerTests: XCTestCase {
 
     func testCoalesceEventsDuringRunningRefresh() {
         let t0 = Date(timeIntervalSince1970: 1000)
-        var scheduler = RefreshScheduler(lastRefreshTime: Date(timeIntervalSince1970: 800))
+        var scheduler = RefreshScheduler(lastRefreshTime: Date(timeIntervalSince1970: 800), isPanelVisible: true)
         scheduler.onRefreshStarted(at: t0)
 
         // Events arrive during refresh
@@ -126,7 +126,7 @@ final class RefreshSchedulerTests: XCTestCase {
     }
 
     func testDebounceStarvationMaxWait() {
-        var scheduler = RefreshScheduler(lastRefreshTime: nil)
+        var scheduler = RefreshScheduler(lastRefreshTime: nil, isPanelVisible: true)
         let t0 = Date(timeIntervalSince1970: 1000)
         var refreshStartTimes: [Date] = []
         var scheduledRefreshTime: Date? = nil
@@ -166,5 +166,68 @@ final class RefreshSchedulerTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(interval, 120.0)
             XCTAssertLessThanOrEqual(interval, 190.0)
         }
+    }
+
+    func testHiddenDefaultsToFalseAndUses600SecondMinimumInterval() {
+        let lastRefresh = Date(timeIntervalSince1970: 1000)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+        XCTAssertFalse(scheduler.isPanelVisible)
+
+        // Event 30s after last refresh while hidden -> min interval is +600 (1600), delay = 570s.
+        let t1 = Date(timeIntervalSince1970: 1030)
+        XCTAssertEqual(scheduler.onFileEvent(at: t1), .scheduleRefresh(after: 570))
+
+        // Coalesced follow-up after refresh finishes while hidden also uses 600s minimum gap.
+        let tStart = Date(timeIntervalSince1970: 2000)
+        scheduler.onRefreshStarted(at: tStart)
+        XCTAssertEqual(scheduler.onFileEvent(at: Date(timeIntervalSince1970: 2005)), .none)
+        let tFinish = Date(timeIntervalSince1970: 2010)
+        XCTAssertEqual(scheduler.onRefreshFinished(at: tFinish), .scheduleRefresh(after: 600))
+    }
+
+    func testHiddenToVisibleWithPendingEventsRefreshesNowIfOlderThan120Seconds() {
+        let lastRefresh = Date(timeIntervalSince1970: 1000)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+
+        // File event arrives at 1020 while hidden -> scheduled for 1600 (delay 580s).
+        XCTAssertEqual(scheduler.onFileEvent(at: Date(timeIntervalSince1970: 1020)), .scheduleRefresh(after: 580))
+
+        // Panel opens at 1121 (> 120s since last refresh) with pending event -> refresh immediately.
+        let action = scheduler.onPanelVisibilityChanged(visible: true, at: Date(timeIntervalSince1970: 1121))
+        XCTAssertEqual(action, .refreshNow)
+        XCTAssertTrue(scheduler.isPanelVisible)
+        XCTAssertFalse(scheduler.hasScheduledRefresh)
+    }
+
+    func testHiddenToVisibleWithPendingEventsReschedulesIfWithin120Seconds() {
+        let lastRefresh = Date(timeIntervalSince1970: 1000)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+
+        // File event arrives at 1020 while hidden -> scheduled for 1600 (delay 580s).
+        XCTAssertEqual(scheduler.onFileEvent(at: Date(timeIntervalSince1970: 1020)), .scheduleRefresh(after: 580))
+
+        // Panel opens at 1090 (90s after last refresh, <= 120s) -> reschedules for 1120 (delay 30s).
+        let action = scheduler.onPanelVisibilityChanged(visible: true, at: Date(timeIntervalSince1970: 1090))
+        XCTAssertEqual(action, .scheduleRefresh(after: 30))
+        XCTAssertTrue(scheduler.isPanelVisible)
+        XCTAssertTrue(scheduler.hasScheduledRefresh)
+
+        // No pending event -> visibility change returns .none.
+        var idleScheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+        XCTAssertEqual(idleScheduler.onPanelVisibilityChanged(visible: true, at: Date(timeIntervalSince1970: 1200)), .none)
+    }
+
+    func testVisibleToHiddenExtendsPendingScheduleTo600SecondRule() {
+        let lastRefresh = Date(timeIntervalSince1970: 1000)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh, isPanelVisible: true)
+
+        // Event arrives at 1030 while visible -> scheduled for 1120 (delay 90s).
+        XCTAssertEqual(scheduler.onFileEvent(at: Date(timeIntervalSince1970: 1030)), .scheduleRefresh(after: 90))
+
+        // Panel closes at 1050 -> extends pending schedule to 1600 (delay 550s).
+        let action = scheduler.onPanelVisibilityChanged(visible: false, at: Date(timeIntervalSince1970: 1050))
+        XCTAssertEqual(action, .scheduleRefresh(after: 550))
+        XCTAssertFalse(scheduler.isPanelVisible)
+        XCTAssertTrue(scheduler.hasScheduledRefresh)
     }
 }

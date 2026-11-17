@@ -153,9 +153,17 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelOpened() {
+        let action = scheduler.onPanelVisibilityChanged(visible: true)
         if scheduler.shouldRefreshOnOpen() {
             refresh(qualityOfService: .background)
+        } else {
+            handleSchedulerAction(action)
         }
+    }
+
+    func onPanelClosed() {
+        let action = scheduler.onPanelVisibilityChanged(visible: false)
+        handleSchedulerAction(action)
     }
 
     func checkPython() async {

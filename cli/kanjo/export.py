@@ -1335,8 +1335,9 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     return h.hexdigest()
 
 
-def load_fast_export(fingerprint: str, directory: Optional[str] = None,
-                     now: Optional[float] = None) -> Optional[dict]:
+def load_fast_export(fingerprint: Optional[str], directory: Optional[str] = None,
+                     now: Optional[float] = None, max_age: float = 1800.0,
+                     ignore_fingerprint: bool = False) -> Optional[dict]:
     cdir = directory or _cache_dir()
     path = os.path.join(cdir, "export-last.json")
     try:
@@ -1344,13 +1345,13 @@ def load_fast_export(fingerprint: str, directory: Optional[str] = None,
             payload = json.load(handle)
         if not isinstance(payload, dict):
             return None
-        if payload.get("fingerprint") != fingerprint:
+        if not ignore_fingerprint and payload.get("fingerprint") != fingerprint:
             return None
         scanned_at = payload.get("scanned_at")
-        if not isinstance(scanned_at, (int, float)):
+        if isinstance(scanned_at, bool) or not isinstance(scanned_at, (int, float)):
             return None
         current = time.time() if now is None else now
-        if current - scanned_at < 0 or current - scanned_at >= 1800.0:  # 30 minutes
+        if current - scanned_at < 0 or current - scanned_at >= max_age:
             return None
         doc = payload.get("doc")
         if isinstance(doc, dict):

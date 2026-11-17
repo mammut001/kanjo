@@ -61,8 +61,8 @@ public struct CLIDataSource: UsageDataSource {
     public static func mobileExportCommand(_ command: String, hideProjectNames: Bool) -> String {
         let base = command.trimmingCharacters(in: .whitespacesAndNewlines)
         let flags = hideProjectNames
-            ? " --mobile --gzip --hide-project-names"
-            : " --mobile --gzip"
+            ? " --mobile --gzip --hide-project-names --reuse-within 300"
+            : " --mobile --gzip --reuse-within 300"
         return base + flags
     }
 

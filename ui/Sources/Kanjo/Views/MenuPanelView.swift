@@ -148,6 +148,9 @@ struct MenuPanelView: View {
             store.onPanelOpened()
             applyDevRoute(report: store.report)
         }
+        .onDisappear {
+            store.onPanelClosed()
+        }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
     }
 
