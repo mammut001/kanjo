@@ -331,6 +331,40 @@ class AgyLoginSyncSwitchTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(res["running_agy"], 3)
 
+    def test_switch_quit_running_quits_then_switches(self):
+        backend = FakeKeychainBackend(slot=b"alice_secret", slot_mdat=150.0,
+                                      saved={"alice@example.com": b"alice_secret",
+                                             "bob@example.com": b"bob_secret"})
+        with patch("kanjo.agy_login.list_running_agy_pids", return_value=[11, 12]), \
+             patch("kanjo.agy_login.quit_running_agy", return_value=[]) as q:
+            code, res = switch("bob@example.com", backend, FakeAccountIndex(),
+                               cache_dir=self.tmp, quit_running=True)
+        q.assert_called_once()
+        self.assertEqual(code, 0)
+        self.assertEqual(res["quit_agy"], 2)
+        self.assertEqual(res["running_agy"], 0)
+        self.assertEqual(backend.read_slot(), b"bob_secret")
+
+    def test_switch_quit_running_refuses_when_agy_survives(self):
+        backend = FakeKeychainBackend(slot=b"alice_secret", slot_mdat=150.0,
+                                      saved={"alice@example.com": b"alice_secret",
+                                             "bob@example.com": b"bob_secret"})
+        with patch("kanjo.agy_login.list_running_agy_pids", return_value=[11]), \
+             patch("kanjo.agy_login.quit_running_agy", return_value=[11]):
+            code, res = switch("bob@example.com", backend, FakeAccountIndex(),
+                               cache_dir=self.tmp, quit_running=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(res["error"], "agy_still_running")
+        self.assertEqual(backend.read_slot(), b"alice_secret")
+
+    def test_switch_without_quit_running_never_quits(self):
+        backend = FakeKeychainBackend(slot=b"bob_secret", slot_mdat=150.0,
+                                      saved={"bob@example.com": b"bob_secret"})
+        with patch("kanjo.agy_login.quit_running_agy") as q, \
+             patch("kanjo.agy_login.count_running_agy", return_value=2):
+            switch("bob@example.com", backend, FakeAccountIndex(), cache_dir=self.tmp)
+        q.assert_not_called()
+
     def test_list_and_forget(self):
         s = _span("cli-1.log", 100.0, 300.0,
                   auth_events=[(100.5, "alice@example.com", "keyring")], refresh_events=[150.0])

@@ -514,4 +514,10 @@
 "overview.agy.no_saved_login" = "未找到已保存的登录信息";
 "overview.agy.unsaved_login" = "当前登录尚未保存；请运行一次 agy 并刷新 Kanjo";
 "overview.agy.switch_failed" = "切换失败";
+"overview.agy.quit_confirm_title" = "退出 %d 个 agy 再切换？";
+"overview.agy.quit_confirm_body" = "正在运行的 agy 会在下次刷新时把旧账号写回去。退出后它们里的任务会中断，之后重新打开即是新账号。";
+"overview.agy.quit_confirm_quit" = "退出全部并切换";
+"overview.agy.quit_confirm_keep" = "只切换，不退出";
+"overview.agy.quit_confirm_cancel" = "取消";
+"overview.agy.still_running" = "有 agy 没能退出，未做任何更改";
 

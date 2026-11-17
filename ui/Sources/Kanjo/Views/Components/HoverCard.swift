@@ -443,7 +443,7 @@ struct QuotaCard: View {
                     .frame(width: 38, height: 16)
             } else {
                 Button(L10n.tr("overview.agy.switch")) {
-                    switchAccount(acc.email)
+                    requestSwitch(acc.email)
                 }
                 .buttonStyle(.bordered)
                 .font(.system(size: 9.5, weight: .medium))
@@ -482,7 +482,40 @@ struct QuotaCard: View {
         }
     }
 
-    private func switchAccount(_ email: String) {
+    /// Number of running `agy` processes (nil when pgrep fails).
+    private static func runningAgyCount() -> Int? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-x", "agy"]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 || p.terminationStatus == 1 else { return nil }
+        return String(decoding: data, as: UTF8.self)
+            .split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+    }
+
+    /// Running agy sessions would write their old login back; ask before quitting them.
+    private func requestSwitch(_ email: String) {
+        let running = Self.runningAgyCount() ?? 0
+        guard running > 0 else { switchAccount(email, quitRunning: false); return }
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("overview.agy.quit_confirm_title", running)
+        alert.informativeText = L10n.tr("overview.agy.quit_confirm_body")
+        alert.addButton(withTitle: L10n.tr("overview.agy.quit_confirm_quit"))
+        alert.addButton(withTitle: L10n.tr("overview.agy.quit_confirm_keep"))
+        alert.addButton(withTitle: L10n.tr("overview.agy.quit_confirm_cancel"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: switchAccount(email, quitRunning: true)
+        case .alertSecondButtonReturn: switchAccount(email, quitRunning: false)
+        default: break
+        }
+    }
+
+    private func switchAccount(_ email: String, quitRunning: Bool = false) {
         switchingEmail = email
         statusMessage = nil
         Task { @MainActor in
@@ -491,16 +524,16 @@ struct QuotaCard: View {
             let workingDir = CLILaunch.workingDirectory(defaults: defaults)
             do {
                 let command: String
-                if let derived = try? AgyAccountCommand.switchCommand(from: baseCli, email: email) {
+                if let derived = try? AgyAccountCommand.switchCommand(from: baseCli, email: email, quitRunning: quitRunning) {
                     command = derived
                 } else {
-                    command = "python3 -m kanjo agy-account switch '\(email)' --json"
+                    command = "python3 -m kanjo agy-account switch '\(email)' --json" + (quitRunning ? " --quit-running" : "")
                 }
                 let (status, outData, errData, timedOut) = try await Task.detached(priority: .userInitiated) {
                     try CLIDataSource.run(
                         command: command,
                         cwd: workingDir,
-                        timeout: 30,
+                        timeout: 40,
                         qualityOfService: .userInitiated
                     )
                 }.value
@@ -536,6 +569,8 @@ struct QuotaCard: View {
                     let rawMsg = (parsedJson?["message"] as? String) ?? (!errStr.isEmpty ? errStr : outStr)
                     if errCode == "no_saved_login" {
                         statusMessage = L10n.tr("overview.agy.no_saved_login")
+                    } else if errCode == "agy_still_running" {
+                        statusMessage = L10n.tr("overview.agy.still_running")
                     } else if errCode == "unsaved_login" || rawMsg.contains("current login is not saved yet") {
                         statusMessage = L10n.tr("overview.agy.unsaved_login")
                     } else {

@@ -379,7 +379,8 @@ def cmd_agy_account(args) -> int:
 
     elif action == "switch":
         email = getattr(args, "email", "")
-        code, res = agy_login.switch(email, backend)
+        code, res = agy_login.switch(
+            email, backend, quit_running=getattr(args, "quit_running", False))
         if use_json:
             print(json.dumps(res, ensure_ascii=False, indent=2))
         else:
@@ -779,6 +780,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = agy_sub.add_parser("switch", help="switch active login to email")
     c.add_argument("email", metavar="EMAIL", help="account email to switch to")
+    c.add_argument("--quit-running", action="store_true",
+                   help="quit all running agy sessions first (they would write their old login back)")
     c.add_argument("--json", action="store_true", help="output as JSON")
     c.set_defaults(func=cmd_agy_account, agy_action="switch")
 

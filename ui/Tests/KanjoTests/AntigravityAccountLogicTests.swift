@@ -115,6 +115,13 @@ final class AntigravityAccountLogicTests: KanjoTestCase {
         )
     }
 
+    func testSwitchArgumentsQuitRunning() {
+        XCTAssertEqual(
+            AgyAccountCommand.switchArguments(email: " a@b.c ", quitRunning: true),
+            ["agy-account", "switch", "a@b.c", "--json", "--quit-running"]
+        )
+    }
+
     func testAgyAccountCommand() throws {
         XCTAssertEqual(
             AgyAccountCommand.switchArguments(email: "alex@example.com"),

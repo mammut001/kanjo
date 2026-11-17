@@ -514,4 +514,10 @@
 "overview.agy.no_saved_login" = "No saved login found";
 "overview.agy.unsaved_login" = "Current login is not saved yet; run agy once and refresh Kanjo";
 "overview.agy.switch_failed" = "Switch failed";
+"overview.agy.quit_confirm_title" = "Quit %d agy sessions and switch?";
+"overview.agy.quit_confirm_body" = "Running agy sessions write their old login back at their next token refresh. Quitting interrupts their tasks; reopen them afterwards to use the new account.";
+"overview.agy.quit_confirm_quit" = "Quit all and switch";
+"overview.agy.quit_confirm_keep" = "Switch only";
+"overview.agy.quit_confirm_cancel" = "Cancel";
+"overview.agy.still_running" = "Some agy sessions did not quit; nothing was changed";
 

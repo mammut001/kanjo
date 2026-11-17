@@ -514,4 +514,10 @@
 "overview.agy.no_saved_login" = "Aucune connexion enregistrée trouvée";
 "overview.agy.unsaved_login" = "La connexion actuelle n'est pas encore enregistrée ; lancez agy une fois et actualisez Kanjo";
 "overview.agy.switch_failed" = "Échec du basculement";
+"overview.agy.quit_confirm_title" = "Quitter %d sessions agy et basculer ?";
+"overview.agy.quit_confirm_body" = "Les sessions agy en cours réécrivent leur ancien compte à leur prochain rafraîchissement. Les quitter interrompt leurs tâches ; rouvrez-les ensuite pour utiliser le nouveau compte.";
+"overview.agy.quit_confirm_quit" = "Tout quitter et basculer";
+"overview.agy.quit_confirm_keep" = "Basculer seulement";
+"overview.agy.quit_confirm_cancel" = "Annuler";
+"overview.agy.still_running" = "Certaines sessions agy ne se sont pas fermées ; rien n'a été modifié";
 
