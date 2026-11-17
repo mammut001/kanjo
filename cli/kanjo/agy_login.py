@@ -459,8 +459,30 @@ def switch(
     if not target:
         return 1, {"status": "error", "message": "email cannot be empty"}
 
+    def _ok_result() -> Tuple[int, dict]:
+        return 0, {
+            "status": "ok",
+            "account": target,
+            "note": _SWITCH_NOTE,
+            "running_agy": _running_agy_field(running_agy),
+            **({"quit_agy": quit_count} if quit_count is not None else {}),
+        }
+
+    def _no_saved_login() -> Tuple[int, dict]:
+        return 1, {
+            "status": "error",
+            "error": "no_saved_login",
+            "message": f"no saved login for {target}",
+        }
+
     quit_count = None
     if quit_running:
+        target_bytes = backend.read_saved(target)
+        if not target_bytes:
+            return _no_saved_login()
+        if backend.read_slot() == target_bytes:
+            quit_count = 0
+            return _ok_result()
         before = list_running_agy_pids()
         survivors = quit_running_agy()
         if survivors:
@@ -480,13 +502,7 @@ def switch(
     target_bytes = backend.read_saved(target)
     slot_bytes = backend.read_slot()
     if target_bytes and slot_bytes == target_bytes:
-        return 0, {
-            "status": "ok",
-            "account": target,
-            "note": _SWITCH_NOTE,
-            "running_agy": _running_agy_field(running_agy),
-            **({"quit_agy": quit_count} if quit_count is not None else {}),
-        }
+        return _ok_result()
 
     # 2. if slot owner is unknown and slot is non-empty and differs from every saved copy, refuse
     slot_bytes = backend.read_slot()
@@ -509,11 +525,7 @@ def switch(
     # 3. require a saved copy for EMAIL, else error no_saved_login
     target_bytes = backend.read_saved(target)
     if not target_bytes:
-        return 1, {
-            "status": "error",
-            "error": "no_saved_login",
-            "message": f"no saved login for {target}",
-        }
+        return _no_saved_login()
 
     # 4. write saved bytes into the slot, read back and compare; on mismatch restore
     prev_bytes = slot_bytes
@@ -531,13 +543,7 @@ def switch(
     _record_slot_write(target_bytes, target, cache_dir=cache_dir)
 
     # 5. output
-    return 0, {
-        "status": "ok",
-        "account": target,
-        "note": _SWITCH_NOTE,
-        "running_agy": _running_agy_field(running_agy),
-        **({"quit_agy": quit_count} if quit_count is not None else {}),
-    }
+    return _ok_result()
 
 
 def list_accounts_login(backend: Optional[KeychainBackend] = None, index=None) -> Tuple[int, dict]:

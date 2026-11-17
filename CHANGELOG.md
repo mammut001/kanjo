@@ -12,6 +12,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Antigravity account switch can quit running agy sessions first (they would otherwise write their old login back within about an hour); the Mac app asks before quitting them (`agy-account switch EMAIL --quit-running`).
 - **Family server: merge two members.** A member can now have several tokens, and
   `python -m family_server member merge --from NAME --into NAME` moves one member's tokens and past
   reports onto another, so one person's computers count together without re-entering tokens.

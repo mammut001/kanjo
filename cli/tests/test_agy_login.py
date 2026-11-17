@@ -365,6 +365,35 @@ class AgyLoginSyncSwitchTest(unittest.TestCase):
             switch("bob@example.com", backend, FakeAccountIndex(), cache_dir=self.tmp)
         q.assert_not_called()
 
+    def test_switch_quit_running_no_saved_login_never_quits(self):
+        backend = FakeKeychainBackend(slot=b"alice_secret", slot_mdat=150.0,
+                                      saved={"alice@example.com": b"alice_secret"})
+        with patch("kanjo.agy_login.list_running_agy_pids") as lp, \
+             patch("kanjo.agy_login.quit_running_agy") as q:
+            code, res = switch("carol@example.com", backend, FakeAccountIndex(),
+                               cache_dir=self.tmp, quit_running=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(res["error"], "no_saved_login")
+        q.assert_not_called()
+        lp.assert_not_called()
+        self.assertEqual(backend.read_slot(), b"alice_secret")
+
+    def test_switch_quit_running_already_active_never_quits(self):
+        backend = FakeKeychainBackend(slot=b"bob_secret", slot_mdat=150.0,
+                                      saved={"bob@example.com": b"bob_secret"})
+        with patch("kanjo.agy_login.list_running_agy_pids") as lp, \
+             patch("kanjo.agy_login.quit_running_agy") as q, \
+             patch("kanjo.agy_login.count_running_agy", return_value=2):
+            code, res = switch("bob@example.com", backend, FakeAccountIndex(),
+                               cache_dir=self.tmp, quit_running=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["quit_agy"], 0)
+        self.assertEqual(res["running_agy"], 2)
+        q.assert_not_called()
+        lp.assert_not_called()
+        self.assertEqual(len(backend.write_slot_calls), 0)
+
     def test_list_and_forget(self):
         s = _span("cli-1.log", 100.0, 300.0,
                   auth_events=[(100.5, "alice@example.com", "keyring")], refresh_events=[150.0])
