@@ -178,3 +178,84 @@ class PerfQuietTest(unittest.TestCase):
         data = json.loads(out)
         self.assertIn("claude", data)
         self.assertTrue(any(self.claude_src in p for p in data["claude"]))
+
+    def _touch_claude_log(self):
+        for root, _, files in os.walk(self.claude_src):
+            for file in files:
+                if file.endswith(".jsonl"):
+                    path = os.path.join(root, file)
+                    new_mtime = time.time() + 10
+                    os.utime(path, (new_mtime, new_mtime))
+                    return path
+        self.fail("no claude jsonl fixture found")
+
+    def test_reuse_within_reuses_fresh_cache_with_different_fingerprint(self):
+        code1, out1, _ = self._run_cli("export")
+        self.assertEqual(code1, 0)
+        fast_cache = os.path.join(self.cache_dir, "export-last.json")
+        with open(fast_cache, encoding="utf-8") as f:
+            fp1 = json.load(f)["fingerprint"]
+
+        self._touch_claude_log()
+
+        # With --reuse-within 300, fresh cache is reused without rebuilding even though fingerprint changed.
+        with mock.patch("kanjo.cli.build_export", side_effect=AssertionError("should not rebuild")):
+            code2, out2, _ = self._run_cli("export", "--reuse-within", "300")
+        self.assertEqual(code2, 0)
+        self.assertEqual(out1, out2)
+
+        # Without the flag, the fingerprint rule is unchanged (changed file forces rebuild).
+        code3, _, _ = self._run_cli("export")
+        self.assertEqual(code3, 0)
+        with open(fast_cache, encoding="utf-8") as f:
+            fp3 = json.load(f)["fingerprint"]
+        self.assertNotEqual(fp1, fp3)
+
+    def test_reuse_within_rebuilds_stale_or_future_cache(self):
+        code1, _, _ = self._run_cli("export")
+        self.assertEqual(code1, 0)
+        fast_cache = os.path.join(self.cache_dir, "export-last.json")
+        with open(fast_cache, encoding="utf-8") as f:
+            payload = json.load(f)
+
+        # Stale cache with different fingerprint -> rebuilt.
+        payload["fingerprint"] = "stale-different-fp"
+        payload["scanned_at"] = time.time() - 400
+        with open(fast_cache, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+        code2, _, _ = self._run_cli("export", "--reuse-within", "300")
+        self.assertEqual(code2, 0)
+        with open(fast_cache, encoding="utf-8") as f:
+            rebuilt = json.load(f)
+        self.assertNotEqual(rebuilt["fingerprint"], "stale-different-fp")
+
+        # Future scanned_at with different fingerprint -> not reused, rebuilt.
+        rebuilt["fingerprint"] = "future-different-fp"
+        rebuilt["scanned_at"] = time.time() + 120
+        with open(fast_cache, "w", encoding="utf-8") as f:
+            json.dump(rebuilt, f)
+
+        code3, _, _ = self._run_cli("export", "--reuse-within", "300")
+        self.assertEqual(code3, 0)
+        with open(fast_cache, encoding="utf-8") as f:
+            after_future = json.load(f)
+        self.assertNotEqual(after_future["fingerprint"], "future-different-fp")
+
+    def test_reuse_within_mobile_output_matches_mobile_document(self):
+        code1, out1, _ = self._run_cli("export")
+        self.assertEqual(code1, 0)
+        doc = json.loads(out1)
+
+        self._touch_claude_log()
+
+        with mock.patch("kanjo.cli.build_export", side_effect=AssertionError("should not rebuild")):
+            code2, out2, _ = self._run_cli("export", "--mobile", "--reuse-within", "300")
+        self.assertEqual(code2, 0)
+        self.assertEqual(json.loads(out2), export.mobile_document(doc))
+
+    def test_reuse_within_rejects_negative_or_non_int(self):
+        for bad in ("-1", "1.5", "abc"):
+            with self.assertRaises(SystemExit) as ctx:
+                self._run_cli("export", "--reuse-within", bad)
+            self.assertEqual(ctx.exception.code, 2)

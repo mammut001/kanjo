@@ -184,4 +184,15 @@ final class SnapshotRecordTests: XCTestCase {
         XCTAssertEqual(chunks.map(\.count), [50, 50, 50, 50, 35])
         XCTAssertEqual(chunks.reduce(Data(), +), original)
     }
+
+    func testMobileExportCommandIncludesReuseWithin() {
+        XCTAssertEqual(
+            CLIDataSource.mobileExportCommand("python3 -m kanjo export", hideProjectNames: false),
+            "python3 -m kanjo export --mobile --gzip --reuse-within 300"
+        )
+        XCTAssertEqual(
+            CLIDataSource.mobileExportCommand("  kanjo export  ", hideProjectNames: true),
+            "kanjo export --mobile --gzip --hide-project-names --reuse-within 300"
+        )
+    }
 }

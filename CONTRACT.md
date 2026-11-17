@@ -379,6 +379,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 - `buckets`：`unattributed` / `excluded` 保留 Aggregate 字段和同样精简的 `sessions_detail`；`parse_failed` 只留 `sessions`（不含 `files` 路径）。
 - `--hide-project-names`（只能和 `--mobile` 一起用）：项目名按 cost 顺序替换为 `Project 1`…`Project N`，`id` 替换为原 id 的 sha256 前 12 位十六进制，`mobile.hidden_project_names` 为 `true`。顺序不变。精简会话里没有任何字段能暴露项目名、路径或远程地址。
 - `--gzip`：把 JSON 以 gzip 压缩后写到 stdout（二进制，无缩进）；`-o` 时写入文件。适合 Mac app 直接上传。
+- `--reuse-within SECONDS`：若 `export-last.json` 在最近 `SECONDS` 秒内刚扫描过（且不早于当前时间），即使日志指纹已变化也直接复用其中的报告，不重新扫描；不传该参数时按原指纹规则判断。
 
 ## 12. 公开汇总 (`kanjo export --public-summary`)
 

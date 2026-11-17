@@ -7,6 +7,7 @@ public struct RefreshScheduler: Equatable {
     public static let minimumFallbackMinutes = 15
     public static let debounceInterval: TimeInterval = 60
     public static let minimumRefreshInterval: TimeInterval = 120
+    public static let hiddenMinimumRefreshInterval: TimeInterval = 600
     public static let maxDebounceWait: TimeInterval = 180
 
     public enum Action: Equatable {
@@ -20,6 +21,8 @@ public struct RefreshScheduler: Equatable {
     public private(set) var firstUnhandledEventTime: Date?
     public private(set) var isRefreshing: Bool = false
     public private(set) var hasPendingEventWhileRefreshing: Bool = false
+    public private(set) var hasScheduledRefresh: Bool = false
+    public private(set) var isPanelVisible: Bool = false
     public private(set) var isAsleep: Bool = false
     public private(set) var isLowPowerMode: Bool = false
     public private(set) var pendingWakeRefresh: Bool = false
@@ -27,10 +30,28 @@ public struct RefreshScheduler: Equatable {
 
     public init(
         fallbackMinutes: Int = defaultFallbackMinutes,
-        lastRefreshTime: Date? = nil
+        lastRefreshTime: Date? = nil,
+        isPanelVisible: Bool = false
     ) {
         self.fallbackMinutes = Self.migrateFallbackMinutes(fallbackMinutes)
         self.lastRefreshTime = lastRefreshTime
+        self.isPanelVisible = isPanelVisible
+    }
+
+    private var activeMinimumRefreshInterval: TimeInterval {
+        isPanelVisible ? Self.minimumRefreshInterval : Self.hiddenMinimumRefreshInterval
+    }
+
+    private mutating func scheduleFileEventRefresh(at date: Date, minIntervalAnchor: Date?) -> Action {
+        let firstEvent = firstUnhandledEventTime ?? (lastEventTime ?? date)
+        let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
+        let debounceTarget = (lastEventTime ?? date).addingTimeInterval(Self.debounceInterval)
+        let effectiveTarget = min(debounceTarget, deadline)
+        let minIntervalTarget = (minIntervalAnchor ?? .distantPast).addingTimeInterval(activeMinimumRefreshInterval)
+        let scheduledTarget = max(effectiveTarget, minIntervalTarget)
+        let delay = max(0, scheduledTarget.timeIntervalSince(date))
+        hasScheduledRefresh = true
+        return .scheduleRefresh(after: delay)
     }
 
     public static func migrateFallbackMinutes(_ stored: Int) -> Int {
@@ -55,20 +76,14 @@ public struct RefreshScheduler: Equatable {
             hasPendingEventWhileRefreshing = true
             return .none
         }
-        let firstEvent = firstUnhandledEventTime ?? date
-        let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
-        let debounceTarget = date.addingTimeInterval(Self.debounceInterval)
-        let effectiveTarget = min(debounceTarget, deadline)
-        let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(Self.minimumRefreshInterval)
-        let scheduledTarget = max(effectiveTarget, minIntervalTarget)
-        let delay = max(0, scheduledTarget.timeIntervalSince(date))
-        return .scheduleRefresh(after: delay)
+        return scheduleFileEventRefresh(at: date, minIntervalAnchor: lastRefreshTime)
     }
 
     /// Called when a refresh starts.
     public mutating func onRefreshStarted(at date: Date = Date()) {
         isRefreshing = true
         hasPendingEventWhileRefreshing = false
+        hasScheduledRefresh = false
         firstUnhandledEventTime = nil
     }
 
@@ -83,17 +98,31 @@ public struct RefreshScheduler: Equatable {
 
         if hasPendingEventWhileRefreshing {
             hasPendingEventWhileRefreshing = false
-            let firstEvent = firstUnhandledEventTime ?? (lastEventTime ?? date)
-            let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
-            let debounceTarget = (lastEventTime ?? date).addingTimeInterval(Self.debounceInterval)
-            let effectiveTarget = min(debounceTarget, deadline)
-            let minIntervalTarget = date.addingTimeInterval(Self.minimumRefreshInterval)
-            let scheduledTarget = max(effectiveTarget, minIntervalTarget)
-            let delay = max(0, scheduledTarget.timeIntervalSince(date))
-            return .scheduleRefresh(after: delay)
+            return scheduleFileEventRefresh(at: date, minIntervalAnchor: date)
         }
 
         return .none
+    }
+
+    /// Called when the menu panel becomes visible or hidden.
+    /// Re-evaluates any pending scheduled refresh under the updated visibility rules.
+    public mutating func onPanelVisibilityChanged(visible: Bool, at date: Date = Date()) -> Action {
+        guard isPanelVisible != visible else { return .none }
+        isPanelVisible = visible
+
+        if isAsleep || isLowPowerMode || isRefreshing || !hasScheduledRefresh {
+            return .none
+        }
+
+        if visible {
+            let sinceLastRefresh = date.timeIntervalSince(lastRefreshTime ?? .distantPast)
+            if sinceLastRefresh > Self.minimumRefreshInterval {
+                hasScheduledRefresh = false
+                return .refreshNow
+            }
+        }
+
+        return scheduleFileEventRefresh(at: date, minIntervalAnchor: lastRefreshTime)
     }
 
     /// Called when the menu panel opens.
@@ -107,6 +136,7 @@ public struct RefreshScheduler: Equatable {
     /// System will sleep.
     public mutating func onSleep() {
         isAsleep = true
+        hasScheduledRefresh = false
     }
 
     /// System did wake.
@@ -119,6 +149,7 @@ public struct RefreshScheduler: Equatable {
         if date >= minIntervalTarget {
             return .refreshNow
         } else {
+            hasScheduledRefresh = true
             return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
         }
     }
@@ -133,6 +164,7 @@ public struct RefreshScheduler: Equatable {
             if date >= minIntervalTarget {
                 return .refreshNow
             } else {
+                hasScheduledRefresh = true
                 return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
             }
         }

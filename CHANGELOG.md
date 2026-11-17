@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Kanjo refreshes at most every 10 minutes while the menu panel is closed (immediately when you open it), and iCloud sync reuses the export that just ran instead of running a second one — much less CPU while agents are busy.
+
 ### Added
 
 - **Family server: merge two members.** A member can now have several tokens, and
