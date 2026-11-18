@@ -13,7 +13,7 @@ from .model import (
     DayRowViewModel, FilteredData, ModelRowViewModel, ProjectDetailViewModel,
     ProjectRowViewModel, QuotaLevel, QuotaMeterWindow, RANGE_TABS,
     SubscriptionMeter, TimeRange, TotalViewModel, VIEW_MODES, ViewMode,
-    format_money, format_tokens, agent_color
+    format_money, format_tokens, agent_color, get_tz, parse_iso_dt
 )
 from .i18n import t, normalize_lang
 
@@ -341,6 +341,8 @@ class TUIState:
     confirm_switch_email: Optional[str] = None
     status_message: str = ""
     status_until: float = 0.0
+    is_stale: bool = False
+    last_generated_at_str: str = ""
 
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -717,10 +719,14 @@ def render_ui(
 
     # Right side: refresh time and spinner
     right_items = []
-    if state.is_scanning:
+    if state.is_stale:
+        spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
+        right_items.append(f"{spin} {t('stale', state.lang, time=state.last_generated_at_str)}")
+    elif state.is_scanning:
         spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
         right_items.append(f"{spin} {t('refreshing', state.lang)}")
-    if state.last_refresh_time:
+    
+    if state.last_refresh_time and not state.is_stale:
         right_items.append(state.last_refresh_time)
 
     right_str = " · ".join(right_items)

@@ -558,6 +558,7 @@ def cmd_usage(args) -> int:
     use_cache = not getattr(args, "no_cache", False)
     data_path = getattr(args, "data", None)
     doc = None
+    is_stale = False
     antigravity_accounts_data = None
     current_account = None
 
@@ -600,6 +601,12 @@ def cmd_usage(args) -> int:
             if use_cache:
                 fp = source_fingerprint(config=cfg)
                 doc = load_fast_export(fp)
+                if doc is None:
+                    fallback_doc = load_fast_export(None, ignore_fingerprint=True, max_age=7 * 24 * 3600)
+                    if isinstance(fallback_doc, dict) and isinstance(fallback_doc.get("projects"), list) and isinstance(fallback_doc.get("totals"), dict):
+                        doc = fallback_doc
+                        is_stale = True
+
                 if doc and isinstance(doc.get("antigravity_accounts"), dict):
                     antigravity_accounts_data = doc["antigravity_accounts"]
                     current_account = antigravity_accounts_data.get("current")
@@ -665,6 +672,7 @@ def cmd_usage(args) -> int:
             use_cache=use_cache,
             lang=lang,
             mouse=mouse,
+            is_stale=is_stale,
         )
     except KeyboardInterrupt:
         return 0

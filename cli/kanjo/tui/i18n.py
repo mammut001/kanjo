@@ -46,6 +46,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         # chrome
         "loading": "Loading…",
         "refreshing": "refreshing…",
+        "stale": "Data from {time} · updating…",
         "terminal_too_small": "Terminal too small (need >= 60x15, current: {width}x{height})",
         "more": "+{count} more",
         "filter_prompt": "Filter: {query}_ (Enter to apply, Esc to cancel)",
@@ -207,6 +208,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         # chrome
         "loading": "正在加载…",
         "refreshing": "正在刷新…",
+        "stale": "数据来自 {time} · 正在更新…",
         "terminal_too_small": "终端窗口太小（至少需要 60x15，当前 {width}x{height}）",
         "more": "另有 {count} 项",
         "filter_prompt": "筛选：{query}_（Enter 应用，Esc 取消）",

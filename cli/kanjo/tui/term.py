@@ -27,7 +27,7 @@ from .model import (
     build_agent_detail, build_agent_rows, build_antigravity_accounts_section,
     build_day_rows, build_model_rows, build_project_detail,
     build_project_footer_rows, build_project_rows, build_subscription_meters,
-    build_total_view_model, filter_report, get_tz
+    build_total_view_model, filter_report, get_tz, format_month_day_time, parse_iso_dt
 )
 from .render import Canvas, Style, TUIState, render_ui, hit_box_at, HitBox
 from .static import rgb_to_256, NAMED_FG, NAMED_BG
@@ -697,6 +697,7 @@ def run_curses_tui(
     switch_login=None,
     mouse: bool = True,
     mouse_reader=None,
+    is_stale: bool = False,
 ) -> int:
     """Main interactive curses loop.
 
@@ -734,6 +735,14 @@ def run_curses_tui(
     scanner.start()
 
     lang = normalize_lang(lang)
+    
+    last_generated_at_str = ""
+    if initial_doc and initial_doc.get("generated_at"):
+        tz = get_tz(initial_doc)
+        dt = parse_iso_dt(initial_doc["generated_at"], default_tz=tz)
+        if dt:
+            last_generated_at_str = format_month_day_time(dt, tz, lang)
+
     state = TUIState(
         version=version,
         time_range=time_range,
@@ -743,6 +752,8 @@ def run_curses_tui(
         is_scanning=(initial_doc is None),
         last_refresh_time=scanner.last_scan_time,
         lang=lang,
+        is_stale=is_stale,
+        last_generated_at_str=last_generated_at_str,
     )
 
     last_spinner_tick = time.time()
@@ -816,6 +827,16 @@ def run_curses_tui(
                 last_doc_version = new_doc_version
                 antigravity_accounts_data = new_ag_accounts
                 current_account = new_cur_account
+                state.is_stale = False
+                if doc and doc.get("generated_at"):
+                    tz = get_tz(doc)
+                    dt = parse_iso_dt(doc["generated_at"], default_tz=tz)
+                    if dt:
+                        state.last_generated_at_str = format_month_day_time(dt, tz, lang)
+                    else:
+                        state.last_generated_at_str = ""
+                else:
+                    state.last_generated_at_str = ""
                 dirty = True
             elif new_doc is not doc:
                 doc = new_doc
