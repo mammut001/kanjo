@@ -11,6 +11,7 @@ is passed. The UI only calls this command.
 from __future__ import annotations
 
 import errno
+import json
 import os
 import re
 import shutil
@@ -441,23 +442,23 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
     """CONTRACT.md section 10 document. Reads the ledger; caches the report."""
     started = time.monotonic()
     now = time.time() if now is None else now
+    # Claude Code worktrees under ``<repo>/.claude/worktrees`` are looked up in the
+    # repos ``kanjo export`` already knows; explicit roots (tests) carry ``repos``.
+    repos = None if roots is not None else _known_repos
     roots = default_roots() if roots is None else roots
     valid_entries = {}
     if not rescan:
         cached, valid_entries, wt_cache = disk_cache.load_cached_report(roots, now, max_age)
         if cached is not None:
             return cached
-        if wt_cache:
-            for k, v in wt_cache.items():
-                parts = k.split("\0")
-                if len(parts) == 3:
-                    try:
-                        _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = v
-                    except ValueError:
-                        pass
+    else:
+        wt_cache = disk_cache.load_worktrees(roots)
+    _load_worktree_cache(wt_cache)
     ledger = ledger or Ledger()
+    repo_list = repos() if repos is not None else list(roots.get("repos") or [])
     with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
-        grouped = _collect(roots, now, _imported_index(ledger), executor, valid_entries=valid_entries)
+        grouped = _collect(roots, now, _imported_index(ledger), executor, valid_entries=valid_entries,
+                           repos=repo_list)
     agents = []
     total = 0
     reclaim = 0
@@ -490,14 +491,38 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
         "cached": False,
         "scanned_at": datetime.fromtimestamp(now, timezone.utc).isoformat().replace("+00:00", "Z"),
     }
-    wt_dict = {("%s\0%d\0%d" % (k[0], k[1], k[2])): v for k, v in _WORKTREE_DIRTY_CACHE.items()}
-    disk_cache.save(doc, roots, worktrees=wt_dict)
+    disk_cache.save(doc, roots, worktrees=_dump_worktree_cache())
     return doc
+
+
+def _load_worktree_cache(saved: Optional[dict]) -> None:
+    """Fill the dirty and merge caches from the disk report cache.
+
+    Dirty keys are ``path\0head_mtime\0index_mtime``; merge keys are
+    ``merge\0path\0head_sha\0default_sha`` with ``[merged, merged_into]``.
+    """
+    for k, v in (saved or {}).items():
+        parts = k.split("\0")
+        if len(parts) == 3:
+            try:
+                _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = v
+            except ValueError:
+                pass
+        elif len(parts) == 4 and parts[0] == "merge":
+            if isinstance(v, list) and len(v) == 2 and isinstance(v[0], bool) and isinstance(v[1], str):
+                _WORKTREE_MERGE_CACHE[(parts[1], parts[2], parts[3])] = (v[0], v[1])
+
+
+def _dump_worktree_cache() -> dict:
+    saved = {("%s\0%d\0%d" % (k[0], k[1], k[2])): v for k, v in _WORKTREE_DIRTY_CACHE.items()}
+    for (path, head, target), (merged, ref) in _WORKTREE_MERGE_CACHE.items():
+        saved["merge\0%s\0%s\0%s" % (path, head, target)] = [merged, ref]
+    return saved
 
 
 def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool = False, yes: bool = False,
           now: Optional[float] = None, roots: Optional[dict] = None, trash_dir: Optional[str] = None,
-          ledger: Optional[Ledger] = None) -> dict:
+          ledger: Optional[Ledger] = None, merged_worktrees: bool = False) -> dict:
     """Move ``ids`` into the Trash. Without ``yes``, or with ``dry_run``, nothing is moved.
 
     ``older_than_days`` keeps files newer than that many days. Worktrees are removed
@@ -510,6 +535,12 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     then carries ``"trash_dir": "Recycle Bin"``. An explicit ``trash_dir`` (or
     ``KANJO_TRASH_DIR``) still pins a real folder, so a caller that wants the move
     confined to a temp tree keeps working on Windows.
+
+    ``claude:scratch`` stands for every Claude scratch entry (the per-session ones
+    and what is left at the top). ``merged_worktrees`` adds every worktree whose
+    branch is merged into the default branch; the ones that are not merged, or are
+    blocked, come back in ``skipped``. A folder that holds other entries (a
+    session folder with a worktree inside) is cleaned around them.
     """
     now = time.time() if now is None else now
     ledger = ledger or Ledger()
@@ -517,10 +548,13 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     imported = _imported_index(ledger)
     by_id = {}
     owners = {}
+    order = []
     for agent in doc["agents"]:
         for entry in agent["entries"]:
             by_id[entry["id"]] = entry
             owners[entry["id"]] = agent["agent"]
+            order.append(entry)
+    all_paths = [_norm(entry["path"]) for entry in order]
     do_it = bool(yes) and not dry_run
     recycle_bin = use_recycle_bin(trash_dir)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -528,7 +562,26 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     moved: List[str] = []
     skipped = []
     freed = 0
+    targets: List[str] = []
     for eid in ids:
+        if eid == "claude:scratch":
+            targets.extend(e["id"] for e in order
+                           if e["id"] == eid or e["id"].startswith("claude:scratch:"))
+        else:
+            targets.append(eid)
+    if merged_worktrees:
+        for entry in order:
+            if entry["kind"] != "worktrees" or entry["id"] in targets:
+                continue
+            if entry.get("merged") is True:
+                targets.append(entry["id"])
+            else:
+                skipped.append({"id": entry["id"], "reason": "not_merged"})
+    seen_targets = set()
+    for eid in targets:
+        if eid in seen_targets:
+            continue
+        seen_targets.add(eid)
         entry = by_id.get(eid)
         if entry is None:
             skipped.append({"id": eid, "reason": "not_found"})
@@ -544,14 +597,17 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         if entry["blocked"] and not partial:
             skipped.append({"id": eid, "reason": ",".join(entry["blocked"])})
             continue
+        detail = None
         try:
             if entry["kind"] == "worktrees":
-                part_moved, part_freed, reason = _clean_worktree(entry, older_than_days, now, do_it)
+                part_moved, part_freed, reason, detail = _clean_worktree(entry, older_than_days, now, do_it)
                 file_skips: List[dict] = []
             else:
+                root = _norm(entry["path"])
+                nested = [p for p in all_paths if _inside(p, root)]
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
-                    recycle_bin=recycle_bin)
+                    recycle_bin=recycle_bin, nested=nested)
         except OSError:
             # A partial per-file clean may already have moved files before failing.
             if do_it:
@@ -559,7 +615,10 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
             skipped.append({"id": eid, "reason": "move_failed"})
             continue
         if reason:
-            skipped.append({"id": eid, "reason": reason})
+            skip = {"id": eid, "reason": reason}
+            if detail:
+                skip["detail"] = detail
+            skipped.append(skip)
             skipped.extend(file_skips)
             continue
         moved.extend(part_moved)
@@ -577,10 +636,13 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
 # ---- scanning targets -----------------------------------------------------------------
 def _collect(roots: dict, now: float, imported: Dict[str, set],
              executor: ThreadPoolExecutor,
-             valid_entries: Optional[Dict[str, dict]] = None) -> Dict[str, List[dict]]:
+             valid_entries: Optional[Dict[str, dict]] = None,
+             repos: Optional[List[str]] = None) -> Dict[str, List[dict]]:
     grouped: Dict[str, List[dict]] = {}
     used = set()
     pending = []
+    worktree_paths = set()
+    probe: List[Optional[subprocess.Popen]] = []
 
     def take_id(eid: str) -> str:
         if eid not in used:
@@ -597,18 +659,35 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             pending.append((agent, eid, kind, path, blocked or [], note, None, None, None, None, deletable, cached_e))
             return
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
-        dirty = executor.submit(_worktree_dirty, path) if kind == "worktrees" else None
+        dirty = merge = None
+        if kind == "worktrees":
+            dirty = executor.submit(_worktree_dirty, path)
+            merge = executor.submit(_merge_status, path)
+            if not probe:
+                # lsof takes a moment; it runs beside the scan and is read at the end.
+                probe.append(_start_cwd_probe())
         parts = []
         shallow = None
         if eid == "claude:scratch":
             # Submit each first-level directory into the SAME pool as other entries.
             # The caller scans root files; workers never wait for other workers.
+            skip = [_norm(p) for p in exclude or []]
+
             def submit(child, st):
-                parts.append(executor.submit(measure, child, now, _root_stat=st))
-            shallow = measure(path, now, _submit=submit)
+                inner = [p for p in skip if _inside(p, child)]
+                parts.append(executor.submit(measure, child, now, inner, _root_stat=st))
+            shallow = measure(path, now, exclude, _submit=submit)
         else:
             parts.append(executor.submit(measure, path, now, exclude))
-        pending.append((agent, eid, kind, path, blocked or [], note, counts, dirty, shallow, parts, deletable, None))
+        pending.append((agent, eid, kind, path, blocked or [], note, counts, (dirty, merge), shallow, parts,
+                        deletable, None))
+
+    def add_worktree(agent: str, eid: str, path: str) -> None:
+        key = winsupport.normcase_key(_norm(path))
+        if key in worktree_paths:
+            return
+        worktree_paths.add(key)
+        add(agent, take_id(eid), "worktrees", path)
 
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
@@ -621,7 +700,20 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
                 add("claude", take_id(eid), "cache", path)
     scratch = roots.get("scratch")
     if scratch and _isdir(scratch):
-        add("claude", "claude:scratch", "scratch", scratch)
+        # One entry per <project>/<session> folder, worktrees inside them on their
+        # own, and ``claude:scratch`` for whatever is left at the top.
+        scratch_trees = _scan_for_worktrees(scratch)
+        sessions = _scratch_sessions(scratch, scratch_trees)
+        add("claude", "claude:scratch", "scratch", scratch,
+            exclude=[spath for _rel, spath in sessions] + scratch_trees)
+        for rel, spath in sessions:
+            add("claude", take_id("claude:scratch:" + rel), "scratch", spath,
+                exclude=[w for w in scratch_trees if _inside(w, spath)])
+        for wpath in scratch_trees:
+            rel = os.path.relpath(wpath, scratch).replace(os.sep, "/")
+            add_worktree("claude", "claude:worktree:" + rel, wpath)
+    for rel, wpath in _repo_worktrees(repos or []):
+        add_worktree("claude", "claude:repo-worktree:" + rel, wpath)
 
     codex_dirs = list(roots.get("codex_dirs") or [])
     for path in codex_dirs:
@@ -631,7 +723,7 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         wt_root = os.path.join(parent, "worktrees")
         if _isdir(wt_root):
             for rel, wpath in _find_worktrees(wt_root):
-                add("codex", take_id("codex:worktree:" + rel), "worktrees", wpath)
+                add_worktree("codex", "codex:worktree:" + rel, wpath)
         logs = os.path.join(parent, "logs")
         if _isdir(logs):
             add("codex", take_id("codex:logs"), "cache", logs)
@@ -837,15 +929,29 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         add("deepseek_harness", take_id("deepseek_harness:sessions"), "sessions", dsh_root, note="DeepSeek Harness sessions.")
 
     # Resolve in discovery order so scheduling never changes ids or JSON ordering.
-    for agent, eid, kind, path, blocked, note, counts, dirty, shallow, parts, deletable, cached_e in pending:
+    cwds: List[Optional[List[str]]] = []
+    for agent, eid, kind, path, blocked, note, counts, git_checks, shallow, parts, deletable, cached_e in pending:
         if cached_e is not None:
             grouped.setdefault(agent, []).append(dict(cached_e))
             continue
         measured = _sum_measurements(([shallow] if shallow is not None else [])
                                      + [part.result() for part in parts], now)
+        dirty, merge = git_checks if git_checks is not None else (None, None)
+        merged = merged_into = None
+        if merge is not None:
+            merged, merged_into = merge.result()
         if dirty is not None and dirty.result():
             blocked.append("uncommitted_changes")
-        if kind in ("scratch", "worktrees") and measured["active"]:
+        if kind == "worktrees" and merged:
+            # A merged branch only needs an idle hour and no process working in it.
+            busy = measured["newest"] is not None and now - measured["newest"] < MERGED_IDLE_SECONDS
+            if not busy and not blocked:
+                if not cwds:
+                    cwds.append(_finish_cwd_probe(probe[0] if probe else None))
+                busy = _cwd_inside(path, cwds[0])
+            if busy:
+                blocked.append("active")
+        elif kind in ("scratch", "worktrees") and measured["active"]:
             blocked.append("active")
         log_files = imported_files = None
         if counts is not None:
@@ -856,7 +962,17 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
                 blocked.append("not_imported")
         entry = _make(eid, kind, path, measured, blocked, note=note,
                       log_files=log_files, imported_files=imported_files, deletable=deletable)
+        if kind == "worktrees":
+            entry["merged"] = merged
+            entry["merged_into"] = merged_into
         grouped.setdefault(agent, []).append(entry)
+    if probe and not cwds and probe[0] is not None:
+        # Nothing needed the answer: stop lsof instead of waiting for it.
+        try:
+            probe[0].kill()
+            probe[0].communicate()
+        except OSError:
+            pass
     return grouped
 
 
@@ -1110,11 +1226,305 @@ def _main_repo(path: str) -> Optional[str]:
     return None
 
 
+# ---- worktree discovery ---------------------------------------------------------------
+WORKTREE_SCAN_DEPTH = 6
+_SCAN_SKIP = HEAVY_DIRS | {".git"}
+
+
+def _is_linked_worktree(path: str) -> bool:
+    """True when ``path/.git`` is a file pointing at ``<repo>/.git/worktrees/<name>``."""
+    git_file = os.path.join(path, ".git")
+    try:
+        if not os.path.isfile(git_file) or os.path.islink(git_file):
+            return False
+        with open(git_file, encoding="utf-8") as handle:
+            line = handle.read(4096).strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not line.startswith("gitdir:"):
+        return False
+    gitdir = winsupport.normpath(line.split(":", 1)[1].strip()).replace("\\", "/")
+    return "/worktrees/" in gitdir
+
+
+def _scan_for_worktrees(root: str, max_depth: int = WORKTREE_SCAN_DEPTH) -> List[str]:
+    """Linked git worktrees under ``root``, at most ``max_depth`` levels down.
+
+    Dependency and build folders and ``.git`` are skipped, and the walk stops at a
+    worktree (nothing nested inside one is reported) and at a regular checkout
+    (a directory whose ``.git`` is a folder). Paths are joined from ``root`` so they
+    match the paths ``measure`` sees, which is what ``exclude`` compares against.
+    """
+    found: List[str] = []
+
+    def walk(path: str, depth: int) -> None:
+        try:
+            with os.scandir(path) as it:
+                children = [ent for ent in it
+                            if ent.name not in _SCAN_SKIP and ent.is_dir(follow_symlinks=False)]
+        except OSError:
+            return
+        children.sort(key=lambda ent: ent.name)
+        for ent in children:
+            if _is_linked_worktree(ent.path):
+                found.append(ent.path)
+            elif depth < max_depth and not _isdir(os.path.join(ent.path, ".git")):
+                walk(ent.path, depth + 1)
+
+    if _isdir(root):
+        walk(root, 1)
+    return found
+
+
+def _scratch_sessions(root: str, worktrees: List[str]) -> List[Tuple[str, str]]:
+    """``(project/session, path)`` for each ``<root>/<project>/<session>`` directory.
+
+    Claude Code gives every session its own folder, so each one is measured and
+    blocked on its own: one busy session no longer holds back the idle ones. A
+    folder that is itself a worktree is reported as a worktree instead.
+    """
+    skip = set(worktrees)
+    found = []
+    for project in _subdirs(root):
+        if project.path in skip:
+            continue
+        for session in _subdirs(project.path):
+            if session.path in skip:
+                continue
+            found.append(("%s/%s" % (project.name, session.name), session.path))
+    return found
+
+
+def _subdirs(path: str) -> list:
+    try:
+        with os.scandir(path) as it:
+            kids = [ent for ent in it if ent.is_dir(follow_symlinks=False)]
+    except OSError:
+        return []
+    kids.sort(key=lambda ent: ent.name)
+    return kids
+
+
+def _known_repos() -> List[str]:
+    """Main working trees from the repo cache that ``kanjo export`` keeps.
+
+    Only the paths are read; nothing is resolved again. Missing or unreadable
+    cache means no repos, not an error.
+    """
+    from .cache import REPO_CACHE_VERSION, _cache_dir
+    path = os.path.join(_cache_dir(), "repo-cache-v%d.json" % REPO_CACHE_VERSION)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    found = set()
+    paths = data.get("paths") if isinstance(data, dict) else None
+    for value in (paths or {}).values():
+        repo = value.get("repo") if isinstance(value, dict) else None
+        while isinstance(repo, dict):
+            main = repo.get("main_root")
+            if isinstance(main, str) and main:
+                found.add(main)
+            repo = repo.get("outer")
+    return sorted(found)
+
+
+def _repo_worktrees(repos: List[str]) -> List[Tuple[str, str]]:
+    """``(repo name/worktree name, path)`` for Claude Code's ``<repo>/.claude/worktrees/*``."""
+    found = []
+    for repo in repos or []:
+        base = os.path.join(repo, ".claude", "worktrees")
+        for ent in _subdirs(base):
+            if os.path.lexists(os.path.join(ent.path, ".git")):
+                found.append(("%s/%s" % (os.path.basename(os.path.normpath(repo)), ent.name), ent.path))
+    return found
+
+
+def _inside(path: str, root: str) -> bool:
+    """True when ``path`` is strictly below ``root``."""
+    root = root.rstrip("/\\")
+    return len(path) > len(root) + 1 and path.startswith(root) and path[len(root)] in "/\\"
+
+
+# ---- merge status ---------------------------------------------------------------------
+MERGED_IDLE_SECONDS = 60 * 60
+# (worktree path, HEAD sha, default-branch sha) -> (merged, merged_into). Persisted in
+# the disk report cache next to the dirty cache, so an unchanged worktree costs two
+# cheap git calls instead of a merge-base and a diff.
+_WORKTREE_MERGE_CACHE: Dict[Tuple[str, str, str], Tuple[bool, str]] = {}
+_DEFAULT_REFS = (
+    "refs/remotes/origin/HEAD",
+    "refs/remotes/origin/main",
+    "refs/remotes/origin/master",
+    "refs/heads/main",
+    "refs/heads/master",
+)
+_PATHSPEC_CHUNK = 200
+
+
+def _git(path: str, *args: str, timeout: int = 60) -> Optional[subprocess.CompletedProcess]:
+    try:
+        return subprocess.run(
+            ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path] + list(args),
+            capture_output=True, timeout=timeout, env=_git_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _git_text(path: str, *args: str) -> Optional[str]:
+    proc = _git(path, *args)
+    if proc is None or proc.returncode != 0:
+        return None
+    return proc.stdout.decode("utf-8", "surrogateescape")
+
+
+def _short_ref(ref: str) -> str:
+    for prefix in ("refs/remotes/", "refs/heads/"):
+        if ref.startswith(prefix):
+            return ref[len(prefix):]
+    return ref
+
+
+def _default_ref(path: str) -> Tuple[Optional[str], Optional[str]]:
+    """``(ref name, sha)`` of the repository's default branch, or ``(None, None)``.
+
+    ``origin/HEAD`` names it when the clone has one (its target, e.g.
+    ``origin/main``); otherwise ``origin/main`` / ``origin/master``, then the local
+    ``main`` / ``master``. Remote refs come first because a squash merge lands
+    there before anyone pulls it into the local branch.
+    """
+    out = _git_text(path, "for-each-ref", "--format=%(refname)%00%(symref)%00%(objectname)", *_DEFAULT_REFS)
+    if out is None:
+        return None, None
+    refs = {}
+    for line in out.splitlines():
+        parts = line.split("\0")
+        if len(parts) == 3 and parts[2]:
+            refs[parts[0]] = (parts[1], parts[2])
+    for name in _DEFAULT_REFS:
+        if name not in refs:
+            continue
+        target, sha = refs[name]
+        if name.endswith("/HEAD"):
+            if not target:
+                continue
+            return _short_ref(target), sha
+        return _short_ref(name), sha
+    return None, None
+
+
+def _merge_status(path: str) -> Tuple[Optional[bool], Optional[str]]:
+    """``(merged, merged_into)`` for the worktree at ``path``, offline.
+
+    Merged means HEAD is an ancestor of the default branch, or the branch was
+    squash-merged: every file it changed since the merge base has the same content
+    (or is absent on both sides) at the default branch tip. ``merged`` is ``None``
+    when git cannot tell, for example without a default branch.
+    """
+    head = _git_text(path, "rev-parse", "--verify", "-q", "HEAD")
+    head = head.strip() if head else ""
+    if not head:
+        return None, None
+    ref, ref_sha = _default_ref(path)
+    if not ref or not ref_sha:
+        return None, None
+    key = (path, head, ref_sha)
+    hit = _WORKTREE_MERGE_CACHE.get(key)
+    if hit is not None:
+        return hit[0], hit[1]
+    merged = _is_merged(path, head, ref_sha)
+    if merged is not None:
+        _WORKTREE_MERGE_CACHE[key] = (merged, ref)
+    return merged, ref
+
+
+def _is_merged(path: str, head: str, target: str) -> Optional[bool]:
+    proc = _git(path, "merge-base", "--is-ancestor", head, target)
+    if proc is None or proc.returncode not in (0, 1):
+        return None
+    if proc.returncode == 0:
+        return True
+    base = _git_text(path, "merge-base", head, target)
+    if base is None or not base.strip():
+        return False  # no common history
+    names = _git_text(path, "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+                      "--name-only", "-z", base.strip(), head)
+    if names is None:
+        return None
+    files = [name for name in names.split("\0") if name]
+    if not files:
+        return False  # commits that cancel out: nothing landed, so nothing to call merged
+    for start in range(0, len(files), _PATHSPEC_CHUNK):
+        chunk = files[start:start + _PATHSPEC_CHUNK]
+        proc = _git(path, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--quiet",
+                    head, target, "--", *chunk)
+        if proc is None or proc.returncode not in (0, 1):
+            return None
+        if proc.returncode == 1:
+            return False
+    return True
+
+
+def _start_cwd_probe() -> Optional[subprocess.Popen]:
+    """Start ``lsof`` listing every process's working directory, in the background.
+
+    POSIX only and best effort: no ``lsof`` (or Windows) means no probe.
+    """
+    if winsupport.is_windows():
+        return None
+    lsof = shutil.which("lsof") or ("/usr/sbin/lsof" if os.path.exists("/usr/sbin/lsof") else None)
+    if not lsof:
+        return None
+    try:
+        return subprocess.Popen([lsof, "-n", "-w", "-d", "cwd", "-FpRn"],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return None
+
+
+def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
+    """Working directories from ``_start_cwd_probe``; ``None`` when unknown."""
+    if proc is None:
+        return None
+    try:
+        out, _err = proc.communicate(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        return None
+    except OSError:
+        return None
+    # lsof exits 1 when some processes could not be inspected; the rest is still valid.
+    # This scan's own git commands run inside the worktrees, so they do not count.
+    me = str(os.getpid()).encode()
+    found = []
+    ours = False
+    for line in out.splitlines():
+        if line.startswith(b"p"):
+            ours = line[1:] == me
+        elif line.startswith(b"R"):
+            ours = ours or line[1:] == me
+        elif line.startswith(b"n") and not ours:
+            found.append(line[1:].decode("utf-8", "surrogateescape"))
+    return found
+
+
+def _cwd_inside(path: str, cwds: Optional[List[str]]) -> bool:
+    if not cwds:
+        return False
+    real = os.path.realpath(path)
+    return any(cwd == real or _inside(cwd, real) for cwd in cwds)
+
+
 # ---- clean ----------------------------------------------------------------------------
 def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash_root: str,
                 agent: str = "", imported: Optional[Dict[str, set]] = None,
-                recycle_bin: bool = False):
+                recycle_bin: bool = False, nested: Optional[List[str]] = None):
     root = entry["path"]
+    if nested:
+        root = _norm(root)
     if not os.path.exists(root):
         return [], 0, "not_found", []
     if agent in ("minimax", "opencode", "qoderwork", "zcode", "qoder_ide", "hermes", "devin", "mimocode"):
@@ -1130,6 +1540,21 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
             parts = (_trash_component(parts[0]),) + tuple(parts[1:])
         return os.path.join(trash_root, *parts)
 
+    if days is None and nested:
+        # Other entries live inside (worktrees in a session folder, sessions under
+        # the scratch root): move everything around them, leave them in place.
+        items = _items_around(root, nested)
+        if not items:
+            return [], 0, "nothing_to_move", []
+        moved = []
+        freed = 0
+        for path in items:
+            nbytes = measure(path, now)["bytes"]
+            if do_it:
+                _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
+            moved.append(path)
+            freed += nbytes
+        return moved, freed, None, []
     if days is None:
         if do_it:
             _relocate(root, _dest(entry["id"], os.path.basename(os.path.normpath(root))))
@@ -1140,7 +1565,7 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     # Empty when the entry is not a sessions folder (nothing is a log file then).
     log_set = set(winsupport.normpath(path) for path in logs or ())
     known = (imported or {}).get(agent) or set()
-    files = _files_older_than(root, now, days)
+    files = _files_older_than(root, now, days, skip=nested)
     movable = []
     file_skips = []
     for path, nbytes, rel in files:
@@ -1177,31 +1602,65 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
 
 
 def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
+    """``(moved, freed, reason, detail)``; ``detail`` is git's own message on failure.
+
+    Always a plain ``git worktree remove``: git itself refuses a worktree with
+    modified or untracked files, and the branch and its commits are kept.
+    """
     path = entry["path"]
     if not os.path.exists(path):
-        return [], 0, "not_found"
+        return [], 0, "not_found", None
     if days is not None and _has_newer_file(path, now, days):
-        return [], 0, "newer_than_cutoff"
+        return [], 0, "newer_than_cutoff", None
     if not do_it:
-        return [path], entry["bytes"], None
+        return [path], entry["bytes"], None, None
     main = _main_repo(path)
     if not main:
-        return [], 0, "not_a_worktree"
+        return [], 0, "not_a_worktree", None
     try:
         subprocess.run(
             ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", main, "worktree", "remove", path],
             check=True, capture_output=True, text=True, encoding="utf-8", timeout=120, env=_git_env(),
         )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return [], 0, "worktree_remove_failed"
-    return [path], entry["bytes"], None
+    except subprocess.CalledProcessError as exc:
+        lines = [line.strip() for line in (exc.stderr or "").splitlines() if line.strip()]
+        return [], 0, "worktree_remove_failed", (lines[0] if lines else None)
+    except (OSError, subprocess.TimeoutExpired):
+        return [], 0, "worktree_remove_failed", None
+    return [path], entry["bytes"], None, None
 
 
-def _files_older_than(root: str, now: float, days: int) -> List[Tuple[str, int, str]]:
+def _items_around(root: str, nested: List[str]) -> List[str]:
+    """Top-most paths under ``root`` that hold none of ``nested`` (which stay put)."""
+    skip = set(nested)
+    found = []
+
+    def walk(path: str) -> None:
+        try:
+            with os.scandir(path) as it:
+                kids = sorted(it, key=lambda ent: ent.name)
+        except OSError:
+            return
+        for ent in kids:
+            if ent.path in skip:
+                continue
+            if ent.is_dir(follow_symlinks=False) and any(_inside(p, ent.path) for p in nested):
+                walk(ent.path)
+            else:
+                found.append(ent.path)
+
+    walk(root)
+    return found
+
+
+def _files_older_than(root: str, now: float, days: int,
+                      skip: Optional[List[str]] = None) -> List[Tuple[str, int, str]]:
     limit = days * 86400
     found = []
+    skipped = set(skip or [])
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))
+                       and os.path.join(dirpath, d) not in skipped]
         for name in filenames:
             path = os.path.join(dirpath, name)
             try:
@@ -1301,38 +1760,3 @@ def _git_env() -> dict:
 def _no_hooks() -> str:
     """``core.hooksPath`` that disables hooks: ``/dev/null`` on POSIX, ``nul`` on Windows."""
     return os.devnull
-
-_WORKTREE_MERGE_CACHE: Dict[Tuple[str, str, str], Tuple[bool, Optional[str]]] = {}
-
-def _get_default_branch(path: str) -> Optional[str]:
-    try:
-        res = subprocess.run(["git", "-C", path, "symbolic-ref", "refs/remotes/origin/HEAD"], capture_output=True, text=True, encoding="utf-8")
-        if res.returncode == 0: return res.stdout.strip().replace("refs/remotes/origin/", "")
-        for branch in ["main", "master"]:
-            if subprocess.run(["git", "-C", path, "show-ref", "--verify", "refs/heads/" + branch], capture_output=True).returncode == 0: return branch
-    except Exception: pass
-    return None
-
-def _git_run(path: str, args: List[str]) -> str:
-    return subprocess.run(["git", "-C", path] + args, capture_output=True, text=True, encoding="utf-8", check=True, env=_git_env()).stdout.strip()
-
-def _is_merged(path: str) -> Tuple[bool, Optional[str]]:
-    default_branch = _get_default_branch(path)
-    if not default_branch: return False, None
-    head = _git_run(path, ["rev-parse", "HEAD"])
-    default_sha = _git_run(path, ["rev-parse", default_branch])
-    key = (path, head, default_sha)
-    if key in _WORKTREE_MERGE_CACHE: return _WORKTREE_MERGE_CACHE[key]
-    if subprocess.run(["git", "-C", path, "merge-base", "--is-ancestor", "HEAD", default_branch], capture_output=True).returncode == 0:
-        res = (True, default_branch)
-        _WORKTREE_MERGE_CACHE[key] = res
-        return res
-    merge_base = _git_run(path, ["merge-base", "HEAD", default_branch])
-    changed_files = _git_run(path, ["diff", "--name-only", merge_base, "HEAD"]).splitlines()
-    if changed_files and subprocess.run(["git", "-C", path, "diff", "--quiet", "HEAD", default_branch, "--"] + changed_files, capture_output=True).returncode == 0:
-        res = (True, default_branch)
-        _WORKTREE_MERGE_CACHE[key] = res
-        return res
-    res = (False, default_branch)
-    _WORKTREE_MERGE_CACHE[key] = res
-    return res

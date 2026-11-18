@@ -490,7 +490,11 @@ def cmd_disk(args) -> int:
         except ValueError:
             print("kanjo: --older-than expects a number of days like 30d", file=sys.stderr)
             return 2
-        doc = disk_clean(args.ids, older_than_days=days, dry_run=bool(args.dry_run), yes=bool(args.yes))
+        if not args.ids and not args.merged_worktrees:
+            print("kanjo: disk clean needs entry ids or --merged-worktrees", file=sys.stderr)
+            return 2
+        doc = disk_clean(args.ids, older_than_days=days, dry_run=bool(args.dry_run), yes=bool(args.yes),
+                         merged_worktrees=bool(args.merged_worktrees))
         sys.stdout.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
         return 0
     doc = disk_report(max_age=args.max_age, rescan=args.rescan)
@@ -772,7 +776,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_disk, disk_cmd=None)
     disk_sub = p.add_subparsers(dest="disk_cmd", required=False)
     c = disk_sub.add_parser("clean", help="move entries into the Trash (nothing moves without --yes)")
-    c.add_argument("ids", nargs="+", metavar="ID", help="entry ids from `kanjo disk`")
+    c.add_argument("ids", nargs="*", metavar="ID", help="entry ids from `kanjo disk`")
+    c.add_argument("--merged-worktrees", action="store_true",
+                   help="also every git worktree whose branch is merged into the default branch")
     c.add_argument("--older-than", metavar="ND", help="only files older than N days, for example 30d")
     c.add_argument("--dry-run", action="store_true", help="print the plan and do not move anything")
     c.add_argument("--yes", action="store_true", help="actually move files; without this, nothing moves")

@@ -401,6 +401,17 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
                                                //   "uncommitted_changes"（worktree 有未提交改动）
                                                //   "active"（24 小时内有修改，或被运行中的进程占用）
           "note": "Session logs. Numbers are kept in the ledger after deletion."
+        },
+        {
+          "id": "claude:worktree:-Users-alice-app/0f3c…/scratchpad/wt-fix",  // 相对扫描根目录的完整路径，稳定且唯一
+          "kind": "worktrees",
+          "path": "/tmp/claude-501/-Users-alice-app/0f3c…/scratchpad/wt-fix",
+          "bytes": 812000000, "files": 5120,
+          "oldest": "2026-10-01", "newest": "2026-10-20",
+          "deletable": "when_clean", "blocked": [],
+          "note": "Git worktrees. Removed with git worktree remove when clean and idle.",
+          "merged": true,                      // 仅 worktrees 条目有：分支是否已合并进默认分支；null = 无法判断
+          "merged_into": "origin/main"         // 比较用的默认分支 ref；无默认分支时为 null
         }
       ]
     }
@@ -408,9 +419,15 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 }
 ```
 
+- Worktree 条目来源：Codex 的 `~/.codex/worktrees/*`（`codex:worktree:<相对路径>`）；Claude Code 草稿目录（`/tmp/claude-<uid>`）里最多 6 层深的 linked worktree（`.git` 是指向 `<repo>/.git/worktrees/<name>` 的文件；跳过 `node_modules` / `.build` / `.git` / `DerivedData` 等，不进入已找到的 worktree），id 为 `claude:worktree:<相对草稿根目录的路径>`；已知仓库（来自 `kanjo export` 的仓库缓存）下的 `<repo>/.claude/worktrees/*`，id 为 `claude:repo-worktree:<仓库目录名>/<名字>`。
+- Claude 草稿目录按会话拆分：每个 `<project>/<session>` 目录是一条 `claude:scratch:<project>/<session>`（不含其中的 worktree），`claude:scratch` 只剩根目录和项目目录里零散的文件。各条目字节数互不重叠。`kanjo disk clean claude:scratch` 表示“全部 Claude 草稿条目”（每条各自判断 `blocked`）；清理含有其他条目的目录时只移动它们之外的内容，worktree 原地保留。
+- `merged`（worktrees 条目，新增字段，旧客户端可忽略）：离线判断，默认分支依次取 `origin/HEAD` 指向的分支（如 `origin/main`）、`origin/main`、`origin/master`、本地 `main`、`master`。HEAD 是默认分支的祖先即为已合并；或 squash 合并：从 merge-base 到 HEAD 改动过的每个文件在默认分支末端内容完全相同（分支上删掉的文件在默认分支上也不存在），且分支至少有一个提交。git 失败或找不到默认分支时为 `null`。结果按（路径，HEAD sha，默认分支 sha）缓存。
+- 已合并 worktree 的 `blocked`：有未提交改动（含未被忽略的未跟踪文件）→ `uncommitted_changes`；一小时内有文件写入，或有进程的工作目录在里面（`lsof`，仅 POSIX，尽力而为）→ `active`。未合并或 `merged` 为 `null` 的 worktree 仍按 24 小时规则。
 - `kind` 与 `deletable` 的默认对应：`cache` → always；`sessions` → after_import；`scratch` / `worktrees` → when_clean；`memory`（如 Antigravity 的跨会话记忆）→ never；`other` → never。
 - `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]`：只对 `blocked` 为空的条目生效；文件移入 `~/.Trash/kanjo-<时间戳>/`，不直接删除；git worktree 通过主仓库 `git worktree remove` 拆除；没有 `--yes` 时等同 `--dry-run`。输出 JSON：`{ "moved": [...路径], "freed_bytes": N, "skipped": [{ "id", "reason" }] }`。
   - Windows 上没有 `~/.Trash`：文件和目录交给回收站（`SHFileOperationW`，`FOF_ALLOWUNDO`），结果里额外带 `"trash_dir": "Recycle Bin"`（字面字符串，不是路径）。`moved` / `freed_bytes` / `skipped` 的含义不变；被别的程序占用而移不动的文件是单条 `{ "id": <条目 id>, "reason": "move_failed" }`，不影响同一条目里的其他文件。显式给了 `trash_dir`（或 `KANJO_TRASH_DIR`）时仍按普通目录移动。
+- `kanjo disk clean --merged-worktrees [--dry-run] [--yes]`：在给定的 id 之外，选中所有 `merged == true` 的 worktree 条目，照常经过 `blocked` 检查后用 `git worktree remove`（从不加 `--force`，从不删除分支和提交）拆除；`moved` 列出拆除的路径，`freed_bytes` 是释放的字节数。未合并（或无法判断）的 worktree 出现在 `skipped` 里，`reason` 为 `"not_merged"`；被阻止的为 `blocked` 里的原因（`uncommitted_changes` / `active`）；git 拒绝时 `reason` 为 `"worktree_remove_failed"`，并可能附带 `"detail"`（git 的第一行错误信息）。不带 id 也不带 `--merged-worktrees` 时退出码 2。
+- `skipped[].reason` 还可能是 `"nothing_to_move"`：目录里除了其他条目之外没有可移动的内容。
 - UI 永远不自己删文件，只调用 `kanjo disk clean`，并且先用 `--dry-run` 展示将要移动的内容，用户确认后再带 `--yes` 执行。
 
 ## 11. 手机快照 (`kanjo export --mobile`)

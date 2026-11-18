@@ -89,6 +89,23 @@ def load_cached_report(roots: dict, now: float, max_age: float) -> Tuple[Optiona
         return None, {}, {}
 
 
+def load_worktrees(roots: dict) -> dict:
+    """The saved worktree caches (dirty and merge results), whatever the report's age.
+
+    Their keys carry everything that makes them valid (mtimes, commit ids), so a
+    forced rescan can still reuse them.
+    """
+    try:
+        with open(cache_path(), encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if payload.get("roots") != roots:
+            return {}
+        worktrees = payload.get("worktrees")
+        return worktrees if isinstance(worktrees, dict) else {}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+
 def load(roots: dict, now: float, max_age: float) -> Optional[dict]:
     doc, _, _ = load_cached_report(roots, now, max_age)
     return doc

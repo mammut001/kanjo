@@ -122,6 +122,7 @@ class DiskTest(unittest.TestCase):
         self.write(os.path.join(self.debug, "debug.log"), "debug")
         self.write(os.path.join(self.scratch, "enc-a", "sess", "scratchpad", "a.txt"), "a")
         self.write(os.path.join(self.scratch, "enc-b", "sess", "scratchpad", "b.txt"), "b")
+        self.write(os.path.join(self.scratch, "loose.log"), "loose")
         self.write(os.path.join(self.sessions, "2026", "01", "01", "rollout-a.jsonl"), "{}\n")
         self.write(os.path.join(self.archived, "rollout-b.jsonl"), "{}\n")
         self.write(os.path.join(self.logs, "codex.log"), "log")
@@ -143,7 +144,9 @@ class DiskTest(unittest.TestCase):
             "claude:sessions": ("sessions", "after_import", ["not_imported"], 1),
             "claude:shell-snapshots": ("cache", "always", [], 1),
             "claude:debug": ("cache", "always", [], 1),
-            "claude:scratch": ("scratch", "when_clean", [], 2),
+            "claude:scratch": ("scratch", "when_clean", [], 1),
+            "claude:scratch:enc-a/sess": ("scratch", "when_clean", [], 1),
+            "claude:scratch:enc-b/sess": ("scratch", "when_clean", [], 1),
             "codex:sessions": ("sessions", "after_import", ["not_imported"], 1),
             "codex:archived_sessions": ("sessions", "after_import", ["not_imported"], 1),
             "codex:logs": ("cache", "always", [], 1),
@@ -179,8 +182,11 @@ class DiskTest(unittest.TestCase):
             if eid != "antigravity:memory":
                 self.assertEqual(entry["newest"], day if eid != "claude:sessions" and not eid.startswith("codex:") and eid != "antigravity:sessions" and not eid.startswith("grok:") else entry["newest"])
         scratch = self.entry(doc, "claude:scratch")
-        self.assertEqual(scratch["files"], 2)
-        self.assertEqual(len([e for e in seen if e.startswith("claude:scratch")]), 1)
+        # One entry per session folder; together they add up to the whole scratch root.
+        parts = [self.entry(doc, e) for e in seen if e.startswith("claude:scratch")]
+        self.assertEqual(len(parts), 3)
+        self.assertEqual(sum(p["files"] for p in parts), 3)
+        self.assertEqual(sum(p["bytes"] for p in parts), disk.measure(self.scratch, now)["bytes"])
         memory = self.entry(doc, "antigravity:memory")
         scratches = [self.entry(doc, "antigravity:scratch:b1"), self.entry(doc, "antigravity:scratch:b2")]
         whole = disk.measure(self.brain, now)
@@ -311,11 +317,11 @@ class DiskTest(unittest.TestCase):
     def test_active_detection(self):
         path = self.write(os.path.join(self.scratch, "enc", "sess", "scratchpad", "f.txt"), "f")
         now = time.time()
-        self.assertIn("active", self.entry(self.report(now), "claude:scratch")["blocked"])
+        self.assertIn("active", self.entry(self.report(now), "claude:scratch:enc/sess")["blocked"])
         set_tree_mtime(self.scratch, now - ACTIVE_INSIDE)
-        self.assertIn("active", self.entry(self.report(now), "claude:scratch")["blocked"])
+        self.assertIn("active", self.entry(self.report(now), "claude:scratch:enc/sess")["blocked"])
         set_tree_mtime(self.scratch, now - DAY)
-        entry = self.entry(self.report(now), "claude:scratch")
+        entry = self.entry(self.report(now), "claude:scratch:enc/sess")
         self.assertNotIn("active", entry["blocked"])
         self.assertEqual(entry["blocked"], [])
         self.assertTrue(os.path.exists(path))
@@ -489,12 +495,17 @@ class DiskTest(unittest.TestCase):
             self.assertEqual(actual, expected)
         doc = self.report(now)
         entry = self.entry(doc, "claude:scratch")
+        # a/nested, b/nested and c/nested are session folders with entries of their own.
+        parts = [e for a in doc["agents"] for e in a["entries"] if e["id"].startswith("claude:scratch")]
+        self.assertEqual(sorted(e["id"] for e in parts),
+                         ["claude:scratch", "claude:scratch:a/nested", "claude:scratch:b/nested",
+                          "claude:scratch:c/nested"])
         for key in ("bytes", "files"):
-            self.assertEqual(entry[key], expected[key])
-        self.assertEqual(entry["skipped_errors"], expected["errors"])
+            self.assertEqual(sum(e[key] for e in parts), expected[key])
+        self.assertEqual(sum(e["skipped_errors"] for e in parts), expected["errors"])
         self.assertEqual(entry["oldest"], datetime.fromtimestamp(expected["oldest"]).strftime("%Y-%m-%d"))
         self.assertEqual(entry["newest"], datetime.fromtimestamp(expected["newest"]).strftime("%Y-%m-%d"))
-        self.assertEqual(entry["blocked"], [])
+        self.assertEqual([e["blocked"] for e in parts], [[]] * 4)
 
     def test_entries_and_scratch_children_run_concurrently(self):
         self.write(os.path.join(self.scratch, "a", "f"))
@@ -728,9 +739,10 @@ def git(cwd, *args):
 
 
 def _excludes(entry, doc):
-    if entry["id"] != "antigravity:memory":
-        return None
-    return [e["path"] for a in doc["agents"] for e in a["entries"] if e["id"].startswith("antigravity:scratch:")]
+    """Paths of the other entries inside ``entry`` (they are measured on their own)."""
+    root = entry["path"].rstrip(os.sep) + os.sep
+    inner = [e["path"] for a in doc["agents"] for e in a["entries"] if e["path"].startswith(root)]
+    return inner or None
 
 
 def _session_ids(doc):
