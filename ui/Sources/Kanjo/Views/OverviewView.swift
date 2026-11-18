@@ -391,16 +391,22 @@ private struct SubscriptionValueCard: View {
     @State private var isExpanded = false
     @State private var targetedAgent: String?
     @State private var userPinnedAgent: String? = nil
+    @State private var dismissedRouteAgent: String? = nil
     @AppStorage(SettingsKeys.renewalNudgeDismissed, store: AppDefaults.store) private var dismissedRaw = ""
     @AppStorage(SettingsKeys.subscriptionOrder, store: AppDefaults.store) private var subscriptionOrderRaw = ""
 
     private var cur: String { report.currency }
 
+    private var effectiveRoutePinnedAgent: String? {
+        guard let pinnedQuotaAgent, dismissedRouteAgent != pinnedQuotaAgent else { return nil }
+        return pinnedQuotaAgent
+    }
+
     var body: some View {
         let defaultRows = SubscriptionValue.rows(of: report)
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
-        let effectivePinnedAgent = userPinnedAgent ?? pinnedQuotaAgent
+        let effectivePinnedAgent = userPinnedAgent ?? effectiveRoutePinnedAgent
         let autoExpandForPinned = effectivePinnedAgent != nil && orderedRows.contains(where: { $0.agent == effectivePinnedAgent })
         let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded || autoExpandForPinned, limit: 3)
 
@@ -460,6 +466,9 @@ private struct SubscriptionValueCard: View {
                     .padding(.bottom, 6)
                 renewalNudge
             }
+        }
+        .onChange(of: pinnedQuotaAgent) { _ in
+            dismissedRouteAgent = nil
         }
     }
 
@@ -525,17 +534,11 @@ private struct SubscriptionValueCard: View {
                     .layoutPriority(1)
                     .frame(minWidth: 42, alignment: .trailing)
             }
-            .hoverCard {
-                SubscriptionValueHoverCard(
-                    agent: row.agent,
-                    planLabel: row.planLabel,
-                    monthlyPriceUsd: row.monthlyPriceUsd,
-                    usage: row.usage,
-                    multiplier: row.multiplier,
-                    currency: cur,
-                    account: row.account
-                )
-            }
+            .modifier(ConditionalSubscriptionHoverCard(
+                enabled: !hasQuotaContent(for: row),
+                row: row,
+                currency: cur
+            ))
             .accessibilityHint(help(row))
             if let sub = report.subscriptions?[row.agent] {
                 Group {
@@ -563,13 +566,21 @@ private struct SubscriptionValueCard: View {
         .padding(.vertical, 4)
     }
 
-    /// 悬停 0.35 秒后在行下方（放不下时在上方）浮出额度卡；移出即收起。没有额度数据的 agent 不出卡片。
+    private func hasQuotaContent(for row: SubscriptionRow) -> Bool {
+        let quota = SubscriptionValue.quotaRows(report.quotaWindows?[row.agent],
+                                                timezone: RangeEngine.timezone(of: report))
+        let isAgy = (row.agent == "antigravity")
+        let hasAgyAccounts = isAgy && report.antigravityAccounts != nil
+        return !quota.isEmpty || hasAgyAccounts
+    }
+
+    /// 悬停 0.35 秒后在主面板侧边浮出额度卡；移出即收起。没有额度数据的 agent 不出卡片。
     /// Antigravity 行支持点击固定展开，以便操作账号切换。
     private func quotaHover(_ content: some View, row: SubscriptionRow) -> some View {
         let quota = SubscriptionValue.quotaRows(report.quotaWindows?[row.agent],
                                                 timezone: RangeEngine.timezone(of: report))
         let quotaId = "overview:quota:\(row.agent)"
-        let isPinned = (pinnedQuotaAgent == row.agent) || (userPinnedAgent == row.agent)
+        let isPinned = (effectiveRoutePinnedAgent == row.agent) || (userPinnedAgent == row.agent)
         let isAgy = (row.agent == "antigravity")
         let hasAgyAccounts = isAgy && report.antigravityAccounts != nil
         let hasContent = !quota.isEmpty || hasAgyAccounts
@@ -580,6 +591,9 @@ private struct SubscriptionValueCard: View {
                     .hoverCard(id: quotaId, isPinned: isPinned, onDismiss: {
                         if userPinnedAgent == row.agent {
                             userPinnedAgent = nil
+                        }
+                        if pinnedQuotaAgent == row.agent {
+                            dismissedRouteAgent = row.agent
                         }
                     }) {
                         QuotaCard(
@@ -595,7 +609,11 @@ private struct SubscriptionValueCard: View {
                             if isAgy {
                                 if isPinned {
                                     userPinnedAgent = nil
+                                    if pinnedQuotaAgent == row.agent {
+                                        dismissedRouteAgent = row.agent
+                                    }
                                 } else {
+                                    dismissedRouteAgent = nil
                                     userPinnedAgent = "antigravity"
                                 }
                             }
@@ -614,6 +632,30 @@ private struct SubscriptionValueCard: View {
             return L10n.tr("overview.sub_help_multiplier", row.planLabel, price, usage, Fmt.multiple(m))
         }
         return L10n.tr("overview.sub_help_unknown", row.planLabel, usage)
+    }
+}
+
+private struct ConditionalSubscriptionHoverCard: ViewModifier {
+    let enabled: Bool
+    let row: SubscriptionRow
+    let currency: String
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.hoverCard {
+                SubscriptionValueHoverCard(
+                    agent: row.agent,
+                    planLabel: row.planLabel,
+                    monthlyPriceUsd: row.monthlyPriceUsd,
+                    usage: row.usage,
+                    multiplier: row.multiplier,
+                    currency: currency,
+                    account: row.account
+                )
+            }
+        } else {
+            content
+        }
     }
 }
 

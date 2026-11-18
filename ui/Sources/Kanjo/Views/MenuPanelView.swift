@@ -165,12 +165,24 @@ struct MenuPanelView: View {
                 )
             }
         }
+        .overlayPreferenceValue(SideCardPreferenceKey.self) { sidePayload in
+            if !isSnapshotMode {
+                SideCardHostBridge(
+                    payload: sidePayload,
+                    appearance: AppAppearance.resolve(appAppearance)
+                )
+                .allowsHitTesting(false)
+            }
+        }
         .onAppear {
             store.onPanelOpened()
             applyDevRoute(report: store.report)
         }
         .onDisappear {
             store.onPanelClosed()
+            if !isSnapshotMode {
+                SideCardController.shared.closeAndDismiss()
+            }
         }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
     }

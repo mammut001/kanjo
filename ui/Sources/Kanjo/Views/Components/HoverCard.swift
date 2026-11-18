@@ -7,6 +7,7 @@ import KanjoCore
 /// 悬停卡的外观：不透明底（深色实底 / 浅色不透明底 + 材质）、细描边、柔和阴影、圆角 10。
 struct HoverCardChrome: ViewModifier {
     @Environment(\.hoverCardMaxHeight) private var maxHeight
+    @Environment(\.hoverCardUsesWindowShadow) private var usesWindowShadow
 
     init() {}
     func body(content: Content) -> some View {
@@ -38,7 +39,11 @@ struct HoverCardChrome: ViewModifier {
         )
         .clipShape(shape)
         .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .shadow(
+            color: .black.opacity(usesWindowShadow ? 0 : 0.18),
+            radius: usesWindowShadow ? 0 : 10,
+            y: usesWindowShadow ? 0 : 4
+        )
     }
 }
 
@@ -46,14 +51,23 @@ private struct HoverCardMaxHeightKey: EnvironmentKey {
     static let defaultValue: CGFloat? = nil
 }
 
-private extension EnvironmentValues {
+private struct HoverCardUsesWindowShadowKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
     var hoverCardMaxHeight: CGFloat? {
         get { self[HoverCardMaxHeightKey.self] }
         set { self[HoverCardMaxHeightKey.self] = newValue }
     }
+
+    var hoverCardUsesWindowShadow: Bool {
+        get { self[HoverCardUsesWindowShadowKey.self] }
+        set { self[HoverCardUsesWindowShadowKey.self] = newValue }
+    }
 }
 
-private struct HoverCardNaturalSizeKey: PreferenceKey {
+struct HoverCardNaturalSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         let next = nextValue()
@@ -106,6 +120,7 @@ struct HoverCardPayload: Equatable {
     let content: AnyView
     var isPinned: Bool = false
     var onDismiss: (() -> Void)? = nil
+    var onHoverClosed: (() -> Void)? = nil
 
     public static func == (lhs: HoverCardPayload, rhs: HoverCardPayload) -> Bool {
         lhs.id == rhs.id && lhs.isPinned == rhs.isPinned && lhs.anchorBox === rhs.anchorBox
@@ -132,25 +147,40 @@ extension EnvironmentValues {
     }
 }
 
-/// 悬停卡修饰器：悬停 0.35s 后激活，将锚点位置与卡片内容传递给顶层宿主。
+/// 悬停卡修饰器：悬停 0.35s 后激活；非快照模式下的详情卡走独立侧边浮窗，纯文本提示与快照模式留在面板内。
 private struct HoverCardModifier<CardContent: View>: ViewModifier {
     let id: String?
     let isPinned: Bool
+    let isTip: Bool
     let onDismiss: (() -> Void)?
     let cardContent: () -> CardContent
 
-    init(id: String?, isPinned: Bool, onDismiss: (() -> Void)? = nil, cardContent: @escaping () -> CardContent) {
+    init(
+        id: String?,
+        isPinned: Bool,
+        isTip: Bool = false,
+        onDismiss: (() -> Void)? = nil,
+        cardContent: @escaping () -> CardContent
+    ) {
         self.id = id
         self.isPinned = isPinned
+        self.isTip = isTip
         self.onDismiss = onDismiss
         self.cardContent = cardContent
     }
 
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
     @Environment(\.pinnedHoverId) private var envPinnedId
     @State private var isShowing = false
     @State private var hoverTask: Task<Void, Never>?
     @State private var autoId = UUID().uuidString
     @State private var anchorBox = HoverCardAnchorBox()
+
+    private var effectiveId: String { id ?? autoId }
+
+    private var usesSideWindow: Bool {
+        !isSnapshotMode && !isTip
+    }
 
     private var effectivePinned: Bool {
         if isPinned { return true }
@@ -166,39 +196,84 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
         content
             .onHover { hovering in
                 hoverTask?.cancel()
-                if hovering {
-                    hoverTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        if !Task.isCancelled {
-                            withAnimation(.easeOut(duration: 0.12)) {
-                                isShowing = true
+                if usesSideWindow {
+                    if hovering {
+                        SideCardController.shared.noteRowHoverEntered(id: effectiveId)
+                        if !isShowing {
+                            hoverTask = Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                if !Task.isCancelled {
+                                    isShowing = true
+                                }
                             }
+                        }
+                    } else {
+                        if isShowing && !effectivePinned {
+                            SideCardController.shared.noteRowHoverExited(id: effectiveId)
+                        } else {
+                            SideCardController.shared.noteRowHoverExitedWithoutShowing(id: effectiveId)
                         }
                     }
                 } else {
-                    withAnimation(.easeIn(duration: 0.08)) {
-                        isShowing = false
+                    if hovering {
+                        hoverTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            if !Task.isCancelled {
+                                withAnimation(.easeOut(duration: 0.12)) {
+                                    isShowing = true
+                                }
+                            }
+                        }
+                    } else {
+                        withAnimation(.easeIn(duration: 0.08)) {
+                            isShowing = false
+                        }
                     }
                 }
             }
             .onChange(of: effectivePinned) { pinned in
                 if !pinned {
                     hoverTask?.cancel()
-                    withAnimation(.easeIn(duration: 0.08)) {
+                    if usesSideWindow {
                         isShowing = false
+                    } else {
+                        withAnimation(.easeIn(duration: 0.08)) {
+                            isShowing = false
+                        }
                     }
+                }
+            }
+            .onDisappear {
+                hoverTask?.cancel()
+                if usesSideWindow {
+                    isShowing = false
+                    SideCardController.shared.noteRowDisappeared(id: effectiveId)
                 }
             }
             .background(HoverCardAnchorProbe(box: anchorBox).allowsHitTesting(false))
             .anchorPreference(key: HoverCardPreferenceKey.self, value: .bounds) { anchor in
-                guard shouldShow else { return nil }
+                guard !usesSideWindow, shouldShow else { return nil }
                 return HoverCardPayload(
-                    id: id ?? autoId,
+                    id: effectiveId,
                     anchor: anchor,
                     anchorBox: anchorBox,
                     content: AnyView(cardContent()),
                     isPinned: effectivePinned,
                     onDismiss: onDismiss
+                )
+            }
+            .anchorPreference(key: SideCardPreferenceKey.self, value: .bounds) { anchor in
+                guard usesSideWindow, shouldShow else { return nil }
+                return HoverCardPayload(
+                    id: effectiveId,
+                    anchor: anchor,
+                    anchorBox: anchorBox,
+                    content: AnyView(cardContent()),
+                    isPinned: effectivePinned,
+                    onDismiss: onDismiss,
+                    onHoverClosed: {
+                        isShowing = false
+                    }
                 )
             }
     }
@@ -212,7 +287,7 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        modifier(HoverCardModifier(id: id, isPinned: isPinned, onDismiss: onDismiss, cardContent: content))
+        modifier(HoverCardModifier(id: id, isPinned: isPinned, isTip: false, onDismiss: onDismiss, cardContent: content))
     }
 
     /// 注册纯文本悬停卡，无缝替代系统 .help / helpIfPresent。
@@ -223,9 +298,9 @@ extension View {
         isPinned: Bool = false
     ) -> some View {
         if let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-            self.hoverCard(id: id, isPinned: isPinned) {
+            self.modifier(HoverCardModifier(id: id, isPinned: isPinned, isTip: true) {
                 PlainHoverCard(text: text)
-            }
+            })
             .accessibilityHint(text)
         } else {
             self
@@ -361,8 +436,11 @@ private final class AnchorProbeNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         enableScrollNotifications()
-        DispatchQueue.main.async { [weak self] in
-            self?.enableScrollNotifications()
+        if window != nil {
+            DispatchQueue.main.async { [weak self] in
+                self?.enableScrollNotifications()
+                SideCardController.shared.noteAnchorWindowChanged()
+            }
         }
     }
 
