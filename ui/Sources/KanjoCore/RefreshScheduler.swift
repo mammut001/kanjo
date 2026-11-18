@@ -7,7 +7,8 @@ public struct RefreshScheduler: Equatable {
     public static let minimumFallbackMinutes = 15
     public static let debounceInterval: TimeInterval = 60
     public static let minimumRefreshInterval: TimeInterval = 120
-    public static let hiddenMinimumRefreshInterval: TimeInterval = 600
+    public static let hiddenMinimumRefreshInterval: TimeInterval = 180
+    public static let openRefreshThreshold: TimeInterval = 180
     public static let maxDebounceWait: TimeInterval = 180
 
     public enum Action: Equatable {
@@ -116,7 +117,7 @@ public struct RefreshScheduler: Equatable {
 
         if visible {
             let sinceLastRefresh = date.timeIntervalSince(lastRefreshTime ?? .distantPast)
-            if sinceLastRefresh > Self.minimumRefreshInterval {
+            if sinceLastRefresh > Self.openRefreshThreshold {
                 hasScheduledRefresh = false
                 return .refreshNow
             }
@@ -126,11 +127,14 @@ public struct RefreshScheduler: Equatable {
     }
 
     /// Called when the menu panel opens.
-    /// Refreshes immediately if last refresh was more than 120s ago or has never occurred.
-    public func shouldRefreshOnOpen(at date: Date = Date()) -> Bool {
-        if isRefreshing { return false }
+    /// Refreshes immediately only if the last completed refresh is older than `openRefreshThreshold` (180s)
+    /// (or has never occurred) and either events are pending or the report is stale from the launch cache.
+    public func shouldRefreshOnOpen(at date: Date = Date(), isStaleReport: Bool = false) -> Bool {
+        if isRefreshing || isAsleep || isLowPowerMode { return false }
+        let hasPendingEvents = hasScheduledRefresh || hasPendingEventWhileRefreshing || pendingWakeRefresh
+        guard hasPendingEvents || isStaleReport else { return false }
         guard let last = lastRefreshTime else { return true }
-        return date.timeIntervalSince(last) > Self.minimumRefreshInterval
+        return date.timeIntervalSince(last) > Self.openRefreshThreshold
     }
 
     /// System will sleep.

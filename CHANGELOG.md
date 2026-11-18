@@ -16,6 +16,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Kanjo refreshes in the background every few minutes while agents are busy, so opening the panel shows up-to-date numbers without waiting.
 - The Mac app shows your last results immediately after launch and refreshes them in the background.
 - `kanjo usage` opens instantly with the last saved results and refreshes them in the background.
 - The menu-bar panel is dark by default; use Settings > General > Appearance to switch to light or follow the system.

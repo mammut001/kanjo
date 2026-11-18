@@ -198,9 +198,10 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelOpened() {
+        let shouldRefresh = loader.scheduler.shouldRefreshOnOpen(isStaleReport: isStaleReport)
         let action = loader.scheduler.onPanelVisibilityChanged(visible: true)
-        if loader.scheduler.shouldRefreshOnOpen() {
-            refresh(qualityOfService: .background)
+        if shouldRefresh || action == .refreshNow {
+            handleSchedulerAction(.refreshNow)
         } else {
             handleSchedulerAction(action)
         }
