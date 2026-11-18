@@ -613,3 +613,4 @@
 "share.total_suffix_format" = "%@ total";
 "share.agent_subscription_format" = "%@ · %@";
 "share.other_agents" = "Autres agents";
+"share.tokens_sessions" = "%@ jetons · %d sessions";

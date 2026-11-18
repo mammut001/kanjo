@@ -613,3 +613,4 @@
 "share.total_suffix_format" = "%@ 总量";
 "share.agent_subscription_format" = "%@ · %@";
 "share.other_agents" = "其他代理";
+"share.tokens_sessions" = "%@ tokens · %d 次会话";
