@@ -548,6 +548,7 @@
 "agents.detail.models" = "按模型";
 "agents.detail.models.hit" = "命中";
 "agents.detail.models.speed" = "速度";
+"agents.detail.models.others" = "其他模型 (%d)";
 "agents.detail.where_money_went" = "花费去向";
 "agents.detail.others" = "其他项目";
 "agents.detail.no_project_cost" = "该范围内无项目花费";

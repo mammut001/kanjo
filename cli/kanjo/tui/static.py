@@ -192,7 +192,10 @@ def render_static_snapshot(
             needed += 1  # window title
             needed += min(15, len(accounts_section.rows)) if accounts_section else 0
         # Static snapshots have no F-key bar: output ends after the table footer.
-        min_detail_h = 29 + (2 + len(detail_vm.account_shares) if detail_vm and detail_vm.account_shares else 0)
+        extra_acc_h = (2 + len(detail_vm.account_shares)) if detail_vm and detail_vm.account_shares else 0
+        model_rows_count = (len(detail_vm.models) + (1 if detail_vm.others_model else 0)) if detail_vm else 0
+        extra_model_h = max(0, model_rows_count - 6)
+        min_detail_h = 29 + extra_acc_h + extra_model_h
         height = max(min_detail_h if detail_agent else 20, needed)
 
     canvas = Canvas(width, height)

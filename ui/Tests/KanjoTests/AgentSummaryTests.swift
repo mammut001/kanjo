@@ -86,4 +86,56 @@ final class AgentSummaryTests: KanjoTestCase {
         let claude = try XCTUnwrap(summary.rows.first { $0.agent == "claude" })
         XCTAssertTrue(claude.antigravityAccountShares.isEmpty)
     }
+
+    func testModelsCappedAtTop8ByCostWithOthers() throws {
+        var report = try loadFixture()
+        // Replace projects[0]'s antigravity models (and strip any antigravity models from other projects)
+        // with 10 models: 9 ranked m1..m9 by cost 9.0..1.0 plus a high-token low-cost m-cheap ($0.05, 500k tok).
+        var customModels: [ModelCost] = (1...9).map { idx in
+            ModelCost(
+                model: "m-\(idx)",
+                agent: "antigravity",
+                cost: Double(10 - idx),
+                tokens: Tokens(total: idx * 100)
+            )
+        }
+        customModels.append(ModelCost(
+            model: "m-cheap",
+            agent: "antigravity",
+            cost: 0.05,
+            tokens: Tokens(total: 500_000)
+        ))
+
+        for i in report.projects.indices {
+            report.projects[i].byModel.removeAll { $0.agent == "antigravity" }
+        }
+        report.projects[0].byModel.append(contentsOf: customModels)
+
+        let spec = RangeEngine.spec(.all, report: report)
+        let filtered = RangeEngine.filtered(report, range: spec) {
+            dominantAgent($0.byAgent)?.agent ?? $0.byAgent.first?.agent ?? "unknown"
+        }
+        let summary = AgentSummary.build(report: report, filtered: filtered)
+
+        let agy = try XCTUnwrap(summary.rows.first { $0.agent == "antigravity" })
+        XCTAssertEqual(agy.models.count, 8)
+        XCTAssertEqual(agy.models.map(\.model), (1...8).map { "m-\($0)" })
+        let costs = agy.models.map(\.cost)
+        XCTAssertEqual(costs, costs.sorted(by: >))
+
+        let others = try XCTUnwrap(agy.othersModel)
+        XCTAssertEqual(others.count, 2)
+        XCTAssertEqual(others.tokens, 900 + 500_000)
+        XCTAssertEqual(others.cost, 1.0 + 0.05, accuracy: 1e-9)
+
+        // Agents with <= 8 models have no Others row
+        let claude = try XCTUnwrap(summary.rows.first { $0.agent == "claude" })
+        XCTAssertLessThanOrEqual(claude.models.count, 8)
+        XCTAssertNil(claude.othersModel)
+
+        // Localized Others (N) strings
+        XCTAssertEqual(L10n.tr("agents.detail.models.others", language: "en", 2), "Others (2)")
+        XCTAssertEqual(L10n.tr("agents.detail.models.others", language: "zh-Hans", 2), "其他模型 (2)")
+        XCTAssertEqual(L10n.tr("agents.detail.models.others", language: "fr", 2), "Autres (2)")
+    }
 }

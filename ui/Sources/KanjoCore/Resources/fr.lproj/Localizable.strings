@@ -548,6 +548,7 @@
 "agents.detail.models" = "Par modèle";
 "agents.detail.models.hit" = "Cache";
 "agents.detail.models.speed" = "Vitesse";
+"agents.detail.models.others" = "Autres (%d)";
 "agents.detail.where_money_went" = "Répartition par projet";
 "agents.detail.others" = "Autres";
 "agents.detail.no_project_cost" = "Aucun coût de projet sur cette période";

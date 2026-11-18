@@ -1511,7 +1511,10 @@ def _render_agent_detail_pane(
     width = canvas.width
     height = canvas.height
     dw = min(width - 4, 80)
-    max_dh = 25 + (2 + len(vm.account_shares) if vm.account_shares else 0)
+    model_rows_count = len(vm.models) + (1 if vm.others_model else 0)
+    extra_acc_h = (2 + len(vm.account_shares)) if vm.account_shares else 0
+    extra_model_h = max(0, model_rows_count - 6)
+    max_dh = 25 + extra_acc_h + extra_model_h
     dh = min(height - 4, max_dh)
     dx = (width - dw) // 2
     dy = (height - dh) // 2
@@ -1764,6 +1767,22 @@ def _render_agent_detail_pane(
                              pane(fg="gray", dim=(m.speed_str == "—")), max_width=8)
             rx += 9
             canvas.draw_text(rx, cy, pad_str(m.cost_str, 10, align="right"), pane(bold=True), max_width=max(0, right_x - rx))
+            cy += 1
+
+        if vm.others_model and len(vm.models) <= max_models and cy < last_cy - reserve_money:
+            om = vm.others_model
+            others_lbl = t("agent_detail.models.others", lang, count=om.count)
+            canvas.draw_text(left_x + 2, cy, pad_str(truncate_str(others_lbl, mod_w), mod_w),
+                             pane(fg="gray"), max_width=mod_w)
+            rx = left_x + 2 + mod_w + 1
+            canvas.draw_text(rx, cy, pad_str(om.tokens_str, 8, align="right"), pane(fg="gray"), max_width=8)
+            rx += 9
+            canvas.draw_text(rx, cy, pad_str("—", 5, align="right"), pane(fg="gray", dim=True), max_width=5)
+            rx += 6
+            canvas.draw_text(rx, cy, pad_str("—", 8, align="right"), pane(fg="gray", dim=True), max_width=8)
+            rx += 9
+            canvas.draw_text(rx, cy, pad_str(om.cost_str, 10, align="right"), pane(fg="gray", bold=True),
+                             max_width=max(0, right_x - rx))
             cy += 1
 
     # 5. Where the money went

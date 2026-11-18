@@ -1084,7 +1084,7 @@ private struct SubscriptionSettingsRow: View {
                     }
                 )
                 HStack(spacing: 6) {
-                    Text(acc.email)
+                    Text(AntigravityAccountLogic.displayName(for: acc, among: accounts))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.primary)
                         .lineLimit(1)

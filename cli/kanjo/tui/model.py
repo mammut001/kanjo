@@ -1217,6 +1217,15 @@ class AgentModelRowViewModel:
 
 
 @dataclass
+class AgentModelOthersViewModel:
+    count: int
+    tokens: int
+    tokens_str: str
+    cost: float
+    cost_str: str
+
+
+@dataclass
 class AgentProjectShareViewModel:
     project_id: str
     project_name: str
@@ -1284,6 +1293,7 @@ class AgentDetailViewModel:
     project_shares: List[AgentProjectShareViewModel]
     others_project_share: Optional[AgentProjectOthersViewModel]
     account_shares: List[AgentAccountShareViewModel] = field(default_factory=list)
+    others_model: Optional[AgentModelOthersViewModel] = None
 
 
 @dataclass
@@ -2422,7 +2432,20 @@ def build_agent_detail(
             cost_str=format_money(mc),
             estimated=est,
         ))
-    model_rows.sort(key=lambda r: (-r.tokens, -r.cost, r.model))
+    model_rows.sort(key=lambda r: (-r.cost, -r.tokens, r.model))
+    others_model: Optional[AgentModelOthersViewModel] = None
+    if len(model_rows) > 8:
+        rest_models = model_rows[8:]
+        rest_tokens = sum(m.tokens for m in rest_models)
+        rest_cost = sum(m.cost for m in rest_models)
+        others_model = AgentModelOthersViewModel(
+            count=len(rest_models),
+            tokens=rest_tokens,
+            tokens_str=format_tokens(rest_tokens, lang),
+            cost=rest_cost,
+            cost_str=format_money(rest_cost),
+        )
+        model_rows = model_rows[:8]
 
     # Where the money went (this agent's cost by project: top 4 + others)
     raw_proj: List[Tuple[str, str, float]] = []
@@ -2505,4 +2528,5 @@ def build_agent_detail(
         project_shares=proj_shares,
         others_project_share=others_share,
         account_shares=account_shares,
+        others_model=others_model,
     )

@@ -594,6 +594,28 @@ private struct AgentDetailCard: View {
                             .font(.system(size: 10, weight: .medium))
                     }
                 }
+                if let others = row.othersModel {
+                    GridRow {
+                        Text(L10n.tr("agents.detail.models.others", others.count))
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Text(Fmt.tokens(others.tokens))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text("—")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.tertiary)
+                        Text("—")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.tertiary)
+                        Text(Fmt.money(others.cost, currency: currency))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

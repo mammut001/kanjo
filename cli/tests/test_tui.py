@@ -3133,6 +3133,54 @@ class TestAntigravityDetailByAccount(unittest.TestCase):
         )
         self.assertNotIn("By account", snap_no_by_day)
 
+    def test_models_capped_at_top_8_by_cost_with_others_and_rendering(self):
+        doc = self._fixture_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        # Build 10 models on antigravity: m-1..m-9 with cost 9.0..1.0 and m-cheap with cost 0.05, 500k tokens.
+        models = [
+            {
+                "agent": "antigravity",
+                "model": f"m-{idx}",
+                "cost": float(10 - idx),
+                "tokens": {"input": idx * 50, "output": idx * 25, "cache_read": idx * 25, "cache_write": 0, "total": idx * 100},
+                "estimated": False,
+            }
+            for idx in range(1, 10)
+        ]
+        models.append({
+            "agent": "antigravity",
+            "model": "m-cheap",
+            "cost": 0.05,
+            "tokens": {"input": 400000, "output": 100000, "cache_read": 0, "cache_write": 0, "total": 500000},
+            "estimated": False,
+        })
+        doc["projects"][0]["by_model"] = models
+
+        det = build_agent_detail(doc, "antigravity", TimeRange.ALL, now=now, lang="en")
+        self.assertEqual(len(det.models), 8)
+        self.assertEqual([m.model for m in det.models], [f"m-{i}" for i in range(1, 9)])
+        self.assertIsNotNone(det.others_model)
+        self.assertEqual(det.others_model.count, 2)
+        self.assertEqual(det.others_model.tokens, 500900)
+        self.assertAlmostEqual(det.others_model.cost, 1.05, places=6)
+        self.assertEqual(det.others_model.cost_str, "$1.05")
+
+        for lang, others_txt in (("en", "Others (2)"), ("zh", "其他模型 (2)")):
+            snap = render_static_snapshot(
+                doc, width=100, no_color=True, now=now,
+                time_range=TimeRange.ALL, view_mode=ViewMode.AGENTS,
+                lang=lang, detail_agent="antigravity",
+            )
+            self.assertIn("m-1", snap)
+            self.assertIn("m-8", snap)
+            self.assertNotIn("m-9", snap)
+            self.assertNotIn("m-cheap", snap)
+            self.assertIn(others_txt, snap)
+            others_line = next(ln for ln in snap.splitlines() if others_txt in ln)
+            self.assertIn("$1.05", others_line)
+            self.assertIn("—", others_line)
+
 
 if __name__ == "__main__":
     unittest.main()
