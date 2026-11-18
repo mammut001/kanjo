@@ -432,6 +432,7 @@ private final class FlippedProbeView: NSView {
 
 private final class AnchorProbeNSView: NSView {
     override var isFlipped: Bool { true }
+    private var lastReportedSize: CGSize = .zero
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -439,6 +440,16 @@ private final class AnchorProbeNSView: NSView {
         if window != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.enableScrollNotifications()
+                SideCardController.shared.noteAnchorWindowChanged()
+            }
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        if window != nil, bounds.size != .zero, bounds.size != lastReportedSize {
+            lastReportedSize = bounds.size
+            DispatchQueue.main.async {
                 SideCardController.shared.noteAnchorWindowChanged()
             }
         }

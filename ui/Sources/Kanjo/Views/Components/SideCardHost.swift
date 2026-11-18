@@ -85,6 +85,7 @@ struct SideCardHostBridge: NSViewRepresentable {
                 nc.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { _ in reposition() },
                 nc.addObserver(forName: NSWindow.didChangeScreenNotification, object: window, queue: .main) { _ in reposition() },
                 nc.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in close() },
+                nc.addObserver(forName: NSWindow.didMiniaturizeNotification, object: window, queue: .main) { _ in close() },
                 nc.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak window] _ in
                     if let window, !window.isVisible {
                         close()
@@ -147,6 +148,10 @@ final class SideCardController {
     private var escMonitor: Any?
     private var appDeactivateObserver: NSObjectProtocol?
 
+    private var isWindowPreview: Bool {
+        CommandLine.arguments.contains(AppDefaults.windowArgument)
+    }
+
     private init() {
         appDeactivateObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
@@ -154,7 +159,12 @@ final class SideCardController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.closeAndDismiss()
+                guard let self else { return }
+                // 在 `--window` 预览窗口模式下，主窗口失活不会自动关闭；固定卡片应保留到用户显式收起或关闭窗口。
+                if self.isWindowPreview && self.activePayload?.isPinned == true {
+                    return
+                }
+                self.closeAndDismiss()
             }
         }
     }
@@ -177,7 +187,7 @@ final class SideCardController {
 
     func noteRowHoverExited(id: String) {
         hoveredRowIds.remove(id)
-        if activePayload?.id == id {
+        if activePayload?.id == id && activePayload?.isPinned != true {
             scheduleHoverClose(delayNs: 200_000_000)
         }
     }
@@ -287,11 +297,13 @@ final class SideCardController {
         hostingView.rootView = makeRootView(payload: payload, maxHeight: initialMaxHeight)
         hostingView.layoutSubtreeIfNeeded()
 
+        let fitting = hostingView.fittingSize
         let measuredHeight: CGFloat
-        if let recorded = naturalHeightsById[payload.id], recorded > 1 {
+        if initialMaxHeight == nil {
+            measuredHeight = max(fitting.height, naturalHeightsById[payload.id] ?? 0, 1)
+        } else if let recorded = naturalHeightsById[payload.id], recorded > 1 {
             measuredHeight = recorded
         } else {
-            let fitting = hostingView.fittingSize
             measuredHeight = max(fitting.height, 1)
         }
 
@@ -418,6 +430,7 @@ final class SideCardController {
 
     private func scheduleHoverClose(delayNs: UInt64) {
         closeGraceTask?.cancel()
+        guard activePayload?.isPinned != true else { return }
         let targetId = activePayload?.id
         closeGraceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: delayNs)
