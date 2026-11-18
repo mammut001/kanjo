@@ -2,9 +2,13 @@ import AppKit
 import SwiftUI
 import KanjoCore
 
-/// `--route agents:expanded:<agent>`：固定展开指定 agent 的行内详情，供截图检查。
+/// `--route agents:expanded:<agent>`：固定展开指定 agent 的浮层详情卡，供截图检查。
 enum AgentsRoute {
     static let expandedPrefix = "agents:expanded:"
+
+    static func cardId(for agent: String) -> String {
+        expandedPrefix + agent
+    }
 
     static func expandedAgent(in anchor: String?) -> String? {
         guard let a = anchor, a.hasPrefix(expandedPrefix) else { return nil }
@@ -14,7 +18,7 @@ enum AgentsRoute {
 }
 
 /// 终端风 Agent 视图：顶部范围选择 + 总计与 token 占比条 + 每个活跃 agent 一行（含分段刻度额度条）。
-/// 悬停预览详情，点击固定展开，再次点击或按 Esc 收起。
+/// 悬停在行上方/下方浮出详情卡，点击固定，再次点击行/空白处或按 Esc 收起。
 struct AgentsView: View {
     let report: UsageReport
     var scrollAnchor: String? = nil
@@ -25,9 +29,6 @@ struct AgentsView: View {
     @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
 
     @State private var pinnedAgent: String?
-    @State private var hoveredAgent: String?
-    @State private var hoverTask: Task<Void, Never>?
-    @State private var escMonitor: Any?
 
     init(
         report: UsageReport,
@@ -66,26 +67,22 @@ struct AgentsView: View {
                                     RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
                                 }
                                 let isPinned = pinnedAgent == row.agent
-                                let isPreviewed = pinnedAgent == nil && hoveredAgent == row.agent
-                                let isExpanded = isPinned || isPreviewed
                                 AgentDetailRow(
                                     row: row,
                                     currency: cur,
                                     quotaLabelWidth: quotaLabelWidth,
-                                    isExpanded: isExpanded,
                                     isPinned: isPinned,
                                     onTogglePin: {
                                         withAnimation(.easeOut(duration: 0.16)) {
-                                            if pinnedAgent == row.agent {
-                                                pinnedAgent = nil
-                                            } else {
-                                                pinnedAgent = row.agent
-                                            }
-                                            hoveredAgent = nil
+                                            pinnedAgent = (pinnedAgent == row.agent) ? nil : row.agent
                                         }
                                     },
-                                    onHoverChange: { hovering in
-                                        handleHover(agent: row.agent, hovering: hovering)
+                                    onDismiss: {
+                                        if pinnedAgent == row.agent {
+                                            withAnimation(.easeOut(duration: 0.12)) {
+                                                pinnedAgent = nil
+                                            }
+                                        }
                                     },
                                     onSelectProject: onSelectProject
                                 )
@@ -114,11 +111,6 @@ struct AgentsView: View {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 proxy.scrollTo(rowAnchor(agent), anchor: .top)
             }
-        }
-        .onAppear { installEscMonitor() }
-        .onDisappear {
-            hoverTask?.cancel()
-            removeEscMonitor()
         }
     }
 
@@ -150,44 +142,6 @@ struct AgentsView: View {
 
     private func rowAnchor(_ agent: String) -> String {
         "agents:row:\(agent)"
-    }
-
-    private func handleHover(agent: String, hovering: Bool) {
-        hoverTask?.cancel()
-        if hovering {
-            guard pinnedAgent == nil else { return }
-            hoverTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 280_000_000)
-                guard !Task.isCancelled, pinnedAgent == nil else { return }
-                withAnimation(.easeOut(duration: 0.15)) {
-                    hoveredAgent = agent
-                }
-            }
-        } else if hoveredAgent == agent {
-            withAnimation(.easeOut(duration: 0.12)) {
-                hoveredAgent = nil
-            }
-        }
-    }
-
-    private func installEscMonitor() {
-        removeEscMonitor()
-        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53, pinnedAgent != nil {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    pinnedAgent = nil
-                }
-                return nil
-            }
-            return event
-        }
-    }
-
-    private func removeEscMonitor() {
-        if let escMonitor {
-            NSEvent.removeMonitor(escMonitor)
-            self.escMonitor = nil
-        }
     }
 
     // MARK: - 顶部汇总与占比条
@@ -283,43 +237,41 @@ struct AgentsView: View {
     }
 }
 
-// MARK: - 单个 Agent 行 + 行内详情
+// MARK: - 单个 Agent 行 + 浮层详情卡
 
 private struct AgentDetailRow: View {
     let row: AgentSummaryRow
     let currency: String
     let quotaLabelWidth: CGFloat
-    let isExpanded: Bool
     let isPinned: Bool
     let onTogglePin: () -> Void
-    let onHoverChange: (Bool) -> Void
+    let onDismiss: () -> Void
     let onSelectProject: (String) -> Void
-
-    @State private var headerHover = false
 
     private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onTogglePin) {
-                rowHeader
-                    .padding(.horizontal, Metrics.listInset)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(RowButtonStyle(highlighted: headerHover || isPinned, cornerRadius: Metrics.rowRadius))
-            .onHover { headerHover = $0 }
-            .hoverTip(isPinned ? L10n.tr("agents.row.collapse_help") : L10n.tr("agents.row.expand_help"))
-
-            if isExpanded {
-                expandedDrawer
-                    .padding(.horizontal, Metrics.listInset)
-                    .padding(.bottom, 10)
-                    .padding(.top, 2)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+        Button(action: onTogglePin) {
+            rowHeader
+                .padding(.horizontal, Metrics.listInset)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
         }
-        .onHover(perform: onHoverChange)
+        .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
+        .hoverCard(
+            id: AgentsRoute.cardId(for: row.agent),
+            isPinned: isPinned,
+            onDismiss: onDismiss
+        ) {
+            AgentDetailCard(
+                row: row,
+                currency: currency,
+                onSelectProject: { projectId in
+                    onDismiss()
+                    onSelectProject(projectId)
+                }
+            )
+        }
     }
 
     // MARK: Line 1 + Quota tick bars
@@ -408,37 +360,31 @@ private struct AgentDetailRow: View {
             }
         }
     }
+}
 
-    // MARK: 行内展开详情
+private struct AgentDetailCard: View {
+    let row: AgentSummaryRow
+    let currency: String
+    let onSelectProject: (String) -> Void
 
-    private var expandedDrawer: some View {
-        HStack(alignment: .top, spacing: 6) {
-            RoundedRectangle(cornerRadius: 1, style: .continuous)
-                .fill(accentColor)
-                .frame(width: 2.5)
-                .padding(.vertical, 2)
+    private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
-            VStack(alignment: .leading, spacing: 9) {
-                tokensBlock
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            tokensBlock
+            Divider().opacity(0.45)
+            perfBlock
+            if !row.models.isEmpty {
                 Divider().opacity(0.45)
-                perfBlock
-                if !row.models.isEmpty {
-                    Divider().opacity(0.45)
-                    modelsBlock
-                }
-                if !row.projectShares.isEmpty {
-                    Divider().opacity(0.45)
-                    whereMoneyWentBlock
-                }
+                modelsBlock
             }
-            .padding(9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(AgentPalette.groupFill)
-            )
+            if !row.projectShares.isEmpty {
+                Divider().opacity(0.45)
+                whereMoneyWentBlock
+            }
         }
         .monospacedDigit()
+        .hoverCard()
     }
 
     private var tokensBlock: some View {
@@ -700,6 +646,8 @@ struct QuotaTickBar: View {
 }
 
 private struct QuotaTickRow: View {
+    private static let percentWidth: CGFloat = 34
+
     let agent: String
     let row: QuotaRow
     let labelWidth: CGFloat
@@ -725,7 +673,9 @@ private struct QuotaTickRow: View {
             Text(row.percent.map { "\(Int($0.rounded()))%" } ?? "—")
                 .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(row.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(barColor))
-                .frame(width: 28, alignment: .trailing)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: Self.percentWidth, alignment: .trailing)
 
             Spacer(minLength: 2)
 
@@ -733,7 +683,7 @@ private struct QuotaTickRow: View {
                 .font(.system(size: 9.5))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .minimumScaleFactor(0.85)
                 .hoverTip(row.detail)
         }
         .monospacedDigit()

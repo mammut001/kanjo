@@ -135,6 +135,14 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
                     }
                 }
             }
+            .onChange(of: effectivePinned) { pinned in
+                if !pinned {
+                    hoverTask?.cancel()
+                    withAnimation(.easeIn(duration: 0.08)) {
+                        isShowing = false
+                    }
+                }
+            }
             .anchorPreference(key: HoverCardPreferenceKey.self, value: .bounds) { anchor in
                 guard shouldShow else { return nil }
                 return HoverCardPayload(
