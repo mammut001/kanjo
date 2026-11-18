@@ -29,6 +29,8 @@ final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 开发用：把面板放进普通窗口（便于截图 / 调试）。
         // 预览模式下不创建 NSStatusItem / MenuBarExtra，避免污染用户的状态栏与偏好设置。
+        let store = ReportStore.shared
+        let disk = DiskStore.shared
         NSApp.setActivationPolicy(.regular)
 
         let mainMenu = NSMenu()
@@ -54,8 +56,8 @@ final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
         effect.blendingMode = .behindWindow
         effect.state = .active
         let host = NSHostingView(rootView: MenuPanelView()
-            .environmentObject(ReportStore.shared)
-            .environmentObject(DiskStore.shared))
+            .environmentObject(store)
+            .environmentObject(disk))
         host.translatesAutoresizingMaskIntoConstraints = false
         effect.addSubview(host)
         w.contentView = effect

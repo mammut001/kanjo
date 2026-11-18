@@ -42,6 +42,10 @@ public enum DataSourceError: LocalizedError, Equatable {
 }
 
 public enum ReportDecoder {
+    public static func makeDecoder() -> JSONDecoder {
+        JSONDecoder()
+    }
+
     /// 解码契约 JSON。错误信息尽量指出出错的字段路径。
     public static func decode(_ data: Data) throws -> UsageReport {
         if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) {
@@ -60,7 +64,7 @@ public enum ReportDecoder {
         }
         let version = obj["schema_version"] as? Int
         do {
-            return try JSONDecoder().decode(UsageReport.self, from: data)
+            return try makeDecoder().decode(UsageReport.self, from: data)
         } catch let e as DecodingError {
             throw DataSourceError.contractMismatch(describe(e), schemaVersion: version)
         }

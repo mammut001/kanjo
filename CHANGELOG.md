@@ -16,6 +16,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Mac app shows your last results immediately after launch and refreshes them in the background.
 - `kanjo usage` opens instantly with the last saved results and refreshes them in the background.
 - The menu-bar panel is dark by default; use Settings > General > Appearance to switch to light or follow the system.
 - The Mac app now updates a terminal `kanjo` installed with `install.sh` to its own version when it starts, so `kanjo usage` and other new commands are there after an app update.

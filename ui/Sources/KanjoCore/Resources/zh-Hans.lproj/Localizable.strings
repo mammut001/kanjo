@@ -232,6 +232,8 @@
 "menu.refresh_now" = "立即刷新";
 "menu.refreshing" = "正在刷新…";
 "menu.updated_at" = "已更新 %@";
+"menu.stale_updating" = "数据来自 %@ · 正在更新…";
+"menu.stale_at" = "数据来自 %@";
 "menu.not_refreshed_yet" = "尚未刷新";
 "menu.update.available" = "%@ %@ 可供更新";
 "menu.update.action" = "更新";

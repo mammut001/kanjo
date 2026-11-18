@@ -387,6 +387,12 @@ struct MenuPanelView: View {
                     } else {
                         Text(L10n.tr("menu.not_refreshed_yet"))
                     }
+                } else if store.isStaleReport {
+                    Text(StaleReportText.footerStatus(
+                        generatedAt: store.staleReportGeneratedAt,
+                        timezoneIdentifier: store.report?.timezone,
+                        isLoading: store.isLoading
+                    ))
                 } else if store.isLoading {
                     Text(L10n.tr("menu.refreshing"))
                 } else if let t = store.lastRefresh {
@@ -397,6 +403,8 @@ struct MenuPanelView: View {
             }
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
             .hoverTip(route == .disk ? disk.sourceDescription : store.sourceDescription)
 
             Spacer()

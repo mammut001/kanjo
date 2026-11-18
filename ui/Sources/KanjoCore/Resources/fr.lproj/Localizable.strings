@@ -232,6 +232,8 @@
 "menu.refresh_now" = "Actualiser maintenant";
 "menu.refreshing" = "Actualisation…";
 "menu.updated_at" = "Mis à jour à %@";
+"menu.stale_updating" = "Données de %@ · actualisation…";
+"menu.stale_at" = "Données de %@";
 "menu.not_refreshed_yet" = "Pas encore actualisé";
 "menu.update.available" = "%@ %@ est disponible";
 "menu.update.action" = "Mettre à jour";

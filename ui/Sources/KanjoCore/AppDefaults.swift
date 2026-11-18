@@ -61,6 +61,10 @@ public enum AppDefaults {
         return .standard
     }
 
+    public static func isSnapshotMode(arguments: [String] = CommandLine.arguments) -> Bool {
+        arguments.contains { $0 == snapshotArgument || $0.hasPrefix("\(snapshotArgument)=") }
+    }
+
     /// 便捷重载（测试时可直接调用 AppDefaults.store(arguments:environment:)）。
     public static func store(
         arguments: [String],

@@ -14,7 +14,7 @@ struct SnapshotConfig {
     let appearance: SnapshotAppearance?
 
     static var isSnapshotMode: Bool {
-        CommandLine.arguments.contains { $0 == "--snapshot" || $0.hasPrefix("--snapshot=") }
+        AppDefaults.isSnapshotMode()
     }
 
     static func parse(arguments: [String] = CommandLine.arguments) -> SnapshotConfig? {

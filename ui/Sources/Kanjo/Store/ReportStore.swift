@@ -9,6 +9,8 @@ final class ReportStore: ObservableObject {
 
     @Published private(set) var needsCommandLineTools = false
     @Published private(set) var report: UsageReport?
+    @Published private(set) var isStaleReport = false
+    @Published private(set) var staleReportGeneratedAt: String?
     @Published private(set) var knownPlans: [String: [KnownPlan]]?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
@@ -17,17 +19,19 @@ final class ReportStore: ObservableObject {
     @Published private(set) var sourceDescription = ""
 
     /// `--data` / `KANJO_DATA` 指定的文件，优先于设置。
-    let dataOverride: URL? = DefaultPaths.dataOverride()
+    let dataOverride: URL?
 
     private var timer: Timer?
-    private var scheduler = RefreshScheduler()
+    private let loader: ReportLoader
     private var logWatcher: LogWatcher?
     private var scheduledTask: Task<Void, Never>?
-    private var generation = 0
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
+        let override = DefaultPaths.dataOverride()
+        self.dataOverride = override
+
         // 默认直接跑 CLI：优先内置 CLI，其次源码和安装目录。
         let defaultKind: SourceKind = DefaultPaths.cliDirectoryExists ? .cli : .file
         defaults.register(defaults: [
@@ -43,14 +47,55 @@ final class ReportStore: ObservableObject {
         if storedMinutes != defaults.integer(forKey: SettingsKeys.refreshMinutes) {
             defaults.set(storedMinutes, forKey: SettingsKeys.refreshMinutes)
         }
+        var scheduler = RefreshScheduler()
         scheduler.fallbackMinutes = storedMinutes
+
+        let initialKind = SourceKind(rawValue: defaults.string(forKey: SettingsKeys.sourceKind) ?? "") ?? .file
+        let shouldLoadCache = ReportLoader.shouldUseLastExportCache(
+            sourceKind: initialKind,
+            dataOverride: override,
+            isSnapshotMode: AppDefaults.isSnapshotMode()
+        )
+        let cacheLoader = Self.makeCacheLoader(shouldLoad: shouldLoadCache)
+        self.loader = ReportLoader(
+            scheduler: scheduler,
+            makeSource: {
+                ReportStore.makeSourceDescriptor(defaults: defaults, dataOverride: override)
+            },
+            loadCachedReport: cacheLoader
+        )
+        loader.onStateChange = { [weak self] state in
+            self?.apply(state)
+        }
+        loader.onLiveReport = { r in
+            CloudSyncStore.shared.reportDidRefresh(r)
+            PublishStore.shared.reportDidRefresh(r)
+            FamilyReportStore.shared.reportDidRefresh(r)
+        }
+        loader.onCLIFailure = { [weak self] in
+            await self?.checkPython()
+        }
+        loader.onFollowUpAction = { [weak self] action in
+            self?.handleSchedulerAction(action)
+        }
 
         setupNotifications()
         Task { await checkPython() }
         Task { await loadKnownPlans() }
-        refresh()
+        loader.startInitialLoad()
         restartTimer()
         setupWatcher()
+    }
+
+    private func apply(_ state: ReportLoadState) {
+        report = state.report
+        isStaleReport = state.isStaleReport
+        staleReportGeneratedAt = state.staleReportGeneratedAt
+        error = state.error
+        isLoading = state.isLoading
+        loadingStartedAt = state.loadingStartedAt
+        lastRefresh = state.lastRefresh
+        sourceDescription = state.sourceDescription
     }
 
     private func setupNotifications() {
@@ -75,17 +120,17 @@ final class ReportStore: ObservableObject {
     private func onWillSleep() {
         scheduledTask?.cancel()
         scheduledTask = nil
-        scheduler.onSleep()
+        loader.scheduler.onSleep()
     }
 
     private func onDidWake() {
-        let action = scheduler.onWake()
+        let action = loader.scheduler.onWake()
         handleSchedulerAction(action)
     }
 
     private func onPowerStateDidChange() {
         let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        let action = scheduler.onLowPowerModeChanged(enabled: isLowPower)
+        let action = loader.scheduler.onLowPowerModeChanged(enabled: isLowPower)
         handleSchedulerAction(action)
     }
 
@@ -128,7 +173,7 @@ final class ReportStore: ObservableObject {
     }
 
     private func handleFileEvent() {
-        let action = scheduler.onFileEvent()
+        let action = loader.scheduler.onFileEvent()
         handleSchedulerAction(action)
     }
 
@@ -153,8 +198,8 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelOpened() {
-        let action = scheduler.onPanelVisibilityChanged(visible: true)
-        if scheduler.shouldRefreshOnOpen() {
+        let action = loader.scheduler.onPanelVisibilityChanged(visible: true)
+        if loader.scheduler.shouldRefreshOnOpen() {
             refresh(qualityOfService: .background)
         } else {
             handleSchedulerAction(action)
@@ -162,7 +207,7 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelClosed() {
-        let action = scheduler.onPanelVisibilityChanged(visible: false)
+        let action = loader.scheduler.onPanelVisibilityChanged(visible: false)
         handleSchedulerAction(action)
     }
 
@@ -178,8 +223,22 @@ final class ReportStore: ObservableObject {
     }
 
     func makeSource() -> (UsageDataSource, String) {
+        let d = Self.makeSourceDescriptor(defaults: defaults, dataOverride: dataOverride)
+        return (d.source, d.description)
+    }
+
+    nonisolated private static func makeCacheLoader(shouldLoad: Bool) -> (@Sendable () -> UsageReport?)? {
+        guard shouldLoad else { return nil }
+        let cache = LastExportCache()
+        return { cache.load() }
+    }
+
+    private static func makeSourceDescriptor(
+        defaults: UserDefaults,
+        dataOverride: URL?
+    ) -> ReportLoader.SourceDescriptor {
         if let o = dataOverride {
-            return (FileDataSource(url: o), "File (--data): \(o.path)")
+            return (FileDataSource(url: o), "File (--data): \(o.path)", false)
         }
         let kind = SourceKind(rawValue: defaults.string(forKey: SettingsKeys.sourceKind) ?? "") ?? .file
         switch kind {
@@ -187,14 +246,15 @@ final class ReportStore: ObservableObject {
             let raw = (defaults.string(forKey: SettingsKeys.filePath) ?? "").trimmingCharacters(in: .whitespaces)
             let url = raw.isEmpty ? DefaultPaths.sampleFixture
                                   : URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
-            return (FileDataSource(url: url), "File: \(url.path)")
+            return (FileDataSource(url: url), "File: \(url.path)", false)
         case .cli:
             let cmd = CLILaunch.command(defaults: defaults)
             // 工作目录留空 = 内置 CLI、源码 cli/，其次 install.sh 装的位置；
             // 都没有就继承进程的当前目录。磁盘页用同一套命令和工作目录。
             let url = CLILaunch.workingDirectory(defaults: defaults)
             return (CLIDataSource(command: cmd, workingDirectory: url),
-                    "Command: \(cmd)" + (url.map { " (in \($0.path))" } ?? ""))
+                    "Command: \(cmd)" + (url.map { " (in \($0.path))" } ?? ""),
+                    true)
         }
     }
 
@@ -294,43 +354,7 @@ final class ReportStore: ObservableObject {
     func refresh(qualityOfService: QualityOfService = .userInitiated) {
         scheduledTask?.cancel()
         scheduledTask = nil
-        scheduler.onRefreshStarted()
-        generation += 1
-        let gen = generation
-        let (source, desc) = makeSource()
-        sourceDescription = desc
-        isLoading = true
-        if loadingStartedAt == nil {
-            loadingStartedAt = Date()
-        }
-        Task {
-            do {
-                let r: UsageReport
-                if let cliSource = source as? CLIDataSource {
-                    r = try await cliSource.load(qualityOfService: qualityOfService)
-                } else {
-                    r = try await source.load()
-                }
-                guard gen == generation else { return }
-                report = r
-                error = nil
-                CloudSyncStore.shared.reportDidRefresh(r)
-                PublishStore.shared.reportDidRefresh(r)
-                FamilyReportStore.shared.reportDidRefresh(r)
-            } catch {
-                guard gen == generation else { return }
-                if source is CLIDataSource { await checkPython() }
-                guard gen == generation else { return }
-                // 刷新失败时保留上一份报告，面板顶部显示错误。
-                self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
-            guard gen == generation else { return }
-            lastRefresh = Date()
-            isLoading = false
-            loadingStartedAt = nil
-            let followUpAction = scheduler.onRefreshFinished()
-            handleSchedulerAction(followUpAction)
-        }
+        loader.refresh(qualityOfService: qualityOfService)
     }
 
     func restartTimer() {
@@ -341,12 +365,12 @@ final class ReportStore: ObservableObject {
         if minutes != defaults.integer(forKey: SettingsKeys.refreshMinutes) {
             defaults.set(minutes, forKey: SettingsKeys.refreshMinutes)
         }
-        scheduler.fallbackMinutes = minutes
+        loader.scheduler.fallbackMinutes = minutes
         guard minutes > 0 else { return }
         timer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes * 60), repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
-                let action = self.scheduler.onFallbackTimerFired()
+                let action = self.loader.scheduler.onFallbackTimerFired()
                 self.handleSchedulerAction(action)
             }
         }
