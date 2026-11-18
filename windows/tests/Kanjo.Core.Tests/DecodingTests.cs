@@ -189,12 +189,12 @@ public sealed class DecodingTests : KanjoTestCase
         Assert.Equal("detected", grok.Source);
 
         var antigravity = r.Subscriptions["antigravity"];
-        Assert.Equal("google_ai_pro", antigravity.Plan);
-        Assert.Equal("Google AI Pro", antigravity.PlanLabel);
-        Assert.Equal(19.99, antigravity.MonthlyPriceUsd);
+        Assert.Equal("google_ai_ultra", antigravity.Plan);
+        Assert.Equal("Google AI Ultra + Google AI Pro", antigravity.PlanLabel);
+        Assert.Equal(269.98, antigravity.MonthlyPriceUsd);
         Assert.Null(antigravity.AnchorDay);
         Assert.Equal("rolling_30d", antigravity.CycleSource);
-        Assert.Equal("detected", antigravity.Source);
+        Assert.Equal("manual", antigravity.Source);
 
         var copilot = r.Subscriptions["copilot"];
         Assert.Equal("pro", copilot.Plan);

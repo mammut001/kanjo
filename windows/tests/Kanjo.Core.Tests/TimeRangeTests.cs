@@ -489,7 +489,7 @@ public sealed class TimeRangeTests : KanjoTestCase
         Assert.NotNull(r.QuotaWindows!.GetValueOrDefault("antigravity"));
         Assert.Null(r.QuotaWindows!.GetValueOrDefault("qwen"));
         Assert.Equal("max_5x", r.Subscriptions!["claude"].Plan);
-        Assert.Equal("google_ai_pro", r.Subscriptions!["antigravity"].Plan);
+        Assert.Equal("google_ai_ultra", r.Subscriptions!["antigravity"].Plan);
         Assert.Null(r.Subscriptions!.GetValueOrDefault("qwen"));
 
         foreach (var range in TimeRanges.All)
