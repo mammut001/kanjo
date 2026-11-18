@@ -4,6 +4,7 @@ import KanjoCore
 
 enum Route: Equatable {
     case overview
+    case agents
     case project(String)
     case bucket(BucketKind)
     case disk
@@ -41,10 +42,14 @@ enum DevRoute {
         case "settings-bottom": return (.settings, SettingsView.bottomAnchor, nil)
         case "overview": return (.overview, nil, nil)
         case "overview-bottom": return report == nil ? nil : (.overview, OverviewView.bottomAnchor, nil)
+        case "agents": return (.agents, nil, nil)
         case "disk": return (.disk, nil, nil)
         case "disk:expanded": return (.disk, DiskView.expandedAnchor, nil)
         case "loading": return (.loading(1.0), nil, nil)
         default: break
+        }
+        if raw.hasPrefix(AgentsRoute.expandedPrefix) {
+            return report == nil ? nil : (.agents, raw, nil)
         }
         if raw.hasPrefix("loading:") {
             let sec = Double(raw.dropFirst("loading:".count)) ?? 12.0
@@ -93,6 +98,7 @@ struct MenuPanelView: View {
     @EnvironmentObject var store: ReportStore
     @EnvironmentObject var disk: DiskStore
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.panelViewMode, store: AppDefaults.store) private var panelViewMode = PanelViewMode.projects.rawValue
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
@@ -256,11 +262,19 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    OverviewView(report: r, scrollAnchor: activeAnchor, onSelect: { route = $0 },
-                                 onSetRenewalDay: { agent in
-                        overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
-                        route = .settings
-                    })
+                    let showAgents = activeRoute == .agents || (activeRoute == .overview && panelViewMode == PanelViewMode.agents.rawValue)
+                    VStack(spacing: 0) {
+                        panelModeHeader(selected: showAgents ? .agents : .projects)
+                        if showAgents {
+                            AgentsView(report: r, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
+                        } else {
+                            OverviewView(report: r, scrollAnchor: activeAnchor, onSelect: { route = $0 },
+                                         onSetRenewalDay: { agent in
+                                overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
+                                route = .settings
+                            })
+                        }
+                    }
                 }
             } else if let err = store.error {
                 ErrorStateView(message: err, source: store.sourceDescription,
@@ -269,6 +283,42 @@ struct MenuPanelView: View {
                 InitialLoadingView()
             }
         }
+    }
+
+    private func panelModeHeader(selected: PanelViewMode) -> some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                ForEach(PanelViewMode.allCases) { mode in
+                    let active = mode == selected
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            panelViewMode = mode.rawValue
+                            if route == .agents && mode == .projects {
+                                route = .overview
+                                overviewAnchor = nil
+                            }
+                        }
+                    } label: {
+                        Text(mode.label)
+                            .font(.system(size: 10, weight: active ? .semibold : .regular))
+                            .foregroundStyle(active ? .primary : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(active ? Color.primary.opacity(0.13) : Color.clear))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(2)
+            .background(Capsule().fill(Color.primary.opacity(0.06)))
+            .hoverTip(L10n.tr("view_mode.toggle_help"))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Metrics.listInset)
+        .padding(.top, 10)
+        .padding(.bottom, 2)
     }
 
     private func missing(_ text: String) -> some View {

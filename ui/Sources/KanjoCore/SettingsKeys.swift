@@ -11,6 +11,7 @@ public enum SettingsKeys {
     public static let menuBarMode = "menuBarMode"            // "cost" | "tokens"；默认 cost
     public static let hiddenProjects = "hiddenProjects"      // 换行分隔的 project id（ProjectPrefs）
     public static let pinnedProjects = "pinnedProjects"      // 同上
+    public static let panelViewMode = "panelViewMode"        // "projects" | "agents"；默认 projects
     public static let timeRange = "timeRange"                // TimeRange.rawValue；默认 all
     public static let renewalNudgeDismissed = "renewalNudgeDismissed"
     public static let subscriptionOrder = "subscriptionOrder" // 逗号分隔的 agent id（SubscriptionOrder）
@@ -66,6 +67,18 @@ public enum MenuBarMode: String, CaseIterable, Identifiable {
         switch self {
         case .cost: return L10n.tr("settings.menubar.cost")
         case .tokens: return L10n.tr("settings.menubar.tokens")
+        }
+    }
+}
+
+/// 面板主视图模式：项目列表或 Agent 列表。
+public enum PanelViewMode: String, CaseIterable, Identifiable {
+    case projects, agents
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .projects: return L10n.tr("view_mode.projects")
+        case .agents: return L10n.tr("view_mode.agents")
         }
     }
 }

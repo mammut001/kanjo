@@ -433,13 +433,81 @@ antigravity_accounts = {
     },
 }
 
+def _perf_ttft_bucket(seconds):
+    import math
+    if seconds < 0.05:
+        return 0
+    return int(math.floor(math.log(seconds / 0.05) / math.log(1.05))) + 1
+
+def build_perf_by_day(projects, buckets):
+    perf_rnd = random.Random(123)
+    # Typical (tps_mean, ttft_mean) per model for realistic fixture metrics.
+    profiles = {
+        "claude-opus-5-5": (62.0, 1.45),
+        "claude-sonnet-5": (94.0, 0.88),
+        "claude-haiku-5-5": (165.0, 0.42),
+        "gemini-3-pro": (118.0, 0.95),
+        "gemini-3-flash": (210.0, 0.36),
+        "gpt-5.5-codex": (88.0, 1.10),
+        "gpt-5.5-mini": (155.0, 0.48),
+        "grok-4-beta": (110.0, 0.78),
+        "qwen-3.8-max": (82.0, 1.05),
+        "command-r-plus": (74.0, 1.20),
+        "minimax-m3": (95.0, 0.85),
+        "deepseek-v4-pro": (68.0, 1.35),
+        "copilot-sonnet-5": (90.0, 0.92),
+    }
+    seen_keys = set()
+    for p in projects:
+        for s in p["sessions_detail"]:
+            d = local_day(datetime.strptime(s["ended"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc))
+            for m in s["models"]:
+                if m in profiles:
+                    seen_keys.add((d, s["agent"], m))
+    for bk in ("unattributed", "excluded"):
+        for s in buckets[bk]["sessions_detail"]:
+            d = local_day(datetime.strptime(s["ended"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc))
+            for m in s["models"]:
+                if m in profiles:
+                    seen_keys.add((d, s["agent"], m))
+
+    rows = []
+    for d, agent, model in sorted(seen_keys):
+        tps_mean, ttft_mean = profiles[model]
+        n = perf_rnd.randint(4, 24)
+        o_total = 0
+        g_total = 0.0
+        th = {}
+        for _ in range(n):
+            out_tok = perf_rnd.randint(180, 1800)
+            tps = max(15.0, min(2800.0, tps_mean * perf_rnd.uniform(0.78, 1.22)))
+            gen_s = max(0.3, min(1800.0, out_tok / tps))
+            ttft = max(0.02, min(120.0, ttft_mean * perf_rnd.lognormvariate(0.0, 0.35)))
+            b = str(_perf_ttft_bucket(ttft))
+            th[b] = th.get(b, 0) + 1
+            o_total += out_tok
+            g_total += gen_s
+        rows.append({
+            "day": d,
+            "agent": agent,
+            "model": model,
+            "o": o_total,
+            "g": round(g_total, 3),
+            "n": n,
+            "th": {k: th[k] for k in sorted(th, key=int)},
+        })
+    return rows
+
+perf_by_day = build_perf_by_day(projects, buckets)
+
 out = {"schema_version": 1, "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "generated_by": "generate_sample.py",
        "timezone": "Asia/Shanghai", "currency": "USD",
        "cost_note": "API-equivalent cost estimated from public API prices. Not actual subscription spend.",
        "config": {"dominant_threshold": 0.8}, "quota_windows": quota_windows,
        "subscriptions": subscriptions,
        "antigravity_accounts": antigravity_accounts,
-       "totals": totals, "projects": projects, "buckets": buckets}
+       "totals": totals, "projects": projects, "buckets": buckets,
+       "perf_by_day": perf_by_day}
 dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample.json")
 json.dump(out, open(dest, "w"), indent=2, ensure_ascii=False)
 

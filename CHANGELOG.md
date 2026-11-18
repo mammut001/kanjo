@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Agent view in the menu-bar panel (toggle in the header): one row per agent with tokens, cost, quota tick bars; hover or click for token breakdown, output speed, TTFT, models and where the money went.
+
 ### Changed
 
 - The Mac app now updates a terminal `kanjo` installed with `install.sh` to its own version when it starts, so `kanjo usage` and other new commands are there after an app update.

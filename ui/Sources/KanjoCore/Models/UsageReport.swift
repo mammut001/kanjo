@@ -23,6 +23,8 @@ public struct UsageReport: Codable, Equatable {
     public var totals: Aggregate
     public var projects: [Project]
     public var buckets: Buckets
+    /// 按天 × agent × model 的输出速度与 TTFT 累加统计；旧数据或不含性能数据的导出为 nil。
+    public var perfByDay: [PerfDay]? = nil
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -36,6 +38,7 @@ public struct UsageReport: Codable, Equatable {
         case subscriptions
         case antigravityAccounts = "antigravity_accounts"
         case totals, projects, buckets
+        case perfByDay = "perf_by_day"
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,6 +57,7 @@ public struct UsageReport: Codable, Equatable {
         totals = try c.decode(Aggregate.self, forKey: .totals)
         projects = try c.decode([Project].self, forKey: .projects)
         buckets = try c.decode(Buckets.self, forKey: .buckets)
+        perfByDay = try c.decodeIfPresent([PerfDay].self, forKey: .perfByDay)
     }
 
     /// schema_version 高于本 UI 支持的版本：显示警告，继续渲染。
@@ -629,6 +633,42 @@ public struct Buckets: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case unattributed, excluded
         case parseFailed = "parse_failed"
+    }
+}
+
+/// 按天 × agent × model 累加的生成性能样本（契约 perf_by_day）。
+public struct PerfDay: Codable, Equatable, Sendable {
+    public var day: String
+    public var agent: String
+    public var model: String
+    public var o: Int
+    public var g: Double
+    public var n: Int
+    public var th: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case day, agent, model, o, g, n, th
+    }
+
+    public init(day: String, agent: String, model: String, o: Int, g: Double, n: Int, th: [String: Int] = [:]) {
+        self.day = day
+        self.agent = agent
+        self.model = model
+        self.o = o
+        self.g = g
+        self.n = n
+        self.th = th
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(String.self, forKey: .day)
+        agent = try c.decode(String.self, forKey: .agent)
+        model = try c.decode(String.self, forKey: .model)
+        o = try c.decode(Int.self, forKey: .o)
+        g = try c.decode(Double.self, forKey: .g)
+        n = try c.decode(Int.self, forKey: .n)
+        th = try c.decodeIfPresent([String: Int].self, forKey: .th) ?? [:]
     }
 }
 

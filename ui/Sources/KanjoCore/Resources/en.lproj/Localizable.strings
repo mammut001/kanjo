@@ -521,3 +521,31 @@
 "overview.agy.quit_confirm_cancel" = "Cancel";
 "overview.agy.still_running" = "Some agy sessions did not quit; nothing was changed";
 
+/* Agent view */
+"view_mode.projects" = "Projects";
+"view_mode.agents" = "Agents";
+"view_mode.toggle_help" = "Switch between Projects and Agents view";
+"settings.section.general" = "General";
+"settings.panel_view" = "Panel view";
+"agents.empty" = "No agent usage in this range.";
+"agents.proportion_other" = "Other";
+"agents.tokens_share_help" = "Share of total tokens in this range";
+"agents.row.expand_help" = "Hover to preview, click to pin details";
+"agents.row.collapse_help" = "Click or press Esc to close details";
+"agents.detail.tokens" = "Tokens";
+"agents.detail.cache_hit" = "Cache hit";
+"agents.detail.performance" = "Performance";
+"agents.detail.output_speed" = "Output speed";
+"agents.detail.ttft_median" = "Median TTFT";
+"agents.detail.samples.singular" = "%d sample";
+"agents.detail.samples.plural" = "%d samples";
+"agents.detail.no_samples" = "No speed samples in this range";
+"agents.detail.tok_per_sec" = "%@ tok/s";
+"agents.detail.models" = "By model";
+"agents.detail.models.hit" = "Hit";
+"agents.detail.models.speed" = "Speed";
+"agents.detail.where_money_went" = "Where the money went";
+"agents.detail.others" = "Others";
+"agents.detail.no_project_cost" = "No project cost in this range";
+"agents.detail.open_project_help" = "Open %@ details";
+

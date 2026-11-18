@@ -409,4 +409,17 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertNil(r.antigravityAccounts)
         XCTAssertEqual(r.schemaVersion, 1)
     }
+
+    func testPerfByDayDecodesFromSampleFixtureAndTolerantOfAbsence() throws {
+        let r = try loadFixture()
+        let perf = try XCTUnwrap(r.perfByDay)
+        XCTAssertFalse(perf.isEmpty)
+        XCTAssertTrue(perf.contains { $0.agent == "claude" && $0.o > 0 && $0.g > 0 && $0.n > 0 })
+
+        // 旧数据缺 perf_by_day 时仍能正常解码，值为 nil
+        let stripped = try mutatedFixture { $0.removeValue(forKey: "perf_by_day") }
+        let legacy = try ReportDecoder.decode(stripped)
+        XCTAssertNil(legacy.perfByDay)
+        XCTAssertEqual(legacy.schemaVersion, 1)
+    }
 }
