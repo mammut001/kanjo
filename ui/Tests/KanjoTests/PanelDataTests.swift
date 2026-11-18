@@ -109,7 +109,7 @@ final class PanelDataTests: XCTestCase {
                 "parse_failed": {"sessions": 0, "files": []}
             },
             "subscriptions": {"a1": {"plan": "p", "plan_label": "P", "cycle_start": "2026-11-01T00:00:00Z", "cycle_end": "2026-12-01T00:00:00Z", "cycle_source": "manual", "extra_usage_enabled": false, "source": "manual"}},
-            "quota_windows": {"a1": {"weekly_resets_at": "2026-11-19T00:00:00Z", "weekly_window_hours": 168}}
+            "quota_windows": {"a1": {"weekly_resets_at": "2026-11-19T00:00:00Z", "weekly_window_hours": 168, "source": "tokei"}}
         }
         """.data(using: .utf8)!)
         
