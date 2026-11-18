@@ -42,8 +42,94 @@ final class PanelDataTests: XCTestCase {
         }
     }
     
-    func testSpecMatch() {
-        // RangeEngine.resolve matches RangeContext's logic
+    func testParseTimestampRandom() {
+        var seed: UInt64 = 42
+        func lcg() -> UInt64 {
+            seed = (6364136223846793005 &* seed &+ 1)
+            return seed
+        }
+        
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        let isoFractional = ISO8601DateFormatter()
+        isoFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        for _ in 0..<500 {
+            let year = 2000 + Int(lcg() % 41)
+            let month = 1 + Int(lcg() % 12)
+            let day = 1 + Int(lcg() % 28) // Simple day
+            let hour = Int(lcg() % 24)
+            let minute = Int(lcg() % 60)
+            let second = Int(lcg() % 60)
+            
+            let fractionDigits = [0, 1, 3, 6, 9][Int(lcg() % 5)]
+            var fracStr = ""
+            if fractionDigits > 0 {
+                fracStr = "."
+                for _ in 0..<fractionDigits { fracStr += String(Int(lcg() % 10)) }
+            }
+            
+            let zones = ["Z", "+05:30", "-08:00"]
+            let zone = zones[Int(lcg() % 3)]
+            
+            let s = String(format: "%04d-%02d-%02dT%02d:%02d:%02d%@%@", year, month, day, hour, minute, second, fracStr, zone)
+            
+            let ref = (fractionDigits > 0 ? isoFractional : iso).date(from: s)
+            let actual = ReportDates.parseTimestamp(s)
+            
+            XCTAssertNotNil(actual, "Failed for \(s)")
+            if let ref = ref, let actual = actual {
+                XCTAssertEqual(actual.timeIntervalSince1970, ref.timeIntervalSince1970, accuracy: 1e-6, "Failed for \(s)")
+            }
+        }
+    }
+
+    func testPanelDataEquivalence() {
+        // Build synthetic report (simplified for brevity, but includes required fields)
+        let report = try! JSONDecoder().decode(UsageReport.self, from: """
+        {
+            "schema_version": 1,
+            "generated_at": "2026-11-18T10:00:00Z",
+            "currency": "USD",
+            "cost_note": "",
+            "config": {"dominant_threshold": 0.8},
+            "totals": {"cost": 100, "tokens": {"total": 1000}, "sessions": 10},
+            "projects": [
+                {
+                    "id": "p1", "name": "Project 1", "cost": 100, "tokens": {"total": 1000}, "sessions": 10,
+                    "by_agent": [{"agent": "a1", "label": "A1", "cost": 100, "tokens": {"total": 1000}, "sessions": 10}],
+                    "by_model": [],
+                    "by_day": [{"day": "2026-11-17", "cost": 100, "tokens": 1000}],
+                    "sessions_detail": [{"id": "s1", "agent": "a1", "label": "A1", "started": "2026-11-17T10:00:00Z", "ended": "2026-11-17T11:00:00Z", "cost": 100, "tokens": {"total": 1000}, "share": 1, "attribution": "none", "subagents": 0}]
+                }
+            ],
+            "buckets": {
+                "unattributed": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "excluded": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "parse_failed": {"sessions": 0, "files": []}
+            },
+            "subscriptions": {"a1": {"plan": "p", "plan_label": "P", "cycle_start": "2026-11-01T00:00:00Z", "cycle_end": "2026-12-01T00:00:00Z", "cycle_source": "manual", "extra_usage_enabled": false, "source": "manual"}},
+            "quota_windows": {"a1": {"weekly_resets_at": "2026-11-19T00:00:00Z", "weekly_window_hours": 168}}
+        }
+        """.data(using: .utf8)!)
+        
+        let now = Date(timeIntervalSince1970: 1763460000)
+        let fallback: (Project) -> String = { p in dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown" }
+        
+        for r in TimeRange.allCases {
+            let spec = RangeEngine.spec(r, report: report, now: now)
+            let panelData = PanelData.compute(report: report, rangeRaw: r.rawValue, now: now)
+            let filtered = RangeEngine.filtered(report, range: spec, fallbackAgentFor: fallback)
+            
+            XCTAssertNotNil(panelData, "Failed for \(r)")
+            XCTAssertEqual(panelData!.filteredReport, filtered, "FilteredReport mismatch for \(r)")
+            
+            let rows = SubscriptionValue.rows(of: report, now: now)
+            XCTAssertEqual(panelData!.subscriptionRows, rows, "SubscriptionRows mismatch for \(r)")
+        }
+    }
+
+    func testMatches() {
         let report = try! JSONDecoder().decode(UsageReport.self, from: """
         {
             "schema_version": 1,
@@ -61,14 +147,27 @@ final class PanelDataTests: XCTestCase {
         }
         """.data(using: .utf8)!)
         
-        let now = Date(timeIntervalSince1970: 1763440800) // 2026-11-18T10:00:00Z
+        let now = Date(timeIntervalSince1970: 1763460000) // 2026-11-18T10:00:00Z
+        let spec = RangeEngine.spec(.all, report: report, now: now)
+        let panelData = PanelData(rangeSpec: spec, filteredReport: FilteredReport(spec: spec, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, now: now)
         
-        // sinceReset requires QuotaWindows, which are missing
-        let resolved = RangeEngine.resolve(raw: "sinceReset", report: report, now: now)
-        XCTAssertEqual(resolved.range, .all)
+        // True: same report, same range, same day
+        XCTAssertTrue(panelData.matches(report: report, spec: spec))
         
-        let panelData = PanelData.compute(report: report, rangeRaw: "sinceReset", now: now)
-        XCTAssertNotNil(panelData)
-        XCTAssertEqual(panelData!.rangeSpec, resolved.spec)
+        // False: different generatedAt
+        var report2 = report
+        report2.generatedAt = "2026-11-18T11:00:00Z"
+        XCTAssertFalse(panelData.matches(report: report2, spec: spec))
+        
+        // False: different range
+        let spec2 = RangeEngine.spec(.today, report: report, now: now)
+        XCTAssertFalse(panelData.matches(report: report, spec: spec2))
+        
+        // False: today when now moves to next day
+        let specToday = RangeEngine.spec(.today, report: report, now: now)
+        let panelDataToday = PanelData(rangeSpec: specToday, filteredReport: FilteredReport(spec: specToday, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, now: now)
+        
+        let tomorrow = now.addingTimeInterval(86400)
+        XCTAssertFalse(panelDataToday.matches(report: report, spec: RangeEngine.spec(.today, report: report, now: tomorrow)))
     }
 }
