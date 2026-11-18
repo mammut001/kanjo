@@ -241,6 +241,12 @@ HEAVY_DIRS = {"node_modules", ".build", "DerivedData", ".venv", "target", "Pods"
 def _stat_bytes(st) -> int:
     if hasattr(st, "st_blocks"):
         return int(st.st_blocks) * 512
+    # Windows has no st_blocks. A directory's st_size there is the NTFS index size,
+    # and os.lstat() and os.scandir() report different values for the same folder,
+    # so an entry root (lstat) and the same folder seen in a parent's walk (scandir)
+    # would not add up. Directories count as 0; files keep their size.
+    if stat.S_ISDIR(getattr(st, "st_mode", 0)):
+        return 0
     return int(getattr(st, "st_size", 0))
 
 
@@ -360,7 +366,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
     ``_root_stat`` reuses their stat result so each directory is counted once.
     """
     path = _norm(path)
-    excluded = set(_norm(p) for p in (exclude or []))
+    excluded = _PathSet(exclude or [])
     total = 0
     files = 0
     errors = 0
@@ -393,7 +399,7 @@ def measure(path: str, now: float, exclude: Optional[List[str]] = None,
             continue
         with iterator:
             for ent in iterator:
-                if excluded and ent.path in excluded:
+                if excluded and excluded.has(ent):
                     continue
                 try:
                     st = ent.stat(follow_symlinks=False)
@@ -1342,9 +1348,56 @@ def _repo_worktrees(repos: List[str]) -> List[Tuple[str, str]]:
 
 
 def _inside(path: str, root: str) -> bool:
-    """True when ``path`` is strictly below ``root``."""
-    root = root.rstrip("/\\")
+    """True when ``path`` is strictly below ``root`` (case- and slash-insensitive on Windows)."""
+    path = winsupport.normcase_key(path)
+    root = winsupport.normcase_key(root).rstrip("/\\")
     return len(path) > len(root) + 1 and path.startswith(root) and path[len(root)] in "/\\"
+
+
+class _PathSet:
+    """Paths to leave out of a walk, matched against ``os.scandir`` entries.
+
+    POSIX compares the normalized path exactly. On Windows the same folder can be
+    spelled with other case, other slashes or an 8.3 short name (``RUNNER~1``), so
+    the key is case-folded and slash-normalized, and a directory also matches by
+    file id (``DirEntry.inode()``) on the same volume.
+    """
+
+    def __init__(self, paths: List[str]):
+        self.keys = set(winsupport.normcase_key(_norm(p)) for p in paths)
+        self.ids = set()
+        if paths and winsupport.is_windows():
+            for p in paths:
+                try:
+                    st = os.stat(p)
+                except OSError:
+                    continue
+                if st.st_ino:
+                    self.ids.add((st.st_dev, st.st_ino))
+        self._dev: Optional[int] = None
+
+    def __bool__(self) -> bool:
+        return bool(self.keys)
+
+    def __contains__(self, path: str) -> bool:
+        return winsupport.normcase_key(_norm(path)) in self.keys
+
+    def has(self, ent) -> bool:
+        if ent.path in self.keys or winsupport.normcase_key(ent.path) in self.keys:
+            return True
+        if not self.ids:
+            return False
+        try:
+            if not ent.is_dir(follow_symlinks=False):
+                return False
+            ino = ent.inode()
+            if not ino:
+                return False
+            if self._dev is None:
+                self._dev = os.stat(os.path.dirname(ent.path)).st_dev
+        except OSError:
+            return False
+        return (self._dev, ino) in self.ids
 
 
 # ---- merge status ---------------------------------------------------------------------
@@ -1632,7 +1685,7 @@ def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
 
 def _items_around(root: str, nested: List[str]) -> List[str]:
     """Top-most paths under ``root`` that hold none of ``nested`` (which stay put)."""
-    skip = set(nested)
+    skip = _PathSet(nested)
     found = []
 
     def walk(path: str) -> None:
@@ -1642,7 +1695,7 @@ def _items_around(root: str, nested: List[str]) -> List[str]:
         except OSError:
             return
         for ent in kids:
-            if ent.path in skip:
+            if skip.has(ent):
                 continue
             if ent.is_dir(follow_symlinks=False) and any(_inside(p, ent.path) for p in nested):
                 walk(ent.path)
@@ -1657,10 +1710,10 @@ def _files_older_than(root: str, now: float, days: int,
                       skip: Optional[List[str]] = None) -> List[Tuple[str, int, str]]:
     limit = days * 86400
     found = []
-    skipped = set(skip or [])
+    skipped = _PathSet(skip or [])
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))
-                       and os.path.join(dirpath, d) not in skipped]
+                       and not (skipped and os.path.join(dirpath, d) in skipped)]
         for name in filenames:
             path = os.path.join(dirpath, name)
             try:

@@ -98,6 +98,11 @@ class MergedWorktreeTest(unittest.TestCase):
     def entries(self, doc):
         return {e["id"]: e for a in doc["agents"] for e in a["entries"]}
 
+    def listed_worktrees(self):
+        """``git worktree list`` paths, normalized (git prints forward slashes on Windows)."""
+        out = subprocess.check_output(["git", "-C", self.repo, "worktree", "list", "--porcelain"], text=True)
+        return {_key(line[len("worktree "):]) for line in out.splitlines() if line.startswith("worktree ")}
+
     def wt_id(self, rel):
         return "claude:worktree:" + rel
 
@@ -326,10 +331,12 @@ class MergedWorktreeTest(unittest.TestCase):
 
         done = disk.clean([], merged_worktrees=True, yes=True, roots=self.roots, trash_dir=self.trash)
         self.assertEqual(sorted(done["moved"]), sorted(plan["moved"]))
-        listed = subprocess.check_output(["git", "-C", self.repo, "worktree", "list"], text=True)
+        listed = self.listed_worktrees()
         for case in ("ff", "squash", "nocommit"):
             self.assertFalse(os.path.exists(cases[case]), case)
-            self.assertNotIn(cases[case], listed)
+            self.assertNotIn(_key(cases[case]), listed)
+        for case in ("unmerged", "dirty", "untracked"):
+            self.assertIn(_key(cases[case]), listed)
         for case in ("unmerged", "dirty", "untracked"):
             self.assertTrue(os.path.isdir(cases[case]), case)
         branches = subprocess.check_output(["git", "-C", self.repo, "branch", "--format=%(refname:short)"],
@@ -373,8 +380,11 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertFalse(os.path.exists(notes))
         self.assertFalse(os.path.exists(loose))
         self.assertTrue(os.path.isdir(path))
-        listed = subprocess.check_output(["git", "-C", self.repo, "worktree", "list"], text=True)
-        self.assertIn(path, listed)
+        self.assertIn(_key(path), self.listed_worktrees())
+
+
+def _key(path):
+    return os.path.normcase(os.path.normpath(path))
 
 
 if __name__ == "__main__":
