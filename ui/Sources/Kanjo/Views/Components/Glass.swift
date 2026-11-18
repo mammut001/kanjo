@@ -4,13 +4,21 @@ import SwiftUI
 // 玻璃用在三处：面板根背景（PanelBackground）、底栏、总览的马赛克（treemap）方块。
 // 低于 macOS 26 时回退为系统材质 / 淡底色 / 实色，视图代码不需要关心系统版本。
 
-/// 面板根背景：macOS 26+ 是一整块 Liquid Glass，13–25 是 `.regularMaterial`。
-/// 玻璃画在内容后面（background），内容本身不进玻璃，文字不受 vibrancy 影响。
+/// 面板根背景：深色下用接近不透明的深灰底（截图模式仍用 `.regularMaterial` 保持输出一致），
+/// 避免桌面透出导致发灰；浅色在 macOS 26+ 用 Liquid Glass，13–25 用 `.regularMaterial`。
+/// 玻璃/背景画在内容后面（background），内容本身不进玻璃，文字不受 vibrancy 影响。
 struct PanelBackground: ViewModifier {
     @Environment(\.isSnapshotMode) private var isSnapshotMode
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *), !isSnapshotMode {
+        if colorScheme == .dark {
+            if isSnapshotMode {
+                content.background(Rectangle().fill(.regularMaterial).ignoresSafeArea())
+            } else {
+                content.background(Rectangle().fill(AgentPalette.darkPanelFill).ignoresSafeArea())
+            }
+        } else if #available(macOS 26, *), !isSnapshotMode {
             content.background(Color.clear.glassEffect(.regular, in: Rectangle()).ignoresSafeArea())
         } else {
             content.background(Rectangle().fill(.regularMaterial).ignoresSafeArea())
@@ -25,10 +33,11 @@ extension View {
 struct GlassSurface: ViewModifier {
     var cornerRadius: CGFloat
     @Environment(\.isSnapshotMode) private var isSnapshotMode
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(macOS 26, *), !isSnapshotMode {
+        if colorScheme != .dark, #available(macOS 26, *), !isSnapshotMode {
             content.glassEffect(.regular, in: shape)
         } else {
             content.background(shape.fill(AgentPalette.groupFill))
@@ -42,7 +51,27 @@ extension View {
     }
 }
 
-/// 马赛克方块的底：macOS 26+ 是有色玻璃（tint = agent 色 90%），低版本是实色填充。
+/// 浮层卡片底色（悬停卡、磁盘确认卡）：深色下用接近不透明的深灰底防止透出桌面，浅色与截图保持 `.regularMaterial`。
+struct CardSurfaceBackground<S: InsettableShape>: View {
+    let shape: S
+    var lightFallbackColor: Color? = nil
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
+
+    var body: some View {
+        if colorScheme == .dark, !isSnapshotMode {
+            shape.fill(AgentPalette.darkPanelFill)
+        } else if let lightFallbackColor {
+            shape.fill(.regularMaterial)
+                .background(shape.fill(lightFallbackColor))
+        } else {
+            shape.fill(.regularMaterial)
+        }
+    }
+}
+
+/// 马赛克方块的底：浅色 macOS 26+ 是有色玻璃（tint = agent 色 90%），深色与低版本是实色填充。
 /// 方块不放进 GlassEffectContainer：容器里相邻的玻璃会互相折射，2pt 的缝里会渗进邻块的颜色、边缘发糊；
 /// 各自独立渲染时每块都是干净的玻璃边。
 struct MosaicTile: ViewModifier {
@@ -50,10 +79,11 @@ struct MosaicTile: ViewModifier {
     static let cornerRadius: CGFloat = 4
     @Environment(\.self) private var environment
     @Environment(\.isSnapshotMode) private var isSnapshotMode
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-        if #available(macOS 26, *), !isSnapshotMode {
+        if colorScheme != .dark, #available(macOS 26, *), !isSnapshotMode {
             // 玻璃的 tint 不跟随动态 NSColor，先按当前外观解析成静态颜色。
             let resolved = Color(color.resolve(in: environment))
             content.glassEffect(.regular.tint(resolved.opacity(0.9)), in: shape)
@@ -63,18 +93,19 @@ struct MosaicTile: ViewModifier {
     }
 }
 
-/// 叠在马赛克方块上面的一层（在文字下面）。macOS 26+：窗口失焦时玻璃的色调会被系统洗淡，
+/// 叠在马赛克方块上面的一层（在文字下面）。浅色 macOS 26+：窗口失焦时玻璃的色调会被系统洗淡，
 /// 这一层在失焦时补上 agent 色，保证颜色仍然读得出来；聚焦时只留很薄一层，不盖住玻璃质感。
-/// 悬停时再提亮一层。低版本底下已经是实色，只画悬停提亮。
+/// 悬停时再提亮一层。深色与低版本底下已经是实色，只画悬停提亮。
 struct MosaicWash: View {
     var color: Color
     var hover: Bool
     @Environment(\.controlActiveState) private var activeState
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: MosaicTile.cornerRadius, style: .continuous)
         let lit = shape.fill(Color.white.opacity(hover ? 0.18 : 0))
-        if #available(macOS 26, *) {
+        if colorScheme != .dark, #available(macOS 26, *) {
             shape.fill(color.opacity(activeState == .inactive ? 0.8 : 0.25)).overlay(lit)
         } else {
             lit

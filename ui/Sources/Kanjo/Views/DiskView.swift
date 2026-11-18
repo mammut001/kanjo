@@ -385,7 +385,7 @@ struct DiskView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.regularMaterial))
+        .background(CardSurfaceBackground(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)))
     }
 
     @ViewBuilder private func planBody(_ result: CleanResult) -> some View {

@@ -13,8 +13,10 @@ struct HoverCardChrome: ViewModifier {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(
-                shape.fill(.regularMaterial)
-                    .background(shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
+                CardSurfaceBackground(
+                    shape: shape,
+                    lightFallbackColor: Color(nsColor: .windowBackgroundColor).opacity(0.85)
+                )
             )
             .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.18), radius: 10, y: 4)

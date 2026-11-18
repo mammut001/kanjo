@@ -49,7 +49,7 @@ final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
         w.isOpaque = false
         w.backgroundColor = .clear
         w.titlebarAppearsTransparent = true
-        let effect = NSVisualEffectView()
+        let effect = PreviewBackdropView()
         effect.material = .popover
         effect.blendingMode = .behindWindow
         effect.state = .active
@@ -187,6 +187,8 @@ struct MenuBarLabel: View {
     }
 }
 
+private final class PreviewBackdropView: NSVisualEffectView {}
+
 @MainActor
 enum AppearanceController {
     static func nsAppearance(for appearance: AppAppearance) -> NSAppearance? {
@@ -209,14 +211,33 @@ enum AppearanceController {
         let nsApp = nsAppearance(for: appearance)
         if let targetWindow, !isStatusBarWindow(targetWindow) {
             targetWindow.appearance = nsApp
+            updatePreviewBackdrop(for: targetWindow, appearance: appearance)
         }
         for window in NSApp.windows where !isStatusBarWindow(window) {
             window.appearance = nsApp
+            updatePreviewBackdrop(for: window, appearance: appearance)
         }
     }
 
     static func applyStored(defaults: UserDefaults = AppDefaults.store) {
         apply(AppAppearance.resolve(defaults.string(forKey: SettingsKeys.appAppearance)))
+    }
+
+    private static func updatePreviewBackdrop(for window: NSWindow, appearance: AppAppearance) {
+        guard let effect = window.contentView as? PreviewBackdropView else { return }
+        let resolved = nsAppearance(for: appearance) ?? NSApp.effectiveAppearance
+        let isDark = resolved.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        if isDark {
+            window.backgroundColor = NSColor(srgbRed: 0.135, green: 0.135, blue: 0.135, alpha: 0.97)
+            effect.material = .windowBackground
+            effect.blendingMode = .withinWindow
+            effect.state = .inactive
+        } else {
+            window.backgroundColor = .clear
+            effect.material = .popover
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+        }
     }
 
     private static func isStatusBarWindow(_ window: NSWindow) -> Bool {

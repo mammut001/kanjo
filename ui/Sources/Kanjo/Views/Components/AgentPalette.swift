@@ -41,6 +41,8 @@ enum AgentPalette {
 
     // 分组底色：一层很淡的填充，替代卡片描边。
     static let groupFill = dynamic(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.04, darkAlpha: 0.06)
+    // 深色面板实底：替代 macOS 26+ 浅色桌面透出导致发灰的半透明玻璃，保持与截图深色材质接近的深灰底。
+    static let darkPanelFill = Color(white: 0.135, opacity: 0.97)
     static let rowHover = Color.primary.opacity(0.06)
     static let rowPressed = Color.primary.opacity(0.11)
 
