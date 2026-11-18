@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-11-18
+
 ### Changed
 
 - Opening the menu-bar panel never waits for a refresh: Kanjo refreshes in the background when there is new usage, at an interval you pick in Settings (30 seconds, 1 minute, 5 minutes or 10 minutes; default 1 minute), and puts it off while the Mac is busy (hot, heavily loaded or in Low Power Mode). Background refreshes no longer show "Refreshing…".
