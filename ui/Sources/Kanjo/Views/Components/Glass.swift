@@ -141,10 +141,18 @@ struct RowButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
+                .scaleEffect(configuration.isPressed ? 0.98 : (hover || highlighted ? 1.01 : 1.0))
                 .background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(configuration.isPressed ? AgentPalette.rowPressed
-                          : hover || highlighted ? AgentPalette.rowHover : Color.clear))
+                          : hover || highlighted ? AgentPalette.rowHover : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(hover || highlighted ? Color.white.opacity(0.15) : Color.clear, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(hover || highlighted ? 0.1 : 0), radius: 3, x: 0, y: 1)
+                )
                 .animation(.easeOut(duration: 0.1), value: hover)
+                .animation(.spring(response: 0.2, dampingFraction: 0.7, blendDuration: 0), value: configuration.isPressed)
                 .onHover { hover = $0 }
         }
     }

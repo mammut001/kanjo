@@ -18,6 +18,27 @@ struct OverviewView: View {
 
     private var cur: String { report.currency }
 
+    private func calculateWeeklyTokens() -> Int {
+        let calendar = Calendar.current
+        let now = Date()
+        var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+        components.weekday = 2
+        components.hour = 0
+        components.minute = 0
+        components.second = 0
+        guard let startOfWeek = calendar.date(from: components) else { return 0 }
+        
+        var totalTokens = 0
+        for project in report.projects {
+            for dayCost in project.byDay {
+                if let date = ReportDates.parseDay(dayCost.day), date >= startOfWeek {
+                    totalTokens += dayCost.tokens
+                }
+            }
+        }
+        return totalTokens
+    }
+
     /// 当前范围内有花费或 token 的所有 agent（按花费降序），用于图例。
     private func legendAgents(in f: FilteredReport) -> [Legend.Item] {
         var cost: [String: Double] = [:], tokens: [String: Int] = [:], label: [String: String] = [:]
@@ -157,7 +178,9 @@ struct OverviewView: View {
                             cycleAvailable: ctx.cycleAvailable)
                     .layoutPriority(0)
             }
-            HeroAmount(value: Fmt.money(f.cost, currency: cur))
+            HeroAmount(value: Fmt.money(f.cost, currency: cur)).contentTransition(.numericText())
+            Text("本周: \(Fmt.tokens(calculateWeeklyTokens()))")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {
                 Text(summaryLine).font(.system(size: 11)).lineLimit(1).fixedSize()
