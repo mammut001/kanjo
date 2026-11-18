@@ -224,6 +224,12 @@ final class ReportStore: ObservableObject {
         case .none:
             break
         case .refreshNow:
+            // Check busy before refresh
+            checkBusy()
+            if loader.scheduler.isSystemBusy {
+                loader.scheduler.deferForBusy()
+                return
+            }
             scheduledTask?.cancel()
             scheduledTask = nil
             refresh(quiet: true, qualityOfService: .background)
@@ -233,8 +239,15 @@ final class ReportStore: ObservableObject {
                 do {
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 } catch { return }
-                guard !Task.isCancelled else { return }
-                self?.refresh(quiet: true, qualityOfService: .background)
+                guard let self = self, !Task.isCancelled else { return }
+                
+                // Before refresh, check busy
+                self.checkBusy()
+                if self.loader.scheduler.isSystemBusy {
+                    self.loader.scheduler.deferForBusy()
+                    return
+                }
+                self.refresh(quiet: true, qualityOfService: .background)
             }
         }
     }

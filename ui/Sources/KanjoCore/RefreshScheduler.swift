@@ -106,6 +106,11 @@ public struct RefreshScheduler: Equatable {
         return .none
     }
 
+    public mutating func deferForBusy() {
+        pendingWakeRefresh = true
+        hasScheduledRefresh = false
+    }
+
     /// Called when the menu panel becomes visible or hidden.
     /// Re-evaluates any pending scheduled refresh under the updated visibility rules.
     public mutating func onPanelVisibilityChanged(visible: Bool, at date: Date = Date()) -> Action {
