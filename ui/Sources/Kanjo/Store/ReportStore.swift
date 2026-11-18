@@ -19,6 +19,7 @@ final class ReportStore: ObservableObject {
     @Published private(set) var loadingStartedAt: Date?
     @Published private(set) var lastRefresh: Date?
     @Published private(set) var sourceDescription = ""
+    @Published private(set) var pendingAntigravityAccountPlans: [String: String] = [:]
 
     /// `--data` / `KANJO_DATA` 指定的文件，优先于设置。
     let dataOverride: URL?
@@ -132,6 +133,14 @@ final class ReportStore: ObservableObject {
             panelGeneration = gen
             
             if let newReport = state.report {
+                if let agyAccounts = newReport.antigravityAccounts {
+                    for acc in agyAccounts.accounts {
+                        if let pendingPlan = pendingAntigravityAccountPlans[acc.email], 
+                           (acc.plan?.plan ?? "") == pendingPlan {
+                            pendingAntigravityAccountPlans.removeValue(forKey: acc.email)
+                        }
+                    }
+                }
                 pendingReport = (newReport, state.isStaleReport, state.staleReportGeneratedAt)
                 let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
                 Task.detached(priority: .userInitiated) {
@@ -479,11 +488,18 @@ final class ReportStore: ObservableObject {
         guard canEditSubscriptions else {
             throw DataSourceError.launchFailed("Editing needs the CLI data source")
         }
+        pendingAntigravityAccountPlans[email] = plan ?? ""
         let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
                                       workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
-        do { try await source.setAntigravityAccountPlan(email: email, plan: plan) }
-        catch { await checkPython(); throw error }
-        refresh()
+        do { 
+            try await source.setAntigravityAccountPlan(email: email, plan: plan)
+        }
+        catch { 
+            await checkPython()
+            pendingAntigravityAccountPlans.removeValue(forKey: email)
+            throw error 
+        }
+        refresh(quiet: true)
     }
 
     func refresh(quiet: Bool = false, qualityOfService: QualityOfService = .userInitiated) {

@@ -1084,7 +1084,8 @@ private struct SubscriptionSettingsRow: View {
         let plans = agentKnownPlans ?? []
         VStack(alignment: .leading, spacing: 5) {
             ForEach(accounts) { acc in
-                let currentSelection = accountPlanSelections[acc.email] ?? {
+                let pending = store.pendingAntigravityAccountPlans[acc.email]
+                let currentSelection = pending ?? {
                     let k = acc.plan?.plan ?? ""
                     return k.lowercased() == "none" ? "" : k
                 }()
@@ -1121,7 +1122,7 @@ private struct SubscriptionSettingsRow: View {
                     .pickerStyle(.menu)
                     .controlSize(.small)
                     .fixedSize()
-                    .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                    .disabled(!store.canEditSubscriptions || (pending != nil && store.pendingAntigravityAccountPlans[acc.email] != nil && pending != store.pendingAntigravityAccountPlans[acc.email]))
                 }
             }
         }
