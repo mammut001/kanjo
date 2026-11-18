@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-11-18
+
 ### Added
 
 - Disk page finds git worktrees inside Claude Code scratch folders and `.claude/worktrees`, and tells you which ones are already merged into the main branch (also squash merges). One button cleans the merged, unchanged, idle ones (`git worktree remove`; branches and commits are kept), or turn on "Auto-clean merged worktrees" to do it after each disk scan. `kanjo disk clean --merged-worktrees` does the same from the terminal.
