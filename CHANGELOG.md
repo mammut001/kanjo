@@ -6,6 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Disk page finds git worktrees inside Claude Code scratch folders and `.claude/worktrees`, and tells you which ones are already merged into the main branch (also squash merges). One button cleans the merged, unchanged, idle ones (`git worktree remove`; branches and commits are kept), or turn on "Auto-clean merged worktrees" to do it after each disk scan. `kanjo disk clean --merged-worktrees` does the same from the terminal.
+- Claude Code scratch space is listed per session, so an idle session can be cleaned while another one is active.
+
 ### Fixed
 
 - Antigravity per-account plan pickers in Settings apply instantly: the picker and the plan total update right away, changes are saved in the background one at a time (quick changes to several accounts no longer overwrite each other in overrides.json), and the numbers refresh quietly afterwards. Choosing "None" for an account now sticks.
