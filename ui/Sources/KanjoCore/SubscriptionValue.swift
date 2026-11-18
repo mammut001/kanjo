@@ -143,17 +143,19 @@ public enum SubscriptionValue {
     private static func resetParts(_ reset: Date, timezone: TimeZone, now: Date, language: String?) -> (String, String) {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timezone
-        let template = cal.isDate(reset, inSameDayAs: now) ? "jmm" : "EEEjmm"
+        // 24 小时以内省略星期（只显示时刻），避免跨午夜后变成 "4h 49m · Wed 1:25 AM" 导致过长。
+        let minutes = max(1, Int((reset.timeIntervalSince(now) / 60).rounded(.up)))
+        let template = minutes < 1440 ? "jmm" : "EEEjmm"
         let absolute = RangeCaptionBuilder.templateFormatter(template, cal, language: language).string(from: reset)
-        return (relative(from: now, to: reset), absolute)
+        return (relative(from: now, to: reset, language: language), absolute)
     }
 
     /// 剩余时长，向上取整到分钟：不到 1 小时给分钟，不到 1 天给时+分，否则天+时。
-    public static func relative(from now: Date, to date: Date) -> String {
+    public static func relative(from now: Date, to date: Date, language: String? = nil) -> String {
         let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
-        if minutes < 60 { return L10n.tr("overview.quota.rel_m", minutes) }
-        if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", minutes / 60, minutes % 60) }
-        return L10n.tr("overview.quota.rel_dh", minutes / 1440, minutes % 1440 / 60)
+        if minutes < 60 { return L10n.tr("overview.quota.rel_m", language: language, minutes) }
+        if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", language: language, minutes / 60, minutes % 60) }
+        return L10n.tr("overview.quota.rel_dh", language: language, minutes / 1440, minutes % 1440 / 60)
     }
 
     public static func level(_ percent: Double?) -> QuotaLevel {

@@ -145,7 +145,7 @@ struct AgentsView: View {
         let maxW = titles.map {
             ceil(($0 as NSString).size(withAttributes: [.font: font]).width)
         }.max() ?? 46
-        return max(44, min(110, maxW + 2))
+        return max(44, min(102, maxW + 2))
     }
 
     private func rowAnchor(_ agent: String) -> String {
@@ -357,7 +357,7 @@ private struct AgentDetailRow: View {
                         )
                     }
                 }
-                .padding(.leading, 13)
+                .padding(.leading, 12)
             }
         }
         .monospacedDigit()
@@ -692,7 +692,7 @@ struct QuotaTickBar: View {
             ForEach(0..<segments, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 0.75, style: .continuous)
                     .fill(i < filled ? color : Color.primary.opacity(0.14))
-                    .frame(width: 2, height: 9)
+                    .frame(width: 1.5, height: 9)
             }
         }
         .fixedSize()
@@ -713,7 +713,7 @@ private struct QuotaTickRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
+        HStack(alignment: .center, spacing: 4) {
             Text(row.title)
                 .font(.system(size: 9.5))
                 .foregroundStyle(.secondary)
@@ -723,15 +723,17 @@ private struct QuotaTickRow: View {
             QuotaTickBar(percent: row.percent, color: barColor)
 
             Text(row.percent.map { "\(Int($0.rounded()))%" } ?? "—")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(row.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(barColor))
-                .frame(width: 26, alignment: .trailing)
+                .frame(width: 28, alignment: .trailing)
+
+            Spacer(minLength: 2)
 
             Text(row.compactDetail)
                 .font(.system(size: 9.5))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
                 .hoverTip(row.detail)
         }
         .monospacedDigit()

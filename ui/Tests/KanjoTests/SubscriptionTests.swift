@@ -39,6 +39,14 @@ final class SubscriptionTests: KanjoTestCase {
         XCTAssertEqual(rows.map(\.title), ["5-hour", "Weekly"])
         XCTAssertEqual(rows.map(\.percent), [100, 24.4])
         XCTAssertEqual(plain(rows.map(\.detail)), ["Resets in 5h 6m · 5:05 PM", "Resets in 6d 16h · Sat 4:53 AM"])
+        XCTAssertEqual(plain(rows.map(\.compactDetail)), ["5h 6m · 5:05 PM", "6d 16h · Sat 4:53 AM"])
+
+        // 24 小时以内即使跨午夜也省略星期
+        let nightNow = ReportDates.parseTimestamp("2026-11-17T20:36:00-05:00")!
+        let earlyMorningReset = ReportDates.parseTimestamp("2026-11-18T01:25:00-05:00")!
+        let ny = TimeZone(identifier: "America/New_York")!
+        XCTAssertEqual(plain([SubscriptionValue.compactResetText(earlyMorningReset, timezone: ny, now: nightNow, language: "en_US")]),
+                       ["4h 49m · 1:25 AM"])
         // 5 小时窗口已结束 → 「—」+ Window ended；没有 5 小时窗口（Grok）→ 只有周一行
         let ended = QuotaWindow(weeklyResetsAt: "2026-10-27T05:00:00Z", weeklyUsedPercent: 40,
                                 fiveHourResetsAt: nil, fiveHourWindowHours: 5)
