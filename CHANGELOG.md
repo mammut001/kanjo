@@ -6,8 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-18
+
 ### Added
 
+- The Overview shows tokens used this week (since Monday) under the total; rows get a subtler hover and press animation.
 - Antigravity: per-account usage per day, per-account plans (`kanjo config set antigravity_accounts.<email>.plan …`) and last-seen quota per account.
 - Antigravity agent card shows each Google account's share of the range, also in `kanjo usage`; Settings lets you set a plan per Antigravity account; the quota card shows each account's last-seen quota.
 - `kanjo usage` Agents view shows output speed and TTFT, and Enter opens an agent detail pane (token breakdown, models, where the money went).
