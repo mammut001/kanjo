@@ -17,21 +17,24 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from kanjo.tui.model import (
-    AntigravityAccountRow, AntigravityAccountsSection, FilteredData,
-    QuotaLevel, RANGE_TABS, TimeRange, VIEW_MODES, ViewMode,
-    agent_color, available_view_modes, build_agent_rows,
+    AgentDetailViewModel, AntigravityAccountRow, AntigravityAccountsSection,
+    FilteredData, QuotaLevel, RANGE_TABS, TimeRange, VIEW_MODES, ViewMode,
+    agent_color, available_view_modes, build_agent_detail, build_agent_rows,
     build_antigravity_accounts_section, build_day_rows, build_model_rows,
     build_project_detail, build_project_footer_rows, build_project_rows,
-    build_subscription_meters, build_total_view_model, compute_30d_sparkline,
-    compute_8w_strip, ensure_aware, filter_report, format_money,
-    format_month_day_time, format_reset_countdown, format_tokens,
-    get_accounts_window, get_tz, heat_level, parse_iso_dt, parse_tokens_str,
-    quota_level
+    build_subscription_meters, build_total_view_model, cache_hit_rate,
+    compute_30d_sparkline, compute_8w_strip, compute_agent_model_perf,
+    compute_agent_perf, ensure_aware, filter_report, format_money,
+    format_month_day_time, format_percent, format_reset_countdown,
+    format_speed, format_tokens, format_ttft, get_accounts_window, get_tz,
+    heat_level, parse_iso_dt, parse_tokens_str, quota_level
 )
 from kanjo.tui.render import (
-    Canvas, Cell, SELECTED_ROW_BG, Style, TUIState, render_ui,
-    char_width, hit_box_at, str_width, truncate_str, wrap_display
+    Canvas, Cell, DETAIL_PANE_BG, SELECTED_ROW_BG, Style, TUIState,
+    agent_table_layout, char_width, hit_box_at, render_ui, str_width,
+    truncate_str, wrap_display
 )
+from kanjo import perf as kanjo_perf
 from kanjo.tui.static import canvas_to_ansi, render_static_snapshot
 from kanjo.tui.term import (
     BUTTON1_BITS, MOUSE_WHEEL_ROWS, WHEEL_DOWN_BITS, WHEEL_UP_BITS,
@@ -2161,6 +2164,385 @@ class TUIHelpWrapTest(unittest.TestCase):
                     _fold_breaks_ok(chunks, self._expected_help_text(lang)),
                     "%s help text was wrapped inside a word at %dx%d: %r"
                     % (lang, w, h, chunks))
+
+
+class TUIAgentPerfAndDetailTest(unittest.TestCase):
+    def _sample_doc(self) -> dict:
+        b_fast = str(kanjo_perf.ttft_bucket(0.893))
+        b_slow = str(kanjo_perf.ttft_bucket(1.09))
+        return {
+            "schema_version": 1,
+            "generated_at": "2026-11-17T12:00:00Z",
+            "timezone": "UTC",
+            "currency": "USD",
+            "quota_windows": {
+                # Claude reset window started 2026-11-16T00:00:00Z (resets Nov 23)
+                "claude": {
+                    "weekly_resets_at": "2026-11-23T00:00:00Z",
+                    "weekly_window_hours": 168,
+                    "weekly_used_percent": 20.0,
+                },
+                # Codex reset window started 2026-11-12T00:00:00Z (resets Nov 19)
+                "codex": {
+                    "weekly_resets_at": "2026-11-19T00:00:00Z",
+                    "weekly_window_hours": 168,
+                    "weekly_used_percent": 40.0,
+                },
+            },
+            "subscriptions": {
+                "claude": {
+                    "plan": "max_5x",
+                    "plan_label": "Claude Max 5x",
+                    "monthly_price_usd": 100.0,
+                    "cycle_start": "2026-11-01T00:00:00Z",
+                    "cycle_end": "2026-12-01T00:00:00Z",
+                },
+            },
+            "totals": {
+                "cost": 150.0,
+                "tokens": {"input": 1000, "output": 500, "cache_read": 9000, "cache_write": 500, "total": 11000},
+                "sessions": 12,
+            },
+            "projects": [
+                {
+                    "id": "p1", "name": "alpha", "cost": 60.0,
+                    "tokens": {"total": 4000}, "sessions": 4,
+                    "by_agent": [
+                        {"agent": "claude", "label": "Claude Code", "cost": 50.0,
+                         "tokens": {"input": 400, "output": 200, "cache_read": 3600, "cache_write": 200, "total": 4400},
+                         "sessions": 3},
+                        {"agent": "codex", "label": "Codex CLI", "cost": 10.0,
+                         "tokens": {"input": 200, "output": 100, "cache_read": 0, "cache_write": 0, "total": 300},
+                         "sessions": 1},
+                    ],
+                    "by_model": [
+                        {"model": "claude-opus-5-5", "agent": "claude", "cost": 40.0,
+                         "tokens": {"input": 300, "output": 150, "cache_read": 3000, "cache_write": 150, "total": 3600},
+                         "estimated": False},
+                        {"model": "claude-fable-5-2", "agent": "claude", "cost": 10.0,
+                         "tokens": {"input": 100, "output": 50, "cache_read": 600, "cache_write": 50, "total": 800},
+                         "estimated": True},
+                    ],
+                    "by_day": [
+                        {"day": "2026-11-14", "cost": 20.0, "tokens": 1500,
+                         "by_agent": {"claude": 15.0, "codex": 5.0},
+                         "by_agent_tokens": {"claude": 1300, "codex": 200}},
+                        {"day": "2026-11-17", "cost": 40.0, "tokens": 3200,
+                         "by_agent": {"claude": 35.0, "codex": 5.0},
+                         "by_agent_tokens": {"claude": 3100, "codex": 100}},
+                    ],
+                    "sessions_detail": [
+                        {"id": "s1", "agent": "claude", "started": "2026-11-14T10:00:00Z", "ended": "2026-11-14T11:00:00Z",
+                         "models": ["claude-opus-5-5"], "cost": 15.0,
+                         "tokens": {"input": 100, "output": 50, "cache_read": 1100, "cache_write": 50, "total": 1300}},
+                        {"id": "s2", "agent": "claude", "started": "2026-11-17T09:00:00Z", "ended": "2026-11-17T10:00:00Z",
+                         "models": ["claude-opus-5-5", "claude-fable-5-2"], "cost": 35.0,
+                         "tokens": {"input": 300, "output": 150, "cache_read": 2500, "cache_write": 150, "total": 3100}},
+                    ],
+                },
+                # Extra projects so claude spans 6 projects -> top 4 + Others(2)
+                *[
+                    {
+                        "id": f"p{i}", "name": f"proj-{i}", "cost": float(20 - i),
+                        "tokens": {"total": 1000}, "sessions": 1,
+                        "by_agent": [
+                            {"agent": "claude", "label": "Claude Code", "cost": float(20 - i),
+                             "tokens": {"input": 100, "output": 50, "cache_read": 800, "cache_write": 50, "total": 1000},
+                             "sessions": 1},
+                        ],
+                        "by_model": [
+                            {"model": "claude-opus-5-5", "agent": "claude", "cost": float(20 - i),
+                             "tokens": {"input": 100, "output": 50, "cache_read": 800, "cache_write": 50, "total": 1000},
+                             "estimated": False},
+                        ],
+                        "by_day": [
+                            {"day": "2026-11-17", "cost": float(20 - i), "tokens": 1000,
+                             "by_agent": {"claude": float(20 - i)},
+                             "by_agent_tokens": {"claude": 1000}},
+                        ],
+                        "sessions_detail": [
+                            {"id": f"sx{i}", "agent": "claude", "started": "2026-11-17T08:00:00Z", "ended": "2026-11-17T08:30:00Z",
+                             "models": ["claude-opus-5-5"], "cost": float(20 - i),
+                             "tokens": {"input": 100, "output": 50, "cache_read": 800, "cache_write": 50, "total": 1000}},
+                        ],
+                    }
+                    for i in range(2, 7)
+                ],
+                {
+                    "id": "p7", "name": "grok-only", "cost": 10.0,
+                    "tokens": {"total": 500}, "sessions": 1,
+                    "by_agent": [
+                        {"agent": "grok", "label": "Grok CLI", "cost": 10.0,
+                         "tokens": {"input": 500, "output": 0, "cache_read": 0, "cache_write": 0, "total": 500},
+                         "sessions": 1},
+                    ],
+                    "by_model": [],
+                    "by_day": [
+                        {"day": "2026-11-17", "cost": 10.0, "tokens": 500,
+                         "by_agent": {"grok": 10.0}, "by_agent_tokens": {"grok": 500}},
+                    ],
+                    "sessions_detail": [],
+                },
+            ],
+            "buckets": {"unattributed": {"cost": 0, "tokens": {"total": 0}, "sessions": 0},
+                        "excluded": {"cost": 0, "tokens": {"total": 0}, "sessions": 0},
+                        "parse_failed": {"sessions": 0}},
+            "perf_by_day": [
+                # Nov 14: before Claude reset (Nov 16), inside Codex reset (Nov 12)
+                {"day": "2026-11-14", "agent": "claude", "model": "claude-opus-5-5",
+                 "o": 1000, "g": 10.0, "n": 5, "th": {b_slow: 5}},
+                {"day": "2026-11-14", "agent": "codex", "model": "gpt-5.5",
+                 "o": 400, "g": 8.0, "n": 4, "th": {b_fast: 4}},
+                # Nov 17: inside both resets & today
+                {"day": "2026-11-17", "agent": "claude", "model": "claude-opus-5-5",
+                 "o": 2738, "g": 20.0, "n": 10, "th": {b_fast: 10}},
+                {"day": "2026-11-17", "agent": "claude", "model": "claude-fable-5-2",
+                 "o": 500, "g": 5.0, "n": 2, "th": {}},
+            ],
+        }
+
+    def test_formatters_and_empty_perf(self):
+        self.assertEqual(format_speed(None), "—")
+        self.assertEqual(format_speed(float("nan")), "—")
+        self.assertEqual(format_speed(136.94), "136.9/s")
+        self.assertEqual(format_ttft(None), "—")
+        self.assertEqual(format_ttft(-0.1), "—")
+        self.assertEqual(format_ttft(0.893), "893ms")
+        self.assertEqual(format_ttft(0.9996), "1.00s")
+        self.assertEqual(format_ttft(1.09), "1.09s")
+        self.assertEqual(format_percent(None), "—")
+        self.assertEqual(format_percent(0.0), "0%")
+        self.assertEqual(format_percent(0.004), "0.4%")
+        self.assertEqual(format_percent(0.9996), "100%")
+        self.assertIsNone(cache_hit_rate(0, 0))
+        self.assertAlmostEqual(cache_hit_rate(100, 900), 0.9)
+
+        doc = self._sample_doc()
+        doc["perf_by_day"] = []
+        now = parse_iso_dt(doc["generated_at"])
+        self.assertEqual(compute_agent_perf(doc, TimeRange.ALL, now=now), {})
+        filtered = filter_report(doc, TimeRange.ALL, now=now)
+        rows = build_agent_rows(filtered)
+        for r in rows:
+            self.assertEqual(r.speed_str, "—")
+            self.assertEqual(r.ttft_str, "—")
+
+    def test_perf_per_agent_for_ranges_and_since_reset(self):
+        doc = self._sample_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        # ALL: Claude sums Nov 14 + Nov 17 = (1000+2738+500)/(10+20+5) = 4238/35 = 121.0857/s
+        perf_all = compute_agent_perf(doc, TimeRange.ALL, now=now)
+        self.assertIn("claude", perf_all)
+        self.assertIn("codex", perf_all)
+        self.assertNotIn("grok", perf_all)
+        self.assertEqual(perf_all["claude"].sample_count, 17)
+        self.assertAlmostEqual(perf_all["claude"].tps, 4238 / 35.0, places=3)
+        self.assertEqual(perf_all["codex"].sample_count, 4)
+        self.assertAlmostEqual(perf_all["codex"].tps, 50.0, places=3)
+        self.assertEqual(format_ttft(perf_all["codex"].ttft_median),
+                         format_ttft(kanjo_perf.ttft_median({str(kanjo_perf.ttft_bucket(0.893)): 4})))
+
+        # RESET: Claude starts Nov 16 (drops Nov 14), Codex starts Nov 12 (keeps Nov 14)
+        perf_reset = compute_agent_perf(doc, TimeRange.RESET, now=now)
+        self.assertEqual(perf_reset["claude"].sample_count, 12)
+        self.assertAlmostEqual(perf_reset["claude"].tps, (2738 + 500) / 25.0, places=3)
+        self.assertEqual(perf_reset["codex"].sample_count, 4)
+        self.assertAlmostEqual(perf_reset["codex"].tps, 50.0, places=3)
+
+        # Agent rows in filtered report carry speed_str and ttft_str
+        f_reset = filter_report(doc, TimeRange.RESET, now=now)
+        rows_reset = {r.agent: r for r in build_agent_rows(f_reset)}
+        self.assertEqual(rows_reset["claude"].speed_str, "129.5/s")
+        self.assertEqual(rows_reset["codex"].speed_str, "50.0/s")
+        self.assertEqual(rows_reset["codex"].ttft_str, format_ttft(perf_reset["codex"].ttft_median))
+
+    def test_agent_detail_data_tokens_models_and_top_projects(self):
+        doc = self._sample_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        # ALL range for claude: 6 projects -> top 4 + Others(2)
+        det_all = build_agent_detail(doc, "claude", TimeRange.ALL, now=now, lang="en")
+        self.assertEqual(det_all.plan_label, "Claude Max 5x")
+        self.assertEqual(det_all.price_str, "$100.00/mo")
+        self.assertEqual(det_all.multiplier_str, "1.3×")
+        self.assertEqual(det_all.input_tokens, 900)
+        self.assertEqual(det_all.output_tokens, 450)
+        self.assertEqual(det_all.cache_read_tokens, 7600)
+        self.assertEqual(det_all.cache_write_tokens, 450)
+        self.assertAlmostEqual(det_all.cache_hit_rate, 7600 / 8500, places=6)
+        self.assertEqual(det_all.cache_hit_str, "89%")
+
+        # Models: claude-opus-5-5 (not est) and claude-fable-5-2 (est)
+        self.assertEqual(len(det_all.models), 2)
+        self.assertEqual(det_all.models[0].model, "claude-opus-5-5")
+        self.assertFalse(det_all.models[0].estimated)
+        self.assertEqual(det_all.models[1].model, "claude-fable-5-2")
+        self.assertTrue(det_all.models[1].estimated)
+
+        # Where the money went: top 4 + Others(2) summing to 1.0
+        self.assertEqual(len(det_all.project_shares), 4)
+        self.assertIsNotNone(det_all.others_project_share)
+        self.assertEqual(det_all.others_project_share.count, 2)
+        total_share = sum(s.share for s in det_all.project_shares) + det_all.others_project_share.share
+        self.assertAlmostEqual(total_share, 1.0, places=6)
+        costs = [s.cost for s in det_all.project_shares]
+        self.assertEqual(costs, sorted(costs, reverse=True))
+
+        # TODAY range recomputes tokens, perf, and splits multi-model session as estimated
+        det_today = build_agent_detail(doc, "claude", TimeRange.TODAY, now=now, lang="en")
+        self.assertEqual(det_today.perf_samples, 12)
+        self.assertEqual(det_today.input_tokens + det_today.output_tokens
+                         + det_today.cache_read_tokens + det_today.cache_write_tokens, 8100)
+        self.assertTrue(all(m.estimated for m in det_today.models))
+
+        # Grok: zero cache read & no speed samples -> "0%" hit, "—" speed/TTFT, no models
+        det_grok = build_agent_detail(doc, "grok", TimeRange.ALL, now=now, lang="en")
+        self.assertEqual(det_grok.cache_hit_str, "0%")
+        self.assertEqual(det_grok.speed_str, "—")
+        self.assertEqual(det_grok.ttft_str, "—")
+        self.assertEqual(det_grok.samples_str, "No speed samples in this range")
+
+    def test_agents_column_layout_keeps_full_share_pct_at_60_80_110(self):
+        doc = self._sample_doc()
+        now = parse_iso_dt(doc["generated_at"])
+        for lang in ("en", "zh"):
+            for width in (60, 80, 110):
+                out = render_static_snapshot(
+                    doc, width=width, height=40, no_color=True, now=now,
+                    view_mode=ViewMode.AGENTS, lang=lang,
+                )
+                lines = out.splitlines()
+                for line in lines:
+                    self.assertLessEqual(str_width(line), width,
+                                         f"line too wide at {width} ({lang}): {line!r}")
+                claude_line = next(ln for ln in lines if ln.startswith("Claud"))
+                # Full share percentage with '%' must be visible (not clipped to e.g. '86.')
+                self.assertRegex(claude_line, r"\d+\.\d%$",
+                                 f"share percentage truncated at {width} ({lang}): {claude_line!r}")
+                self.assertIn("121.1/s", claude_line)
+                if width >= 80:
+                    self.assertIn("[", claude_line)
+                    self.assertIn("]", claude_line)
+                else:
+                    # Narrow 60-col terminal drops the bar so % stays intact
+                    ag_w, bar_len = agent_table_layout(width)
+                    self.assertEqual(bar_len, 0)
+                    self.assertGreaterEqual(ag_w, 6)
+
+    def test_agent_detail_pane_rendering_and_solid_background(self):
+        doc = self._sample_doc()
+        now = parse_iso_dt(doc["generated_at"])
+        tz = get_tz(doc)
+        filtered = filter_report(doc, TimeRange.ALL, now=now)
+        total_vm = build_total_view_model(filtered, "en")
+        meters = build_subscription_meters(doc, now=now, lang="en")
+        agent_rows = build_agent_rows(filtered, lang="en")
+        detail_vm = build_agent_detail(doc, "claude", TimeRange.ALL, now=now, filtered=filtered, lang="en")
+
+        for w, h in ((80, 24), (110, 32)):
+            state = TUIState(version="0.9.0", view_mode=ViewMode.AGENTS, detail_open=True, detail_agent="claude")
+            canvas = Canvas(w, h)
+            render_ui(
+                canvas, state, filtered, total_vm, meters, None,
+                [], [], [], agent_rows, [], detail_vm=detail_vm,
+            )
+            all_text = "\n".join(canvas.get_line_text(y) for y in range(h))
+            self.assertIn("Agent: Claude Code", all_text)
+            self.assertIn("Claude Max 5x", all_text)
+            self.assertIn("Cache hit", all_text)
+            self.assertIn("Performance", all_text)
+            self.assertIn("By model", all_text)
+            self.assertIn("est.", all_text)
+            self.assertIn("Where the money went", all_text)
+            self.assertIn("Others (2)", all_text)
+            self.assertIn("Close", all_text)
+
+            top_y = next(y for y in range(h) if "┌" in canvas.get_line_text(y))
+            x0 = canvas.get_line_text(top_y).index("┌")
+            x1 = canvas.get_line_text(top_y).index("┐", x0)
+            bottom_y = next(y for y in range(top_y + 1, h) if canvas.get_line_text(y)[x0] == "└")
+            for y in range(top_y + 1, bottom_y):
+                for x in range(x0 + 1, x1):
+                    cell = canvas.grid[y][x]
+                    self.assertEqual(cell.style.bg, DETAIL_PANE_BG)
+
+        # Static --detail flag renders the agent detail pane cleanly in zh too
+        zh_snap = render_static_snapshot(
+            doc, width=90, height=30, no_color=True, now=now,
+            view_mode=ViewMode.AGENTS, lang="zh", detail_agent="claude",
+        )
+        self.assertIn("Agent：Claude Code", zh_snap)
+        self.assertIn("Token 明细", zh_snap)
+        self.assertIn("花费去向", zh_snap)
+        self.assertIn("其他项目 (2)", zh_snap)
+
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_enter_range_change_and_esc_on_agent_row(self):
+        doc = self._sample_doc()
+        # 'a' -> Agents view, Enter (10) -> open Claude detail, '2' -> Today range (recomputes),
+        # 27 (Esc) -> closes detail without quitting, 'q' -> quits.
+        scr = FakeStdscr(width=110, height=34, keys=[ord("a"), 10, ord("2"), 27, ord("q")])
+        rc = run_curses_tui(
+            scr, initial_doc=doc, data_path="fake.json", no_color=True, lang="en",
+        )
+        self.assertEqual(rc, 0)
+        # Reconstruct per-frame text
+        frames = []
+        bounds = scr.frames + [len(scr.captured)]
+        for i in range(len(bounds) - 1):
+            chunk = scr.captured[bounds[i]:bounds[i + 1]]
+            rows = {}
+            for args in chunk:
+                if len(args) >= 3 and isinstance(args[0], int) and isinstance(args[1], int):
+                    y, x, s = args[0], args[1], str(args[2])
+                    rows.setdefault(y, []).append((x, s))
+            lines = []
+            for y in sorted(rows):
+                buf = [" "] * 110
+                for x, s in rows[y]:
+                    for off, ch in enumerate(s):
+                        if 0 <= x + off < 110:
+                            buf[x + off] = ch
+                lines.append("".join(buf).rstrip())
+            frames.append("\n".join(lines))
+
+        # Frame after Enter shows ALL range samples (17 samples)
+        self.assertTrue(any("17 samples" in fr and "Agent: Claude Code" in fr for fr in frames))
+        # Frame after pressing '2' (Today) recomputes to Today samples (12 samples)
+        self.assertTrue(any("12 samples" in fr and "Agent: Claude Code" in fr for fr in frames))
+        # Final frame (after Esc closed detail, before 'q') shows Agents table without detail pane
+        self.assertNotIn("Agent: Claude Code", frames[-1])
+        self.assertIn("SPEED", frames[-1])
+        self.assertIn("TTFT", frames[-1])
+
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_mouse_double_click_on_agent_row_opens_detail(self):
+        doc = self._sample_doc()
+        now = parse_iso_dt(doc["generated_at"])
+        filtered = filter_report(doc, TimeRange.ALL, now=now)
+        total_vm = build_total_view_model(filtered, "en")
+        meters = build_subscription_meters(doc, now=now, lang="en")
+        agent_rows = build_agent_rows(filtered, lang="en")
+        canvas = Canvas(110, 34)
+        state = TUIState(version="0.9.0", view_mode=ViewMode.AGENTS, lang="en")
+        hit_boxes = render_ui(
+            canvas, state, filtered, total_vm, meters, None,
+            [], [], [], agent_rows, [],
+        )
+        row0_y = next(b[0] for b in hit_boxes if b[3] == "row:0")
+        scr = FakeMouseStdscr(
+            width=110, height=34,
+            events=[(4, row0_y, BUTTON1_BITS), (4, row0_y, BUTTON1_BITS)],
+            keys=[ord("q")],
+        )
+        rc = run_curses_tui(
+            scr, initial_doc=doc, data_path="fake.json", no_color=True,
+            lang="en", view_mode=ViewMode.AGENTS, mouse=True,
+            mouse_reader=lambda: scr.pending,
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(any("Agent: Claude Code" in fr for fr in screen_frames(scr)))
 
 
 if __name__ == "__main__":

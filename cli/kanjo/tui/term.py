@@ -20,10 +20,10 @@ except ImportError:
 from .model import (
     AntigravityAccountsSection, FilteredData, ProjectRowViewModel, TimeRange,
     ViewMode, RANGE_TABS, VIEW_MODES, available_view_modes,
-    build_agent_rows, build_antigravity_accounts_section, build_day_rows,
-    build_model_rows, build_project_detail, build_project_footer_rows,
-    build_project_rows, build_subscription_meters, build_total_view_model,
-    filter_report, get_tz
+    build_agent_detail, build_agent_rows, build_antigravity_accounts_section,
+    build_day_rows, build_model_rows, build_project_detail,
+    build_project_footer_rows, build_project_rows, build_subscription_meters,
+    build_total_view_model, filter_report, get_tz
 )
 from .render import Canvas, Style, TUIState, render_ui, hit_box_at, HitBox
 from .static import rgb_to_256, NAMED_FG, NAMED_BG
@@ -556,8 +556,17 @@ def run_curses_tui(
                     proj_rows.sort(key=lambda r: get_sort_key(r, state.sort_column), reverse=state.sort_descending)
 
                 detail_vm = None
-                if state.detail_open and state.detail_project:
-                    detail_vm = build_project_detail(state.detail_project, now_dt, tz, ascii_mode=state.ascii_mode, lang=lang)
+                if state.detail_open:
+                    if state.detail_agent:
+                        detail_vm = build_agent_detail(
+                            doc, state.detail_agent, time_range=state.time_range,
+                            now=now_dt, filtered=filtered, lang=lang,
+                        )
+                    elif state.detail_project:
+                        detail_vm = build_project_detail(
+                            state.detail_project, now_dt, tz,
+                            ascii_mode=state.ascii_mode, lang=lang,
+                        )
 
                 # Render onto canvas
                 hit_boxes = render_ui(
@@ -815,11 +824,17 @@ def run_curses_tui(
                 state.selected_index = max(0, cur_list_len - 1)
                 continue
 
-            # Enter on Project -> Detail pane; Enter on account -> switch login
+            # Enter on Project / Agent -> Detail pane; Enter on account -> switch login
             if ch in (10, 13, curses.KEY_ENTER):
                 if state.view_mode == ViewMode.PROJECTS and proj_rows:
                     if 0 <= state.selected_index < len(filtered.projects):
                         state.detail_project = filtered.projects[state.selected_index]
+                        state.detail_agent = None
+                        state.detail_open = True
+                elif state.view_mode == ViewMode.AGENTS and agent_rows:
+                    if 0 <= state.selected_index < len(agent_rows):
+                        state.detail_agent = agent_rows[state.selected_index].agent
+                        state.detail_project = None
                         state.detail_open = True
                 elif state.view_mode == ViewMode.ACCOUNTS and accounts_sec is not None:
                     rows = accounts_sec.rows
@@ -840,6 +855,7 @@ def run_curses_tui(
                 if state.detail_open:
                     state.detail_open = False
                     state.detail_project = None
+                    state.detail_agent = None
                 elif state.filter_query:
                     state.filter_query = ""
                     state.selected_index = 0

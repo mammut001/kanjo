@@ -12,6 +12,7 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
+from .. import perf as _perf
 from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
@@ -188,6 +189,45 @@ def format_money(amount: float) -> str:
     if amount < 0:
         return f"-${abs(amount):,.2f}"
     return f"${amount:,.2f}"
+
+
+def format_speed(tps: Optional[float]) -> str:
+    """Format output speed in tokens/sec, e.g. ``136.9/s``, or ``—``."""
+    if tps is None or not math.isfinite(tps) or tps < 0:
+        return "—"
+    return f"{tps:.1f}/s"
+
+
+def format_ttft(seconds: Optional[float]) -> str:
+    """Format median TTFT: ``893ms`` when < 1s, ``1.09s`` when >= 1s, or ``—``."""
+    if seconds is None or not math.isfinite(seconds) or seconds < 0:
+        return "—"
+    ms = int(round(seconds * 1000))
+    if ms < 1000:
+        return f"{ms}ms"
+    return f"{seconds:.2f}s"
+
+
+def format_percent(ratio: Optional[float]) -> str:
+    """Format a 0..1 ratio as percentage: ``98%``, ``0.4%``, ``100%``, or ``—``."""
+    if ratio is None or not math.isfinite(ratio):
+        return "—"
+    p = max(0.0, ratio * 100.0)
+    if p >= 99.95:
+        return "100%"
+    if p == 0.0:
+        return "0%"
+    if p < 1.0:
+        return f"{p:.1f}%"
+    return f"{p:.0f}%"
+
+
+def cache_hit_rate(input_tokens: int, cache_read: int) -> Optional[float]:
+    """Compute cache hit rate ``cache_read / (input + cache_read)``; ``None`` when denom <= 0."""
+    denom = input_tokens + cache_read
+    if denom <= 0:
+        return None
+    return cache_read / denom
 
 
 def ensure_aware(dt: Optional[datetime], tz: Optional[datetime.tzinfo] = None) -> Optional[datetime]:
@@ -516,9 +556,19 @@ class FilteredData:
     last_active: Optional[str] = None
 
 
-def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
-                  now: Optional[datetime] = None) -> FilteredData:
-    """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
+@dataclass
+class PerfSummary:
+    output_tokens: int
+    gen_seconds: float
+    sample_count: int
+    ttft_histogram: Dict[str, int]
+    tps: Optional[float]
+    ttft_median: Optional[float]
+
+
+def _build_range_helpers(doc: dict, time_range: TimeRange = TimeRange.ALL,
+                         now: Optional[datetime] = None):
+    """Build timezone-aware window predicates matching TimeRange.swift semantics."""
     doc = doc or {}
     tz = get_tz(doc)
     now = ensure_aware(now, tz) or datetime.now(tz)
@@ -528,7 +578,6 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     now_local = now.astimezone(tz)
     today_start = datetime(now_local.year, now_local.month, now_local.day, tzinfo=tz)
 
-    # Calculate agent window [start, end)
     range_start: Optional[datetime] = None
     range_end: Optional[datetime] = now
     agent_starts: Dict[str, datetime] = {}
@@ -639,6 +688,78 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             return 0.0, 0
         share = min(1.0, max(0.0, (overlap1 - overlap0).total_seconds() / dur))
         return total_c * share, int(round(total_t * share))
+
+    return tz, now, agent_window, day_included, session_included, session_in_range_cost_tokens
+
+
+def _summarize_perf(doc: dict, time_range: TimeRange, now: Optional[datetime],
+                    key_field: str, agent_filter: Optional[str] = None) -> Dict[str, PerfSummary]:
+    """Aggregate ``perf_by_day`` over ``time_range`` keyed by ``key_field`` using ``kanjo.perf``."""
+    doc = doc or {}
+    rows = doc.get("perf_by_day")
+    if not rows or not isinstance(rows, list):
+        return {}
+    _tz, _now, _ag_win, day_included, _sess_inc, _sess_ct = _build_range_helpers(doc, time_range, now=now)
+    acc: Dict[str, dict] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ag = str(row.get("agent") or "")
+        if not ag:
+            continue
+        if agent_filter is not None and ag != agent_filter:
+            continue
+        key = str(row.get(key_field) or "")
+        if not key:
+            continue
+        if time_range != TimeRange.ALL and not day_included(str(row.get("day") or ""), ag):
+            continue
+        try:
+            n = int(row.get("n", 0) or 0)
+            o = int(row.get("o", 0) or 0)
+            g = float(row.get("g", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if n <= 0 and o <= 0 and g <= 0.0:
+            continue
+        _perf.merge_perf(acc, {key: row})
+
+    out: Dict[str, PerfSummary] = {}
+    for key, stats in acc.items():
+        if stats["n"] <= 0 or stats["g"] <= 0:
+            continue
+        tps = _perf.avg_tps(stats["o"], stats["g"])
+        ttft = _perf.ttft_median(stats["th"])
+        out[key] = PerfSummary(
+            output_tokens=stats["o"],
+            gen_seconds=stats["g"],
+            sample_count=stats["n"],
+            ttft_histogram=stats["th"],
+            tps=tps,
+            ttft_median=ttft,
+        )
+    return out
+
+
+def compute_agent_perf(doc: dict, time_range: TimeRange = TimeRange.ALL,
+                       now: Optional[datetime] = None) -> Dict[str, PerfSummary]:
+    """Compute output speed and median TTFT per agent for ``time_range``."""
+    return _summarize_perf(doc, time_range, now, key_field="agent")
+
+
+def compute_agent_model_perf(doc: dict, agent: str, time_range: TimeRange = TimeRange.ALL,
+                             now: Optional[datetime] = None) -> Dict[str, PerfSummary]:
+    """Compute output speed and median TTFT per model for one agent over ``time_range``."""
+    return _summarize_perf(doc, time_range, now, key_field="model", agent_filter=agent)
+
+
+def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
+                  now: Optional[datetime] = None) -> FilteredData:
+    """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
+    doc = doc or {}
+    tz, now, _agent_window, day_included, session_included, session_in_range_cost_tokens = (
+        _build_range_helpers(doc, time_range, now=now)
+    )
 
     filtered_projects: List[dict] = []
     all_projects = doc.get("projects") or []
@@ -965,10 +1086,15 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         agent_rows[ag]["tokens"] += st
         agent_rows[ag]["sessions"] += 1
 
+    agent_perf = compute_agent_perf(doc, time_range, now=now)
     by_agent_list = []
     for ag, row in sorted(agent_rows.items(), key=lambda kv: (-kv[1]["cost"], kv[0])):
         row_share = (row["cost"] / tot_for_share) * 100.0 if tot_for_share > 0 else 0.0
         row["share_pct"] = row_share
+        perf = agent_perf.get(ag)
+        row["tps"] = perf.tps if perf else None
+        row["ttft_median"] = perf.ttft_median if perf else None
+        row["perf_samples"] = perf.sample_count if perf else 0
         by_agent_list.append(row)
 
     first_act = min((p["first_active"] for p in filtered_projects if p.get("first_active")), default=None)
@@ -1074,6 +1200,73 @@ class AgentRowViewModel:
     cost_str: str
     share_pct: float
     color: Tuple[int, int, int]
+    speed_str: str = "—"
+    ttft_str: str = "—"
+
+
+@dataclass
+class AgentModelRowViewModel:
+    model: str
+    tokens: int
+    tokens_str: str
+    hit_str: str
+    speed_str: str
+    cost: float
+    cost_str: str
+    estimated: bool = False
+
+
+@dataclass
+class AgentProjectShareViewModel:
+    project_id: str
+    project_name: str
+    cost: float
+    cost_str: str
+    share: float
+    share_str: str
+    color: Tuple[int, int, int]
+
+
+@dataclass
+class AgentProjectOthersViewModel:
+    count: int
+    cost: float
+    cost_str: str
+    share: float
+    share_str: str
+    color: Tuple[int, int, int]
+
+
+@dataclass
+class AgentDetailViewModel:
+    agent: str
+    label: str
+    color: Tuple[int, int, int]
+    plan_label: Optional[str]
+    price_str: Optional[str]
+    multiplier_str: Optional[str]
+    cost_str: str
+    tokens_str: str
+    sessions_str: str
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
+    input_str: str
+    output_str: str
+    cache_read_str: str
+    cache_write_str: str
+    cache_hit_rate: Optional[float]
+    cache_hit_str: str
+    tps: Optional[float]
+    ttft_median: Optional[float]
+    perf_samples: int
+    speed_str: str
+    ttft_str: str
+    samples_str: str
+    models: List[AgentModelRowViewModel]
+    project_shares: List[AgentProjectShareViewModel]
+    others_project_share: Optional[AgentProjectOthersViewModel]
 
 
 @dataclass
@@ -1611,6 +1804,8 @@ def build_agent_rows(filtered: FilteredData, filter_query: str = "",
             cost_str=format_money(float(a.get("cost") or 0.0)),
             share_pct=float(a.get("share_pct") or 0.0),
             color=agent_color(ag),
+            speed_str=format_speed(a.get("tps")),
+            ttft_str=format_ttft(a.get("ttft_median")),
         ))
     return rows
 
@@ -1704,4 +1899,402 @@ def build_project_detail(project: dict, now: datetime, tz: datetime.tzinfo,
         by_model=by_model,
         sparkline_30d=spark,
         sparkline_peak_str=peak_str,
+    )
+
+
+def _apportion(total: int, weights: List[float], equal_if_zero: bool = False) -> List[int]:
+    """Hamilton-Hare largest-remainder apportionment of integer ``total``."""
+    if not weights or total <= 0:
+        return [0] * len(weights)
+    sum_w = sum(weights)
+    if sum_w <= 0:
+        if not equal_if_zero:
+            return [0] * len(weights)
+        norm = [1.0 / len(weights)] * len(weights)
+    else:
+        norm = [w / sum_w for w in weights]
+    quotas = [total * w for w in norm]
+    ints = [int(math.floor(q)) for q in quotas]
+    leftover = total - sum(ints)
+    remainders = sorted(
+        [(quotas[i] - ints[i], i) for i in range(len(weights))],
+        key=lambda item: (-round(item[0], 9), item[1]),
+    )
+    for _, idx in remainders[:max(0, leftover)]:
+        ints[idx] += 1
+    return ints
+
+
+def _token_parts(toks: Any) -> Tuple[int, int, int, int, int]:
+    """Return ``(input, output, cache_read, cache_write, total)`` from a tokens dict or int."""
+    if isinstance(toks, dict):
+        inp = int(toks.get("input", 0) or 0)
+        out = int(toks.get("output", 0) or 0)
+        cr = int(toks.get("cache_read", 0) or 0)
+        cw = int(toks.get("cache_write", 0) or 0)
+        tot = int(toks.get("total", 0) or 0)
+        return inp, out, cr, cw, tot
+    tot = int(toks or 0) if toks else 0
+    return 0, 0, 0, 0, tot
+
+
+def _exact_agent_breakdowns(doc: dict) -> Dict[str, Tuple[int, int, int, int, int]]:
+    """Sum exact all-time ``(input, output, cache_read, cache_write, total)`` per agent."""
+    out: Dict[str, List[int]] = {}
+    for p in (doc.get("projects") or []):
+        if not isinstance(p, dict):
+            continue
+        for a in (p.get("by_agent") or []):
+            if not isinstance(a, dict):
+                continue
+            ag = str(a.get("agent") or "")
+            if not ag:
+                continue
+            parts = _token_parts(a.get("tokens"))
+            cur = out.setdefault(ag, [0, 0, 0, 0, 0])
+            for i in range(5):
+                cur[i] += parts[i]
+    buckets = doc.get("buckets") or {}
+    for b_name in ("unattributed", "excluded"):
+        b = buckets.get(b_name) or {}
+        for s in (b.get("sessions_detail") or []):
+            if not isinstance(s, dict):
+                continue
+            ag = str(s.get("agent") or "")
+            if not ag:
+                continue
+            parts = _token_parts(s.get("tokens"))
+            cur = out.setdefault(ag, [0, 0, 0, 0, 0])
+            for i in range(5):
+                cur[i] += parts[i]
+    return {ag: (v[0], v[1], v[2], v[3], v[4]) for ag, v in out.items()}
+
+
+def _project_segment_color(agent: str, index: int) -> Tuple[int, int, int]:
+    """Match the Mac app's per-project colour sequence for 'Where the money went'."""
+    if index == 0:
+        return agent_color(agent)
+    palette = [k for k in ("codex", "grok", "antigravity", "opencode", "copilot") if k != agent]
+    return agent_color(palette[(index - 1) % len(palette)])
+
+
+def build_agent_detail(
+    doc: dict,
+    agent: str,
+    time_range: TimeRange = TimeRange.ALL,
+    now: Optional[datetime] = None,
+    filtered: Optional[FilteredData] = None,
+    lang: str = "en",
+) -> AgentDetailViewModel:
+    """Build detail pane view model for ``agent`` in ``time_range``."""
+    doc = doc or {}
+    tz, now_dt, _ag_win, _day_inc, _sess_inc, session_in_range_cost_tokens = (
+        _build_range_helpers(doc, time_range, now=now)
+    )
+    if filtered is None or filtered.time_range != time_range:
+        filtered = filter_report(doc, time_range, now=now_dt)
+
+    agent_row = next((r for r in filtered.by_agent if r.get("agent") == agent), None)
+    label = str((agent_row or {}).get("label") or AGENT_LABELS.get(agent, agent))
+    for p in (doc.get("projects") or []):
+        if label != agent:
+            break
+        if isinstance(p, dict):
+            for a in (p.get("by_agent") or []):
+                if isinstance(a, dict) and a.get("agent") == agent and a.get("label"):
+                    label = str(a["label"])
+                    break
+
+    range_cost = float((agent_row or {}).get("cost") or 0.0)
+    range_tokens = int((agent_row or {}).get("tokens") or 0)
+    range_sessions = int((agent_row or {}).get("sessions") or 0)
+
+    # Subscription metadata & billing-cycle multiplier
+    subs = doc.get("subscriptions") or {}
+    sub = subs.get(agent) if isinstance(subs, dict) else None
+    plan_label: Optional[str] = None
+    price_str: Optional[str] = None
+    multiplier_str: Optional[str] = None
+    if isinstance(sub, dict):
+        plan_label = str(sub.get("plan_label") or agent)
+        raw_price = sub.get("monthly_price_usd")
+        try:
+            price = float(raw_price) if raw_price is not None else None
+        except (TypeError, ValueError):
+            price = None
+        if price is not None and price > 0:
+            price_str = t("meter.per_month", lang, price=format_money(price))
+            cycle_filtered = (
+                filtered if time_range == TimeRange.CYCLE
+                else filter_report(doc, TimeRange.CYCLE, now=now_dt)
+            )
+            cycle_usage = next(
+                (float(r.get("cost") or 0.0) for r in cycle_filtered.by_agent if r.get("agent") == agent),
+                0.0,
+            )
+            multiplier_str = f"{cycle_usage / price:.1f}×" if cycle_usage > 0 else "—"
+
+    # Token breakdown (input / output / cache_read / cache_write)
+    exact_map = _exact_agent_breakdowns(doc)
+    exact = exact_map.get(agent)
+    if time_range == TimeRange.ALL:
+        if exact is not None and (exact[0] + exact[1] + exact[2] + exact[3] > 0 or exact[4] > 0):
+            inp, out_tok, cr, cw, _tot = exact
+        else:
+            inp, out_tok, cr, cw = 0, 0, 0, 0
+    else:
+        if range_tokens <= 0:
+            inp, out_tok, cr, cw = 0, 0, 0, 0
+        else:
+            w_in = w_out = w_cr = w_cw = 0.0
+            in_range_sessions: List[dict] = []
+            for p in filtered.projects:
+                for s in (p.get("sessions_detail") or []):
+                    if isinstance(s, dict) and s.get("agent") == agent:
+                        in_range_sessions.append(s)
+            for s in ((filtered.unattributed.get("sessions_detail") or [])
+                      + (filtered.excluded.get("sessions_detail") or [])):
+                if isinstance(s, dict) and s.get("agent") == agent:
+                    in_range_sessions.append(s)
+            for s in in_range_sessions:
+                _, st = session_in_range_cost_tokens(s)
+                if st <= 0:
+                    continue
+                s_in, s_out, s_cr, s_cw, s_tot = _token_parts(s.get("tokens"))
+                denom = max(s_in + s_out + s_cr + s_cw, s_tot)
+                if denom <= 0:
+                    continue
+                scale = st / denom
+                w_in += s_in * scale
+                w_out += s_out * scale
+                w_cr += s_cr * scale
+                w_cw += s_cw * scale
+            if w_in + w_out + w_cr + w_cw > 0:
+                weights = [w_in, w_out, w_cr, w_cw]
+            elif exact is not None and (exact[0] + exact[1] + exact[2] + exact[3]) > 0:
+                weights = [float(exact[0]), float(exact[1]), float(exact[2]), float(exact[3])]
+            else:
+                weights = []
+            if weights:
+                inp, out_tok, cr, cw = _apportion(range_tokens, weights)
+            else:
+                inp, out_tok, cr, cw = 0, 0, 0, 0
+
+    hit_ratio = cache_hit_rate(inp, cr)
+
+    # Performance summary for agent & per-model
+    perf_map = compute_agent_perf(doc, time_range, now=now_dt)
+    perf = perf_map.get(agent)
+    tps = perf.tps if perf else None
+    ttft_med = perf.ttft_median if perf else None
+    samples = perf.sample_count if perf else 0
+    if samples <= 0:
+        samples_str = t("agent_detail.no_samples", lang)
+    elif samples == 1:
+        samples_str = t("agent_detail.samples.one", lang, count=f"{samples:,}")
+    else:
+        samples_str = t("agent_detail.samples.many", lang, count=f"{samples:,}")
+    speed_detail_str = (
+        t("agent_detail.tok_per_sec", lang, value=f"{tps:.1f}")
+        if (tps is not None and math.isfinite(tps))
+        else "—"
+    )
+
+    # Per-model table
+    model_perf_map = compute_agent_model_perf(doc, agent, time_range, now=now_dt)
+    all_time_est: Dict[str, bool] = {}
+    for p in (doc.get("projects") or []):
+        if not isinstance(p, dict):
+            continue
+        for m in (p.get("by_model") or []):
+            if isinstance(m, dict) and m.get("agent") == agent:
+                mn = str(m.get("model") or "")
+                if mn:
+                    all_time_est[mn] = all_time_est.get(mn, False) or bool(m.get("estimated"))
+
+    # {model_name: [cost, inp, out, cr, cw, tot, estimated]}
+    model_agg: Dict[str, List[Any]] = {}
+
+    def add_model_entry(m_name: str, cost: float, m_inp: int, m_out: int, m_cr: int, m_cw: int, m_tot: int, est: bool) -> None:
+        if not m_name:
+            return
+        cur = model_agg.get(m_name)
+        if cur is None:
+            model_agg[m_name] = [cost, m_inp, m_out, m_cr, m_cw, m_tot, est]
+        else:
+            cur[0] += cost
+            cur[1] += m_inp
+            cur[2] += m_out
+            cur[3] += m_cr
+            cur[4] += m_cw
+            cur[5] += m_tot
+            cur[6] = cur[6] or est
+
+    if time_range == TimeRange.ALL:
+        for p in (doc.get("projects") or []):
+            if not isinstance(p, dict):
+                continue
+            for m in (p.get("by_model") or []):
+                if not isinstance(m, dict) or m.get("agent") != agent:
+                    continue
+                m_name = str(m.get("model") or "")
+                try:
+                    mc = float(m.get("cost") or 0.0)
+                except (TypeError, ValueError):
+                    mc = 0.0
+                mi, mo, mcr, mcw, mtot = _token_parts(m.get("tokens"))
+                add_model_entry(m_name, mc, mi, mo, mcr, mcw, mtot, bool(m.get("estimated")))
+    else:
+        def process_sessions(sessions: List[dict], target_cost: float, target_tokens: int, apportion_targets: bool) -> None:
+            ag_sessions = [s for s in sessions if isinstance(s, dict) and s.get("agent") == agent]
+            if not ag_sessions:
+                return
+            if apportion_targets:
+                if target_cost <= 0 and target_tokens <= 0:
+                    return
+                raw_pairs = [session_in_range_cost_tokens(s) for s in ag_sessions]
+                raw_costs = [c for c, _ in raw_pairs]
+                raw_toks = [float(tk) for _, tk in raw_pairs]
+                sum_c = sum(raw_costs)
+                if sum_c > 0:
+                    sess_costs = [target_cost * (c / sum_c) for c in raw_costs]
+                else:
+                    eq = target_cost / len(ag_sessions)
+                    sess_costs = [eq] * len(ag_sessions)
+                sess_toks = _apportion(target_tokens, raw_toks, equal_if_zero=True)
+            else:
+                pairs = [session_in_range_cost_tokens(s) for s in ag_sessions]
+                sess_costs = [c for c, _ in pairs]
+                sess_toks = [tk for _, tk in pairs]
+
+            for s, sc, st in zip(ag_sessions, sess_costs, sess_toks):
+                models = [str(m) for m in (s.get("models") or []) if m]
+                if not models or (sc <= 0 and st <= 0):
+                    continue
+                si, so, scr, scw, _ = _token_parts(s.get("tokens"))
+                if si + so + scr + scw > 0:
+                    si, so, scr, scw = _apportion(st, [float(si), float(so), float(scr), float(scw)])
+                else:
+                    si = so = scr = scw = 0
+                cnt = len(models)
+                if cnt == 1:
+                    mn = models[0]
+                    add_model_entry(mn, sc, si, so, scr, scw, st, all_time_est.get(mn, False))
+                else:
+                    share_c = sc / cnt
+                    for idx_m, mn in enumerate(models):
+                        def split_val(v: int) -> int:
+                            base, rem = divmod(v, cnt)
+                            return base + rem if idx_m == 0 else base
+
+                        mi = split_val(si)
+                        mo = split_val(so)
+                        mcr = split_val(scr)
+                        mcw = split_val(scw)
+                        mtot = (mi + mo + mcr + mcw) if (si + so + scr + scw > 0) else split_val(st)
+                        add_model_entry(mn, share_c, mi, mo, mcr, mcw, mtot, True)
+
+        for p in filtered.projects:
+            p_ag = next((a for a in (p.get("by_agent") or []) if isinstance(a, dict) and a.get("agent") == agent), None)
+            if p_ag:
+                p_cost = float(p_ag.get("cost") or 0.0)
+                p_toks = _token_parts(p_ag.get("tokens"))[4]
+                process_sessions(p.get("sessions_detail") or [], p_cost, p_toks, apportion_targets=True)
+        process_sessions(filtered.unattributed.get("sessions_detail") or [], 0.0, 0, apportion_targets=False)
+        process_sessions(filtered.excluded.get("sessions_detail") or [], 0.0, 0, apportion_targets=False)
+
+    model_rows: List[AgentModelRowViewModel] = []
+    for m_name, vals in model_agg.items():
+        mc, mi, _mo, mcr, _mcw, mtot, est = vals
+        if mtot <= 0 and mc <= 0:
+            continue
+        m_hit = cache_hit_rate(mi, mcr)
+        m_perf = model_perf_map.get(m_name)
+        m_tps = m_perf.tps if m_perf else None
+        model_rows.append(AgentModelRowViewModel(
+            model=m_name,
+            tokens=mtot,
+            tokens_str=format_tokens(mtot, lang),
+            hit_str=format_percent(m_hit),
+            speed_str=format_speed(m_tps),
+            cost=mc,
+            cost_str=format_money(mc),
+            estimated=est,
+        ))
+    model_rows.sort(key=lambda r: (-r.tokens, -r.cost, r.model))
+
+    # Where the money went (this agent's cost by project: top 4 + others)
+    raw_proj: List[Tuple[str, str, float]] = []
+    for p in filtered.projects:
+        if not isinstance(p, dict):
+            continue
+        p_ag = next((a for a in (p.get("by_agent") or []) if isinstance(a, dict) and a.get("agent") == agent), None)
+        if p_ag is None:
+            continue
+        try:
+            pc = float(p_ag.get("cost") or 0.0)
+        except (TypeError, ValueError):
+            pc = 0.0
+        if pc > 0:
+            raw_proj.append((str(p.get("id") or ""), str(p.get("name") or "Unnamed"), pc))
+    raw_proj.sort(key=lambda item: (-item[2], item[0]))
+
+    proj_shares: List[AgentProjectShareViewModel] = []
+    others_share: Optional[AgentProjectOthersViewModel] = None
+    total_proj_cost = sum(item[2] for item in raw_proj)
+    if total_proj_cost > 0:
+        for idx, (pid, pname, pc) in enumerate(raw_proj[:4]):
+            sh = pc / total_proj_cost
+            proj_shares.append(AgentProjectShareViewModel(
+                project_id=pid,
+                project_name=pname,
+                cost=pc,
+                cost_str=format_money(pc),
+                share=sh,
+                share_str=format_percent(sh),
+                color=_project_segment_color(agent, idx),
+            ))
+        rest = raw_proj[4:]
+        if rest:
+            rest_cost = sum(item[2] for item in rest)
+            if rest_cost > 0:
+                sh = rest_cost / total_proj_cost
+                others_share = AgentProjectOthersViewModel(
+                    count=len(rest),
+                    cost=rest_cost,
+                    cost_str=format_money(rest_cost),
+                    share=sh,
+                    share_str=format_percent(sh),
+                    color=DEFAULT_AGENT_COLOR,
+                )
+
+    return AgentDetailViewModel(
+        agent=agent,
+        label=label,
+        color=agent_color(agent),
+        plan_label=plan_label,
+        price_str=price_str,
+        multiplier_str=multiplier_str,
+        cost_str=format_money(range_cost),
+        tokens_str=format_tokens(range_tokens, lang),
+        sessions_str=str(range_sessions),
+        input_tokens=inp,
+        output_tokens=out_tok,
+        cache_read_tokens=cr,
+        cache_write_tokens=cw,
+        input_str=format_tokens(inp, lang),
+        output_str=format_tokens(out_tok, lang),
+        cache_read_str=format_tokens(cr, lang),
+        cache_write_str=format_tokens(cw, lang),
+        cache_hit_rate=hit_ratio,
+        cache_hit_str=format_percent(hit_ratio),
+        tps=tps,
+        ttft_median=ttft_med,
+        perf_samples=samples,
+        speed_str=speed_detail_str,
+        ttft_str=format_ttft(ttft_med),
+        samples_str=samples_str,
+        models=model_rows,
+        project_shares=proj_shares,
+        others_project_share=others_share,
     )

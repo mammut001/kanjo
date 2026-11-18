@@ -9,10 +9,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
 
 from .model import (
-    AntigravityAccountsSection, AntigravityAccountRow, DayRowViewModel, FilteredData,
-    ModelRowViewModel, ProjectDetailViewModel, ProjectRowViewModel, QuotaLevel,
-    QuotaMeterWindow, RANGE_TABS, SubscriptionMeter, TimeRange, TotalViewModel,
-    VIEW_MODES, ViewMode, format_money, format_tokens, agent_color
+    AgentDetailViewModel, AntigravityAccountsSection, AntigravityAccountRow,
+    DayRowViewModel, FilteredData, ModelRowViewModel, ProjectDetailViewModel,
+    ProjectRowViewModel, QuotaLevel, QuotaMeterWindow, RANGE_TABS,
+    SubscriptionMeter, TimeRange, TotalViewModel, VIEW_MODES, ViewMode,
+    format_money, format_tokens, agent_color
 )
 from .i18n import t, normalize_lang
 
@@ -326,6 +327,7 @@ class TUIState:
     filter_input: str = ""
     detail_open: bool = False
     detail_project: Optional[dict] = None
+    detail_agent: Optional[str] = None
     show_help: bool = False
     is_scanning: bool = False
     spinner_frame: int = 0
@@ -587,6 +589,27 @@ def _draw_compact_meters(canvas: Canvas, y: int, meters: List[SubscriptionMeter]
     return y
 
 
+def agent_table_layout(width: int) -> Tuple[int, int]:
+    """Compute ``(agent_col_width, share_bar_len)`` for the Agents table.
+
+    Sizes columns so the share percentage (``100.0%`` = 6 cells) is always
+    fully visible; on narrow terminals the share bar shrinks first and is
+    dropped before the percentage is clipped.
+    """
+    # Fixed columns + gaps: SESSIONS(8) + TOKENS(8) + COST(10) + SPEED(8) + TTFT(7) + PCT(6) + gaps(7) = 54
+    fixed_no_bar = 54
+    rem = max(0, width - fixed_no_bar)
+    min_ag = 16
+    min_bar = 4  # '[' + bar + '] ' needs bar_len + 3 cells
+    if rem >= min_ag + min_bar + 3:
+        bar_len = min(16, rem - min_ag - 3)
+        ag_w = rem - (bar_len + 3)
+    else:
+        bar_len = 0
+        ag_w = max(6, rem)
+    return ag_w, bar_len
+
+
 def render_ui(
     canvas: Canvas,
     state: TUIState,
@@ -599,7 +622,7 @@ def render_ui(
     model_rows: Optional[List[ModelRowViewModel]] = None,
     agent_rows: Optional[List[AgentRowViewModel]] = None,
     day_rows: Optional[List[DayRowViewModel]] = None,
-    detail_vm: Optional[ProjectDetailViewModel] = None,
+    detail_vm: Optional[Union[ProjectDetailViewModel, AgentDetailViewModel]] = None,
     static_mode: bool = False,
 ) -> List[HitBox]:
     """Render the full TUI layout onto canvas.
@@ -1052,16 +1075,19 @@ def render_ui(
                              "row:%d" % (scroll_offset + idx), width)
 
     elif state.view_mode == ViewMode.AGENTS:
-        # Columns: AGENT, SESSIONS, TOKENS, COST, SHARE
-        ag_w = max(16, width - 50)
+        # Columns: AGENT, SESSIONS, TOKENS, COST, SPEED, TTFT, SHARE
+        ag_w, bar_len = agent_table_layout(width)
+        share_w = (bar_len + 9) if bar_len > 0 else 6
         h_ag = pad_str(t("col.agent", lang), ag_w)
-        h_sess = pad_str(t("col.sessions", lang), 10, align="right")
-        h_tok = pad_str(t("col.tokens", lang), 10, align="right")
+        h_sess = pad_str(t("col.sessions", lang), 8, align="right")
+        h_tok = pad_str(t("col.tokens", lang), 8, align="right")
         h_cost = pad_str(t("col.cost", lang), 10, align="right")
-        h_share = t("col.share", lang)
-        h_line = f"{h_ag} {h_sess} {h_tok} {h_cost}  {h_share}"
+        h_spd = pad_str(t("col.speed", lang), 8, align="right")
+        h_ttft = pad_str(t("col.ttft", lang), 7, align="right")
+        h_share = pad_str(t("col.share", lang), share_w, align="left" if bar_len > 0 else "right")
+        h_line = f"{h_ag} {h_sess} {h_tok} {h_cost} {h_spd} {h_ttft}  {h_share}"
         canvas.fill_rect(0, table_header_y, width, 1, " ", header_style)
-        canvas.draw_text(0, table_header_y, h_line[:width], header_style)
+        canvas.draw_text(0, table_header_y, truncate_str(h_line, width), header_style)
         cur_y += 1
 
         body_height = max(0, table_bottom_y - cur_y)
@@ -1091,17 +1117,23 @@ def render_ui(
 
             canvas.draw_text(0, row_y, pad_str(truncate_str(row.label, ag_w), ag_w), row_style)
             rx = ag_w + 1
-            canvas.draw_text(rx, row_y, pad_str(row.sessions_str, 10, align="right"), row_style)
-            rx += 11
-            canvas.draw_text(rx, row_y, pad_str(row.tokens_str, 10, align="right"), row_style)
-            rx += 11
+            canvas.draw_text(rx, row_y, pad_str(row.sessions_str, 8, align="right"), row_style)
+            rx += 9
+            canvas.draw_text(rx, row_y, pad_str(row.tokens_str, 8, align="right"), row_style)
+            rx += 9
             canvas.draw_text(rx, row_y, pad_str(row.cost_str, 10, align="right"), row_style)
-            rx += 12
+            rx += 11
+            spd_style = _on_selected_row(state, is_sel, Style(dim=(row.speed_str == "—")))
+            canvas.draw_text(rx, row_y, pad_str(row.speed_str, 8, align="right"), spd_style)
+            rx += 9
+            ttft_style = _on_selected_row(state, is_sel, Style(dim=(row.ttft_str == "—")))
+            canvas.draw_text(rx, row_y, pad_str(row.ttft_str, 7, align="right"), ttft_style)
+            rx += 9
 
-            # Share bar [████░░░░] 45.2%
-            bar_len = min(16, max(8, width - rx - 10))
+            # Share bar [████░░░░] 45.2% (drop bar on narrow widths, always show %)
+            pct_str = f"{row.share_pct:5.1f}%"
             if bar_len > 0:
-                filled = int(round((row.share_pct / 100.0) * bar_len))
+                filled = min(bar_len, max(0, int(round((row.share_pct / 100.0) * bar_len))))
                 empty = bar_len - filled
                 canvas.draw_text(rx, row_y, "[", _on_selected_row(state, is_sel, Style(dim=True)))
                 block_ch = "=" if state.ascii_mode else "█"
@@ -1111,7 +1143,9 @@ def render_ui(
                                  _on_selected_row(state, is_sel, Style()))
                 canvas.draw_text(rx + 1 + bar_len, row_y, "]",
                                  _on_selected_row(state, is_sel, Style(dim=True)))
-                canvas.draw_text(rx + 3 + bar_len, row_y, f"{row.share_pct:5.1f}%", row_style)
+                canvas.draw_text(rx + 3 + bar_len, row_y, pct_str, row_style)
+            else:
+                canvas.draw_text(rx, row_y, pct_str, row_style)
 
         if not static_mode:
             for idx in range(len(shown_agents)):
@@ -1296,7 +1330,9 @@ def render_ui(
                          "fkey:" + key_lbl, width)
 
     # 9. Detail Pane Overlay
-    if state.detail_open and detail_vm is not None:
+    if state.detail_open and isinstance(detail_vm, AgentDetailViewModel):
+        _render_agent_detail_pane(canvas, state, detail_vm, lang)
+    elif state.detail_open and detail_vm is not None:
         dw = min(width - 4, 80)
         dh = min(height - 4, 22)
         dx = (width - dw) // 2
@@ -1457,3 +1493,280 @@ def render_ui(
             cy += 1
 
     return hit_boxes
+
+
+def _render_agent_detail_pane(
+    canvas: Canvas,
+    state: TUIState,
+    vm: AgentDetailViewModel,
+    lang: str,
+) -> None:
+    """Render the Agent detail overlay pane with solid background inside border."""
+    width = canvas.width
+    height = canvas.height
+    dw = min(width - 4, 80)
+    dh = min(height - 4, 25)
+    dx = (width - dw) // 2
+    dy = (height - dh) // 2
+    iw = max(10, dw - 4)
+    left_x = dx + 2
+    right_x = left_x + iw
+    last_cy = dy + dh - 2  # reserved for close hint
+    hline_ch = "-" if state.ascii_mode else "─"
+    dot = "*" if state.ascii_mode else "●"
+    block_ch = "=" if state.ascii_mode else "█"
+    leg_dot = "*" if state.ascii_mode else "■"
+
+    def pane(fg=None, bold=False, dim=False) -> Style:
+        return Style(fg=fg, bg=DETAIL_PANE_BG, bold=bold, dim=dim)
+
+    canvas.draw_box(
+        dx, dy, dw, dh,
+        title=t("agent_detail.title", lang, name=vm.label),
+        style=pane(fg="white"),
+        border_style=Style(fg="cyan", bold=True),
+        ascii_mode=state.ascii_mode,
+    )
+    canvas.fill_rect(dx + 1, dy + 1, dw - 2, dh - 2, " ", pane(fg="white"))
+
+    cy = dy + 1
+    if cy >= last_cy:
+        close_note = t("detail.close", lang)
+        canvas.draw_text(dx + max(1, (dw - str_width(close_note)) // 2), dy + dh - 2,
+                         truncate_str(close_note, dw - 2), pane(dim=True))
+        return
+
+    # 1. Header: colour dot + agent label + plan label/price + multiplier; right-side summary if room
+    cx = canvas.draw_text(left_x, cy, f"{dot} ", pane(fg=vm.color, bold=True), max_width=right_x - left_x)
+    cx = canvas.draw_text(cx, cy, truncate_str(vm.label, max(0, right_x - cx)),
+                          pane(fg="white", bold=True), max_width=max(0, right_x - cx))
+    if vm.plan_label and cx < right_x:
+        plan_txt = f" · {vm.plan_label}"
+        if vm.price_str:
+            plan_txt += f" ({vm.price_str})"
+        mult_reserve = (str_width(f" · {vm.multiplier_str}") if vm.multiplier_str else 0)
+        avail_plan = max(0, right_x - cx - mult_reserve)
+        if avail_plan > 3:
+            cx = canvas.draw_text(cx, cy, truncate_str(plan_txt, avail_plan),
+                                  pane(fg="gray"), max_width=avail_plan)
+        if vm.multiplier_str and cx < right_x:
+            cx = canvas.draw_text(cx, cy, " · ", pane(fg="gray"), max_width=max(0, right_x - cx))
+            cx = canvas.draw_text(cx, cy, vm.multiplier_str,
+                                  pane(fg=vm.color, bold=True), max_width=max(0, right_x - cx))
+    summary_txt = f"{vm.cost_str} · {vm.tokens_str}"
+    sw = str_width(summary_txt)
+    if cx + 2 + sw <= right_x:
+        canvas.draw_text(right_x - sw, cy, summary_txt, pane(fg="gray"), max_width=sw)
+    cy += 1
+
+    # 2. Tokens breakdown + cache hit
+    if cy < last_cy:
+        canvas.draw_hline(dx + 1, cy, dw - 2, hline_ch, pane(dim=True))
+        cy += 1
+    if cy < last_cy:
+        tok_title = t("agent_detail.tokens", lang)
+        hit_txt = t("agent_detail.cache_hit", lang, value=vm.cache_hit_str)
+        canvas.draw_text(left_x, cy, tok_title, pane(bold=True), max_width=iw)
+        hw = str_width(hit_txt)
+        if str_width(tok_title) + 2 + hw <= iw:
+            canvas.draw_text(right_x - hw, cy, hit_txt, pane(fg="cyan" if vm.cache_hit_rate is not None else "gray"), max_width=hw)
+        cy += 1
+    if cy < last_cy:
+        tok_items = [
+            (t("agent_detail.input", lang), vm.input_str),
+            (t("agent_detail.output", lang), vm.output_str),
+            (t("agent_detail.cache_read", lang), vm.cache_read_str),
+            (t("agent_detail.cache_write", lang), vm.cache_write_str),
+        ]
+        single_parts = [f"{lbl} {val}" for lbl, val in tok_items]
+        single_line = "  " + "  ".join(single_parts)
+        if str_width(single_line) <= iw:
+            tx = left_x + 2
+            for idx_t, (lbl, val) in enumerate(tok_items):
+                if idx_t > 0:
+                    tx = canvas.draw_text(tx, cy, "  ", pane(), max_width=max(0, right_x - tx))
+                tx = canvas.draw_text(tx, cy, f"{lbl} ", pane(fg="gray"), max_width=max(0, right_x - tx))
+                tx = canvas.draw_text(tx, cy, val, pane(fg="white", bold=True), max_width=max(0, right_x - tx))
+            cy += 1
+        else:
+            col_w = max(10, (iw - 2) // 2)
+            for pair in (tok_items[:2], tok_items[2:]):
+                if cy >= last_cy:
+                    break
+                tx = left_x + 2
+                for idx_p, (lbl, val) in enumerate(pair):
+                    cell_x = tx + idx_p * col_w
+                    px = canvas.draw_text(cell_x, cy, f"{lbl} ", pane(fg="gray"),
+                                          max_width=max(0, right_x - cell_x))
+                    canvas.draw_text(px, cy, val, pane(fg="white", bold=True),
+                                     max_width=max(0, right_x - px))
+                cy += 1
+
+    # 3. Performance
+    if cy < last_cy:
+        canvas.draw_hline(dx + 1, cy, dw - 2, hline_ch, pane(dim=True))
+        cy += 1
+    if cy < last_cy:
+        perf_title = t("agent_detail.performance", lang)
+        canvas.draw_text(left_x, cy, perf_title, pane(bold=True), max_width=iw)
+        sw = str_width(vm.samples_str)
+        if str_width(perf_title) + 2 + sw <= iw:
+            canvas.draw_text(right_x - sw, cy, vm.samples_str,
+                             pane(fg="gray", dim=(vm.perf_samples == 0)), max_width=sw)
+        cy += 1
+    if cy < last_cy:
+        tx = left_x + 2
+        tx = canvas.draw_text(tx, cy, t("agent_detail.output_speed", lang), pane(fg="gray"),
+                              max_width=max(0, right_x - tx))
+        tx = canvas.draw_text(tx, cy, vm.speed_str,
+                              pane(fg="white", bold=(vm.tps is not None), dim=(vm.tps is None)),
+                              max_width=max(0, right_x - tx))
+        tx = canvas.draw_text(tx, cy, "   ", pane(), max_width=max(0, right_x - tx))
+        tx = canvas.draw_text(tx, cy, t("agent_detail.ttft_median", lang), pane(fg="gray"),
+                              max_width=max(0, right_x - tx))
+        canvas.draw_text(tx, cy, vm.ttft_str,
+                         pane(fg="white", bold=(vm.ttft_median is not None), dim=(vm.ttft_median is None)),
+                         max_width=max(0, right_x - tx))
+        cy += 1
+
+    # Build legend items for "Where the money went" so we reserve exact vertical lines
+    leg_items: List[Tuple[Tuple[int, int, int], str]] = [
+        (seg.color, f"{seg.project_name} {seg.share_str}")
+        for seg in vm.project_shares
+    ]
+    if vm.others_project_share:
+        others = vm.others_project_share
+        leg_items.append((
+            others.color,
+            f"{t('agent_detail.others', lang, count=others.count)} {others.share_str}",
+        ))
+    leg_lines = 0
+    if leg_items:
+        leg_lines = 1
+        lx_sim = 0
+        for _rgb, text in leg_items:
+            prefix_w = 0 if lx_sim == 0 else 2
+            item_w = prefix_w + str_width(leg_dot) + 1 + str_width(text)
+            if lx_sim > 0 and lx_sim + item_w > iw:
+                leg_lines += 1
+                lx_sim = str_width(leg_dot) + 1 + str_width(text)
+            else:
+                lx_sim += item_w
+    reserve_money = (3 + leg_lines) if vm.project_shares else 3
+
+    # 4. Per-model table
+    if vm.models and cy + 4 <= last_cy - reserve_money:
+        canvas.draw_hline(dx + 1, cy, dw - 2, hline_ch, pane(dim=True))
+        cy += 1
+        canvas.draw_text(left_x, cy, t("agent_detail.models", lang), pane(bold=True), max_width=iw)
+        cy += 1
+
+        # Right columns: TOKENS(8) HIT(5) SPEED(8) COST(10) + gaps(4) + indent(2) = 37
+        mod_w = max(10, iw - 37)
+        mh_line = (
+            "  "
+            + pad_str(t("col.model", lang), mod_w) + " "
+            + pad_str(t("col.tokens", lang), 8, align="right") + " "
+            + pad_str(t("agent_detail.models.hit", lang), 5, align="right") + " "
+            + pad_str(t("agent_detail.models.speed", lang), 8, align="right") + " "
+            + pad_str(t("col.cost", lang), 10, align="right")
+        )
+        canvas.draw_text(left_x, cy, truncate_str(mh_line, iw), pane(fg="gray", dim=True), max_width=iw)
+        cy += 1
+
+        max_models = max(1, (last_cy - reserve_money) - cy)
+        for m in vm.models[:max_models]:
+            if cy >= last_cy - reserve_money:
+                break
+            mx = left_x + 2
+            if m.estimated:
+                est_txt = " " + t("agent_detail.estimated", lang)
+                est_w = str_width(est_txt)
+                name_max = max(4, mod_w - est_w)
+                name_part = truncate_str(m.model, name_max)
+                mx = canvas.draw_text(mx, cy, name_part, pane(), max_width=name_max)
+                mx = canvas.draw_text(mx, cy, est_txt, pane(fg="yellow"), max_width=est_w)
+                rem_pad = mod_w - (str_width(name_part) + est_w)
+                if rem_pad > 0:
+                    canvas.draw_text(mx, cy, " " * rem_pad, pane(), max_width=rem_pad)
+            else:
+                canvas.draw_text(mx, cy, pad_str(truncate_str(m.model, mod_w), mod_w), pane(), max_width=mod_w)
+
+            rx = left_x + 2 + mod_w + 1
+            canvas.draw_text(rx, cy, pad_str(m.tokens_str, 8, align="right"), pane(), max_width=8)
+            rx += 9
+            canvas.draw_text(rx, cy, pad_str(m.hit_str, 5, align="right"),
+                             pane(fg="gray", dim=(m.hit_str == "—")), max_width=5)
+            rx += 6
+            canvas.draw_text(rx, cy, pad_str(m.speed_str, 8, align="right"),
+                             pane(fg="gray", dim=(m.speed_str == "—")), max_width=8)
+            rx += 9
+            canvas.draw_text(rx, cy, pad_str(m.cost_str, 10, align="right"), pane(bold=True), max_width=max(0, right_x - rx))
+            cy += 1
+
+    # 5. Where the money went
+    if cy + 2 < last_cy:
+        canvas.draw_hline(dx + 1, cy, dw - 2, hline_ch, pane(dim=True))
+        cy += 1
+        canvas.draw_text(left_x, cy, t("agent_detail.where_money_went", lang), pane(bold=True), max_width=iw)
+        cy += 1
+
+        if vm.project_shares and cy < last_cy:
+            segments: List[Tuple[float, Tuple[int, int, int]]] = [
+                (seg.share, seg.color) for seg in vm.project_shares if seg.share > 0
+            ]
+            if vm.others_project_share and vm.others_project_share.share > 0:
+                segments.append((vm.others_project_share.share, vm.others_project_share.color))
+
+            bar_len = max(4, iw - 2)
+            if segments:
+                seg_widths = [max(1, int(round(sh * bar_len))) for sh, _ in segments]
+                diff = bar_len - sum(seg_widths)
+                while diff < 0:
+                    widest = max(range(len(seg_widths)), key=lambda i: seg_widths[i])
+                    if seg_widths[widest] <= 1:
+                        break
+                    seg_widths[widest] -= 1
+                    diff += 1
+                while diff > 0:
+                    widest = max(range(len(seg_widths)), key=lambda i: seg_widths[i])
+                    seg_widths[widest] += 1
+                    diff -= 1
+
+                bx = canvas.draw_text(left_x, cy, "[", pane(dim=True), max_width=1)
+                for seg_w, (_, rgb) in zip(seg_widths, segments):
+                    if bx >= left_x + 1 + bar_len:
+                        break
+                    draw_w = min(seg_w, left_x + 1 + bar_len - bx)
+                    bx = canvas.draw_text(bx, cy, block_ch * draw_w, pane(fg=rgb, bold=True), max_width=draw_w)
+                if bx < left_x + 1 + bar_len:
+                    rem_b = left_x + 1 + bar_len - bx
+                    bx = canvas.draw_text(bx, cy, " " * rem_b, pane(), max_width=rem_b)
+                canvas.draw_text(left_x + 1 + bar_len, cy, "]", pane(dim=True), max_width=1)
+                cy += 1
+
+            # Legend: top 4 projects + others, wrapped across remaining lines
+            if cy < last_cy:
+                lx = left_x
+                for _idx_l, (rgb, text) in enumerate(leg_items):
+                    prefix = "" if lx == left_x else "  "
+                    item_w = str_width(prefix) + str_width(leg_dot) + 1 + str_width(text)
+                    if lx > left_x and lx + item_w > right_x:
+                        cy += 1
+                        if cy >= last_cy:
+                            break
+                        lx = left_x
+                        prefix = ""
+                    if prefix:
+                        lx = canvas.draw_text(lx, cy, prefix, pane(), max_width=max(0, right_x - lx))
+                    lx = canvas.draw_text(lx, cy, f"{leg_dot} ", pane(fg=rgb, bold=True), max_width=max(0, right_x - lx))
+                    lx = canvas.draw_text(lx, cy, truncate_str(text, max(0, right_x - lx)),
+                                          pane(fg="white"), max_width=max(0, right_x - lx))
+        elif cy < last_cy:
+            canvas.draw_text(left_x + 2, cy, t("agent_detail.no_project_cost", lang),
+                             pane(fg="gray", dim=True), max_width=max(0, iw - 2))
+
+    # Close note at bottom of detail pane
+    close_note = t("detail.close", lang)
+    canvas.draw_text(dx + max(1, (dw - str_width(close_note)) // 2), dy + dh - 2,
+                     truncate_str(close_note, dw - 2), pane(dim=True))

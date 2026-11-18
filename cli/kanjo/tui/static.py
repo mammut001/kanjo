@@ -9,9 +9,10 @@ from typing import Any, Optional
 from datetime import datetime
 
 from .model import (
-    FilteredData, TimeRange, ViewMode, build_agent_rows, build_antigravity_accounts_section,
-    build_day_rows, build_model_rows, build_project_footer_rows, build_project_rows,
-    build_subscription_meters, build_total_view_model, ensure_aware, filter_report, get_tz
+    FilteredData, TimeRange, ViewMode, build_agent_detail, build_agent_rows,
+    build_antigravity_accounts_section, build_day_rows, build_model_rows,
+    build_project_footer_rows, build_project_rows, build_subscription_meters,
+    build_total_view_model, ensure_aware, filter_report, get_tz
 )
 from .render import Canvas, Style, TUIState, render_ui, str_width
 
@@ -141,6 +142,7 @@ def render_static_snapshot(
     antigravity_accounts_data: Optional[Any] = None,
     current_account: Optional[str] = None,
     lang: str = "en",
+    detail_agent: Optional[str] = None,
 ) -> str:
     """Produce one static snapshot of the UI."""
     doc = doc or {}
@@ -183,13 +185,22 @@ def render_static_snapshot(
             needed += 1  # window title
             needed += min(15, len(accounts_section.rows)) if accounts_section else 0
         # Static snapshots have no F-key bar: output ends after the table footer.
-        height = max(20, needed)
+        height = max(29 if detail_agent else 20, needed)
+
+    detail_vm = None
+    if detail_agent:
+        detail_vm = build_agent_detail(
+            doc, detail_agent, time_range=time_range, now=now,
+            filtered=filtered, lang=lang,
+        )
 
     canvas = Canvas(width, height)
     state = TUIState(
         version=version,
         time_range=time_range,
         view_mode=view_mode,
+        detail_open=bool(detail_agent),
+        detail_agent=detail_agent,
         ascii_mode=ascii_mode,
         no_color=no_color,
         last_refresh_time=now.strftime("%H:%M:%S"),
@@ -208,6 +219,7 @@ def render_static_snapshot(
         model_rows=model_rows,
         agent_rows=agent_rows,
         day_rows=day_rows,
+        detail_vm=detail_vm,
         static_mode=True,
     )
 

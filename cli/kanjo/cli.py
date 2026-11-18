@@ -640,6 +640,7 @@ def cmd_usage(args) -> int:
             antigravity_accounts_data=antigravity_accounts_data,
             current_account=current_account,
             lang=lang,
+            detail_agent=getattr(args, "detail", None),
         )
         sys.stdout.write(snapshot)
         sys.stdout.flush()
@@ -837,6 +838,7 @@ def build_parser() -> argparse.ArgumentParser:
         up.add_argument("--no-mouse", action="store_true",
                         help="disable mouse support, so the terminal can select text as usual")
         up.add_argument("--data", metavar="PATH", help=argparse.SUPPRESS)
+        up.add_argument("--detail", metavar="AGENT", help=argparse.SUPPRESS)
         common(up)
         up.set_defaults(func=cmd_usage)
 
