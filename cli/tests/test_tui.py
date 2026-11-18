@@ -24,7 +24,7 @@ from kanjo.tui.model import (
     build_project_detail, build_project_footer_rows, build_project_rows,
     build_subscription_meters, build_total_view_model, cache_hit_rate,
     compute_30d_sparkline, compute_8w_strip, compute_agent_model_perf,
-    compute_agent_perf, ensure_aware, filter_report, format_money,
+    compute_agent_perf, compute_antigravity_account_shares, ensure_aware, filter_report, format_money,
     format_month_day_time, format_percent, format_reset_countdown,
     format_speed, format_tokens, format_ttft, get_accounts_window, get_tz,
     heat_level, parse_iso_dt, parse_tokens_str, quota_level
@@ -2826,6 +2826,312 @@ class TUIPerformanceAndSubprocessTest(unittest.TestCase):
         self.assertEqual(scanner.last_error, "subprocess crashed")
         self.assertEqual(scanner.error_seq, 1)
         self.assertFalse(scanner.is_scanning)
+
+
+class TestAntigravityDetailByAccount(unittest.TestCase):
+    """Tests for the Antigravity agent detail pane 'By account' section."""
+
+    def _fixture_doc(self) -> dict:
+        return {
+            "schema_version": 1,
+            "generated_at": "2026-10-23T12:00:00Z",
+            "timezone": "UTC",
+            "currency": "USD",
+            "quota_windows": {
+                "claude": {"weekly_resets_at": "2026-10-28T00:00:00Z", "weekly_window_hours": 168},
+                "antigravity": {"weekly_resets_at": "2026-10-26T00:00:00Z", "weekly_window_hours": 168},
+            },
+            "subscriptions": {
+                "antigravity": {
+                    "plan_label": "Google AI Ultra",
+                    "monthly_price_usd": 249.99,
+                    "cycle_start": "2026-10-20T00:00:00Z",
+                }
+            },
+            "antigravity_accounts": {
+                "window_start": "2026-10-19T00:00:00Z",
+                "window_kind": "quota_week",
+                "current": "alex@example.com",
+                "accounts": [
+                    {"email": "alex@example.com", "tokens": 300, "cost_usd": 3.0, "messages": 6, "saved_login": True},
+                    {"email": "work@company.com", "tokens": 150, "cost_usd": 1.5, "messages": 3, "saved_login": True},
+                    {"email": "backup@gmail.com", "tokens": 0, "cost_usd": 0.0, "messages": 0, "saved_login": False},
+                ],
+                "by_day": [
+                    {"day": "2026-09-10", "email": "backup@gmail.com", "tokens": 100, "cost_usd": 1.0, "messages": 2},
+                    {"day": "2026-10-18", "email": "alex@example.com", "tokens": 300, "cost_usd": 3.0, "messages": 6},
+                    {"day": "2026-10-20", "email": "work@company.com", "tokens": 150, "cost_usd": 1.5, "messages": 3},
+                    {"day": "2026-10-21", "email": None, "tokens": 50, "cost_usd": 0.5, "messages": 1},
+                    {"day": "2026-10-23", "email": "alex@example.com", "tokens": 200, "cost_usd": 2.0, "messages": 4},
+                ],
+            },
+            "totals": {
+                "cost": 8.0,
+                "tokens": {"input": 100, "output": 100, "cache_read": 600, "cache_write": 0, "total": 800},
+                "sessions": 2,
+                "first_active": "2026-09-10",
+                "last_active": "2026-10-23",
+            },
+            "projects": [
+                {
+                    "id": "p1",
+                    "name": "Kanjo",
+                    "cost": 6.0,
+                    "tokens": {"input": 75, "output": 75, "cache_read": 450, "cache_write": 0, "total": 600},
+                    "sessions": 1,
+                    "first_active": "2026-09-10",
+                    "last_active": "2026-10-23",
+                    "by_agent": [
+                        {
+                            "agent": "antigravity",
+                            "label": "Antigravity CLI",
+                            "cost": 6.0,
+                            "tokens": {"input": 75, "output": 75, "cache_read": 450, "cache_write": 0, "total": 600},
+                            "sessions": 1,
+                        }
+                    ],
+                    "by_model": [
+                        {
+                            "agent": "antigravity",
+                            "model": "gemini-3.8-flash",
+                            "cost": 6.0,
+                            "tokens": {"input": 75, "output": 75, "cache_read": 450, "cache_write": 0, "total": 600},
+                            "estimated": False,
+                        }
+                    ],
+                    "by_day": [
+                        {"day": "2026-10-18", "cost": 3.0, "tokens": 300},
+                        {"day": "2026-10-23", "cost": 3.0, "tokens": 300},
+                    ],
+                    "sessions_detail": [
+                        {
+                            "agent": "antigravity",
+                            "started": "2026-10-23T10:00:00Z",
+                            "ended": "2026-10-23T10:30:00Z",
+                            "cost": 3.0,
+                            "tokens": {"input": 40, "output": 40, "cache_read": 220, "cache_write": 0, "total": 300},
+                            "models": ["gemini-3.8-flash"],
+                        }
+                    ],
+                },
+                {
+                    "id": "p2",
+                    "name": "Other",
+                    "cost": 2.0,
+                    "tokens": {"input": 25, "output": 25, "cache_read": 150, "cache_write": 0, "total": 200},
+                    "sessions": 1,
+                    "first_active": "2026-10-20",
+                    "last_active": "2026-10-21",
+                    "by_agent": [
+                        {
+                            "agent": "claude",
+                            "label": "Claude Code",
+                            "cost": 2.0,
+                            "tokens": {"input": 25, "output": 25, "cache_read": 150, "cache_write": 0, "total": 200},
+                            "sessions": 1,
+                        }
+                    ],
+                    "by_model": [],
+                    "by_day": [{"day": "2026-10-20", "cost": 2.0, "tokens": 200}],
+                    "sessions_detail": [],
+                },
+            ],
+            "buckets": {
+                "unattributed": {"cost": 0.0, "tokens": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}, "sessions": 0},
+                "excluded": {"cost": 0.0, "tokens": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}, "sessions": 0},
+                "parse_failed": {"sessions": 0, "files": []},
+            },
+        }
+
+    def test_range_filter_null_email_and_zero_accounts(self):
+        doc = self._fixture_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        # ALL: alex(500), work(150), backup(100), Unattributed(50) => total 800
+        all_rows = compute_antigravity_account_shares(doc, TimeRange.ALL, now=now, lang="en")
+        self.assertEqual([r.display_name for r in all_rows], ["alex", "work", "backup", "Unattributed"])
+        self.assertEqual([r.tokens for r in all_rows], [500, 150, 100, 50])
+        self.assertEqual(sum(r.share_pct for r in all_rows), 100)
+        self.assertTrue(all_rows[-1].is_unattributed)
+        self.assertIsNone(all_rows[-1].email)
+        self.assertFalse(any(r.is_dimmed for r in all_rows))
+
+        # DAYS_7 (2026-10-17..2026-10-23): backup@gmail.com has 0 in range -> dimmed at bottom
+        d7_rows = compute_antigravity_account_shares(doc, TimeRange.DAYS_7, now=now, lang="en")
+        self.assertEqual([r.display_name for r in d7_rows], ["alex", "work", "Unattributed", "backup"])
+        self.assertEqual([r.tokens for r in d7_rows], [500, 150, 50, 0])
+        self.assertTrue(d7_rows[2].is_unattributed)
+        self.assertTrue(d7_rows[3].is_dimmed)
+        self.assertEqual(d7_rows[3].share_pct, 0)
+        self.assertEqual(d7_rows[3].share_str, "0%")
+        self.assertEqual(d7_rows[3].cost_str, "$0.00")
+        self.assertEqual(sum(r.share_pct for r in d7_rows), 100)
+
+        # TODAY (2026-10-23): only alex active (100%), work + backup dimmed at bottom (0%)
+        today_rows = compute_antigravity_account_shares(doc, TimeRange.TODAY, now=now, lang="en")
+        self.assertEqual([r.display_name for r in today_rows], ["alex", "work", "backup"])
+        self.assertEqual([r.share_pct for r in today_rows], [100, 0, 0])
+        self.assertFalse(today_rows[0].is_dimmed)
+        self.assertTrue(today_rows[1].is_dimmed)
+        self.assertTrue(today_rows[2].is_dimmed)
+
+        # RESET (antigravity window starts 2026-10-19T00:00Z): alex(200), work(150), Unattributed(50), backup(0)
+        reset_rows = compute_antigravity_account_shares(doc, TimeRange.RESET, now=now, lang="en")
+        self.assertEqual([r.display_name for r in reset_rows], ["alex", "work", "Unattributed", "backup"])
+        self.assertEqual([r.tokens for r in reset_rows], [200, 150, 50, 0])
+        self.assertEqual([r.share_pct for r in reset_rows], [50, 38, 12, 0])
+        self.assertEqual(sum(r.share_pct for r in reset_rows), 100)
+
+        # RESET without antigravity quota window -> omitted (per-agent range rule)
+        doc_no_agy_q = json.loads(json.dumps(doc))
+        doc_no_agy_q["quota_windows"].pop("antigravity")
+        self.assertEqual(compute_antigravity_account_shares(doc_no_agy_q, TimeRange.RESET, now=now), [])
+
+        # CYCLE (2026-10-20T00:00Z..): same active set alex(200), work(150), Unattributed(50), backup(0)
+        cycle_rows = compute_antigravity_account_shares(doc, TimeRange.CYCLE, now=now, lang="zh")
+        self.assertEqual([r.display_name for r in cycle_rows], ["alex", "work", "未识别", "backup"])
+        self.assertEqual(sum(r.share_pct for r in cycle_rows), 100)
+
+        # CYCLE without antigravity subscription -> omitted
+        doc_no_agy_sub = json.loads(json.dumps(doc))
+        doc_no_agy_sub["subscriptions"].pop("antigravity")
+        self.assertEqual(compute_antigravity_account_shares(doc_no_agy_sub, TimeRange.CYCLE, now=now), [])
+
+    def test_percentage_rounding_sums_to_100(self):
+        # 3 equal accounts -> 34 + 33 + 33 = 100
+        doc_3way = {
+            "timezone": "UTC",
+            "antigravity_accounts": {
+                "accounts": [
+                    {"email": "a@x.com"},
+                    {"email": "b@x.com"},
+                    {"email": "c@x.com"},
+                    {"email": "zero@x.com"},
+                ],
+                "by_day": [
+                    {"day": "2026-10-20", "email": "a@x.com", "tokens": 100, "cost_usd": 1.0, "messages": 1},
+                    {"day": "2026-10-20", "email": "b@x.com", "tokens": 100, "cost_usd": 1.0, "messages": 1},
+                    {"day": "2026-10-20", "email": "c@x.com", "tokens": 100, "cost_usd": 1.0, "messages": 1},
+                ],
+            },
+        }
+        rows = compute_antigravity_account_shares(doc_3way, TimeRange.ALL, lang="en")
+        self.assertEqual([r.share_pct for r in rows], [34, 33, 33, 0])
+        self.assertEqual(sum(r.share_pct for r in rows), 100)
+        self.assertTrue(rows[-1].is_dimmed)
+
+        # 99.6% vs 0.4% -> 100 + 0 = 100
+        doc_skew = {
+            "timezone": "UTC",
+            "antigravity_accounts": {
+                "accounts": [],
+                "by_day": [
+                    {"day": "2026-10-20", "email": "big@x.com", "tokens": 996, "cost_usd": 9.96, "messages": 9},
+                    {"day": "2026-10-20", "email": "tiny@x.com", "tokens": 4, "cost_usd": 0.04, "messages": 1},
+                ],
+            },
+        }
+        rows_skew = compute_antigravity_account_shares(doc_skew, TimeRange.ALL, lang="en")
+        self.assertEqual([r.share_pct for r in rows_skew], [100, 0])
+        self.assertEqual(sum(r.share_pct for r in rows_skew), 100)
+
+    def test_missing_by_day_and_non_antigravity_omit_section(self):
+        doc = self._fixture_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        # Non-antigravity agent omits account_shares
+        det_claude = build_agent_detail(doc, "claude", TimeRange.ALL, now=now, lang="en")
+        self.assertEqual(det_claude.account_shares, [])
+
+        # Antigravity agent includes account_shares
+        det_agy = build_agent_detail(doc, "antigravity", TimeRange.ALL, now=now, lang="en")
+        self.assertEqual(len(det_agy.account_shares), 4)
+
+        # Missing by_day -> omitted
+        doc_no_by_day = json.loads(json.dumps(doc))
+        doc_no_by_day["antigravity_accounts"].pop("by_day")
+        self.assertEqual(build_agent_detail(doc_no_by_day, "antigravity", TimeRange.ALL, now=now).account_shares, [])
+
+        # Empty by_day -> omitted
+        doc_empty_by_day = json.loads(json.dumps(doc))
+        doc_empty_by_day["antigravity_accounts"]["by_day"] = []
+        self.assertEqual(build_agent_detail(doc_empty_by_day, "antigravity", TimeRange.ALL, now=now).account_shares, [])
+
+        # Future TODAY with zero usage in range -> omitted
+        future_now = datetime(2030, 1, 1, 12, 0, tzinfo=timezone.utc)
+        self.assertEqual(compute_antigravity_account_shares(doc, TimeRange.TODAY, now=future_now), [])
+
+    def test_colliding_local_parts_disambiguated(self):
+        doc = {
+            "timezone": "UTC",
+            "antigravity_accounts": {
+                "accounts": [{"email": "alex@example.com"}, {"email": "alex@work.com"}, {"email": "bob@example.com"}],
+                "by_day": [
+                    {"day": "2026-10-20", "email": "alex@example.com", "tokens": 300, "cost_usd": 3.0, "messages": 3},
+                    {"day": "2026-10-20", "email": "alex@work.com", "tokens": 200, "cost_usd": 2.0, "messages": 2},
+                    {"day": "2026-10-20", "email": "bob@example.com", "tokens": 100, "cost_usd": 1.0, "messages": 1},
+                ],
+            },
+        }
+        rows = compute_antigravity_account_shares(doc, TimeRange.ALL, lang="en")
+        self.assertEqual([r.display_name for r in rows], ["alex@example.com", "alex@work.com", "bob"])
+
+    def test_by_account_rendering_en_and_zh_100_cols(self):
+        doc = self._fixture_doc()
+        now = parse_iso_dt(doc["generated_at"])
+
+        for lang, hdr, unattr_lbl in (("en", "By account", "Unattributed"), ("zh", "按账号", "未识别")):
+            snap = render_static_snapshot(
+                doc, width=100, no_color=True, now=now,
+                time_range=TimeRange.DAYS_7, view_mode=ViewMode.AGENTS,
+                lang=lang, detail_agent="antigravity",
+            )
+            lines = snap.splitlines()
+            for ln in lines:
+                self.assertLessEqual(str_width(ln), 100)
+            self.assertIn(hdr, snap)
+            self.assertIn(unattr_lbl, snap)
+            self.assertIn("alex", snap)
+            self.assertIn("work", snap)
+            self.assertIn("backup", snap)
+            # By account section appears after Performance and before By model
+            self.assertLess(snap.index("Performance" if lang == "en" else "生成性能"), snap.index(hdr))
+            self.assertLess(snap.index(hdr), snap.index("By model" if lang == "en" else "按模型"))
+
+            # Verify cost column alignment inside the detail pane
+            def pane_slice(ln: str) -> str:
+                i0 = ln.index("│")
+                i1 = ln.index("│", i0 + 1)
+                return ln[i0:i1 + 1]
+
+            alex_line = next(ln for ln in lines if "alex" in ln and "[" in ln and "%" in ln)
+            backup_line = next(ln for ln in lines if "backup" in ln and "[" in ln and "%" in ln)
+            alex_box = pane_slice(alex_line)
+            backup_box = pane_slice(backup_line)
+            self.assertEqual(str_width(alex_box), str_width(backup_box))
+            self.assertIn("0%", backup_box)
+            self.assertTrue(backup_box.endswith("     $0.00 │"), f"unexpected cost alignment: {backup_box!r}")
+
+        # Verify dimmed styling on zero-usage row using Canvas directly
+        filtered = filter_report(doc, TimeRange.DAYS_7, now=now)
+        detail_vm = build_agent_detail(doc, "antigravity", TimeRange.DAYS_7, now=now, filtered=filtered, lang="en")
+        canvas = Canvas(100, 36)
+        state = TUIState(version="0.9.0", time_range=TimeRange.DAYS_7, view_mode=ViewMode.AGENTS,
+                         detail_open=True, detail_agent="antigravity")
+        render_ui(canvas, state, filtered, build_total_view_model(filtered, "en"), [], None,
+                  [], [], [], build_agent_rows(filtered, lang="en"), [], detail_vm=detail_vm)
+        backup_y = next(y for y in range(36) if "backup" in canvas.get_line_text(y) and "0%" in canvas.get_line_text(y))
+        backup_x = canvas.get_line_text(backup_y).index("backup")
+        self.assertTrue(canvas.grid[backup_y][backup_x].style.dim)
+
+        # Missing by_day omits the By account section in rendered output too
+        doc_no_by_day = json.loads(json.dumps(doc))
+        doc_no_by_day["antigravity_accounts"].pop("by_day")
+        snap_no_by_day = render_static_snapshot(
+            doc_no_by_day, width=100, no_color=True, now=now,
+            view_mode=ViewMode.AGENTS, lang="en", detail_agent="antigravity",
+        )
+        self.assertNotIn("By account", snap_no_by_day)
 
 
 if __name__ == "__main__":

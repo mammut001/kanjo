@@ -9,7 +9,7 @@ from enum import Enum
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from zoneinfo import ZoneInfo
 
 from .. import perf as _perf
@@ -1238,6 +1238,22 @@ class AgentProjectOthersViewModel:
 
 
 @dataclass
+class AgentAccountShareViewModel:
+    email: Optional[str]
+    display_name: str
+    tokens: int
+    tokens_str: str
+    cost: float
+    cost_str: str
+    messages: int
+    share: float
+    share_pct: int
+    share_str: str
+    is_unattributed: bool = False
+    is_dimmed: bool = False
+
+
+@dataclass
 class AgentDetailViewModel:
     agent: str
     label: str
@@ -1267,6 +1283,7 @@ class AgentDetailViewModel:
     models: List[AgentModelRowViewModel]
     project_shares: List[AgentProjectShareViewModel]
     others_project_share: Optional[AgentProjectOthersViewModel]
+    account_shares: List[AgentAccountShareViewModel] = field(default_factory=list)
 
 
 @dataclass
@@ -1978,6 +1995,190 @@ def _project_segment_color(agent: str, index: int) -> Tuple[int, int, int]:
     return agent_color(palette[(index - 1) % len(palette)])
 
 
+def _email_local_part(email: str) -> str:
+    return email.split("@", 1)[0]
+
+
+def _account_display_name(email: str, all_emails: Sequence[str]) -> str:
+    lp = _email_local_part(email)
+    low = email.lower()
+    if any(other.lower() != low and _email_local_part(other) == lp for other in all_emails):
+        return email
+    return lp
+
+
+def _apportion_percentages(weights: Sequence[float]) -> List[int]:
+    """Round non-negative weights to integer percentages summing to 100 (or 0 if all <= 0)."""
+    n = len(weights)
+    if n == 0:
+        return []
+    clean = [max(0.0, float(w)) for w in weights]
+    total = sum(clean)
+    if total <= 0.0:
+        return [0] * n
+    raw = [100.0 * w / total for w in clean]
+    pcts = [int(math.floor(r)) for r in raw]
+    rem = 100 - sum(pcts)
+    if rem > 0:
+        order = sorted(
+            (i for i in range(n) if clean[i] > 0.0),
+            key=lambda i: (-(raw[i] - pcts[i]), -clean[i], i),
+        )
+        for i in order[:rem]:
+            pcts[i] += 1
+    elif rem < 0:
+        order = sorted(
+            (i for i in range(n) if pcts[i] > 0),
+            key=lambda i: ((raw[i] - pcts[i]), clean[i], -i),
+        )
+        for i in order[:-rem]:
+            pcts[i] -= 1
+    return pcts
+
+
+def compute_antigravity_account_shares(
+    doc: dict,
+    time_range: TimeRange = TimeRange.ALL,
+    now: Optional[datetime] = None,
+    lang: str = "en",
+) -> List[AgentAccountShareViewModel]:
+    """Compute per-account Antigravity usage shares over ``time_range`` (day granularity).
+
+    Returns an empty list when ``antigravity_accounts.by_day`` is missing/empty or has
+    no usage in ``time_range``. Active accounts are sorted by tokens descending, followed
+    by an Unattributed row (if any null-email usage exists in range), then zero-usage
+    accounts from ``antigravity_accounts.accounts`` dimmed at the bottom. Integer
+    percentages sum to 100 via largest-remainder rounding.
+    """
+    doc = doc or {}
+    agy = doc.get("antigravity_accounts")
+    if not isinstance(agy, dict):
+        return []
+    by_day = agy.get("by_day")
+    if not isinstance(by_day, list) or not by_day:
+        return []
+
+    _tz, _now_dt, _ag_win, day_included, _sess_inc, _sess_ct = _build_range_helpers(
+        doc, time_range, now=now
+    )
+
+    by_email: Dict[str, Tuple[str, int, float, int]] = {}
+    unattr_tokens = 0
+    unattr_cost = 0.0
+    unattr_msgs = 0
+
+    for entry in by_day:
+        if not isinstance(entry, dict):
+            continue
+        if not day_included(entry.get("day"), "antigravity"):
+            continue
+        try:
+            tok = int(entry.get("tokens") or 0)
+        except (TypeError, ValueError):
+            tok = 0
+        raw_cost = entry.get("cost_usd") if entry.get("cost_usd") is not None else entry.get("cost")
+        try:
+            cost = float(raw_cost or 0.0)
+        except (TypeError, ValueError):
+            cost = 0.0
+        try:
+            msgs = int(entry.get("messages") or 0)
+        except (TypeError, ValueError):
+            msgs = 0
+
+        raw_email = entry.get("email")
+        email_clean = raw_email.strip() if isinstance(raw_email, str) else ""
+        if email_clean:
+            key = email_clean.lower()
+            prev = by_email.get(key)
+            if prev is None:
+                by_email[key] = (email_clean, tok, cost, msgs)
+            else:
+                by_email[key] = (prev[0], prev[1] + tok, prev[2] + cost, prev[3] + msgs)
+        else:
+            unattr_tokens += tok
+            unattr_cost += cost
+            unattr_msgs += msgs
+
+    total_tokens = sum(v[1] for v in by_email.values()) + unattr_tokens
+    total_cost = sum(v[2] for v in by_email.values()) + unattr_cost
+    if total_tokens <= 0 and total_cost <= 0:
+        return []
+
+    canonical_emails: List[str] = []
+    seen_keys: Set[str] = set()
+    for acc in (agy.get("accounts") or []):
+        if not isinstance(acc, dict):
+            continue
+        raw_acc_email = acc.get("email") or acc.get("account")
+        if not isinstance(raw_acc_email, str) or not raw_acc_email.strip():
+            continue
+        acc_email = raw_acc_email.strip()
+        key = acc_email.lower()
+        if key not in seen_keys:
+            seen_keys.add(key)
+            canonical_emails.append(acc_email)
+
+    for key in sorted(by_email.keys()):
+        if key not in seen_keys:
+            seen_keys.add(key)
+            canonical_emails.append(by_email[key][0])
+
+    # Intermediate tuples: (email, display_name, tokens, cost, messages, is_unattr, is_dimmed)
+    active_items: List[Tuple[Optional[str], str, int, float, int, bool, bool]] = []
+    zero_items: List[Tuple[Optional[str], str, int, float, int, bool, bool]] = []
+
+    for email in canonical_emails:
+        key = email.lower()
+        agg = by_email.get(key)
+        tok = agg[1] if agg is not None else 0
+        cost = agg[2] if agg is not None else 0.0
+        msgs = agg[3] if agg is not None else 0
+        disp = _account_display_name(email, canonical_emails)
+        if tok > 0 or cost > 0:
+            active_items.append((email, disp, tok, cost, msgs, False, False))
+        else:
+            zero_items.append((email, disp, 0, 0.0, 0, False, True))
+
+    active_items.sort(key=lambda item: (-item[2], -item[3], (item[0] or "").lower()))
+
+    ordered = list(active_items)
+    if unattr_tokens > 0 or unattr_cost > 0:
+        ordered.append((
+            None,
+            t("agent_detail.unattributed", lang),
+            unattr_tokens,
+            unattr_cost,
+            unattr_msgs,
+            True,
+            False,
+        ))
+    ordered.extend(zero_items)
+
+    weights = [float(item[2]) if total_tokens > 0 else float(item[3]) for item in ordered]
+    denom = float(total_tokens) if total_tokens > 0 else float(total_cost)
+    pcts = _apportion_percentages(weights)
+
+    rows: List[AgentAccountShareViewModel] = []
+    for (email, disp, tok, cost, msgs, is_unattr, is_dimmed), w, pct in zip(ordered, weights, pcts):
+        frac = (w / denom) if denom > 0 else 0.0
+        rows.append(AgentAccountShareViewModel(
+            email=email,
+            display_name=disp,
+            tokens=tok,
+            tokens_str=format_tokens(tok, lang),
+            cost=cost,
+            cost_str=format_money(cost),
+            messages=msgs,
+            share=frac,
+            share_pct=pct,
+            share_str=f"{pct}%",
+            is_unattributed=is_unattr,
+            is_dimmed=is_dimmed,
+        ))
+    return rows
+
+
 def build_agent_detail(
     doc: dict,
     agent: str,
@@ -2268,6 +2469,12 @@ def build_agent_detail(
                     color=DEFAULT_AGENT_COLOR,
                 )
 
+    account_shares = (
+        compute_antigravity_account_shares(doc, time_range=time_range, now=now_dt, lang=lang)
+        if agent == "antigravity"
+        else []
+    )
+
     return AgentDetailViewModel(
         agent=agent,
         label=label,
@@ -2297,4 +2504,5 @@ def build_agent_detail(
         models=model_rows,
         project_shares=proj_shares,
         others_project_share=others_share,
+        account_shares=account_shares,
     )

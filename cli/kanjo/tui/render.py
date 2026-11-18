@@ -1511,7 +1511,8 @@ def _render_agent_detail_pane(
     width = canvas.width
     height = canvas.height
     dw = min(width - 4, 80)
-    dh = min(height - 4, 25)
+    max_dh = 25 + (2 + len(vm.account_shares) if vm.account_shares else 0)
+    dh = min(height - 4, max_dh)
     dx = (width - dw) // 2
     dy = (height - dh) // 2
     iw = max(10, dw - 4)
@@ -1659,6 +1660,61 @@ def _render_agent_detail_pane(
             else:
                 lx_sim += item_w
     reserve_money = (3 + leg_lines) if vm.project_shares else 3
+
+    # 3b. By account (Antigravity only, omitted when empty)
+    if vm.account_shares and cy + 3 <= last_cy:
+        canvas.draw_hline(dx + 1, cy, dw - 2, hline_ch, pane(dim=True))
+        cy += 1
+        canvas.draw_text(left_x, cy, t("agent_detail.by_account", lang), pane(bold=True), max_width=iw)
+        cy += 1
+
+        bar_len = 12 if iw >= 58 else max(4, iw - 44)
+        # 2(indent) + name_w + 1 + 8(tokens) + 1 + (bar_len+2) + 1 + 4(pct) + 1 + 10(cost) = iw
+        name_w = max(6, iw - 30 - bar_len)
+        avail_rows = last_cy - cy
+        max_accounts = (avail_rows - reserve_money) if (avail_rows - reserve_money >= 1) else avail_rows
+        for acc in vm.account_shares[:max_accounts]:
+            if cy >= last_cy:
+                break
+            ax = left_x + 2
+            name_txt = pad_str(truncate_str(acc.display_name, name_w), name_w)
+            if acc.is_dimmed:
+                name_style = pane(fg="gray", dim=True)
+            elif acc.is_unattributed:
+                name_style = pane(fg="gray")
+            else:
+                name_style = pane()
+            canvas.draw_text(ax, cy, name_txt, name_style, max_width=name_w)
+
+            rx = ax + name_w + 1
+            tok_style = pane(fg="gray", dim=True) if acc.is_dimmed else pane()
+            canvas.draw_text(rx, cy, pad_str(acc.tokens_str, 8, align="right"), tok_style, max_width=8)
+            rx += 9
+
+            filled = 0 if acc.is_dimmed else min(bar_len, max(0, int(round(acc.share * bar_len))))
+            empty = bar_len - filled
+            canvas.draw_text(rx, cy, "[", pane(dim=True), max_width=1)
+            if filled > 0:
+                bar_fg = "gray" if acc.is_unattributed else vm.color
+                canvas.draw_text(rx + 1, cy, block_ch * filled, pane(fg=bar_fg, bold=True), max_width=filled)
+            if empty > 0:
+                canvas.draw_text(rx + 1 + filled, cy, " " * empty, pane(dim=acc.is_dimmed), max_width=empty)
+            canvas.draw_text(rx + 1 + bar_len, cy, "]", pane(dim=True), max_width=1)
+            rx += bar_len + 3
+
+            if acc.is_dimmed:
+                pct_style = pane(fg="gray", dim=True)
+            elif acc.is_unattributed:
+                pct_style = pane(fg="gray", bold=True)
+            else:
+                pct_style = pane(fg=vm.color, bold=True)
+            canvas.draw_text(rx, cy, pad_str(acc.share_str, 4, align="right"), pct_style, max_width=4)
+            rx += 5
+
+            cost_style = pane(fg="gray", dim=True) if acc.is_dimmed else pane(bold=True)
+            canvas.draw_text(rx, cy, pad_str(acc.cost_str, 10, align="right"), cost_style,
+                             max_width=max(0, right_x - rx))
+            cy += 1
 
     # 4. Per-model table
     if vm.models and cy + 4 <= last_cy - reserve_money:

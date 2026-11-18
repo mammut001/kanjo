@@ -162,6 +162,13 @@ def render_static_snapshot(
     agent_rows = build_agent_rows(filtered, lang=lang)
     day_rows = build_day_rows(filtered, lang=lang)
 
+    detail_vm = None
+    if detail_agent:
+        detail_vm = build_agent_detail(
+            doc, detail_agent, time_range=time_range, now=now,
+            filtered=filtered, lang=lang,
+        )
+
     # Estimate required height if not specified
     if height is None:
         needed = 4  # header + total + share bar + spacing
@@ -185,14 +192,8 @@ def render_static_snapshot(
             needed += 1  # window title
             needed += min(15, len(accounts_section.rows)) if accounts_section else 0
         # Static snapshots have no F-key bar: output ends after the table footer.
-        height = max(29 if detail_agent else 20, needed)
-
-    detail_vm = None
-    if detail_agent:
-        detail_vm = build_agent_detail(
-            doc, detail_agent, time_range=time_range, now=now,
-            filtered=filtered, lang=lang,
-        )
+        min_detail_h = 29 + (2 + len(detail_vm.account_shares) if detail_vm and detail_vm.account_shares else 0)
+        height = max(min_detail_h if detail_agent else 20, needed)
 
     canvas = Canvas(width, height)
     state = TUIState(
