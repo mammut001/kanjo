@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-11-18
+
 ### Changed
 
 - The menu-bar panel opens instantly after a background refresh: the numbers for the selected range are worked out in the background when new usage arrives, so clicking the icon only shows them (it used to take 3–4 seconds with a lot of history).
