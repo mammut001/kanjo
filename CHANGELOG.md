@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Copy your usage as an image: the photo button in the panel footer puts a share card for the current range on the clipboard (top agents with tokens, cost, cache hit and input/output/cache read, the other agents in one line, totals and your top 5 projects; hidden projects are left out). The detail card of each agent in the Agents view has its own button for a single-agent card. Inspired by the share images in Tokei.
+
 ## [0.6.8] - 2026-11-18
 
 ### Added
