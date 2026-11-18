@@ -13,17 +13,11 @@ struct RangeContext {
 
     init(report: UsageReport, raw: String, now: Date = Date()) {
         self.report = report
-        let reset = !(report.quotaWindows ?? [:]).isEmpty
-        let cycle = !(report.subscriptions ?? [:]).isEmpty
-        let wanted = TimeRange(rawValue: raw) ?? .all
-        switch wanted {
-        case .sinceReset where !reset: range = .all
-        case .billingCycle where !cycle: range = .all
-        default: range = wanted
-        }
-        resetAvailable = reset
-        cycleAvailable = cycle
-        spec = RangeEngine.spec(range, report: report, now: now)
+        let resolved = RangeEngine.resolve(raw: raw, report: report, now: now)
+        self.range = resolved.range
+        self.spec = resolved.spec
+        self.resetAvailable = resolved.resetAvailable
+        self.cycleAvailable = resolved.cycleAvailable
     }
 
     var isAll: Bool { range == .all }

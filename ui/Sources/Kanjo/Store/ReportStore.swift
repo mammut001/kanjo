@@ -30,6 +30,7 @@ final class ReportStore: ObservableObject {
     private var scheduledTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var defaultsObserver: NSObjectProtocol?
+    private var pendingReport: (report: UsageReport, isStale: Bool, staleAt: String?)?
 
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
@@ -131,17 +132,18 @@ final class ReportStore: ObservableObject {
             panelGeneration = gen
             
             if let newReport = state.report {
+                pendingReport = (newReport, state.isStaleReport, state.staleReportGeneratedAt)
                 let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
                 Task.detached(priority: .userInitiated) {
                     let now = Date()
                     let data = PanelData.compute(report: newReport, rangeRaw: range, now: now)
                     await MainActor.run {
-                        if self.panelGeneration == gen {
-                            self.report = newReport
-                            self.isStaleReport = state.isStaleReport
-                            self.staleReportGeneratedAt = state.staleReportGeneratedAt
-                            self.panelData = data
-                        }
+                        guard self.panelGeneration == gen else { return }
+                        self.report = newReport
+                        self.isStaleReport = state.isStaleReport
+                        self.staleReportGeneratedAt = state.staleReportGeneratedAt
+                        self.panelData = data
+                        self.pendingReport = nil
                     }
                 }
             } else {
@@ -149,20 +151,32 @@ final class ReportStore: ObservableObject {
                 self.isStaleReport = false
                 self.staleReportGeneratedAt = nil
                 self.panelData = nil
+                self.pendingReport = nil
             }
         }
     }
 
     func prepare(rangeRaw: String) {
-        guard let report = report else { return }
+        let reportToCompute = pendingReport?.report ?? report
+        guard let report = reportToCompute else { return }
+        
         let gen = panelGeneration + 1
         panelGeneration = gen
+        
+        let stale = pendingReport?.isStale
+        let staleAt = pendingReport?.staleAt
+        
         Task.detached(priority: .userInitiated) {
             let now = Date()
             let data = PanelData.compute(report: report, rangeRaw: rangeRaw, now: now)
             await MainActor.run {
-                if self.panelGeneration == gen {
-                    self.panelData = data
+                guard self.panelGeneration == gen else { return }
+                self.panelData = data
+                if let stale = stale {
+                    self.report = report
+                    self.isStaleReport = stale
+                    self.staleReportGeneratedAt = staleAt
+                    self.pendingReport = nil
                 }
             }
         }

@@ -245,6 +245,20 @@ public enum RangeEngine {
         report.timezone.flatMap(TimeZone.init(identifier:)) ?? .current
     }
 
+    public static func resolve(raw: String, report: UsageReport, now: Date) -> (range: TimeRange, spec: RangeSpec, resetAvailable: Bool, cycleAvailable: Bool) {
+        let reset = !(report.quotaWindows ?? [:]).isEmpty
+        let cycle = !(report.subscriptions ?? [:]).isEmpty
+        let wanted = TimeRange(rawValue: raw) ?? .all
+        let range: TimeRange
+        switch wanted {
+        case .sinceReset where !reset: range = .all
+        case .billingCycle where !cycle: range = .all
+        default: range = wanted
+        }
+        let spec = RangeEngine.spec(range, report: report, now: now)
+        return (range, spec, reset, cycle)
+    }
+
     /// 范围 → 区间。
     /// - all：无界；today：[今天零点, now)；days7 / days30：[今天往前 6 / 29 天的零点, now)；
     /// - lastWeek：上一个周一零点到本周一零点；

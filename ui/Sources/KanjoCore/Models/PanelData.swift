@@ -8,8 +8,9 @@ public struct PanelData: Equatable {
     public let now: Date
 
     public static func compute(report: UsageReport, rangeRaw: String, now: Date) -> PanelData? {
-        guard let range = TimeRange(rawValue: rangeRaw) else { return nil }
-        let spec = RangeEngine.spec(range, report: report, now: now)
+        let resolved = RangeEngine.resolve(raw: rangeRaw, report: report, now: now)
+        let spec = resolved.spec
+        
         let filtered = RangeEngine.filtered(report, range: spec, fallbackAgentFor: { p in
             dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown"
         })

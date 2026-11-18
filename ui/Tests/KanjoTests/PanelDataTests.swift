@@ -43,7 +43,32 @@ final class PanelDataTests: XCTestCase {
     }
     
     func testSpecMatch() {
-        // Need to create synthetic data for PanelData.compute and matches
-        // ...
+        // RangeEngine.resolve matches RangeContext's logic
+        let report = try! JSONDecoder().decode(UsageReport.self, from: """
+        {
+            "schema_version": 1,
+            "generated_at": "2026-11-18T10:00:00Z",
+            "currency": "USD",
+            "cost_note": "",
+            "config": {"dominant_threshold": 0},
+            "totals": {"cost": 0, "tokens": {"total": 0}, "sessions": 0},
+            "projects": [],
+            "buckets": {
+                "unattributed": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "excluded": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "parse_failed": {"sessions": 0, "files": []}
+            }
+        }
+        """.data(using: .utf8)!)
+        
+        let now = Date(timeIntervalSince1970: 1763440800) // 2026-11-18T10:00:00Z
+        
+        // sinceReset requires QuotaWindows, which are missing
+        let resolved = RangeEngine.resolve(raw: "sinceReset", report: report, now: now)
+        XCTAssertEqual(resolved.range, .all)
+        
+        let panelData = PanelData.compute(report: report, rangeRaw: "sinceReset", now: now)
+        XCTAssertNotNil(panelData)
+        XCTAssertEqual(panelData!.rangeSpec, resolved.spec)
     }
 }
