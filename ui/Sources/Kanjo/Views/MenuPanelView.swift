@@ -99,6 +99,7 @@ struct MenuPanelView: View {
     @EnvironmentObject var disk: DiskStore
     @Environment(\.isSnapshotMode) private var isSnapshotMode
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @AppStorage(SettingsKeys.appAppearance, store: AppDefaults.store) private var appAppearance = AppAppearance.defaultValue.rawValue
     @AppStorage(SettingsKeys.panelViewMode, store: AppDefaults.store) private var panelViewMode = PanelViewMode.projects.rawValue
     @State private var route: Route = .overview
@@ -383,11 +384,10 @@ struct MenuPanelView: View {
                 Button {
                     let hiddenRaw = AppDefaults.store.string(forKey: SettingsKeys.hiddenProjects) ?? ""
                     let hiddenProjects = ProjectPrefs.parse(hiddenRaw)
-                    let summary = ShareSummary.build(report: store.report!, rangeRaw: store.panelData?.rangeSpec.range.rawValue ?? "all", hiddenProjects: hiddenProjects)
-                    let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: nil))
-                    renderer.scale = 2.0
-                    if let nsImage = renderer.nsImage {
-                        ShareImageExporter.copyToPasteboard(image: nsImage)
+                    
+                    guard let report = store.report else { return }
+                    
+                    if ShareImage.copy(report: report, rangeRaw: rangeRaw, agentId: nil, hiddenProjects: hiddenProjects) {
                         copied = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { copied = false }
                     }

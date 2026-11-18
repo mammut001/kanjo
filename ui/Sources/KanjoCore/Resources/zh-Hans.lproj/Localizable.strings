@@ -611,5 +611,5 @@
 "share.sessions" = "会话";
 "share.updated_format" = "已更新于 %@";
 "share.total_suffix_format" = "%@ 总量";
-"share.agent_subscription_format" = "%@ · %@×";
+"share.agent_subscription_format" = "%@ · %@";
 "share.other_agents" = "其他代理";

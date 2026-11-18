@@ -248,6 +248,35 @@ struct AgentsView: View {
     }
 }
 
+struct AgentCopyButton: View {
+    let report: UsageReport
+    let rangeRaw: String
+    let agentId: String
+    let accentColor: Color
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            let hiddenRaw = AppDefaults.store.string(forKey: SettingsKeys.hiddenProjects) ?? ""
+            let hiddenProjects = ProjectPrefs.parse(hiddenRaw)
+            if ShareImage.copy(report: report, rangeRaw: rangeRaw, agentId: agentId, hiddenProjects: hiddenProjects) {
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { copied = false }
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "photo.on.rectangle")
+                .font(.system(size: 11))
+                .foregroundColor(copied ? accentColor : .secondary)
+                .frame(width: 22, height: 22)
+                .background(Color.primary.opacity(0.06))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .hoverTip(L10n.tr(copied ? "menu.copied" : "menu.copy_usage_image"))
+    }
+}
+
 // MARK: - 单个 Agent 行 + 浮层详情卡
 
 private struct AgentDetailRow: View {
@@ -264,23 +293,19 @@ private struct AgentDetailRow: View {
     private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
     var body: some View {
-        Button(action: onTogglePin) {
-            HStack {
+        ZStack(alignment: .trailing) {
+            Button(action: onTogglePin) {
                 rowHeader
-                CopyButton {
-                    let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw)
-                    let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: row.agent))
-                    renderer.scale = 2.0
-                    if let nsImage = renderer.nsImage {
-                        ShareImageExporter.copyToPasteboard(image: nsImage)
-                    }
-                }
+                    .padding(.horizontal, Metrics.listInset)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .padding(.trailing, 26)
             }
-            .padding(.horizontal, Metrics.listInset)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+            .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
+            
+            AgentCopyButton(report: report, rangeRaw: rangeRaw, agentId: row.agent, accentColor: accentColor)
+                .padding(.trailing, Metrics.listInset)
         }
-        .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
         .hoverCard(
             id: AgentsRoute.cardId(for: row.agent),
             isPinned: isPinned,

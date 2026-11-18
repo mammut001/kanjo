@@ -13,8 +13,8 @@ struct ShareImage: View {
                 AgentCard(row: row, rangeLabel: summary.rangeLabel)
             } else {
                 let sortedAgents = summary.agentRows.sorted { $0.cost > $1.cost }
-                let topAgents = sortedAgents.prefix(4)
-                let others = sortedAgents.dropFirst(4)
+                let topAgents = sortedAgents.prefix(3)
+                let others = sortedAgents.dropFirst(3)
                 
                 ForEach(topAgents, id: \.agent) { row in
                     AgentCard(row: row, rangeLabel: summary.rangeLabel)
@@ -69,6 +69,17 @@ struct ShareImage: View {
         .font(.system(size: 10, design: .monospaced))
         .foregroundStyle(.secondary)
     }
+
+    public static func copy(report: UsageReport, rangeRaw: String, agentId: String?, hiddenProjects: Set<String>) -> Bool {
+        let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw, hiddenProjects: hiddenProjects)
+        let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: agentId))
+        renderer.scale = 2.0
+        if let nsImage = renderer.nsImage {
+            ShareImageExporter.copyToPasteboard(image: nsImage)
+            return true
+        }
+        return false
+    }
 }
 
 struct AgentCard: View {
@@ -83,7 +94,7 @@ struct AgentCard: View {
                     .fill(agentColor.opacity(0.15))
                     .frame(width: 22, height: 22)
                     .overlay(Circle().stroke(agentColor, lineWidth: 1))
-                    .overlay(Image(systemName: "person").font(.system(size: 10)).foregroundColor(agentColor)) 
+                    .overlay(Circle().fill(agentColor).frame(width: 8, height: 8))
                 
                 Text(row.label)
                     .font(.system(size: 14, weight: .semibold))
@@ -109,9 +120,7 @@ struct AgentCard: View {
                 row.cacheHitRate != nil ? (icon: "circle", caption: L10n.tr("share.cache_hit"), value: String(format: "%.1f%%", (row.cacheHitRate!)*100), color: agentColor, rate: row.cacheHitRate!) : nil,
                 row.tokenBreakdown.input > 0 ? (icon: "arrow.down", caption: L10n.tr("share.input"), value: Fmt.tokens(row.tokenBreakdown.input), color: agentColor, rate: nil) : nil,
                 row.tokenBreakdown.output > 0 ? (icon: "arrow.up", caption: L10n.tr("share.output"), value: Fmt.tokens(row.tokenBreakdown.output), color: agentColor, rate: nil) : nil,
-                row.tokenBreakdown.cacheRead > 0 ? (icon: "bolt", caption: L10n.tr("share.cache_read"), value: Fmt.tokens(row.tokenBreakdown.cacheRead), color: agentColor, rate: nil) : nil,
-                row.tokenBreakdown.cacheWrite > 0 ? (icon: "square.stack.3d.up", caption: L10n.tr("share.cache_write"), value: Fmt.tokens(row.tokenBreakdown.cacheWrite), color: agentColor, rate: nil) : nil,
-                row.tokenBreakdown.thinking > 0 ? (icon: "brain", caption: L10n.tr("share.reasoning"), value: Fmt.tokens(row.tokenBreakdown.thinking), color: agentColor, rate: nil) : nil
+                row.tokenBreakdown.cacheRead > 0 ? (icon: "bolt", caption: L10n.tr("share.cache_read"), value: Fmt.tokens(row.tokenBreakdown.cacheRead), color: agentColor, rate: nil) : nil
             ].compactMap { $0 }
             
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 8) {

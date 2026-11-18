@@ -611,5 +611,5 @@
 "share.sessions" = "Sessions";
 "share.updated_format" = "Updated %@";
 "share.total_suffix_format" = "%@ total";
-"share.agent_subscription_format" = "%@ · %@×";
+"share.agent_subscription_format" = "%@ · %@";
 "share.other_agents" = "Other agents";

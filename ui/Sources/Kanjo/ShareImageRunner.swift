@@ -37,9 +37,17 @@ enum ShareImageRunner {
         
         // Use preview defaults
         let store = AppDefaults.resolveStore(arguments: args + ["--snapshot"])
-        let rangeRaw = store.string(forKey: SettingsKeys.timeRange) ?? "all"
+        let rangeRaw = args.firstIndex(of: "--share-range").flatMap { i in i + 1 < args.count ? args[i+1] : nil } ?? store.string(forKey: SettingsKeys.timeRange) ?? "all"
         
         let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw)
+        
+        if let agentId = agentId {
+            if !summary.agentRows.contains(where: { $0.agent == agentId }) {
+                let ids = summary.agentRows.map(\.agent).joined(separator: ", ")
+                fputs("Error: no agent '\(agentId)'; available: \(ids)\n", stderr)
+                exit(1)
+            }
+        }
         
         let view = ShareImage(summary: summary, agentId: agentId)
             .preferredColorScheme(.dark)

@@ -1,8 +1,7 @@
 import AppKit
-import SwiftUI
 
-enum ShareImageExporter {
-    static func copyToPasteboard(image: NSImage, pasteboard: NSPasteboard = .general) {
+public enum ShareImageExporter {
+    public static func copyToPasteboard(image: NSImage, pasteboard: NSPasteboard = .general) {
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
         
