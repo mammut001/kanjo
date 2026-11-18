@@ -59,6 +59,7 @@ struct AgentsView: View {
                             .padding(.horizontal, Metrics.listInset)
                             .padding(.vertical, 12)
                     } else {
+                        let quotaLabelWidth = sharedQuotaLabelWidth(for: summary.rows)
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(summary.rows.enumerated()), id: \.element.id) { index, row in
                                 if index > 0 {
@@ -70,6 +71,7 @@ struct AgentsView: View {
                                 AgentDetailRow(
                                     row: row,
                                     currency: cur,
+                                    quotaLabelWidth: quotaLabelWidth,
                                     isExpanded: isExpanded,
                                     isPinned: isPinned,
                                     onTogglePin: {
@@ -134,6 +136,16 @@ struct AgentsView: View {
             return earliest5h.addingTimeInterval(-6660)
         }
         return ReportDates.parseTimestamp(report.generatedAt) ?? realNow
+    }
+
+    private func sharedQuotaLabelWidth(for rows: [AgentSummaryRow]) -> CGFloat {
+        let titles = rows.flatMap { $0.quotaRows.map(\.title) }
+        guard !titles.isEmpty else { return 46 }
+        let font = NSFont.systemFont(ofSize: 9.5)
+        let maxW = titles.map {
+            ceil(($0 as NSString).size(withAttributes: [.font: font]).width)
+        }.max() ?? 46
+        return max(44, min(110, maxW + 2))
     }
 
     private func rowAnchor(_ agent: String) -> String {
@@ -276,6 +288,7 @@ struct AgentsView: View {
 private struct AgentDetailRow: View {
     let row: AgentSummaryRow
     let currency: String
+    let quotaLabelWidth: CGFloat
     let isExpanded: Bool
     let isPinned: Bool
     let onTogglePin: () -> Void
@@ -335,13 +348,12 @@ private struct AgentDetailRow: View {
             }
 
             if !row.quotaRows.isEmpty {
-                let labelWidth = quotaLabelWidth(for: row.quotaRows)
                 VStack(alignment: .leading, spacing: 3.5) {
                     ForEach(row.quotaRows) { q in
                         QuotaTickRow(
                             agent: row.agent,
                             row: q,
-                            labelWidth: labelWidth
+                            labelWidth: quotaLabelWidth
                         )
                     }
                 }
@@ -395,11 +407,6 @@ private struct AgentDetailRow: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
-    }
-
-    private func quotaLabelWidth(for rows: [QuotaRow]) -> CGFloat {
-        let hasLongExtra = rows.contains { $0.title.count > 10 }
-        return hasLongExtra ? 78 : 46
     }
 
     // MARK: 行内展开详情
@@ -706,12 +713,11 @@ private struct QuotaTickRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 4.5) {
+        HStack(alignment: .center, spacing: 5) {
             Text(row.title)
                 .font(.system(size: 9.5))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
                 .frame(width: labelWidth, alignment: .leading)
 
             QuotaTickBar(percent: row.percent, color: barColor)
@@ -719,13 +725,12 @@ private struct QuotaTickRow: View {
             Text(row.percent.map { "\(Int($0.rounded()))%" } ?? "—")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(row.percent == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(barColor))
-                .frame(width: 24, alignment: .trailing)
+                .frame(width: 26, alignment: .trailing)
 
-            Text(row.detail)
-                .font(.system(size: 9))
-                .foregroundStyle(row.percent == nil ? .tertiary : .secondary)
+            Text(row.compactDetail)
+                .font(.system(size: 9.5))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .hoverTip(row.detail)
         }

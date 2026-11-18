@@ -159,6 +159,8 @@ final class SubscriptionTests: KanjoTestCase {
         let reset = ReportDates.parseTimestamp("2026-10-27T02:00:00Z")!
         XCTAssertEqual(plain([SubscriptionValue.resetText(reset, timezone: tz, now: now, language: "zh-Hans")]),
                        ["2 天 14 小时后重置 · 周二 10:00"])
+        XCTAssertEqual(plain([SubscriptionValue.compactResetText(reset, timezone: tz, now: now, language: "zh-Hans")]),
+                       ["2 天 14 小时 · 周二 10:00"])
     }
 
     func testRenewalTodayTomorrowAndExpired() {
