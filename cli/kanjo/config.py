@@ -42,7 +42,7 @@ from typing import Dict, List, Optional
 
 from .quota import parse_weekly_reset
 from .sources.base import AGENT_LABELS
-from .subscriptions import known_monthly_price
+from .subscriptions import KNOWN_PLANS, _known, known_monthly_price
 
 DEFAULT_THRESHOLD = 0.8
 
@@ -85,6 +85,9 @@ class Config:
     # agent -> explicitly configured subscription fields
     subscriptions: Dict[str, dict] = field(default_factory=dict)
     subscription_origins: Dict[str, dict] = field(default_factory=dict)
+    # email -> {"plan": str, "monthly_price_usd": float}
+    antigravity_accounts: Dict[str, dict] = field(default_factory=dict)
+    antigravity_account_origins: Dict[str, dict] = field(default_factory=dict)
     family_since: Optional[str] = None
     family_agents: Optional[Any] = None
     family_accounts: Optional[List[str]] = None
@@ -173,6 +176,45 @@ def _strip_comment(line: str) -> str:
     return "".join(out).strip()
 
 
+def _parse_table_header(line: str, lineno: int) -> Optional[List[str]]:
+    if not (line.startswith("[") and line.endswith("]")):
+        return None
+    inner = line[1:-1].strip()
+    if not inner or inner.startswith("["):
+        return None
+    parts: List[str] = []
+    i = 0
+    n = len(inner)
+    while i < n:
+        while i < n and inner[i].isspace():
+            i += 1
+        if i >= n:
+            raise ConfigError("line %d: trailing dot in [%s]" % (lineno, inner))
+        if inner[i] in "\"'":
+            quote = inner[i]
+            end = inner.find(quote, i + 1)
+            if end < 0:
+                raise ConfigError("line %d: unterminated string in [%s]" % (lineno, inner))
+            parts.append(inner[i + 1:end])
+            i = end + 1
+        else:
+            start = i
+            while i < n and (inner[i].isalnum() or inner[i] in "_-"):
+                i += 1
+            if i == start:
+                raise ConfigError("line %d: invalid table header [%s]" % (lineno, inner))
+            parts.append(inner[start:i])
+        while i < n and inner[i].isspace():
+            i += 1
+        if i < n:
+            if inner[i] != ".":
+                raise ConfigError("line %d: invalid table header [%s]" % (lineno, inner))
+            i += 1
+            if i == n:
+                raise ConfigError("line %d: trailing dot in [%s]" % (lineno, inner))
+    return parts
+
+
 def parse_toml_subset(text: str) -> dict:
     data: dict = {}
     table = data
@@ -180,13 +222,13 @@ def parse_toml_subset(text: str) -> dict:
         line = _strip_comment(raw)
         if not line:
             continue
-        m = re.match(r"^\[\s*([A-Za-z0-9_.\-]+)\s*\]$", line)
-        if m:
+        parts = _parse_table_header(line, lineno)
+        if parts is not None:
             table = data  # dotted headers ([quota_windows.claude]) nest, as in TOML
-            for part in m.group(1).split("."):
+            for part in parts:
                 table = table.setdefault(part, {})
                 if not isinstance(table, dict):
-                    raise ConfigError("line %d: [%s] redefines a value" % (lineno, m.group(1)))
+                    raise ConfigError("line %d: [%s] redefines a value" % (lineno, ".".join(parts)))
             continue
         m = re.match(r'^(?:"([^"]*)"|\'([^\']*)\'|([A-Za-z0-9_\-]+))\s*=\s*(.+)$', line)
         if not m:
@@ -264,6 +306,11 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
         cfg.subscriptions = _subscriptions(flat["subscriptions"])
         cfg.subscription_origins = {
             agent: {key: "toml" for key in spec} for agent, spec in cfg.subscriptions.items()
+        }
+    if flat.get("antigravity_accounts"):
+        cfg.antigravity_accounts = _antigravity_accounts(flat["antigravity_accounts"])
+        cfg.antigravity_account_origins = {
+            email: {key: "toml" for key in spec} for email, spec in cfg.antigravity_accounts.items()
         }
     if flat.get("family"):
         fam = _family(flat["family"])
@@ -371,6 +418,48 @@ def _subscriptions(raw) -> Dict[str, dict]:
                 raise ConfigError("%s.extra_usage_enabled must be true or false" % where)
             fields["extra_usage_enabled"] = extra
         out[str(agent)] = fields
+    return out
+
+
+_AGY_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _validate_agy_email(email) -> str:
+    if not isinstance(email, str) or not _AGY_EMAIL_RE.match(email.strip()):
+        raise ConfigError("invalid email in [antigravity_accounts]: %r" % (email,))
+    return email.strip().lower()
+
+
+def _antigravity_accounts(raw) -> Dict[str, dict]:
+    """Validate per-account Antigravity plans and optional price overrides."""
+    if not isinstance(raw, dict):
+        raise ConfigError("[antigravity_accounts] must be a table")
+    out: Dict[str, dict] = {}
+    for email, spec in raw.items():
+        norm_email = _validate_agy_email(email)
+        where = "antigravity_accounts.%s" % norm_email
+        if not isinstance(spec, dict):
+            raise ConfigError("[%s] must be a table" % where)
+        fields = dict(out.get(norm_email, {}))
+        if "plan" in spec and spec["plan"] is not None:
+            plan = spec["plan"]
+            if not isinstance(plan, str) or not plan.strip():
+                raise ConfigError("%s.plan must be a non-empty string" % where)
+            raw_plan = plan.strip()
+            if raw_plan.lower() == "none":
+                fields["plan"] = "none"
+            else:
+                resolved = _known("antigravity", raw_plan)
+                if resolved is None:
+                    valid_keys = ", ".join(sorted(KNOWN_PLANS["antigravity"].keys()))
+                    raise ConfigError("[%s] unknown plan %r (expected %s, or 'none')" % (where, raw_plan, valid_keys))
+                fields["plan"] = resolved[0]
+        if "monthly_price_usd" in spec and spec["monthly_price_usd"] is not None:
+            price = spec["monthly_price_usd"]
+            if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or price < 0:
+                raise ConfigError("%s.monthly_price_usd must be a non-negative number" % where)
+            fields["monthly_price_usd"] = float(price)
+        out[norm_email] = fields
     return out
 
 
@@ -528,6 +617,23 @@ def load(path: Optional[str] = None, overrides: Optional[dict] = None) -> Config
             if key in cfg.quota_windows[agent]:
                 origins[key] = "overrides"
 
+    raw_agy = data.get("antigravity_accounts", {})
+    if not isinstance(raw_agy, dict):
+        raise ConfigError("overrides antigravity_accounts must be an object")
+    merged_agy = {email: dict(spec) for email, spec in cfg.antigravity_accounts.items()}
+    for email, spec in raw_agy.items():
+        if not isinstance(spec, dict):
+            raise ConfigError("overrides antigravity_accounts.%s must be an object" % email)
+        norm_email = _validate_agy_email(email)
+        merged_agy.setdefault(norm_email, {}).update(spec)
+    cfg.antigravity_accounts = _antigravity_accounts(merged_agy)
+    for email, spec in raw_agy.items():
+        norm_email = _validate_agy_email(email)
+        origins = cfg.antigravity_account_origins.setdefault(norm_email, {})
+        for key in spec:
+            if key in cfg.antigravity_accounts.get(norm_email, {}):
+                origins[key] = "overrides"
+
     raw_fam = data.get("family", {})
     if not isinstance(raw_fam, dict):
         raise ConfigError("overrides family must be an object")
@@ -592,4 +698,19 @@ def subscription_value(cfg: Config, agent: str, key: str, found: dict):
         return sub.get(key), origin
     if key in sub:
         return sub[key], "detected"
+    return None, "default"
+
+
+def antigravity_account_value(cfg: Config, email: str, key: str):
+    """Effective field and its origin for antigravity_accounts.<email>."""
+    norm_email = email.strip().lower()
+    spec = cfg.antigravity_accounts.get(norm_email, {})
+    origins = cfg.antigravity_account_origins.get(norm_email, {})
+    if key in spec:
+        return spec[key], origins.get(key, "toml")
+    if key == "monthly_price_usd" and "plan" in spec:
+        plan = spec["plan"]
+        if plan == "none":
+            return None, origins.get("plan", "toml")
+        return known_monthly_price("antigravity", plan), origins.get("plan", "toml")
     return None, "default"

@@ -273,6 +273,7 @@ def _config_has_custom_fields(config: Any) -> bool:
         or getattr(config, "no_network", False)
         or getattr(config, "quota_windows", None)
         or getattr(config, "subscriptions", None)
+        or getattr(config, "antigravity_accounts", None)
         or getattr(config, "family_since", None)
         or getattr(config, "family_agents", None) is not None
         or getattr(config, "family_accounts", None) is not None
@@ -303,6 +304,8 @@ def _config_to_dict(config: Any) -> dict:
         data["quota_windows"] = qw_out
     if getattr(config, "subscriptions", None):
         data["subscriptions"] = {k: dict(v) for k, v in config.subscriptions.items()}
+    if getattr(config, "antigravity_accounts", None):
+        data["antigravity_accounts"] = {k: dict(v) for k, v in config.antigravity_accounts.items()}
     fam: Dict[str, Any] = {}
     if getattr(config, "family_since", None):
         fam["since"] = config.family_since

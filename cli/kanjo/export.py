@@ -399,7 +399,9 @@ def _build_antigravity_accounts(sessions: List[Session],
                                 quota_windows: Optional[dict],
                                 subscriptions: Optional[dict],
                                 prices: PriceBook,
-                                now: datetime) -> Optional[dict]:
+                                now: datetime,
+                                antigravity_accounts_cfg: Optional[Dict[str, dict]] = None,
+                                tz_name: Optional[str] = None) -> Optional[dict]:
     """Build the antigravity_accounts section for export."""
     agy_qw = quota_windows.get("antigravity") if isinstance(quota_windows, dict) else None
     window_start_dt = None
@@ -467,11 +469,18 @@ def _build_antigravity_accounts(sessions: List[Session],
                 if em:
                     all_emails.add(em.lower())
 
+    try:
+        from .antigravity_accounts import _normalize_account_email, compute_antigravity_by_day
+    except Exception:
+        _normalize_account_email = lambda r: r.strip().lower() if isinstance(r, str) and r.strip() else None  # noqa: E731
+        compute_antigravity_by_day = None
+
     for s in sessions:
         if s.agent == "antigravity":
             for m in s.messages:
-                if m.account:
-                    all_emails.add(m.account.lower())
+                acc = _normalize_account_email(m.account)
+                if acc:
+                    all_emails.add(acc)
 
     # Omit key entirely when no account has ever been seen and nothing is saved
     if not all_emails:
@@ -495,7 +504,7 @@ def _build_antigravity_accounts(sessions: List[Session],
         if s.agent != "antigravity":
             continue
         for m in s.messages:
-            acc = m.account.lower() if m.account else None
+            acc = _normalize_account_email(m.account)
             if acc and acc in account_stats:
                 if account_stats[acc]["last_seen_ts"] is None or m.ts > account_stats[acc]["last_seen_ts"]:
                     account_stats[acc]["last_seen_ts"] = m.ts
@@ -522,27 +531,44 @@ def _build_antigravity_accounts(sessions: List[Session],
                     if account_stats[em_clean]["last_seen_ts"] is None or span.end > account_stats[em_clean]["last_seen_ts"]:
                         account_stats[em_clean]["last_seen_ts"] = span.end
 
+    try:
+        from .quota_fetch import load_antigravity_account_quotas
+        account_quotas = load_antigravity_account_quotas(now=now_ts)
+    except Exception:
+        account_quotas = {}
+
+    from .subscriptions import resolve_antigravity_account_plan
+
     accounts_rows = []
     for em, st in account_stats.items():
-        accounts_rows.append({
+        row = {
             "email": em,
             "tokens": st["tokens"],
             "cost_usd": round(st["cost_usd"], 4),
             "messages": st["messages"],
             "last_seen": iso_utc(st["last_seen_ts"]) if st["last_seen_ts"] is not None else None,
             "saved_login": st["saved_login"],
-        })
+        }
+        plan_obj = resolve_antigravity_account_plan((antigravity_accounts_cfg or {}).get(em))
+        if plan_obj is not None:
+            row["plan"] = plan_obj
+        quota_obj = account_quotas.get(em)
+        if quota_obj is not None:
+            row["quota"] = quota_obj
+        accounts_rows.append(row)
 
     # Sort: tokens desc, then email
     accounts_rows.sort(key=lambda a: (-a["tokens"], a["email"]))
 
     current_account = agy_index.get_current_account() if agy_index is not None else None
+    by_day = compute_antigravity_by_day(sessions, tz_name=tz_name, prices=prices) if compute_antigravity_by_day else []
 
     return {
         "window_start": window_start_iso,
         "window_kind": window_kind,
         "current": current_account,
         "accounts": accounts_rows,
+        "by_day": by_day,
         "unknown": {
             "tokens": unknown_tokens,
             "cost_usd": round(unknown_cost, 4),
@@ -1128,7 +1154,8 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                                              timezone_name=tz_name,
                                              no_network=getattr(config, "no_network", False)),
         "subscriptions": load_subscriptions(config.subscriptions, directory=tokei_dir, now=now,
-                                            timezone_name=tz_name),
+                                            timezone_name=tz_name,
+                                            antigravity_accounts=config.antigravity_accounts),
         "totals": totals_json,
         "projects": project_list,
         "buckets": {
@@ -1144,6 +1171,8 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         subscriptions=doc["subscriptions"],
         prices=prices,
         now=now,
+        antigravity_accounts_cfg=config.antigravity_accounts,
+        tz_name=tz_name,
     )
     if agy_accs is not None:
         doc["antigravity_accounts"] = agy_accs
@@ -1312,6 +1341,11 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
 
     pricing_ov = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pricing_overrides.json")
     config_paths.append(pricing_ov)
+    try:
+        from .quota_fetch import antigravity_account_quota_path
+        config_paths.append(antigravity_account_quota_path())
+    except Exception:
+        pass
 
     for cp in sorted(set(config_paths)):
         try:
@@ -1326,6 +1360,7 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     items.append(("__cfg_family_agents__", str(cfg.family_agents), 0))
     items.append(("__cfg_family_accounts__", str(sorted(cfg.family_accounts) if cfg.family_accounts else None), 0))
     items.append(("__cfg_family_device_name__", str(cfg.family_device_name), 0))
+    items.append(("__cfg_agy_accounts__", str(sorted((k, sorted(v.items())) for k, v in (getattr(cfg, "antigravity_accounts", None) or {}).items())), 0))
 
     try:
         from .antigravity_accounts import log_dirs as get_agy_log_dirs
@@ -1809,7 +1844,8 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         qw_clean[agent] = cleaned_entry
 
     subs = load_subscriptions(config.subscriptions, directory=tokei_dir, now=now,
-                              timezone_name=tz_name)
+                              timezone_name=tz_name,
+                              antigravity_accounts=config.antigravity_accounts)
     plans = {
         agent: subs[agent]["plan_label"]
         for agent in sorted(subs)
