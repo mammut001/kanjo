@@ -1,0 +1,15 @@
+{
+  "info": {
+    "id": "grok-acp-1",
+    "cwd": "/Users/alice/Documents/GitHub/Notes"
+  },
+  "session_summary": "",
+  "created_at": "2026-11-13T10:00:00Z",
+  "updated_at": "2026-11-13T11:00:00Z",
+  "current_model_id": "grok-4.7",
+  "git_root_dir": "/Users/alice/Documents/GitHub/Notes/",
+  "git_remotes": [
+    "https://github.com/alice/Notes.git"
+  ],
+  "chat_format_version": 1
+}

@@ -10,6 +10,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The Mac app now updates a terminal `kanjo` installed with `install.sh` to its own version when it starts, so `kanjo usage` and other new commands are there after an app update.
 
+### Fixed
+
+- Grok usage now also comes from `updates.jsonl` (`turn_completed` records), so Grok sessions that never wrote `usage.json` (newer Grok CLI builds, and most sessions from August–September 2026) and turns that `usage.json` left out are counted. Turns already in `usage.json` are counted exactly as before.
+
 ## [0.6.4] - 2026-11-17
 
 ### Changed

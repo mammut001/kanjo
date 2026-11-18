@@ -1,0 +1,26 @@
+{
+  "sessionId": "grok-mix-1",
+  "turns": [
+    {
+      "turnNumber": 2,
+      "endedAt": "2026-10-20T09:10:00.400000+00:00",
+      "inputTokens": 800,
+      "outputTokens": 80,
+      "cachedReadTokens": 300,
+      "cacheCreationTokens": 0,
+      "reasoningTokens": 20,
+      "totalTokens": 880,
+      "primaryModelId": "grok-4.6-build",
+      "modelUsage": {
+        "grok-4.6-build": {
+          "inputTokens": 800,
+          "outputTokens": 80,
+          "cachedReadTokens": 300,
+          "cacheCreationTokens": 0,
+          "reasoningTokens": 20,
+          "totalTokens": 880
+        }
+      }
+    }
+  ]
+}
