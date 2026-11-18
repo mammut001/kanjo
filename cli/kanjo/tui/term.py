@@ -910,7 +910,6 @@ def run_curses_tui(
             if doc is not None:
                 tz = get_tz(doc)
                 if data_path and doc.get("generated_at"):
-                    from .model import parse_iso_dt
                     fixed_now_dt = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
                 if fixed_now_dt is None:
                     cur_bucket = _now_minute_bucket(datetime.now(tz), tz)
