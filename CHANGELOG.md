@@ -19,6 +19,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Grok usage now also comes from `updates.jsonl` (`turn_completed` records), so Grok sessions that never wrote `usage.json` (newer Grok CLI builds, and most sessions from August–September 2026) and turns that `usage.json` left out are counted. Turns already in `usage.json` are counted exactly as before.
+- The dark panel is solid instead of see-through Liquid Glass, so it no longer looks grey over a light desktop and the treemap keeps its full colours.
+- Agent view details open as a floating card over the list (like the quota card) instead of pushing the rows below out of view; hover cards stay above the footer and track the scroll position.
 
 ## [0.6.4] - 2026-11-17
 
