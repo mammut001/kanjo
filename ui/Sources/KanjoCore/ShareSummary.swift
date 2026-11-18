@@ -38,6 +38,7 @@ public struct ShareSummary: Equatable {
     }
 
     public var agentRows: [AgentRow]
+    public var agentSummaryRows: [AgentSummaryRow]
     public var totals: Totals
     public var topProjects: [ProjectShare]
     public var mosaicProjects: [Project]
@@ -108,6 +109,7 @@ public struct ShareSummary: Equatable {
         
         return ShareSummary(
             agentRows: agentRows,
+            agentSummaryRows: agentSummary.rows,
             totals: totals,
             topProjects: Array(topProjects),
             mosaicProjects: mosaicProjects,

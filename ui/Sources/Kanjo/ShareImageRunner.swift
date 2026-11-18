@@ -49,7 +49,7 @@ enum ShareImageRunner {
             }
         }
         
-        let view = ShareImage(summary: summary, agentId: agentId)
+        let view = ShareImage(summary: summary, agentId: agentId, report: report, rangeRaw: rangeRaw)
             .preferredColorScheme(.dark)
             .environment(\.colorScheme, .dark)
             .environment(\.locale, Locale(identifier: store.string(forKey: SettingsKeys.appLanguage) ?? "en"))
