@@ -51,22 +51,25 @@ extension View {
     }
 }
 
-/// 浮层卡片底色（悬停卡、磁盘确认卡）：深色下用接近不透明的深灰底防止透出桌面，浅色与截图保持 `.regularMaterial`。
+/// 浮层卡片底色（悬停卡、磁盘确认卡）：深色下用完全不透明的深灰底，浅色在材质下垫一层不透明底色，
+/// 保证下方列表文字不会透出；截图模式下保留 `.regularMaterial`。
 struct CardSurfaceBackground<S: InsettableShape>: View {
     let shape: S
-    var lightFallbackColor: Color? = nil
+    var lightBaseColor: Color? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isSnapshotMode) private var isSnapshotMode
 
     var body: some View {
-        if colorScheme == .dark, !isSnapshotMode {
-            shape.fill(AgentPalette.darkPanelFill)
-        } else if let lightFallbackColor {
-            shape.fill(.regularMaterial)
-                .background(shape.fill(lightFallbackColor))
+        if colorScheme == .dark {
+            if isSnapshotMode {
+                shape.fill(.regularMaterial)
+            } else {
+                shape.fill(AgentPalette.darkCardFill)
+            }
         } else {
             shape.fill(.regularMaterial)
+                .background(shape.fill(lightBaseColor ?? Color(nsColor: .windowBackgroundColor)))
         }
     }
 }

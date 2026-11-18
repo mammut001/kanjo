@@ -105,6 +105,7 @@ struct MenuPanelView: View {
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
     @State private var editingSubscriptionAgent: String?
+    @State private var footerHeight: CGFloat = 0
     @StateObject private var updates = UpdateController.shared
     var initialRoute: Route? = nil
     var initialAnchor: String? = nil
@@ -141,6 +142,13 @@ struct MenuPanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: isTall ? nil : .infinity, alignment: .top)
                 .clipped()
             footer
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { footerHeight = geo.size.height }
+                            .onChange(of: geo.size.height) { footerHeight = $0 }
+                    }
+                )
         }
         .frame(width: Self.size.width)
         .frame(minHeight: isTall ? Self.size.height : nil)
@@ -150,7 +158,11 @@ struct MenuPanelView: View {
         .environment(\.pinnedHoverId, activeAnchor)
         .overlayPreferenceValue(HoverCardPreferenceKey.self) { payload in
             GeometryReader { rootGeo in
-                HoverCardOverlayHost(payload: payload, containerSize: rootGeo.size)
+                HoverCardOverlayHost(
+                    payload: payload,
+                    containerSize: rootGeo.size,
+                    footerHeight: footerHeight
+                )
             }
         }
         .onAppear {

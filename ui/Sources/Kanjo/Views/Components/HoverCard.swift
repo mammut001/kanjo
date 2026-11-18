@@ -4,22 +4,62 @@ import KanjoCore
 
 // MARK: - 悬停卡外观与基础组件
 
-/// 悬停卡的外观：实底 + 材质、细描边、柔和阴影、圆角 10。
+/// 悬停卡的外观：不透明底（深色实底 / 浅色不透明底 + 材质）、细描边、柔和阴影、圆角 10。
 struct HoverCardChrome: ViewModifier {
+    @Environment(\.hoverCardMaxHeight) private var maxHeight
+
     init() {}
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        content
+        let padded = content
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(
-                CardSurfaceBackground(
-                    shape: shape,
-                    lightFallbackColor: Color(nsColor: .windowBackgroundColor).opacity(0.85)
-                )
+                GeometryReader { geo in
+                    Color.clear.preference(key: HoverCardNaturalSizeKey.self, value: geo.size)
+                }
             )
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+
+        Group {
+            if let maxHeight {
+                ScrollView(.vertical, showsIndicators: true) {
+                    padded
+                }
+                .frame(height: max(maxHeight, 1))
+            } else {
+                padded
+            }
+        }
+        .background(
+            CardSurfaceBackground(
+                shape: shape,
+                lightBaseColor: Color(nsColor: .windowBackgroundColor)
+            )
+        )
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+}
+
+private struct HoverCardMaxHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+private extension EnvironmentValues {
+    var hoverCardMaxHeight: CGFloat? {
+        get { self[HoverCardMaxHeightKey.self] }
+        set { self[HoverCardMaxHeightKey.self] = newValue }
+    }
+}
+
+private struct HoverCardNaturalSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }
 
@@ -55,15 +95,20 @@ struct QuotaBar: View {
 
 // MARK: - 悬停卡宿主与 PreferenceKey
 
+final class HoverCardAnchorBox {
+    weak var view: NSView?
+}
+
 struct HoverCardPayload: Equatable {
     let id: String
     let anchor: Anchor<CGRect>
+    let anchorBox: HoverCardAnchorBox
     let content: AnyView
     var isPinned: Bool = false
     var onDismiss: (() -> Void)? = nil
 
     public static func == (lhs: HoverCardPayload, rhs: HoverCardPayload) -> Bool {
-        lhs.id == rhs.id && lhs.isPinned == rhs.isPinned
+        lhs.id == rhs.id && lhs.isPinned == rhs.isPinned && lhs.anchorBox === rhs.anchorBox
     }
 }
 
@@ -105,6 +150,7 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
     @State private var isShowing = false
     @State private var hoverTask: Task<Void, Never>?
     @State private var autoId = UUID().uuidString
+    @State private var anchorBox = HoverCardAnchorBox()
 
     private var effectivePinned: Bool {
         if isPinned { return true }
@@ -143,11 +189,13 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
                     }
                 }
             }
+            .background(HoverCardAnchorProbe(box: anchorBox).allowsHitTesting(false))
             .anchorPreference(key: HoverCardPreferenceKey.self, value: .bounds) { anchor in
                 guard shouldShow else { return nil }
                 return HoverCardPayload(
                     id: id ?? autoId,
                     anchor: anchor,
+                    anchorBox: anchorBox,
                     content: AnyView(cardContent()),
                     isPinned: effectivePinned,
                     onDismiss: onDismiss
@@ -189,47 +237,94 @@ extension View {
 struct HoverCardOverlayHost: View {
     let payload: HoverCardPayload?
     let containerSize: CGSize
+    var footerHeight: CGFloat = 0
 
     @State private var escMonitor: Any?
+    @State private var rootProbe = HoverCardRootBox()
+    @State private var scrollRevision: UInt = 0
 
-    init(payload: HoverCardPayload?, containerSize: CGSize) {
+    init(payload: HoverCardPayload?, containerSize: CGSize, footerHeight: CGFloat = 0) {
         self.payload = payload
         self.containerSize = containerSize
+        self.footerHeight = footerHeight
     }
 
     var body: some View {
-        if let payload {
-            ZStack {
-                if payload.isPinned {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            payload.onDismiss?()
+        ZStack {
+            HoverCardRootProbe(box: rootProbe) {
+                scrollRevision &+= 1
+            }
+            .allowsHitTesting(false)
+
+            if let payload {
+                ZStack {
+                    if payload.isPinned {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                payload.onDismiss?()
+                            }
+                    }
+                    GeometryReader { rootGeo in
+                        let _ = scrollRevision
+                        let resolved = resolveAnchor(payload: payload, rootGeo: rootGeo)
+                        if resolved.visible {
+                            let bottomInset = resolved.isAboveFooter
+                                ? max(16, footerHeight + 8)
+                                : 16
+                            HoverCardPresenter(
+                                anchorRect: resolved.rect,
+                                containerSize: containerSize,
+                                topInset: resolved.topInset,
+                                bottomInset: bottomInset,
+                                content: payload.content
+                            )
+                            .id(payload.id)
                         }
-                }
-                GeometryReader { rootGeo in
-                    let anchorRect = rootGeo[payload.anchor]
-                    if anchorRect.intersects(CGRect(origin: .zero, size: containerSize)) {
-                        HoverCardPresenter(
-                            anchorRect: anchorRect,
-                            containerSize: containerSize,
-                            content: payload.content
-                        )
-                        .id(payload.id)
                     }
                 }
-            }
-            .allowsHitTesting(payload.isPinned)
-            .onAppear {
-                updateEscMonitor(pinned: payload.isPinned, onDismiss: payload.onDismiss)
-            }
-            .onChange(of: payload.isPinned) { pinned in
-                updateEscMonitor(pinned: pinned, onDismiss: payload.onDismiss)
-            }
-            .onDisappear {
-                removeEscMonitor()
+                .allowsHitTesting(payload.isPinned)
+                .onAppear {
+                    updateEscMonitor(pinned: payload.isPinned, onDismiss: payload.onDismiss)
+                }
+                .onChange(of: payload.isPinned) { pinned in
+                    updateEscMonitor(pinned: pinned, onDismiss: payload.onDismiss)
+                }
+                .onDisappear {
+                    removeEscMonitor()
+                }
             }
         }
+        .onChange(of: payload?.id) { _ in
+            scrollRevision &+= 1
+        }
+    }
+
+    private func resolveAnchor(
+        payload: HoverCardPayload,
+        rootGeo: GeometryProxy
+    ) -> (rect: CGRect, visible: Bool, topInset: CGFloat, isAboveFooter: Bool) {
+        let fallbackRect = rootGeo[payload.anchor]
+        let footerBoundary = footerHeight > 0 ? max(0, containerSize.height - footerHeight) : containerSize.height
+
+        if let anchorView = payload.anchorBox.view,
+           let rootView = rootProbe.view,
+           let anchorWin = anchorView.window,
+           anchorWin === rootView.window {
+            let liveRect = anchorView.convert(anchorView.bounds, to: rootView)
+            if let clipView = anchorView.enclosingScrollView?.contentView {
+                let clipRect = clipView.convert(clipView.bounds, to: rootView)
+                let visible = liveRect.intersects(clipRect)
+                let topInset = max(12, clipRect.minY + 4)
+                let isAboveFooter = clipRect.maxY <= footerBoundary + 1 || liveRect.maxY <= footerBoundary
+                return (liveRect, visible, topInset, isAboveFooter)
+            }
+            let panelRect = CGRect(origin: .zero, size: containerSize)
+            return (liveRect, liveRect.intersects(panelRect), 16, liveRect.maxY <= footerBoundary)
+        }
+
+        let panelRect = CGRect(origin: .zero, size: containerSize)
+        return (fallbackRect, fallbackRect.intersects(panelRect), 16, fallbackRect.maxY <= footerBoundary)
     }
 
     private func updateEscMonitor(pinned: Bool, onDismiss: (() -> Void)?) {
@@ -252,33 +347,166 @@ struct HoverCardOverlayHost: View {
     }
 }
 
+private final class HoverCardRootBox {
+    weak var view: NSView?
+}
+
+private final class FlippedProbeView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+private final class AnchorProbeNSView: NSView {
+    override var isFlipped: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        enableScrollNotifications()
+        DispatchQueue.main.async { [weak self] in
+            self?.enableScrollNotifications()
+        }
+    }
+
+    private func enableScrollNotifications() {
+        enclosingScrollView?.contentView.postsBoundsChangedNotifications = true
+    }
+}
+
+private struct HoverCardAnchorProbe: NSViewRepresentable {
+    let box: HoverCardAnchorBox
+
+    func makeNSView(context: Context) -> NSView {
+        let v = AnchorProbeNSView(frame: .zero)
+        box.view = v
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        box.view = nsView
+        nsView.enclosingScrollView?.contentView.postsBoundsChangedNotifications = true
+    }
+}
+
+private struct HoverCardRootProbe: NSViewRepresentable {
+    let box: HoverCardRootBox
+    let onScroll: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScroll: onScroll)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let v = FlippedProbeView(frame: .zero)
+        box.view = v
+        context.coordinator.attach(to: v)
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        box.view = nsView
+        context.coordinator.onScroll = onScroll
+        context.coordinator.attach(to: nsView)
+    }
+
+    final class Coordinator: NSObject {
+        var onScroll: () -> Void
+        private weak var observedView: NSView?
+        private var observers: [NSObjectProtocol] = []
+
+        init(onScroll: @escaping () -> Void) {
+            self.onScroll = onScroll
+        }
+
+        func attach(to view: NSView) {
+            guard observedView !== view || observers.isEmpty else { return }
+            detach()
+            observedView = view
+            let nc = NotificationCenter.default
+            let trigger: () -> Void = { [weak self] in
+                DispatchQueue.main.async {
+                    self?.onScroll()
+                }
+            }
+            let boundsObs = nc.addObserver(forName: NSView.boundsDidChangeNotification, object: nil, queue: .main) { [weak self] note in
+                guard let self,
+                      let clip = note.object as? NSClipView,
+                      let win = self.observedView?.window,
+                      clip.window === win else { return }
+                trigger()
+            }
+            let scrollObs = nc.addObserver(forName: NSScrollView.didLiveScrollNotification, object: nil, queue: .main) { [weak self] note in
+                guard let self,
+                      let sv = note.object as? NSScrollView,
+                      let win = self.observedView?.window,
+                      sv.window === win else { return }
+                trigger()
+            }
+            let endScrollObs = nc.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: nil, queue: .main) { [weak self] note in
+                guard let self,
+                      let sv = note.object as? NSScrollView,
+                      let win = self.observedView?.window,
+                      sv.window === win else { return }
+                trigger()
+            }
+            observers = [boundsObs, scrollObs, endScrollObs]
+        }
+
+        func detach() {
+            let nc = NotificationCenter.default
+            for o in observers { nc.removeObserver(o) }
+            observers.removeAll()
+        }
+
+        deinit { detach() }
+    }
+}
+
 private struct HoverCardPresenter: View {
     let anchorRect: CGRect
     let containerSize: CGSize
+    let topInset: CGFloat
+    let bottomInset: CGFloat
     let content: AnyView
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
     @State private var cardSize: CGSize = .zero
 
     var body: some View {
-        let origin = HoverCardLayout.origin(
+        let placement = HoverCardLayout.placement(
             anchor: anchorRect,
             cardSize: cardSize,
             container: containerSize,
-            inset: 16,
+            topInset: topInset,
+            bottomInset: bottomInset,
+            horizontalInset: 16,
             gap: 4
         )
+        let activeMaxHeight = isSnapshotMode ? nil : placement.maxHeight
+        let displayHeight = activeMaxHeight.map { min(cardSize.height, $0) } ?? cardSize.height
+
         content
             .frame(maxWidth: 320)
             .fixedSize(horizontal: false, vertical: true)
+            .environment(\.hoverCardMaxHeight, activeMaxHeight)
+            .onPreferenceChange(HoverCardNaturalSizeKey.self) { size in
+                if size != .zero {
+                    cardSize = size
+                }
+            }
             .background(
                 GeometryReader { c in
                     Color.clear
-                        .onAppear { cardSize = c.size }
-                        .onChange(of: c.size) { cardSize = $0 }
+                        .onAppear {
+                            if cardSize == .zero { cardSize = c.size }
+                        }
+                        .onChange(of: c.size) { newSize in
+                            if activeMaxHeight == nil {
+                                cardSize = newSize
+                            }
+                        }
                 }
             )
             .position(
-                x: origin.x + max(cardSize.width, 1) / 2,
-                y: origin.y + max(cardSize.height, 1) / 2
+                x: placement.origin.x + max(cardSize.width, 1) / 2,
+                y: placement.origin.y + max(displayHeight, 1) / 2
             )
             .opacity(cardSize == .zero ? 0 : 1)
             .transition(.opacity)

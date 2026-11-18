@@ -117,6 +117,56 @@ final class HoverCardLayoutTests: KanjoTestCase {
         XCTAssertEqual(rows[2].fraction, 10.0 / 30.0, accuracy: 0.0001)
     }
 
+    func testPlacementRespectsFooterBottomInsetAndCapsHeightWhenNeitherFits() {
+        // 面板 360x620，底栏留出 52pt（底部安全边界 568）
+        let footerInset: CGFloat = 52
+        let topInset: CGFloat = 40
+
+        // 1. 靠上方的行，卡片高 300 可以完整放在下方
+        let topAnchor = CGRect(x: 8, y: 40, width: 344, height: 70)
+        let fitsBelow = HoverCardLayout.placement(
+            anchor: topAnchor,
+            cardSize: CGSize(width: 320, height: 300),
+            container: container,
+            topInset: topInset,
+            bottomInset: footerInset,
+            horizontalInset: 16,
+            gap: 4
+        )
+        XCTAssertEqual(fitsBelow.origin.y, 114)
+        XCTAssertNil(fitsBelow.maxHeight)
+        XCTAssertLessThanOrEqual(fitsBelow.origin.y + 300, container.height - footerInset)
+
+        // 2. 靠近底栏的行，卡片高 300 翻转到底部锚点上方
+        let bottomAnchor = CGRect(x: 8, y: 490, width: 344, height: 60)
+        let flipsAbove = HoverCardLayout.placement(
+            anchor: bottomAnchor,
+            cardSize: CGSize(width: 320, height: 300),
+            container: container,
+            topInset: topInset,
+            bottomInset: footerInset,
+            horizontalInset: 16,
+            gap: 4
+        )
+        XCTAssertEqual(flipsAbove.origin.y, 186)
+        XCTAssertNil(flipsAbove.maxHeight)
+
+        // 3. 中间行：下方空间 344pt，上方空间 146pt，卡片高 450pt 上下都放不下 -> 选下方并截断高度到 344pt
+        let midAnchor = CGRect(x: 8, y: 190, width: 344, height: 30)
+        let capped = HoverCardLayout.placement(
+            anchor: midAnchor,
+            cardSize: CGSize(width: 320, height: 450),
+            container: container,
+            topInset: topInset,
+            bottomInset: footerInset,
+            horizontalInset: 16,
+            gap: 4
+        )
+        XCTAssertEqual(capped.origin.y, 224)
+        XCTAssertEqual(capped.maxHeight, 344)
+        XCTAssertEqual(capped.origin.y + (capped.maxHeight ?? 0), container.height - footerInset)
+    }
+
     func testHoverCardRowBuilderTokenRows() {
         let tokens = Tokens(input: 400, output: 200, cacheRead: 300, cacheWrite: 100, thinking: 50, total: 1000)
         let rows = HoverCardRowBuilder.tokenRows(tokens: tokens)

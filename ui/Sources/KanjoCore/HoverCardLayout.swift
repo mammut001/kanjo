@@ -1,8 +1,56 @@
 import CoreGraphics
 import Foundation
 
+/// 悬停卡布局结果：卡片左上角原点，以及当上下空间都不足时限定的最大高度（`nil` 表示完整展示无需滚动）。
+public struct HoverCardPlacement: Equatable {
+    public let origin: CGPoint
+    public let maxHeight: CGFloat?
+
+    public init(origin: CGPoint, maxHeight: CGFloat?) {
+        self.origin = origin
+        self.maxHeight = maxHeight
+    }
+}
+
 /// 悬停卡布局纯逻辑：根据锚点矩形、卡片大小、容器大小及安全边距，计算卡片左上角原点。
 public enum HoverCardLayout {
+    /// 计算悬停卡在容器坐标系中的左上角原点与可选最大高度。
+    /// 优先放在锚点下方；下方放不下时翻转到上方；若上下都放不下，则选择空间更大的一侧并给出 `maxHeight` 供卡片内部滚动。
+    public static func placement(
+        anchor: CGRect,
+        cardSize: CGSize,
+        container: CGSize,
+        topInset: CGFloat = 16,
+        bottomInset: CGFloat = 16,
+        horizontalInset: CGFloat = 16,
+        gap: CGFloat = 4
+    ) -> HoverCardPlacement {
+        let minX = horizontalInset
+        let maxX = max(minX, container.width - horizontalInset - cardSize.width)
+        let x = min(max(anchor.minX, minX), maxX)
+
+        let minY = topInset
+        let maxBottom = max(minY, container.height - bottomInset)
+
+        let yBelow = anchor.maxY + gap
+        let spaceBelow = max(0, maxBottom - yBelow)
+        let spaceAbove = max(0, (anchor.minY - gap) - minY)
+
+        if cardSize.height <= spaceBelow {
+            return HoverCardPlacement(origin: CGPoint(x: x, y: yBelow), maxHeight: nil)
+        }
+        if cardSize.height <= spaceAbove {
+            return HoverCardPlacement(origin: CGPoint(x: x, y: anchor.minY - gap - cardSize.height), maxHeight: nil)
+        }
+
+        if spaceBelow >= spaceAbove {
+            let capped = spaceBelow
+            return HoverCardPlacement(origin: CGPoint(x: x, y: yBelow), maxHeight: capped)
+        } else {
+            let capped = spaceAbove
+            return HoverCardPlacement(origin: CGPoint(x: x, y: anchor.minY - gap - capped), maxHeight: capped)
+        }
+    }
     /// 计算悬停卡在容器坐标系中的左上角原点。
     /// - Parameters:
     ///   - anchor: 锚点视图在容器坐标系中的矩形。
