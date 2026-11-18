@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from . import attribution as attr
+from . import perf as perf_mod
 from . import quota
 from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
@@ -1146,6 +1147,33 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     )
     if agy_accs is not None:
         doc["antigravity_accounts"] = agy_accs
+    perf_acc: Dict[Tuple[str, str, str], dict] = {}
+    for s in sessions:
+        s_agent = s.agent
+        for m in s.messages:
+            if m.gen_s is None or m.model == "<synthetic>":
+                continue
+            out_tokens = max(m.output - m.thinking, 0) if s_agent == "antigravity" else m.output
+            perf_mod.add_sample(
+                perf_acc,
+                (get_day(m.ts), s_agent, m.model or "unknown"),
+                out_tokens,
+                m.gen_s,
+                m.ttft_s,
+            )
+    if perf_acc:
+        doc["perf_by_day"] = [
+            {
+                "day": day,
+                "agent": p_agent,
+                "model": p_model,
+                "o": stats["o"],
+                "g": stats["g"],
+                "n": stats["n"],
+                "th": {b: stats["th"][b] for b in sorted(stats["th"], key=int)},
+            }
+            for (day, p_agent, p_model), stats in sorted(perf_acc.items())
+        ]
     if cache is not None:
         cache.save()
     return doc

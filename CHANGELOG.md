@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `kanjo export` now includes per-day output speed and time-to-first-token per agent and model (`perf_by_day`) for Claude Code, Codex, Grok, and Antigravity.
+
 ### Changed
 
 - The Mac app now updates a terminal `kanjo` installed with `install.sh` to its own version when it starts, so `kanjo usage` and other new commands are there after an app update.

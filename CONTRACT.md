@@ -97,6 +97,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
   },
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
+  "perf_by_day": [ /* PerfByDay */ ],         // 可选：按 day × agent × model 累加的输出速度与 TTFT 直方图；无样本时不出现；--mobile / --family-report / --public-summary 不含
   "buckets": {
     "unattributed": { /* Aggregate */ },
     "excluded":     { /* Aggregate */ },
@@ -264,6 +265,33 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | `cwd` | 零文件信号，按 cwd 归属 |
 | `scratchpad` | 零文件信号，按 scratchpad 路径归属 |
 | `override` | 用户配置强制归属 |
+
+---
+
+## 5.1 性能统计 (`perf_by_day`)
+
+可选顶层数组，按本地自然日 × `agent` × `model` 累加模型输出速度与首字延迟（TTFT）；没有任何有效样本时省略或为空。按 `(day, agent, model)` 升序排列。
+
+```jsonc
+"perf_by_day": [                       // 按 day、agent、model 升序；无样本时不出现或为空
+  { "day": "2026-11-17",               // 请求结束时刻所在本地自然日（按顶层 timezone）
+    "agent": "claude",
+    "model": "claude-opus-5-5",        // 与 by_model 行相同的模型标识
+    "o": 51234,                        // 有效样本的输出 token 之和
+    "g": 412.337,                      // 生成耗时之和（秒，保留 3 位小数）
+    "n": 180,                          // 有效样本请求数
+    "th": { "47": 3, "52": 10 } }      // TTFT 直方图：分桶下标（字符串） -> 计数；无 TTFT 时可为 {}
+]
+```
+
+规则：
+- 每次模型请求记为一个样本：输出 token、生成秒数、以及拿得到时的 TTFT 秒数。去重后的每条消息只计入一次，不按项目拆分重复计算。
+- 过滤条件：丢弃 `output < 20`、`gen <= 0.2` 或 `gen > 1800` 秒、以及 `output / gen > 3000` 的异常样本（Antigravity 的流式时长仅覆盖回复文本，样本输出 token 取 `max(output - thinking, 0)`）。
+- TTFT 仅在 `0 <= ttft <= 120` 秒时记入直方图 `th`。第 0 桶为 `[0, 0.05)` 秒；第 `k >= 1` 桶为 `[0.05 * 1.05^(k-1), 0.05 * 1.05^k)` 秒。
+- 消费端（UI）任选一天/agent/模型集合时，将所选行的 `o`、`g`、`n` 及 `th` 各桶计数直接相加：
+  - 平均输出速度 = `Σo / Σg`（tokens/s）。
+  - TTFT 中位数 = 直方图分位数桶内线性插值（偶数样本取中间两个秩的均值）。
+- `--mobile`、`--family-report` 与 `--public-summary` 输出均**不包含** `perf_by_day`。
 
 ---
 

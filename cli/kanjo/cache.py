@@ -21,11 +21,11 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .sources.base import Message, ParseError, Session
 
-CACHE_VERSION = 4
+CACHE_VERSION = 5
 REPO_CACHE_VERSION = 2
 NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
-               "thinking", "cwd", "branch", "key", "account")
+               "thinking", "cwd", "branch", "key", "account", "gen_s", "ttft_s")
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
 
@@ -66,20 +66,39 @@ def _dump_session(s: Session) -> dict:
         "cwd": s.cwd,
         "branch": s.branch,
         "messages": [
-            [
-                m.ts,
-                m.model,
-                m.input,
-                m.output,
-                m.cache_read,
-                m.cache_write,
-                m.cache_write_1h,
-                m.thinking,
-                m.cwd,
-                m.branch,
-                m.key,
-                m.account,
-            ]
+            (
+                [
+                    m.ts,
+                    m.model,
+                    m.input,
+                    m.output,
+                    m.cache_read,
+                    m.cache_write,
+                    m.cache_write_1h,
+                    m.thinking,
+                    m.cwd,
+                    m.branch,
+                    m.key,
+                    m.account,
+                    m.gen_s,
+                    m.ttft_s,
+                ]
+                if (m.gen_s is not None or m.ttft_s is not None)
+                else [
+                    m.ts,
+                    m.model,
+                    m.input,
+                    m.output,
+                    m.cache_read,
+                    m.cache_write,
+                    m.cache_write_1h,
+                    m.thinking,
+                    m.cwd,
+                    m.branch,
+                    m.key,
+                    m.account,
+                ]
+            )
             for m in s.messages
         ],
         "tool_paths": [list(call) for call in s.tool_paths],
@@ -111,7 +130,7 @@ def _load_session(d: dict) -> Session:
         s.messages = [Message(*row) for row in msgs]
     except TypeError:
         s.messages = [
-            Message(*row) if len(row) in (11, 12) else Message(**dict(zip(_MSG_FIELDS, row)))
+            Message(*row) if len(row) in (11, 12, 13, 14) else Message(**dict(zip(_MSG_FIELDS, row)))
             for row in msgs
         ]
     return s

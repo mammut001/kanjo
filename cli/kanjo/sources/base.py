@@ -64,6 +64,8 @@ class Message:
     branch: Optional[str] = None
     key: Optional[str] = None      # global de-duplication key
     account: Optional[str] = None
+    gen_s: Optional[float] = None
+    ttft_s: Optional[float] = None
 
 
 @dataclass
