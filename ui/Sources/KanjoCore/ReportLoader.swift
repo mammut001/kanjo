@@ -94,20 +94,23 @@ public final class ReportLoader {
         }
     }
 
-    public func refresh(qualityOfService: QualityOfService = .userInitiated) {
+    public func refresh(qualityOfService: QualityOfService = .userInitiated, quiet: Bool = false) {
+        if quiet && scheduler.isRefreshing { return }
         scheduler.onRefreshStarted()
         generation += 1
         let gen = generation
         let descriptor = makeSource()
-
+        
         var starting = state
         starting.sourceDescription = descriptor.description
-        starting.isLoading = true
-        if starting.loadingStartedAt == nil {
-            starting.loadingStartedAt = Date()
+        if !quiet {
+            starting.isLoading = true
+            if starting.loadingStartedAt == nil {
+                starting.loadingStartedAt = Date()
+            }
         }
         state = starting
-
+        
         refreshTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -128,6 +131,10 @@ public final class ReportLoader {
                 updated.isStaleReport = false
                 updated.staleReportGeneratedAt = nil
                 updated.error = nil
+                if !quiet {
+                    updated.isLoading = false
+                    updated.loadingStartedAt = nil
+                }
                 self.state = updated
                 self.onLiveReport(loaded)
             } catch {
@@ -139,13 +146,15 @@ public final class ReportLoader {
                 self.hasFinishedLiveRefresh = true
                 var updated = self.state
                 updated.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                if !quiet {
+                    updated.isLoading = false
+                    updated.loadingStartedAt = nil
+                }
                 self.state = updated
             }
             guard gen == self.generation else { return }
             var finished = self.state
             finished.lastRefresh = Date()
-            finished.isLoading = false
-            finished.loadingStartedAt = nil
             self.state = finished
             let followUpAction = self.scheduler.onRefreshFinished()
             self.onFollowUpAction(followUpAction)

@@ -1,15 +1,8 @@
 import Foundation
 
-/// Pure scheduling decision engine for usage refreshes.
-/// Handles debouncing, minimum intervals, coalescing, fallback timer, sleep/wake, and Low Power Mode.
 public struct RefreshScheduler: Equatable {
     public static let defaultFallbackMinutes = 30
     public static let minimumFallbackMinutes = 15
-    public static let debounceInterval: TimeInterval = 60
-    public static let minimumRefreshInterval: TimeInterval = 120
-    public static let hiddenMinimumRefreshInterval: TimeInterval = 180
-    public static let openRefreshThreshold: TimeInterval = 180
-    public static let maxDebounceWait: TimeInterval = 180
 
     public enum Action: Equatable {
         case none
@@ -26,30 +19,38 @@ public struct RefreshScheduler: Equatable {
     public private(set) var isPanelVisible: Bool = false
     public private(set) var isAsleep: Bool = false
     public private(set) var isLowPowerMode: Bool = false
+    public private(set) var isSystemBusy: Bool = false
     public private(set) var pendingWakeRefresh: Bool = false
     public var fallbackMinutes: Int
+    public var backgroundInterval: TimeInterval
 
     public init(
         fallbackMinutes: Int = defaultFallbackMinutes,
+        backgroundInterval: TimeInterval = 60,
         lastRefreshTime: Date? = nil,
         isPanelVisible: Bool = false
     ) {
         self.fallbackMinutes = Self.migrateFallbackMinutes(fallbackMinutes)
+        self.backgroundInterval = backgroundInterval
         self.lastRefreshTime = lastRefreshTime
         self.isPanelVisible = isPanelVisible
     }
 
-    private var activeMinimumRefreshInterval: TimeInterval {
-        isPanelVisible ? Self.minimumRefreshInterval : Self.hiddenMinimumRefreshInterval
+    public mutating func onBackgroundIntervalChanged(_ interval: TimeInterval, at date: Date = Date()) -> Action {
+        self.backgroundInterval = interval
+        if hasScheduledRefresh {
+            return scheduleFileEventRefresh(at: date, minIntervalAnchor: lastRefreshTime)
+        }
+        return .none
     }
 
     private mutating func scheduleFileEventRefresh(at date: Date, minIntervalAnchor: Date?) -> Action {
-        let firstEvent = firstUnhandledEventTime ?? (lastEventTime ?? date)
-        let deadline = firstEvent.addingTimeInterval(Self.maxDebounceWait)
-        let debounceTarget = (lastEventTime ?? date).addingTimeInterval(Self.debounceInterval)
-        let effectiveTarget = min(debounceTarget, deadline)
-        let minIntervalTarget = (minIntervalAnchor ?? .distantPast).addingTimeInterval(activeMinimumRefreshInterval)
-        let scheduledTarget = max(effectiveTarget, minIntervalTarget)
+        let firstEvent = firstUnhandledEventTime ?? date
+        let eventDeadline = firstEvent.addingTimeInterval(5)
+        let minIntervalTarget = (minIntervalAnchor ?? .distantPast).addingTimeInterval(backgroundInterval)
+        
+        let scheduledTarget = max(eventDeadline, minIntervalTarget)
+        
         let delay = max(0, scheduledTarget.timeIntervalSince(date))
         hasScheduledRefresh = true
         return .scheduleRefresh(after: delay)
@@ -69,7 +70,7 @@ public struct RefreshScheduler: Equatable {
         if firstUnhandledEventTime == nil {
             firstUnhandledEventTime = date
         }
-        if isAsleep || isLowPowerMode {
+        if isAsleep || isLowPowerMode || isSystemBusy {
             pendingWakeRefresh = true
             return .none
         }
@@ -93,7 +94,7 @@ public struct RefreshScheduler: Equatable {
         isRefreshing = false
         lastRefreshTime = date
 
-        if isAsleep || isLowPowerMode {
+        if isAsleep || isLowPowerMode || isSystemBusy {
             return .none
         }
 
@@ -111,30 +112,17 @@ public struct RefreshScheduler: Equatable {
         guard isPanelVisible != visible else { return .none }
         isPanelVisible = visible
 
-        if isAsleep || isLowPowerMode || isRefreshing || !hasScheduledRefresh {
+        if isAsleep || isLowPowerMode || isSystemBusy || isRefreshing || !hasScheduledRefresh {
             return .none
-        }
-
-        if visible {
-            let sinceLastRefresh = date.timeIntervalSince(lastRefreshTime ?? .distantPast)
-            if sinceLastRefresh > Self.openRefreshThreshold {
-                hasScheduledRefresh = false
-                return .refreshNow
-            }
         }
 
         return scheduleFileEventRefresh(at: date, minIntervalAnchor: lastRefreshTime)
     }
 
     /// Called when the menu panel opens.
-    /// Refreshes immediately only if the last completed refresh is older than `openRefreshThreshold` (180s)
-    /// (or has never occurred) and either events are pending or the report is stale from the launch cache.
-    public func shouldRefreshOnOpen(at date: Date = Date(), isStaleReport: Bool = false) -> Bool {
-        if isRefreshing || isAsleep { return false }
-        let hasPendingEvents = hasScheduledRefresh || hasPendingEventWhileRefreshing || pendingWakeRefresh
-        guard hasPendingEvents || isStaleReport else { return false }
-        guard let last = lastRefreshTime else { return true }
-        return date.timeIntervalSince(last) > Self.openRefreshThreshold
+    /// Refreshes immediately only if the report is stale from the launch cache and no refresh is running.
+    public func shouldRefreshOnOpen(isStaleReport: Bool = false) -> Bool {
+        return isStaleReport && !isRefreshing
     }
 
     /// System will sleep.
@@ -146,10 +134,14 @@ public struct RefreshScheduler: Equatable {
     /// System did wake.
     public mutating func onWake(at date: Date = Date()) -> Action {
         isAsleep = false
+        if isSystemBusy {
+            pendingWakeRefresh = true
+            return .none
+        }
         guard pendingWakeRefresh else { return .none }
         pendingWakeRefresh = false
         if isRefreshing { return .none }
-        let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(Self.minimumRefreshInterval)
+        let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
         if date >= minIntervalTarget {
             return .refreshNow
         } else {
@@ -162,9 +154,28 @@ public struct RefreshScheduler: Equatable {
     public mutating func onLowPowerModeChanged(enabled: Bool, at date: Date = Date()) -> Action {
         isLowPowerMode = enabled
         if !enabled && pendingWakeRefresh {
+            if isSystemBusy { return .none }
             pendingWakeRefresh = false
             if isRefreshing { return .none }
-            let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(Self.minimumRefreshInterval)
+            let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
+            if date >= minIntervalTarget {
+                return .refreshNow
+            } else {
+                hasScheduledRefresh = true
+                return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
+            }
+        }
+        return .none
+    }
+
+    /// System busy state changed.
+    public mutating func onSystemBusyChanged(busy: Bool, at date: Date = Date()) -> Action {
+        isSystemBusy = busy
+        if !busy && pendingWakeRefresh {
+            if isAsleep || isLowPowerMode { return .none }
+            pendingWakeRefresh = false
+            if isRefreshing { return .none }
+            let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
             if date >= minIntervalTarget {
                 return .refreshNow
             } else {
@@ -178,7 +189,7 @@ public struct RefreshScheduler: Equatable {
     /// Called when the fallback timer fires.
     public mutating func onFallbackTimerFired(at date: Date = Date()) -> Action {
         if fallbackMinutes <= 0 { return .none }
-        if isAsleep || isLowPowerMode {
+        if isAsleep || isLowPowerMode || isSystemBusy {
             pendingWakeRefresh = true
             return .none
         }

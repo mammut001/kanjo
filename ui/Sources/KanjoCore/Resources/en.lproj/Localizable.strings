@@ -88,6 +88,12 @@
 "settings.file_note" = "Leave empty to use the bundled sample: fixtures/sample.json.";
 "settings.section.refresh" = "Refresh";
 "settings.auto_refresh" = "Fallback refresh interval";
+"settings.background_refresh" = "Background refresh";
+"settings.background_refresh_note" = "Kanjo refreshes in the background at this interval when new usage is detected. No refresh if no new usage or system is busy. Opening the panel shows the latest result instantly.";
+"settings.background_refresh.30s" = "30 seconds";
+"settings.background_refresh.1m" = "1 minute";
+"settings.background_refresh.5m" = "5 minutes";
+"settings.background_refresh.10m" = "10 minutes";
 "settings.refresh_note" = "Kanjo refreshes automatically when agent logs change. This interval is used as a safety fallback.";
 "settings.refresh_off" = "Off";
 "settings.refresh_minutes" = "Every %d min";

@@ -22,6 +22,7 @@ final class ReportStore: ObservableObject {
     let dataOverride: URL?
 
     private var timer: Timer?
+    private var busyCheckTimer: Timer?
     private let loader: ReportLoader
     private var logWatcher: LogWatcher?
     private var scheduledTask: Task<Void, Never>?
@@ -40,6 +41,7 @@ final class ReportStore: ObservableObject {
             SettingsKeys.cliCommand: CLIDataSource.defaultCommand,
             SettingsKeys.cliWorkingDirectory: "",
             SettingsKeys.refreshMinutes: 30,
+            SettingsKeys.backgroundRefreshSeconds: 60,
             SettingsKeys.showAmountInMenuBar: true,
         ])
         var storedMinutes = defaults.integer(forKey: SettingsKeys.refreshMinutes)
@@ -47,8 +49,13 @@ final class ReportStore: ObservableObject {
         if storedMinutes != defaults.integer(forKey: SettingsKeys.refreshMinutes) {
             defaults.set(storedMinutes, forKey: SettingsKeys.refreshMinutes)
         }
-        var scheduler = RefreshScheduler()
-        scheduler.fallbackMinutes = storedMinutes
+        let backgroundSeconds = defaults.integer(forKey: SettingsKeys.backgroundRefreshSeconds)
+        let backgroundInterval = TimeInterval(BackgroundRefreshInterval.resolve(backgroundSeconds).rawValue)
+        
+        let scheduler = RefreshScheduler(
+            fallbackMinutes: storedMinutes,
+            backgroundInterval: backgroundInterval
+        )
 
         let initialKind = SourceKind(rawValue: defaults.string(forKey: SettingsKeys.sourceKind) ?? "") ?? .file
         let shouldLoadCache = ReportLoader.shouldUseLastExportCache(
@@ -115,6 +122,11 @@ final class ReportStore: ObservableObject {
                 self?.onPowerStateDidChange()
             }
         }
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkBusy()
+            }
+        }
     }
 
     private func onWillSleep() {
@@ -132,6 +144,36 @@ final class ReportStore: ObservableObject {
         let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         let action = loader.scheduler.onLowPowerModeChanged(enabled: isLowPower)
         handleSchedulerAction(action)
+        checkBusy()
+    }
+
+    private func getLoadAverage() -> Double {
+        var load = [Double](repeating: 0.0, count: 3)
+        let count = getloadavg(&load, 3)
+        return count >= 1 ? load[0] : 0.0
+    }
+
+    private func checkBusy() {
+        let load = getLoadAverage()
+        let thermal = ProcessInfo.processInfo.thermalState
+        let cores = ProcessInfo.processInfo.activeProcessorCount
+        let isBusy = SystemBusy.isBusy(thermalState: thermal, loadAverage: load, cores: cores)
+
+        let action = loader.scheduler.onSystemBusyChanged(busy: isBusy)
+        handleSchedulerAction(action)
+
+        if isBusy {
+            if busyCheckTimer == nil {
+                busyCheckTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.checkBusy()
+                    }
+                }
+            }
+        } else {
+            busyCheckTimer?.invalidate()
+            busyCheckTimer = nil
+        }
     }
 
     func setupWatcher() {
@@ -184,7 +226,7 @@ final class ReportStore: ObservableObject {
         case .refreshNow:
             scheduledTask?.cancel()
             scheduledTask = nil
-            refresh(qualityOfService: .background)
+            refresh(quiet: true, qualityOfService: .background)
         case .scheduleRefresh(let delay):
             scheduledTask?.cancel()
             scheduledTask = Task { [weak self] in
@@ -192,7 +234,7 @@ final class ReportStore: ObservableObject {
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 } catch { return }
                 guard !Task.isCancelled else { return }
-                self?.refresh(qualityOfService: .background)
+                self?.refresh(quiet: true, qualityOfService: .background)
             }
         }
     }
@@ -200,8 +242,10 @@ final class ReportStore: ObservableObject {
     func onPanelOpened() {
         let shouldRefresh = loader.scheduler.shouldRefreshOnOpen(isStaleReport: isStaleReport)
         let action = loader.scheduler.onPanelVisibilityChanged(visible: true)
-        if shouldRefresh || action == .refreshNow {
-            handleSchedulerAction(.refreshNow)
+        if shouldRefresh {
+            refresh(quiet: false, qualityOfService: .userInitiated)
+        } else if action == .refreshNow {
+            refresh(quiet: true, qualityOfService: .background)
         } else {
             handleSchedulerAction(action)
         }
@@ -352,10 +396,10 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
-    func refresh(qualityOfService: QualityOfService = .userInitiated) {
+    func refresh(quiet: Bool = false, qualityOfService: QualityOfService = .userInitiated) {
         scheduledTask?.cancel()
         scheduledTask = nil
-        loader.refresh(qualityOfService: qualityOfService)
+        loader.refresh(qualityOfService: qualityOfService, quiet: quiet)
     }
 
     func restartTimer() {
@@ -384,6 +428,13 @@ final class ReportStore: ObservableObject {
         DiskStore.shared.applySettings()
         Task { await loadKnownPlans() }
         refresh()
+    }
+
+    func applyBackgroundInterval(_ seconds: Int) {
+        let interval = TimeInterval(BackgroundRefreshInterval.resolve(seconds).rawValue)
+        loader.scheduler.backgroundInterval = interval
+        let action = loader.scheduler.onBackgroundIntervalChanged(interval)
+        handleSchedulerAction(action)
     }
 }
 

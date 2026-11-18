@@ -88,6 +88,12 @@
 "settings.file_note" = "Laisser vide pour utiliser l'échantillon inclus : fixtures/sample.json.";
 "settings.section.refresh" = "Actualisation";
 "settings.auto_refresh" = "Intervalle de secours";
+"settings.background_refresh" = "Actualisation en arrière-plan";
+"settings.background_refresh_note" = "Kanjo s'actualise en arrière-plan à cet intervalle lorsqu'une nouvelle utilisation est détectée. Pas d'actualisation si aucune nouvelle utilisation ou si le système est occupé. L'ouverture du panneau affiche instantanément le résultat le plus récent.";
+"settings.background_refresh.30s" = "30 secondes";
+"settings.background_refresh.1m" = "1 minute";
+"settings.background_refresh.5m" = "5 minutes";
+"settings.background_refresh.10m" = "10 minutes";
 "settings.refresh_note" = "Kanjo s'actualise automatiquement dès que les journaux changent. Cet intervalle sert de sécurité.";
 "settings.refresh_off" = "Désactivé";
 "settings.refresh_minutes" = "Toutes les %d min";

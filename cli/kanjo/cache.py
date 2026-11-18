@@ -23,7 +23,7 @@ from .sources.base import Message, ParseError, Session
 
 CACHE_VERSION = 6
 REPO_CACHE_VERSION = 2
-NEGATIVE_TTL = 600.0  # 10 minutes TTL for negative (no-repo) resolutions
+NEGATIVE_TTL = 7 * 24 * 3600.0  # 7 days TTL for negative (no-repo) resolutions
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
                "thinking", "cwd", "branch", "key", "account", "gen_s", "ttft_s")
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
@@ -197,6 +197,16 @@ class RepoCache:
             return False, None
 
         if entry.get("repo") is None:
+            # Check if it was a directory that might have been initialized as a git repo
+            if not _FILE_LIKE.search(os.path.basename(path)):
+                stat_path = (fs_root + path) if fs_root else path
+                if os.path.lexists(os.path.join(stat_path, ".git")):
+                    # It's now a git repo, invalidate negative entry
+                    if path in self.entries:
+                        del self.entries[path]
+                        self.dirty = True
+                    return False, None
+
             ts = entry.get("ts")
             if ts is not None and isinstance(ts, (int, float)):
                 current_time = time.time() if now is None else now

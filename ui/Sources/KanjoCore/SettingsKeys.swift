@@ -8,6 +8,7 @@ public enum SettingsKeys {
     public static let cliCommand = "cliCommand"
     public static let cliWorkingDirectory = "cliWorkingDirectory"   // 空 = 仓库里的 cli/，其次 ~/.local/share/kanjo/cli、/usr/local/share/kanjo/cli
     public static let refreshMinutes = "refreshMinutes"      // 0 = 关闭自动刷新
+    public static let backgroundRefreshSeconds = "backgroundRefreshSeconds" // 默认 60
     public static let showAmountInMenuBar = "showAmountInMenuBar"
     public static let menuBarMode = "menuBarMode"            // "cost" | "tokens"；默认 cost
     public static let hiddenProjects = "hiddenProjects"      // 换行分隔的 project id（ProjectPrefs）
@@ -38,6 +39,30 @@ public enum SettingsKeys {
     public static let familyReportLastSuccessAt = "familyReportLastSuccessAt"
     public static let familyReportLastResult = "familyReportLastResult"
     public static let familyReportMigrationDone = "familyReportMigrationDone"
+}
+
+public enum BackgroundRefreshInterval: Int, CaseIterable, Identifiable {
+    case s30 = 30
+    case s60 = 60
+    case s300 = 300
+    case s600 = 600
+
+    public static let defaultValue: BackgroundRefreshInterval = .s60
+
+    public var id: Int { rawValue }
+
+    public var labelKey: String {
+        switch self {
+        case .s30: return "settings.background_refresh.30s"
+        case .s60: return "settings.background_refresh.1m"
+        case .s300: return "settings.background_refresh.5m"
+        case .s600: return "settings.background_refresh.10m"
+        }
+    }
+
+    public static func resolve(_ raw: Int) -> BackgroundRefreshInterval {
+        return BackgroundRefreshInterval(rawValue: raw) ?? defaultValue
+    }
 }
 
 public enum PublishFrequency: String, CaseIterable, Identifiable {

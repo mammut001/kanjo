@@ -19,6 +19,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.cliCommand, store: AppDefaults.store) private var cliCommand = CLIDataSource.defaultCommand
     @AppStorage(SettingsKeys.cliWorkingDirectory, store: AppDefaults.store) private var cliWorkingDirectory = ""
     @AppStorage(SettingsKeys.refreshMinutes, store: AppDefaults.store) private var refreshMinutes = 30
+    @AppStorage(SettingsKeys.backgroundRefreshSeconds, store: AppDefaults.store) private var backgroundRefreshSeconds = BackgroundRefreshInterval.defaultValue.rawValue
     @AppStorage(SettingsKeys.showAmountInMenuBar, store: AppDefaults.store) private var showAmount = true
     @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue
     @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
@@ -137,6 +138,16 @@ struct SettingsView: View {
                 }
 
                 PanelSection(L10n.tr("settings.section.refresh"), inset: true) {
+                    Picker(L10n.tr("settings.background_refresh"), selection: $backgroundRefreshSeconds) {
+                        ForEach(BackgroundRefreshInterval.allCases) { interval in
+                            Text(L10n.tr(interval.labelKey)).tag(interval.rawValue)
+                        }
+                    }
+                    .font(.system(size: 12))
+                    .onChange(of: backgroundRefreshSeconds) { newValue in
+                        store.applyBackgroundInterval(newValue)
+                    }
+                    note(L10n.tr("settings.background_refresh_note"))
                     Picker(L10n.tr("settings.auto_refresh"), selection: $refreshMinutes) {
                         ForEach(intervals, id: \.self) { m in
                             Text(m == 0 ? L10n.tr("settings.refresh_off") : L10n.tr("settings.refresh_minutes", m)).tag(m)
