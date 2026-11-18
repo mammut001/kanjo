@@ -20,7 +20,8 @@ counted once.
 
 Output speed (``Message.gen_s``): ``usage.json`` turns are timed from the
 ``shell.turn.inference_done`` records in ``~/.grok/logs/unified.jsonl``;
-``turn_completed`` turns from each model's ``apiDurationMs``. Neither carries a
+``turn_completed`` turns, and ``usage.json`` turns the log does not cover,
+from each model's ``apiDurationMs``. Neither carries a
 usable time to first token, so ``ttft_s`` stays unset.
 """
 
@@ -222,12 +223,15 @@ def _gen_s(u: dict) -> Optional[float]:
 
 def _append_usage(session: Session, usage: dict, fallback_model: str, ts: float,
                   key_base: str, cwd: Optional[str], branch: Optional[str],
-                  turn_gen_s: Optional[float] = None, per_model_timing: bool = False) -> None:
+                  turn_gen_s: Optional[float] = None, per_model_timing: bool = False,
+                  same_turn: Optional[dict] = None) -> None:
     """Add the Messages for one turn's usage object (usage.json turn or turn_completed).
 
     ``turn_gen_s`` (usage.json turns, timed from logs/unified.jsonl) applies only
     when the turn used one model. ``per_model_timing`` (turn_completed) takes each
-    model's own ``apiDurationMs``.
+    model's own ``apiDurationMs``. ``same_turn`` is the turn_completed usage
+    for this usage.json turn: a model left untimed by the unified log borrows its
+    ``apiDurationMs`` when both report the same output tokens.
     """
     model_usage = usage.get("modelUsage")
     if isinstance(model_usage, dict) and model_usage:
@@ -242,6 +246,11 @@ def _append_usage(session: Session, usage: dict, fallback_model: str, ts: float,
         inp = _int(u.get("inputTokens"))
         cache_r = _int(u.get("cachedReadTokens"))
         gen_s = _gen_s(u) if per_model_timing else (None if multi else turn_gen_s)
+        if gen_s is None and same_turn is not None:
+            other_models = same_turn.get("modelUsage")
+            other = other_models.get(model_name) if isinstance(other_models, dict) and other_models else same_turn
+            if isinstance(other, dict) and _int(other.get("outputTokens")) == _int(u.get("outputTokens")):
+                gen_s = _gen_s(other)
         session.messages.append(
             Message(
                 ts=ts,
@@ -359,6 +368,16 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             if isinstance(r, str):
                 session.remote_hints[git_root] = r
 
+    completed = _turn_completed(updates_path) if os.path.isfile(updates_path) else []
+
+    def same_turn(end: Optional[float]) -> Optional[dict]:
+        if end is None:
+            return None
+        for tc_ts, _tc_id, tc_usage in completed:
+            if tc_ts is not None and abs(tc_ts - end) <= _SAME_TURN_S:
+                return tc_usage
+        return None
+
     # --- usage.json (older builds) ---
     usage_ends: List[float] = []
     if os.path.isfile(usage_path):
@@ -402,11 +421,12 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     ts or session.origin_ts or 0.0,
                     f"grok:{session.id}:{turn_num}", cwd, branch,
                     turn_gen_s=round(elapsed_ms / 1000.0, 3) if elapsed_ms > 0 else None,
+                    same_turn=same_turn(ts),
                 )
 
     # --- updates.jsonl turn_completed (all builds) ---
-    if os.path.isfile(updates_path):
-        for ts, turn_id, usage in _turn_completed(updates_path):
+    if completed:
+        for ts, turn_id, usage in completed:
             if ts is not None and any(abs(ts - end) <= _SAME_TURN_S for end in usage_ends):
                 continue  # already counted from usage.json
             if not _has_tokens(usage):

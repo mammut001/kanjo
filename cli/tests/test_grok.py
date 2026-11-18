@@ -117,6 +117,36 @@ class GrokUpdatesFormatTest(unittest.TestCase):
         session = grok.parse_file(_acp("grok-acp-1"))
         self.assertEqual([m.gen_s for m in session.messages], [6.0, 2.0, 0.5])
 
+    def test_usage_json_turn_borrows_matching_timing(self):
+        session = grok.parse_file(_acp("grok-mix-1"))
+        by_key = {m.key: m for m in session.messages}
+        # m-2 reports 70 output tokens, usage.json turn 2 reports 80: not the same numbers, no timing.
+        self.assertIsNone(by_key["grok:grok-mix-1:2"].gen_s)
+        self.assertEqual(by_key["grok:grok-mix-1:p:m-1"].gen_s, 1.0)
+
+    def test_usage_json_turn_timed_from_turn_completed(self):
+        import json
+        import shutil
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        try:
+            src = os.path.dirname(_acp("grok-mix-1"))
+            dst = os.path.join(tmp, "s", "grok-mix-1")
+            shutil.copytree(src, dst)
+            lines = open(os.path.join(dst, "updates.jsonl"), encoding="utf-8").read().splitlines()
+            rec = json.loads(lines[1])
+            rec["params"]["update"]["usage"]["modelUsage"]["grok-4.6-build"]["outputTokens"] = 80
+            lines[1] = json.dumps(rec)
+            with open(os.path.join(dst, "updates.jsonl"), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines) + "\n")
+            session = grok.parse_file(os.path.join(dst, "updates.jsonl"))
+            by_key = {m.key: m for m in session.messages}
+            self.assertEqual(by_key["grok:grok-mix-1:2"].gen_s, 1.5)
+            self.assertEqual(by_key["grok:grok-mix-1:2"].output, 80)
+            self.assertEqual(len(session.messages), 2)
+        finally:
+            shutil.rmtree(tmp)
+
     def test_usage_json_wins_for_the_same_turn(self):
         session = grok.parse_file(_acp("grok-mix-1"))
         by_key = {m.key: m for m in session.messages}
