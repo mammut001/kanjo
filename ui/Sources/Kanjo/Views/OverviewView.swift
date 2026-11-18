@@ -5,10 +5,24 @@ struct OverviewView: View {
     static let bottomAnchor = "overview-bottom"
 
     let report: UsageReport
-    var panelData: PanelData? = nil
-    var scrollAnchor: String? = nil
+    var panelData: PanelData?
+    var scrollAnchor: String?
     let onSelect: (Route) -> Void
     let onSetRenewalDay: (String) -> Void
+
+    init(
+        report: UsageReport,
+        panelData: PanelData? = nil,
+        scrollAnchor: String? = nil,
+        onSelect: @escaping (Route) -> Void,
+        onSetRenewalDay: @escaping (String) -> Void
+    ) {
+        self.report = report
+        self.panelData = panelData
+        self.scrollAnchor = scrollAnchor
+        self.onSelect = onSelect
+        self.onSetRenewalDay = onSetRenewalDay
+    }
 
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
     @AppStorage(SettingsKeys.hiddenProjects, store: AppDefaults.store) private var hiddenRaw = ""
@@ -82,12 +96,13 @@ struct OverviewView: View {
     // 三段节奏：文字（hero）→ 图形（马赛克）→ 列表。列表行直接放在面板上，没有分组底色。
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
-        let f: FilteredReport
-        if let pd = panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
-            f = pd.filteredReport
-        } else {
-            f = ctx.filtered()
-        }
+        let f: FilteredReport = {
+            if let pd = panelData, pd.matches(report: report, spec: ctx.spec) {
+                return pd.filteredReport
+            } else {
+                return ctx.filtered()
+            }
+        }()
         let lists = arrange(f, isAll: ctx.isAll)
         ScrollViewReader { proxy in
             OptionalScrollView {
@@ -433,7 +448,14 @@ private struct SubscriptionValueCard: View {
     }
 
     var body: some View {
-        let defaultRows = panelData?.subscriptionRows ?? SubscriptionValue.rows(of: report)
+        let now = Date()
+        let cal = Calendar.current
+        let defaultRows: [SubscriptionRow]
+        if let pd = panelData, pd.reportGeneratedAt == report.generatedAt, cal.isDate(pd.now, inSameDayAs: now) {
+            defaultRows = pd.subscriptionRows
+        } else {
+            defaultRows = SubscriptionValue.rows(of: report)
+        }
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
         let effectivePinnedAgent = userPinnedAgent ?? effectiveRoutePinnedAgent

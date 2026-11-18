@@ -178,7 +178,7 @@ struct MenuBarLabel: View {
     private func amount(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
         let cost: Double
-        if let pd = store.panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
+        if let pd = store.panelData, pd.matches(report: r, spec: ctx.spec) {
             cost = pd.filteredReport.cost
         } else {
             cost = ctx.isAll ? r.totals.cost : ctx.filtered().cost
@@ -190,7 +190,7 @@ struct MenuBarLabel: View {
     private func tokensText(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
         let tokens: Int
-        if let pd = store.panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
+        if let pd = store.panelData, pd.matches(report: r, spec: ctx.spec) {
             tokens = pd.filteredReport.tokens
         } else {
             tokens = ctx.isAll ? r.totals.tokens.total : ctx.filtered().tokens

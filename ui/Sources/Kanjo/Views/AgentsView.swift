@@ -33,10 +33,12 @@ struct AgentsView: View {
 
     init(
         report: UsageReport,
+        panelData: PanelData? = nil,
         scrollAnchor: String? = nil,
         onSelectProject: @escaping (String) -> Void
     ) {
         self.report = report
+        self.panelData = panelData
         self.scrollAnchor = scrollAnchor
         self.onSelectProject = onSelectProject
         _pinnedAgent = State(initialValue: AgentsRoute.expandedAgent(in: scrollAnchor))
@@ -46,24 +48,14 @@ struct AgentsView: View {
 
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
-        let filtered: FilteredReport
-        let summary: AgentSummaryReport
-        
-        let now = Date()
-        let effectiveNow = effectiveQuotaNow
-        
-        if let pd = panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end, abs(pd.now.timeIntervalSince(now)) < 60 {
-            filtered = pd.filteredReport
-            
-            if abs(effectiveNow.timeIntervalSince(pd.now)) < 60 {
-                summary = pd.agentSummary
+        let filtered: FilteredReport = {
+            if let pd = panelData, pd.matches(report: report, spec: ctx.spec) {
+                return pd.filteredReport
             } else {
-                summary = AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: effectiveNow)
+                return ctx.filtered()
             }
-        } else {
-            filtered = ctx.filtered()
-            summary = AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: effectiveNow)
-        }
+        }()
+        let summary = AgentSummary.build(report: report, filtered: filtered, quotaNow: effectiveQuotaNow)
 
         ScrollViewReader { proxy in
             OptionalScrollView {

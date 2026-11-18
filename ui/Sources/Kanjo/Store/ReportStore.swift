@@ -29,6 +29,7 @@ final class ReportStore: ObservableObject {
     private var logWatcher: LogWatcher?
     private var scheduledTask: Task<Void, Never>?
     private let defaults: UserDefaults
+    private var defaultsObserver: NSObjectProtocol?
 
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
@@ -89,6 +90,11 @@ final class ReportStore: ObservableObject {
         }
 
         setupNotifications()
+        
+        defaultsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: defaults, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.handleDefaultsChange() }
+        }
+
         Task { await checkPython() }
         Task { await loadKnownPlans() }
         loader.startInitialLoad()
@@ -96,29 +102,53 @@ final class ReportStore: ObservableObject {
         setupWatcher()
     }
 
+    deinit {
+        timer?.invalidate()
+        busyCheckTimer?.invalidate()
+        logWatcher?.stop()
+        if let observer = defaultsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func handleDefaultsChange() {
+        let newRange = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
+        if let currentRange = panelData?.rangeSpec.range.rawValue, currentRange == newRange {
+            return
+        }
+        prepare(rangeRaw: newRange)
+    }
+
     func apply(_ state: ReportLoadState) {
-        report = state.report
-        isStaleReport = state.isStaleReport
-        staleReportGeneratedAt = state.staleReportGeneratedAt
         error = state.error
         isLoading = state.isLoading
         loadingStartedAt = state.loadingStartedAt
         lastRefresh = state.lastRefresh
         sourceDescription = state.sourceDescription
         
-        let gen = panelGeneration + 1
-        panelGeneration = gen
-        
-        if let report = report {
-            let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
-            Task.detached(priority: .userInitiated) {
-                let now = Date()
-                let data = PanelData.compute(report: report, rangeRaw: range, now: now)
-                await MainActor.run {
-                    if self.panelGeneration == gen {
-                        self.panelData = data
+        if state.report?.generatedAt != report?.generatedAt || (state.report == nil) != (report == nil) {
+            let gen = panelGeneration + 1
+            panelGeneration = gen
+            
+            if let newReport = state.report {
+                let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
+                Task.detached(priority: .userInitiated) {
+                    let now = Date()
+                    let data = PanelData.compute(report: newReport, rangeRaw: range, now: now)
+                    await MainActor.run {
+                        if self.panelGeneration == gen {
+                            self.report = newReport
+                            self.isStaleReport = state.isStaleReport
+                            self.staleReportGeneratedAt = state.staleReportGeneratedAt
+                            self.panelData = data
+                        }
                     }
                 }
+            } else {
+                self.report = nil
+                self.isStaleReport = false
+                self.staleReportGeneratedAt = nil
+                self.panelData = nil
             }
         }
     }

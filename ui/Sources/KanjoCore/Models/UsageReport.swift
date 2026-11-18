@@ -789,13 +789,69 @@ public enum ReportDates {
     private static func fastParse(_ s: String) -> Date? {
         let bytes = Array(s.utf8)
         guard bytes.count >= 20 else { return nil }
+
+        // Shape: YYYY-MM-DDTHH:MM:SS...
+        let isDigit: (UInt8) -> Bool = { $0 >= 48 && $0 <= 57 }
+        for i in [0,1,2,3,5,6,8,9,11,12,14,15,17,18] {
+            if !isDigit(bytes[i]) { return nil }
+        }
         guard bytes[4] == 45, bytes[7] == 45, bytes[10] == 84, bytes[13] == 58, bytes[16] == 58 else { return nil }
+        
         let y = (Int(bytes[0]-48)*1000 + Int(bytes[1]-48)*100 + Int(bytes[2]-48)*10 + Int(bytes[3]-48))
         let m = (Int(bytes[5]-48)*10 + Int(bytes[6]-48))
         let d = (Int(bytes[8]-48)*10 + Int(bytes[9]-48))
         let hh = (Int(bytes[11]-48)*10 + Int(bytes[12]-48))
         let mm = (Int(bytes[14]-48)*10 + Int(bytes[15]-48))
         let ss = (Int(bytes[17]-48)*10 + Int(bytes[18]-48))
+        
+        guard m >= 1 && m <= 12 && hh < 24 && mm < 60 && ss < 60 else { return nil }
+        let daysInMonth = [31, (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        guard d >= 1 && d <= daysInMonth[m-1] else { return nil }
+        
+        var pos = 19
+        var fraction: TimeInterval = 0
+        if pos < bytes.count, bytes[pos] == 46 { // .
+            pos += 1
+            var millis = 0
+            var count = 0
+            while pos < bytes.count, isDigit(bytes[pos]) {
+                if count < 3 {
+                    millis = millis * 10 + Int(bytes[pos]-48)
+                    count += 1
+                }
+                pos += 1
+            }
+            if count == 0 { return nil } // . followed by nothing
+            // If fewer than 3 digits, scale up
+            while count < 3 {
+                millis *= 10
+                count += 1
+            }
+            fraction = Double(millis) / 1000.0
+            
+            // Skip remaining digits
+            while pos < bytes.count, isDigit(bytes[pos]) {
+                pos += 1
+            }
+        }
+        
+        var secondsFromGMT = 0
+        if pos < bytes.count {
+            if bytes[pos] == 90 { // Z
+                pos += 1
+            } else if bytes[pos] == 43 || bytes[pos] == 45 { // + or -
+                guard pos + 5 < bytes.count else { return nil }
+                let sign = bytes[pos] == 45 ? -1 : 1
+                for i in [pos+1, pos+2, pos+4, pos+5] { if !isDigit(bytes[i]) { return nil } }
+                guard bytes[pos+3] == 58 else { return nil }
+                let h = (Int(bytes[pos+1]-48)*10 + Int(bytes[pos+2]-48))
+                let m = (Int(bytes[pos+4]-48)*10 + Int(bytes[pos+5]-48))
+                secondsFromGMT = sign * (h * 3600 + m * 60)
+                pos += 6
+            } else { return nil }
+        } else { return nil } // Must have timezone
+        
+        guard pos == bytes.count else { return nil } // Trailing characters
         
         // Days from civil formula
         var y_c = y - (m <= 2 ? 1 : 0)
@@ -804,34 +860,6 @@ public enum ReportDates {
         let doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1
         let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
         let days = era * 146097 + doe - 719468
-        
-        var pos = 19
-        var fraction: TimeInterval = 0
-        if pos < bytes.count, bytes[pos] == 46 { // .
-            pos += 1
-            var multiplier: TimeInterval = 0.1
-            while pos < bytes.count, bytes[pos] >= 48, bytes[pos] <= 57 {
-                if multiplier > 0.0001 {
-                    fraction += TimeInterval(bytes[pos]-48) * multiplier
-                    multiplier *= 0.1
-                }
-                pos += 1
-            }
-        }
-        
-        var secondsFromGMT = 0
-        if pos < bytes.count {
-            if bytes[pos] == 90 { // Z
-                secondsFromGMT = 0
-            } else if bytes[pos] == 43 || bytes[pos] == 45 { // + or -
-                if pos + 5 < bytes.count {
-                    let sign = bytes[pos] == 45 ? -1 : 1
-                    let h = (Int(bytes[pos+1]-48)*10 + Int(bytes[pos+2]-48))
-                    let m = (Int(bytes[pos+4]-48)*10 + Int(bytes[pos+5]-48))
-                    secondsFromGMT = sign * (h * 3600 + m * 60)
-                }
-            }
-        }
         
         return Date(timeIntervalSince1970: TimeInterval(days * 86400 + hh * 3600 + mm * 60 + ss) + fraction - TimeInterval(secondsFromGMT))
     }
