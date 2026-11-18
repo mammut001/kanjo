@@ -1301,3 +1301,38 @@ def _git_env() -> dict:
 def _no_hooks() -> str:
     """``core.hooksPath`` that disables hooks: ``/dev/null`` on POSIX, ``nul`` on Windows."""
     return os.devnull
+
+_WORKTREE_MERGE_CACHE: Dict[Tuple[str, str, str], Tuple[bool, Optional[str]]] = {}
+
+def _get_default_branch(path: str) -> Optional[str]:
+    try:
+        res = subprocess.run(["git", "-C", path, "symbolic-ref", "refs/remotes/origin/HEAD"], capture_output=True, text=True, encoding="utf-8")
+        if res.returncode == 0: return res.stdout.strip().replace("refs/remotes/origin/", "")
+        for branch in ["main", "master"]:
+            if subprocess.run(["git", "-C", path, "show-ref", "--verify", "refs/heads/" + branch], capture_output=True).returncode == 0: return branch
+    except Exception: pass
+    return None
+
+def _git_run(path: str, args: List[str]) -> str:
+    return subprocess.run(["git", "-C", path] + args, capture_output=True, text=True, encoding="utf-8", check=True, env=_git_env()).stdout.strip()
+
+def _is_merged(path: str) -> Tuple[bool, Optional[str]]:
+    default_branch = _get_default_branch(path)
+    if not default_branch: return False, None
+    head = _git_run(path, ["rev-parse", "HEAD"])
+    default_sha = _git_run(path, ["rev-parse", default_branch])
+    key = (path, head, default_sha)
+    if key in _WORKTREE_MERGE_CACHE: return _WORKTREE_MERGE_CACHE[key]
+    if subprocess.run(["git", "-C", path, "merge-base", "--is-ancestor", "HEAD", default_branch], capture_output=True).returncode == 0:
+        res = (True, default_branch)
+        _WORKTREE_MERGE_CACHE[key] = res
+        return res
+    merge_base = _git_run(path, ["merge-base", "HEAD", default_branch])
+    changed_files = _git_run(path, ["diff", "--name-only", merge_base, "HEAD"]).splitlines()
+    if changed_files and subprocess.run(["git", "-C", path, "diff", "--quiet", "HEAD", default_branch, "--"] + changed_files, capture_output=True).returncode == 0:
+        res = (True, default_branch)
+        _WORKTREE_MERGE_CACHE[key] = res
+        return res
+    res = (False, default_branch)
+    _WORKTREE_MERGE_CACHE[key] = res
+    return res
