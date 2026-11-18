@@ -275,4 +275,27 @@ final class RefreshSchedulerTests: XCTestCase {
         XCTAssertFalse(scheduler.isPanelVisible)
         XCTAssertTrue(scheduler.hasScheduledRefresh)
     }
+
+    func testShouldRefreshOnOpenInLowPowerModeAndSleep() {
+        let lastRefresh = Date(timeIntervalSince1970: 1000)
+        var scheduler = RefreshScheduler(lastRefreshTime: lastRefresh)
+        _ = scheduler.onLowPowerModeChanged(enabled: true, at: Date(timeIntervalSince1970: 1020))
+
+        // No pending events and not stale -> false even in Low Power Mode
+        XCTAssertFalse(scheduler.shouldRefreshOnOpen(at: Date(timeIntervalSince1970: 1300)))
+        // Stale launch report > 180s -> true in Low Power Mode
+        XCTAssertTrue(scheduler.shouldRefreshOnOpen(at: Date(timeIntervalSince1970: 1300), isStaleReport: true))
+
+        // File event in Low Power Mode marks pendingWakeRefresh without scheduling background timer
+        XCTAssertEqual(scheduler.onFileEvent(at: Date(timeIntervalSince1970: 1050)), .none)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+
+        // Within 180s of last refresh -> false; older than 180s -> true
+        XCTAssertFalse(scheduler.shouldRefreshOnOpen(at: Date(timeIntervalSince1970: 1150)))
+        XCTAssertTrue(scheduler.shouldRefreshOnOpen(at: Date(timeIntervalSince1970: 1181)))
+
+        // While asleep -> still false
+        scheduler.onSleep()
+        XCTAssertFalse(scheduler.shouldRefreshOnOpen(at: Date(timeIntervalSince1970: 1300), isStaleReport: true))
+    }
 }

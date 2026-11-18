@@ -130,7 +130,7 @@ public struct RefreshScheduler: Equatable {
     /// Refreshes immediately only if the last completed refresh is older than `openRefreshThreshold` (180s)
     /// (or has never occurred) and either events are pending or the report is stale from the launch cache.
     public func shouldRefreshOnOpen(at date: Date = Date(), isStaleReport: Bool = false) -> Bool {
-        if isRefreshing || isAsleep || isLowPowerMode { return false }
+        if isRefreshing || isAsleep { return false }
         let hasPendingEvents = hasScheduledRefresh || hasPendingEventWhileRefreshing || pendingWakeRefresh
         guard hasPendingEvents || isStaleReport else { return false }
         guard let last = lastRefreshTime else { return true }
