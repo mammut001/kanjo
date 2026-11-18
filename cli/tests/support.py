@@ -222,6 +222,12 @@ def check_subscriptions(tc, subs):
             name = acc.get("name")
             tc.assertTrue(name is None or isinstance(name, str), where + " account.name")
             keys.remove("account")
+        if "accounts_priced" in keys:
+            ap = sub["accounts_priced"]
+            tc.assertIsInstance(ap, int, where + " accounts_priced")
+            tc.assertNotIsInstance(ap, bool, where + " accounts_priced")
+            tc.assertGreater(ap, 0, where + " accounts_priced")
+            keys.remove("accounts_priced")
         tc.assertEqual(keys, SUBSCRIPTION_KEYS, where)
         tc.assertIsInstance(sub["plan"], str, where)
         tc.assertTrue(sub["plan"], where + " plan")

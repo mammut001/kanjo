@@ -536,9 +536,62 @@ def _detect_account(agent: str, claude_config: Optional[str] = None) -> Optional
     return None
 
 
+def resolve_antigravity_account_plan(spec: Optional[dict]) -> Optional[dict]:
+    """Resolve one per-account Antigravity plan config entry into contract fields."""
+    if not isinstance(spec, dict):
+        return None
+    raw_plan = spec.get("plan")
+    if not isinstance(raw_plan, str) or not raw_plan.strip():
+        return None
+    raw_plan = raw_plan.strip()
+    if raw_plan.lower() == "none":
+        return None
+    plan_key, plan_label, price = _resolve("antigravity", raw_plan, spec.get("monthly_price_usd"))
+    return {
+        "plan": plan_key,
+        "plan_label": plan_label,
+        "monthly_price_usd": None if price is None else round(float(price), 4),
+    }
+
+
+def _aggregate_antigravity_accounts(antigravity_accounts: Optional[Dict[str, dict]]) -> Optional[dict]:
+    """Sum configured per-account Antigravity plans into a single subscription summary."""
+    if not isinstance(antigravity_accounts, dict) or not antigravity_accounts:
+        return None
+    counts: Dict[str, int] = {}
+    max_price: Dict[str, float] = {}
+    distinct_keys = set()
+    total_price = 0.0
+    priced_count = 0
+    for spec in antigravity_accounts.values():
+        resolved = resolve_antigravity_account_plan(spec)
+        if not resolved:
+            continue
+        priced_count += 1
+        distinct_keys.add(resolved["plan"])
+        label = resolved["plan_label"]
+        price = float(resolved["monthly_price_usd"] or 0.0)
+        total_price += price
+        counts[label] = counts.get(label, 0) + 1
+        if label not in max_price or price > max_price[label]:
+            max_price[label] = price
+    if priced_count == 0:
+        return None
+    ordered = sorted(counts.keys(), key=lambda lbl: (-max_price.get(lbl, 0.0), lbl))
+    parts = [f"{lbl} \u00d7{counts[lbl]}" if counts[lbl] > 1 else lbl for lbl in ordered]
+    plan_key = next(iter(distinct_keys)) if len(distinct_keys) == 1 else "multi"
+    return {
+        "plan": plan_key,
+        "plan_label": " + ".join(parts),
+        "monthly_price_usd": round(total_price, 4),
+        "accounts_priced": priced_count,
+    }
+
+
 def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[str] = None,
                   claude_config: Optional[str] = None, now=None,
-                  timezone_name: Optional[str] = None) -> Dict[str, dict]:
+                  timezone_name: Optional[str] = None,
+                  antigravity_accounts: Optional[Dict[str, dict]] = None) -> Dict[str, dict]:
     """agent -> contract ``subscriptions`` entry. ``manual`` is ``Config.subscriptions``.
 
     Agents with no detected or manual plan are absent. Manual wins per field.
@@ -596,6 +649,37 @@ def subscriptions(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         entry = _from_manual(str(agent), spec, now_dt, tz_name, out.get(str(agent)))
         if entry:
             out[str(agent)] = entry
+    agy_agg = _aggregate_antigravity_accounts(antigravity_accounts)
+    if agy_agg is not None:
+        existing = out.get("antigravity")
+        if existing:
+            merged = dict(existing)
+            merged["plan"] = agy_agg["plan"]
+            merged["plan_label"] = agy_agg["plan_label"]
+            merged["monthly_price_usd"] = agy_agg["monthly_price_usd"]
+            merged["accounts_priced"] = agy_agg["accounts_priced"]
+            merged["source"] = "manual"
+            out["antigravity"] = merged
+        else:
+            agy_manual = (manual or {}).get("antigravity") or {}
+            anchor = agy_manual.get("anchor_day")
+            cycle_source = "manual" if "anchor_day" in agy_manual else "rolling_30d"
+            extra = agy_manual.get("extra_usage_enabled", False)
+            entry = _finish(
+                agy_agg["plan"],
+                agy_agg["plan_label"],
+                agy_agg["monthly_price_usd"],
+                anchor,
+                cycle_source,
+                extra,
+                "manual",
+                now_dt,
+                tz_name,
+            )
+            entry["accounts_priced"] = agy_agg["accounts_priced"]
+            if isinstance(agy_manual.get("account"), dict):
+                entry["account"] = agy_manual["account"]
+            out["antigravity"] = entry
     for agent, entry in out.items():
         if "account" not in entry:
             acc = _detect_account(agent, claude_config=claude_config)

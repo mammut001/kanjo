@@ -48,6 +48,11 @@ def quota_cache_path() -> str:
     return os.path.join(data_dir(), "quota_cache.json")
 
 
+def antigravity_account_quota_path() -> str:
+    from .ledger import data_dir
+    return os.path.join(data_dir(), "antigravity_account_quota.json")
+
+
 def _debug_log(provider: str, category: str) -> None:
     if os.environ.get("KANJO_QUOTA_DEBUG") == "1":
         sys.stderr.write(f"quota_debug: {provider} -> {category}\n")
@@ -102,8 +107,7 @@ def load_quota_cache() -> Optional[dict]:
     return None
 
 
-def save_quota_cache(data: dict) -> None:
-    path = quota_cache_path()
+def _atomic_write_json(path: str, data: dict) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = "%s.%d.%s.tmp" % (path, os.getpid(), uuid.uuid4().hex[:8])
     try:
@@ -122,6 +126,148 @@ def save_quota_cache(data: dict) -> None:
             os.remove(tmp)
         except OSError:
             pass
+
+
+def save_quota_cache(data: dict) -> None:
+    _atomic_write_json(quota_cache_path(), data)
+
+
+def _build_antigravity_quota_windows(result: dict) -> List[dict]:
+    if not isinstance(result, dict):
+        return []
+    windows: List[dict] = []
+    weekly_resets_at = result.get("weekly_resets_at")
+    weekly_hours = result.get("weekly_window_hours")
+    if weekly_resets_at is not None:
+        w_hours = int(round(weekly_hours)) if isinstance(weekly_hours, (int, float)) and not isinstance(weekly_hours, bool) else 168
+        w_title = "Weekly" if w_hours == 168 else f"{w_hours}h"
+        windows.append({
+            "id": "weekly",
+            "title": w_title,
+            "used_percent": result.get("weekly_used_percent"),
+            "resets_at": weekly_resets_at,
+            "window_hours": w_hours,
+        })
+    five_hours = result.get("five_hour_window_hours")
+    five_resets_at = result.get("five_hour_resets_at")
+    if five_hours is not None or five_resets_at is not None:
+        f_hours = int(round(five_hours)) if isinstance(five_hours, (int, float)) and not isinstance(five_hours, bool) else 5
+        f_title = "5-hour" if f_hours == 5 else f"{f_hours}h"
+        windows.append({
+            "id": "five_hour",
+            "title": f_title,
+            "used_percent": result.get("five_hour_used_percent"),
+            "resets_at": five_resets_at,
+            "window_hours": f_hours,
+        })
+    for ew in (result.get("extra_windows") or []):
+        if not isinstance(ew, dict):
+            continue
+        eid = str(ew.get("id") or "extra")
+        etitle = str(ew.get("title") or eid)
+        wh = ew.get("window_hours")
+        wh_int = int(round(wh)) if isinstance(wh, (int, float)) and not isinstance(wh, bool) else None
+        windows.append({
+            "id": eid,
+            "title": etitle,
+            "used_percent": ew.get("used_percent"),
+            "resets_at": ew.get("resets_at"),
+            "window_hours": wh_int,
+        })
+    return windows
+
+
+def _current_antigravity_account() -> Optional[str]:
+    try:
+        from .antigravity_accounts import get_account_index
+        cur = get_account_index().get_current_account()
+    except Exception:
+        return None
+    if not isinstance(cur, str):
+        return None
+    cur = cur.strip().lower()
+    if not cur or cur in ("unknown", "unattributed"):
+        return None
+    return cur
+
+
+def _load_raw_antigravity_account_quotas() -> dict:
+    path = antigravity_account_quota_path()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("version") == CACHE_VERSION and isinstance(data.get("accounts"), dict):
+            return data
+    except (OSError, ValueError):
+        pass
+    return {"version": CACHE_VERSION, "accounts": {}}
+
+
+def record_antigravity_account_quota(result: dict, now: Optional[float] = None) -> bool:
+    """Persist the latest live Antigravity quota reading under the current account email."""
+    now_ts = time.time() if now is None else float(now)
+    current = _current_antigravity_account()
+    if not current:
+        return False
+    windows = _build_antigravity_quota_windows(result)
+    if not windows:
+        return False
+    data = _load_raw_antigravity_account_quotas()
+    accounts = dict(data.get("accounts") or {})
+    accounts[current] = {
+        "captured_at": _iso_utc(now_ts),
+        "windows": windows,
+    }
+    _atomic_write_json(antigravity_account_quota_path(), {
+        "version": CACHE_VERSION,
+        "accounts": accounts,
+    })
+    return True
+
+
+def load_antigravity_account_quotas(now: Optional[float] = None) -> Dict[str, dict]:
+    """Load per-account last-seen Antigravity quota, nulling used_percent on ended windows."""
+    now_ts = time.time() if now is None else float(now)
+    raw = _load_raw_antigravity_account_quotas()
+    accounts = raw.get("accounts")
+    if not isinstance(accounts, dict):
+        return {}
+    out: Dict[str, dict] = {}
+    for email, entry in accounts.items():
+        if not isinstance(email, str) or not isinstance(entry, dict):
+            continue
+        norm_email = email.strip().lower()
+        if not norm_email or norm_email in ("unknown", "unattributed"):
+            continue
+        captured_at = entry.get("captured_at")
+        raw_windows = entry.get("windows")
+        if not isinstance(captured_at, str) or not isinstance(raw_windows, list):
+            continue
+        cleaned_windows = []
+        for w in raw_windows:
+            if not isinstance(w, dict):
+                continue
+            resets_at = w.get("resets_at")
+            resets_str = resets_at if isinstance(resets_at, str) and resets_at.strip() else None
+            reset_ts = _parse_iso(resets_str) if resets_str else None
+            if reset_ts is None or reset_ts <= now_ts:
+                used_pct = None
+            else:
+                raw_pct = w.get("used_percent")
+                used_pct = _pct(raw_pct) if raw_pct is not None else None
+            cleaned_windows.append({
+                "id": str(w.get("id") or ""),
+                "title": str(w.get("title") or w.get("id") or ""),
+                "used_percent": used_pct,
+                "resets_at": resets_str,
+                "window_hours": w.get("window_hours"),
+            })
+        if cleaned_windows:
+            out[norm_email] = {
+                "captured_at": captured_at,
+                "windows": cleaned_windows,
+            }
+    return out
 
 
 def get_cached_plan(agent: str) -> Optional[str]:
@@ -314,6 +460,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
 
                 result = parse_antigravity_summary(data, now=now, plan_name=plan_name, email=user_email)
                 if result:
+                    record_antigravity_account_quota(result, now=now)
                     return result
     _debug_log("antigravity", last_error_cat)
     return None
@@ -916,6 +1063,8 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
             res = fetcher(now=now)
             if res:
                 results[agent] = res
+                if agent == "antigravity" and fetcher is not fetch_antigravity_quota:
+                    record_antigravity_account_quota(res, now=now)
         except Exception:
             pass
 

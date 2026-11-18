@@ -33,7 +33,7 @@ import time
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .cache import _cache_dir
-from .sources.base import Message, Session, iso_utc, local_zone
+from .sources.base import Message, Session, iso_utc, local_timezone_name, local_zone
 
 LOGS_CACHE_VERSION = 6
 _FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})")
@@ -509,6 +509,63 @@ def attribute(conversation_id: str, ts: float) -> Optional[str]:
     return get_account_index().attribute(conversation_id, ts)
 
 
+def _normalize_account_email(raw: Optional[str]) -> Optional[str]:
+    if not isinstance(raw, str):
+        return None
+    clean = raw.strip().lower()
+    if not clean or clean in ("unknown", "unattributed"):
+        return None
+    return clean
+
+
+def compute_antigravity_by_day(
+    sessions: Iterable[Session],
+    tz_name: Optional[str] = None,
+    prices=None,
+) -> List[dict]:
+    """Aggregate all de-duplicated Antigravity messages by local day and account email."""
+    from .pricing import default_book
+
+    tz = local_zone(tz_name or local_timezone_name())
+    prices = prices or default_book()
+    groups: Dict[Tuple[str, Optional[str]], dict] = {}
+
+    for s in sessions:
+        if s.agent != "antigravity":
+            continue
+        for m in s.messages:
+            day = datetime.fromtimestamp(m.ts, tz=tz).date().isoformat()
+            email = _normalize_account_email(m.account)
+            tok = (m.input or 0) + (m.output or 0) + (m.cache_read or 0) + (m.cache_write or 0)
+            cost, _ = prices.cost(
+                m.model, "antigravity",
+                m.input or 0, m.output or 0,
+                m.cache_read or 0, m.cache_write or 0,
+                m.cache_write_1h or 0,
+            )
+            key = (day, email)
+            entry = groups.get(key)
+            if entry is None:
+                entry = {"tokens": 0, "cost_usd": 0.0, "messages": 0}
+                groups[key] = entry
+            entry["tokens"] += tok
+            entry["cost_usd"] += cost
+            entry["messages"] += 1
+
+    rows = [
+        {
+            "day": day,
+            "email": email,
+            "tokens": st["tokens"],
+            "cost_usd": round(st["cost_usd"], 4),
+            "messages": st["messages"],
+        }
+        for (day, email), st in groups.items()
+    ]
+    rows.sort(key=lambda r: (r["day"], r["email"] is None, r["email"] or ""))
+    return rows
+
+
 def compute_antigravity_accounts_window(
     sessions: Iterable[Session],
     doc: dict,
@@ -603,11 +660,14 @@ def compute_antigravity_accounts_window(
     ws_utc = window_start_dt.astimezone(timezone.utc)
     ws_iso = ws_utc.isoformat().replace("+00:00", "Z")
 
+    by_day = compute_antigravity_by_day(deduped, tz_name=doc.get("timezone"), prices=prices)
+
     return {
         "window_start": ws_iso,
         "window_kind": kind,
         "current": current_account,
         "accounts": known_rows,
+        "by_day": by_day,
         "unknown": {
             "tokens": unknown_tokens,
             "cost_usd": unknown_cost,

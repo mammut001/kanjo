@@ -246,7 +246,7 @@ def cmd_projects(args) -> int:
 
 def _print_subscriptions(cfg) -> None:
     cfg = cfg or Config()
-    found = load_subscriptions(cfg.subscriptions)
+    found = load_subscriptions(cfg.subscriptions, antigravity_accounts=cfg.antigravity_accounts)
     print("subscriptions:")
     if not found:
         print("  none")
@@ -752,7 +752,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("config", help="get, set or unset subscription and quota overrides")
     p.add_argument("config_cmd", choices=("get", "set", "unset", "path", "plans"))
-    p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field> or quota_windows.<agent>.weekly_reset")
+    p.add_argument("key", nargs="?", help="subscriptions.<agent>.<field>, quota_windows.<agent>.weekly_reset, or antigravity_accounts.<email>.<field>")
     p.add_argument("value", nargs="?", help="override value (set only)")
     p.add_argument("--json", action="store_true", help="output as JSON (plans only)")
     p.add_argument("--config", metavar="PATH", help="attribution config; overrides.json is stored beside it")

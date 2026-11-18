@@ -70,13 +70,14 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
       "cycle_source": "subscription_date",    // subscription_date（从订阅创建日推出）| manual（用户设置）| rolling_30d（不知道续费日：cycle_start = 现在往前 30 天，cycle_end = 现在，anchor_day 为 null；UI 标「day assumed」并引导设置）
       "extra_usage_enabled": false,           // Claude 的 hasExtraUsageEnabled：true 表示超额会真实扣款，UI 要单独标出
       "source": "detected",                   // detected（本机读到）| manual（用户配置）
+      "accounts_priced": 2,                   // 可选（仅 antigravity 且至少为一个账号配置了计划时出现）：已配置计划的账号数；此时 monthly_price_usd 为各已配账号月费之和，plan_label 为汇总标签（如 "Google AI Ultra ×2 + Google AI Pro"）
       "account": {                            // 可选：检测到的账号信息；拿不到时不出现；--mobile 导出不含该字段
         "email": "user@example.com",          // 账号邮箱
         "name": "Jane Doe"                    // 显示名或组织名；无对应信息时为 null
       }
     }
   },
-  "antigravity_accounts": {                   // 可选：Antigravity 账号使用量与登录状态；无历史账号且无保存登录时不出现；--mobile 导出不含该字段
+  "antigravity_accounts": {                   // 可选：Antigravity 账号使用量与登录状态；无历史账号且无保存登录时不出现；--mobile / --family-report / --public-summary 导出不含该字段
     "window_start": "2026-11-06T10:00:00Z",   // 本额度周起点（优先取 live quota window 下 weekly_resets_at - weekly_window_hours；无有效额度周则取 subscriptions 账期起点；否则为 now - 7 天）
     "window_kind": "quota_week",              // "quota_week" | "billing_cycle" | "last_7_days"
     "current": "alex@example.com",            // 最新 launch span 检测到的当前账号，或 null
@@ -87,7 +88,28 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
         "cost_usd": 3.856,
         "messages": 142,
         "last_seen": "2026-11-13T11:45:00Z",  // 全周期最后活跃时间，ISO UTC 或 null
-        "saved_login": true                   // 是否在 Keychain 中有已保存登录副本供一键切换
+        "saved_login": true,                  // 是否在 Keychain 中有已保存登录副本供一键切换
+        "plan": {                             // 可选：用户在配置中为该账号设置的订阅档位（antigravity_accounts.<email>.plan）；未配置或为 "none" 时不出现
+          "plan": "google_ai_ultra",
+          "plan_label": "Google AI Ultra",
+          "monthly_price_usd": 249.99
+        },
+        "quota": {                            // 可选：该账号作为当前账号期间最后一次采集到的 live 额度快照（随切换保留各自最后一次读数）；从未采到时不出现
+          "captured_at": "2026-11-17T21:30:00Z",
+          "windows": [                        // 与实时额度卡一致的窗口列表（主周/5h 窗口及 extra_windows）；resets_at 已过时 used_percent 为 null
+            { "id": "weekly", "title": "Weekly", "used_percent": 10.0, "resets_at": "2026-11-24T15:07:30Z", "window_hours": 168 },
+            { "id": "five_hour", "title": "5-hour", "used_percent": 26.0, "resets_at": "2026-11-17T23:00:00Z", "window_hours": 5 }
+          ]
+        }
+      }
+    ],
+    "by_day": [                               // 导出覆盖的全历史中，按报告时区本地日与账号归属聚合的每日 Antigravity 用量；按 day 升序、同日按 email 升序（null 排最后）
+      {
+        "day": "2026-11-17",
+        "email": "alex@example.com",          // 未归属到任何账号的消息为 null
+        "tokens": 482000,
+        "cost_usd": 3.856,
+        "messages": 142
       }
     ],
     "unknown": {                              // 本窗口未归属到账号的 Antigravity 消息用量（桌面版等）
