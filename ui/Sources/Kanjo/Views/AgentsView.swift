@@ -79,6 +79,7 @@ struct AgentsView: View {
                                 AgentDetailRow(
                                     row: row,
                                     report: report,
+                                    rangeRaw: rangeRaw,
                                     currency: cur,
                                     quotaLabelWidth: quotaLabelWidth,
                                     isPinned: isPinned,
@@ -252,6 +253,7 @@ struct AgentsView: View {
 private struct AgentDetailRow: View {
     let row: AgentSummaryRow
     let report: UsageReport // Add report
+    let rangeRaw: String
     let currency: String
     let quotaLabelWidth: CGFloat
     let isPinned: Bool
@@ -266,8 +268,7 @@ private struct AgentDetailRow: View {
             HStack {
                 rowHeader
                 CopyButton {
-                    let rangeSpec = RangeEngine.defaultSpec(report: report) // Need to match range in view
-                    let summary = ShareSummary.build(report: report, rangeSpec: rangeSpec)
+                    let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw)
                     let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: row.agent))
                     renderer.scale = 2.0
                     if let nsImage = renderer.nsImage {

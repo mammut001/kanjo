@@ -381,8 +381,9 @@ struct MenuPanelView: View {
 
             if route == .overview || route == .agents {
                 Button {
-                    let rangeSpec = store.panelData?.rangeSpec ?? RangeEngine.defaultSpec(report: store.report!)
-                    let summary = ShareSummary.build(report: store.report!, rangeSpec: rangeSpec)
+                    let hiddenRaw = AppDefaults.store.string(forKey: SettingsKeys.hiddenProjects) ?? ""
+                    let hiddenProjects = ProjectPrefs.parse(hiddenRaw)
+                    let summary = ShareSummary.build(report: store.report!, rangeRaw: store.panelData?.rangeSpec.range.rawValue ?? "all", hiddenProjects: hiddenProjects)
                     let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: nil))
                     renderer.scale = 2.0
                     if let nsImage = renderer.nsImage {

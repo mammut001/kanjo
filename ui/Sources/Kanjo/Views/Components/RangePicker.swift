@@ -24,7 +24,7 @@ struct RangeContext {
 
     /// 缺 by_day.by_agent / by_agent_tokens 时的回退：项目级主力 agent。
     static func fallbackAgent(_ p: Project) -> String {
-        dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown"
+        RangeEngine.fallbackAgent(for: p)
     }
 
     func filtered() -> FilteredReport {

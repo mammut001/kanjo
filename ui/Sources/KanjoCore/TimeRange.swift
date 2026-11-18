@@ -446,4 +446,8 @@ public enum RangeEngine {
         let c = cal.dateComponents([.year, .month, .day], from: d)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
+
+    public static func fallbackAgent(for p: Project) -> String {
+        dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown"
+    }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import KanjoCore
 
 public struct ShareSummary: Equatable {
     public struct AgentRow: Equatable {
@@ -38,13 +37,9 @@ public struct ShareSummary: Equatable {
     public var rangeLabel: String
     public var updated: Date
 
-    public static func build(report: UsageReport, rangeSpec: RangeSpec, now: Date = Date()) -> ShareSummary {
-        let filtered = RangeEngine.filtered(report, range: rangeSpec, fallbackAgentFor: { p in
-            // Need to implement dominantAgent or reuse it. It's in PanelData.
-            // Actually I should look where dominantAgent is defined.
-            // It seems to be a helper in KanjoCore. Let's check imports.
-            "unknown" // Placeholder for now, need to find the right helper.
-        })
+    public static func build(report: UsageReport, rangeRaw: String, now: Date = Date(), hiddenProjects: Set<String> = []) -> ShareSummary {
+        let resolved = RangeEngine.resolve(raw: rangeRaw, report: report, now: now)
+        let filtered = RangeEngine.filtered(report, range: resolved.spec, fallbackAgentFor: { RangeEngine.fallbackAgent(for: $0) })
         
         let agentSummary = AgentSummary.build(report: report, filtered: filtered, now: now)
         
@@ -58,7 +53,7 @@ public struct ShareSummary: Equatable {
                 cost: row.cost,
                 subscription: row.subscription,
                 multiplier: row.multiplier,
-                sessionCount: nil 
+                sessionCount: filtered.projects.flatMap { $0.sessionsDetail }.filter { $0.agent == row.agent }.count
             )
         }
         
@@ -80,7 +75,7 @@ public struct ShareSummary: Equatable {
             tokens: agentSummary.totalTokens,
             cost: agentSummary.totalCost,
             agentsCount: agentSummary.rows.count,
-            sessions: filtered.sessions, // From FilteredReport
+            sessions: filtered.sessions,
             input: totalInput,
             output: totalOutput,
             cacheRead: totalCacheRead,
@@ -89,7 +84,7 @@ public struct ShareSummary: Equatable {
         )
         
         var projectCosts: [String: (name: String, cost: Double)] = [:]
-        for p in filtered.projects {
+        for p in filtered.projects.filter { !hiddenProjects.contains($0.id) } {
             projectCosts[p.id] = (name: p.project.name, cost: (projectCosts[p.id]?.cost ?? 0) + p.cost)
         }
         
@@ -102,7 +97,7 @@ public struct ShareSummary: Equatable {
             agentRows: agentRows,
             totals: totals,
             topProjects: Array(topProjects),
-            rangeLabel: RangeCaption.build(spec: rangeSpec, report: report),
+            rangeLabel: RangeCaptionBuilder.caption(for: resolved.range, report: report)?.text ?? resolved.range.longLabel,
             updated: ReportDates.parseTimestamp(report.generatedAt) ?? now
         )
     }

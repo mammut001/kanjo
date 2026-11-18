@@ -595,3 +595,20 @@
 "menu.copy_usage_image" = "复制用量图片";
 "menu.copied" = "已复制";
 
+"share.kanjo" = "Kanjo";
+"share.updated" = "已更新";
+"share.total" = "总计";
+"share.top_projects" = "热门项目";
+"share.cost" = "成本";
+"share.tokens" = "Token";
+"share.cache_hit" = "缓存命中";
+"share.input" = "输入";
+"share.output" = "输出";
+"share.cache_read" = "缓存读取";
+"share.cache_write" = "缓存写入";
+"share.reasoning" = "推理";
+"share.agents" = "代理";
+"share.sessions" = "会话";
+"share.updated_format" = "已更新于 %@";
+"share.total_suffix_format" = "%@ 总计";
+"share.agent_subscription_format" = "%@ · %@×";

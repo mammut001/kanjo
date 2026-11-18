@@ -10,6 +10,8 @@ struct ShareConfig {
 @MainActor
 enum ShareImageRunner {
     static func runCLI() {
+        _ = NSApplication.shared
+        
         // Parse args
         let args = CommandLine.arguments
         guard let idx = args.firstIndex(of: "--share-image"), idx + 1 < args.count else { return }
@@ -17,18 +19,32 @@ enum ShareImageRunner {
         
         var agentId: String? = nil
         if let aidx = args.firstIndex(of: "--share-agent"), aidx + 1 < args.count {
-            agentId = args[aidx + 1]
+            agentId = aidx + 1 < args.count ? args[aidx + 1] : nil
         }
         
-        let config = ShareConfig(outputPath: outputPath, agentId: agentId)
+        guard let didx = args.firstIndex(of: "--data"), didx + 1 < args.count else {
+            fputs("Error: --data <file> required\n", stderr)
+            exit(1)
+        }
+        let dataPath = args[didx + 1]
         
         // Load data
-        let report = ReportStore.shared.report! // Should be loaded by now if --data was passed
-        let rangeSpec = RangeEngine.defaultSpec(report: report) // Simplified, maybe need to parse range if passed
-        let summary = ShareSummary.build(report: report, rangeSpec: rangeSpec)
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dataPath)),
+              let report = try? JSONDecoder().decode(UsageReport.self, from: data) else {
+            fputs("Error: Failed to load data\n", stderr)
+            exit(1)
+        }
         
-        let view = ShareImage(summary: summary, agentId: config.agentId)
+        // Use preview defaults
+        let store = AppDefaults.resolveStore(arguments: args + ["--snapshot"])
+        let rangeRaw = store.string(forKey: SettingsKeys.timeRange) ?? "all"
+        
+        let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw)
+        
+        let view = ShareImage(summary: summary, agentId: agentId)
             .preferredColorScheme(.dark)
+            .environment(\.colorScheme, .dark)
+            .environment(\.locale, Locale(identifier: store.string(forKey: SettingsKeys.appLanguage) ?? "en"))
         
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2.0
@@ -36,8 +52,8 @@ enum ShareImageRunner {
         if let nsImage = renderer.nsImage {
             if let tiff = nsImage.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) {
                 if let png = bitmap.representation(using: .png, properties: [:]) {
-                    try? png.write(to: config.outputPath)
-                    print("Rendered to \(config.outputPath.path)")
+                    try? png.write(to: outputPath)
+                    print("Rendered to \(outputPath.path)")
                     exit(0)
                 }
             }
