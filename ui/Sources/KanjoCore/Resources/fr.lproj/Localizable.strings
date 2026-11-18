@@ -615,3 +615,4 @@
 "share.other_agents" = "Autres agents";
 "share.tokens_sessions" = "%@ jetons · %d sessions";
 "share.projects" = "Projets";
+"share.more_agents" = "+%d autres";

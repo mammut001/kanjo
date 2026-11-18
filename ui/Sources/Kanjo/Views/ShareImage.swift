@@ -25,6 +25,31 @@ struct ShareImage: View {
     }
 }
 
+struct ShareProportionBar: View {
+    let rows: [ShareSummary.AgentRow]
+    let totalTokens: Int
+
+    var body: some View {
+        GeometryReader { geo in
+            let gap: CGFloat = 1.5
+            let count = rows.count
+            let avail = max(geo.size.width - CGFloat(max(count - 1, 0)) * gap, 0)
+            
+            HStack(spacing: gap) {
+                ForEach(rows, id: \.agent) { row in
+                    let share = totalTokens > 0 ? Double(row.tokens) / Double(totalTokens) : 0
+                    let w = max(avail * CGFloat(share), 2)
+                    Rectangle()
+                        .fill(AgentPalette.color(for: row.agent))
+                        .frame(width: w)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
+        .frame(height: 6)
+    }
+}
+
 struct MultiImageView: View {
     let summary: ShareSummary
 
@@ -42,14 +67,41 @@ struct MultiImageView: View {
                 .frame(width: 350)
                 
                 // Right: Agent bar + Legend
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("share.agents")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                    ForEach(summary.agentRows, id: \.agent) { row in
-                        HStack {
-                            Circle().fill(AgentPalette.color(for: row.agent)).frame(width: 8, height: 8)
-                            Text(row.label).font(.system(size: 12))
-                            Spacer()
-                            Text(Fmt.tokens(row.tokens)).font(.system(size: 12, design: .monospaced))
+                    
+                    ShareProportionBar(rows: summary.agentRows, totalTokens: summary.totals.tokens)
+                    
+                    VStack(spacing: 8) {
+                        let maxShown = 7
+                        let shown = Array(summary.agentRows.prefix(maxShown))
+                        let overflow = max(0, summary.agentRows.count - maxShown)
+                        
+                        ForEach(shown, id: \.agent) { row in
+                            HStack(spacing: 6) {
+                                Circle().fill(AgentPalette.color(for: row.agent)).frame(width: 6, height: 6)
+                                Text(row.label).font(.system(size: 13)).lineLimit(1)
+                                Spacer()
+                                Text(Fmt.tokens(row.tokens)).font(.system(size: 13, design: .monospaced)).foregroundStyle(.secondary)
+                                Text(Fmt.money(row.cost)).font(.system(size: 13, design: .monospaced)).frame(width: 64, alignment: .trailing)
+                                
+                                if let m = row.multiplier, m > 0 {
+                                    Text(Fmt.multiple(m)).font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(AgentPalette.color(for: row.agent)).frame(width: 40, alignment: .trailing)
+                                } else {
+                                    Color.clear.frame(width: 40)
+                                }
+                            }
+                        }
+                        
+                        if overflow > 0 {
+                            let overflowCost = summary.agentRows.dropFirst(maxShown).reduce(0.0) { $0 + $1.cost }
+                            HStack(spacing: 6) {
+                                Circle().fill(Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+                                Text(L10n.tr("share.more_agents", overflow)).font(.system(size: 13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Text(Fmt.money(overflowCost)).font(.system(size: 13, design: .monospaced)).frame(width: 64, alignment: .trailing)
+                                Color.clear.frame(width: 40)
+                            }
                         }
                     }
                 }
@@ -57,11 +109,28 @@ struct MultiImageView: View {
             }
             
             // Bottom stat chips
-            HStack(spacing: 12) {
-                Text(L10n.tr("share.input") + ": " + Fmt.tokens(summary.totals.input))
-                Text(L10n.tr("share.output") + ": " + Fmt.tokens(summary.totals.output))
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("share.input")).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(Fmt.tokens(summary.totals.input)).font(.system(size: 13, weight: .semibold, design: .monospaced))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("share.output")).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(Fmt.tokens(summary.totals.output)).font(.system(size: 13, weight: .semibold, design: .monospaced))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("share.cache_read")).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(Fmt.tokens(summary.totals.cacheRead)).font(.system(size: 13, weight: .semibold, design: .monospaced))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("share.cache_hit")).font(.system(size: 10)).foregroundStyle(.secondary)
+                    let total = summary.totals.input + summary.totals.cacheRead
+                    let hitRate = total > 0 ? Double(summary.totals.cacheRead) / Double(total) : 0.0
+                    Text(Fmt.percent(hitRate)).font(.system(size: 13, weight: .semibold, design: .monospaced))
+                }
             }
-            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
             
             footer
         }
@@ -184,20 +253,32 @@ struct SingleImageView: View {
                     VStack(alignment: .leading) {
                         Text(L10n.tr("share.tokens")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                         Text(Fmt.tokens(row.tokens)).font(.system(size: 24, weight: .bold))
+                        
+                        if let sub = row.subscription, let m = row.multiplier, m > 0 {
+                            Text(L10n.tr("share.agent_subscription_format", sub.planLabel, Fmt.multiple(m)))
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
                     }
                     
-                    // Token breakdown bar
-                    HStack(spacing: 0) {
-                        let total = CGFloat(max(1, row.tokens))
-                        Color.blue.frame(width: CGFloat(row.tokenBreakdown.input) / total * 100, height: 6)
-                        Color.purple.frame(width: CGFloat(row.tokenBreakdown.output) / total * 100, height: 6)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                    
-                    // Legend
-                    HStack {
-                        Circle().fill(AgentPalette.color(for: row.agent)).frame(width: 8, height: 8)
-                        Text(row.label).font(.system(size: 12))
+                    VStack(alignment: .leading, spacing: 6) {
+                        tokenCompositionBar(row.tokenBreakdown)
+                        
+                        // Legend Grid
+                        VStack(spacing: 4) {
+                             HStack(spacing: 8) {
+                                 tokenStat(L10n.tr("share.input"), row.tokenBreakdown.input, AgentPalette.tokenInput)
+                                 tokenStat(L10n.tr("share.output"), row.tokenBreakdown.output, AgentPalette.tokenOutput)
+                             }
+                             HStack(spacing: 8) {
+                                 tokenStat(L10n.tr("share.cache_read"), row.tokenBreakdown.cacheRead, AgentPalette.tokenCacheRead)
+                                 tokenStat(L10n.tr("share.cache_write"), row.tokenBreakdown.cacheWrite, AgentPalette.tokenCacheWrite)
+                             }
+                        }
+                        
+                        if let rate = row.cacheHitRate {
+                            Text(L10n.tr("agents.detail.cache_hit") + " " + Fmt.percent(rate))
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .frame(width: 150)
@@ -213,6 +294,35 @@ struct SingleImageView: View {
         .frame(width: 480)
         .background(Color(white: 0.11))
         .environment(\.colorScheme, .dark)
+    }
+    
+    private func tokenCompositionBar(_ t: Tokens) -> some View {
+        let parts: [(tokens: Int, color: Color)] = [
+            (t.input, AgentPalette.tokenInput),
+            (t.output, AgentPalette.tokenOutput),
+            (t.cacheRead, AgentPalette.tokenCacheRead),
+            (t.cacheWrite, AgentPalette.tokenCacheWrite),
+        ].filter { $0.tokens > 0 }
+        let total = max(parts.reduce(0) { $0 + $1.tokens }, 1)
+        return GeometryReader { geo in
+            let avail = max(geo.size.width - CGFloat(max(parts.count - 1, 0)), 0)
+            HStack(spacing: 1) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
+                    Rectangle()
+                        .fill(p.color)
+                        .frame(width: max(avail * CGFloat(p.tokens) / CGFloat(total), 2))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+        .frame(height: 8)
+    }
+
+    private func tokenStat(_ label: String, _ value: Int, _ color: Color) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text("\(label) \(Fmt.tokens(value))").font(.system(size: 11, design: .monospaced))
+        }
     }
 
     private var header: some View {

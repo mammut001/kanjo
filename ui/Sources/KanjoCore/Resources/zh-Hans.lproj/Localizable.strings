@@ -615,3 +615,4 @@
 "share.other_agents" = "其他代理";
 "share.tokens_sessions" = "%@ tokens · %d 次会话";
 "share.projects" = "项目";
+"share.more_agents" = "其余 %d 个";
