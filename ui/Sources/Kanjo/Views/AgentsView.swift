@@ -371,6 +371,7 @@ private struct AgentDetailCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
+            headerBlock
             tokensBlock
             Divider().opacity(0.45)
             perfBlock
@@ -385,6 +386,22 @@ private struct AgentDetailCard: View {
         }
         .monospacedDigit()
         .hoverCard()
+    }
+
+    private var headerBlock: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            AgentDot(agent: row.agent, size: 7)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+            Text(row.label)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            if let sub = row.subscription {
+                Text(sub.planLabel)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 
     private var tokensBlock: some View {
