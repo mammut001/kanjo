@@ -170,6 +170,7 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
     }
 
     @Environment(\.isSnapshotMode) private var isSnapshotMode
+    @Environment(\.isShareRender) private var isShareRender
     @Environment(\.pinnedHoverId) private var envPinnedId
     @State private var isShowing = false
     @State private var hoverTask: Task<Void, Never>?
@@ -192,7 +193,18 @@ private struct HoverCardModifier<CardContent: View>: ViewModifier {
         effectivePinned || isShowing
     }
 
+    @ViewBuilder
     func body(content: Content) -> some View {
+        // 分享图不能挂 AppKit 探针：ImageRenderer 会把 NSViewRepresentable 画成黄色 ⊘。
+        // 面板路径（isShareRender == false）仍走原来的悬停卡。
+        if isShareRender {
+            content
+        } else {
+            interactiveBody(content)
+        }
+    }
+
+    private func interactiveBody(_ content: Content) -> some View {
         content
             .onHover { hovering in
                 hoverTask?.cancel()

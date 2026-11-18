@@ -4,10 +4,21 @@ private struct SnapshotModeKey: EnvironmentKey {
     static let defaultValue: Bool = false
 }
 
+private struct ShareRenderKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
     var isSnapshotMode: Bool {
         get { self[SnapshotModeKey.self] }
         set { self[SnapshotModeKey.self] = newValue }
+    }
+
+    /// 分享图离屏渲染（`ImageRenderer`）。为 true 时 `hoverTip` / `hoverCard` 不挂
+    /// `NSViewRepresentable` 锚点探针，否则探针会被画成黄色 ⊘ 占位。
+    var isShareRender: Bool {
+        get { self[ShareRenderKey.self] }
+        set { self[ShareRenderKey.self] = newValue }
     }
 }
 

@@ -8,6 +8,11 @@ struct ShareImage: View {
     let rangeRaw: String
 
     var body: some View {
+        shareBody.environment(\.isShareRender, true)
+    }
+
+    @ViewBuilder
+    private var shareBody: some View {
         if let id = agentId, let summaryRow = summary.agentSummaryRows.first(where: { $0.agent == id }) {
             VStack(spacing: 18) {
                 HStack {

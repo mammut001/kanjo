@@ -447,7 +447,7 @@ struct AgentDetailCard: View {
         .monospacedDigit()
 
         if forShare {
-            content
+            content.environment(\.isShareRender, true)
         } else {
             content.hoverCard()
         }
