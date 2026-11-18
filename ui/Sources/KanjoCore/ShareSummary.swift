@@ -43,6 +43,7 @@ public struct ShareSummary: Equatable {
     public var topProjects: [ProjectShare]
     public var mosaicProjects: [Project]
     public var rangeLabel: String
+    public var currency: String
     public var updated: Date
 
     public static func build(report: UsageReport, rangeRaw: String, now: Date = Date(), hiddenProjects: Set<String> = []) -> ShareSummary {
@@ -114,6 +115,7 @@ public struct ShareSummary: Equatable {
             topProjects: Array(topProjects),
             mosaicProjects: mosaicProjects,
             rangeLabel: RangeCaptionBuilder.caption(for: resolved.range, report: report)?.text ?? resolved.range.longLabel,
+            currency: report.currency,
             updated: ReportDates.parseTimestamp(report.generatedAt) ?? now
         )
     }

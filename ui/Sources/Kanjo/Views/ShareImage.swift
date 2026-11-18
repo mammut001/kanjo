@@ -8,10 +8,19 @@ struct ShareImage: View {
     let rangeRaw: String
 
     var body: some View {
-        if let id = agentId, let row = summary.agentRows.first(where: { $0.agent == id }),
-           let summaryRow = summary.agentSummaryRows.first(where: { $0.agent == id }) {
+        if let id = agentId, let summaryRow = summary.agentSummaryRows.first(where: { $0.agent == id }) {
             VStack(spacing: 18) {
-                ShareImage.header(title: row.label, rangeLabel: summary.rangeLabel, cost: row.cost, tokens: row.tokens, sessions: row.sessionCount ?? 0)
+                HStack {
+                    if let icon = BrandIcon.image ?? NSApp?.applicationIconImage {
+                        Image(nsImage: icon)
+                            .resizable().frame(width: 28, height: 28)
+                    }
+                    VStack(alignment: .leading) {
+                        Text(verbatim: "Kanjo").font(.system(size: 15, weight: .semibold))
+                        Text(summary.rangeLabel).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
                 AgentDetailCard(row: summaryRow, report: report, rangeRaw: rangeRaw, currency: summary.currency, forShare: true)
                     .padding(14)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
@@ -23,25 +32,6 @@ struct ShareImage: View {
             .environment(\.colorScheme, .dark)
         } else {
             MultiImageView(summary: summary)
-        }
-    }
-
-    static func header(title: String, rangeLabel: String, cost: Double, tokens: Int, sessions: Int) -> some View {
-        HStack {
-            if let icon = BrandIcon.image ?? NSApp?.applicationIconImage {
-                Image(nsImage: icon)
-                    .resizable().frame(width: 28, height: 28)
-            }
-            VStack(alignment: .leading) {
-                Text(verbatim: title).font(.system(size: 15, weight: .semibold))
-                Text(rangeLabel).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing) {
-                HeroAmount(value: Fmt.money(cost), size: 24)
-                Text(L10n.tr("share.tokens_sessions", Fmt.tokens(tokens), sessions))
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -96,6 +86,12 @@ struct MultiImageView: View {
     let summary: ShareSummary
 
     var body: some View {
+        // 640 pt card, 18 pt inset, 16 pt gap → 588 pt for the two columns. ~52% mosaic / ~48% agents.
+        let columns = CGFloat(640 - 18 * 2 - 16)
+        let mosaicW = (columns * 0.52).rounded()
+        let agentsW = columns - mosaicW
+        let mosaicH: CGFloat = 230
+
         VStack(spacing: 18) {
             header
             
@@ -103,18 +99,18 @@ struct MultiImageView: View {
                 // Left: Mosaic
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("share.top_projects")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                    ShareMosaic(projects: summary.mosaicProjects, size: CGSize(width: 350, height: 230))
-                        .frame(width: 350, height: 230)
+                    ShareMosaic(projects: summary.mosaicProjects, size: CGSize(width: mosaicW, height: mosaicH))
+                        .frame(width: mosaicW, height: mosaicH)
                 }
-                .frame(width: 312)
+                .frame(width: mosaicW, alignment: .leading)
                 
-                // Right: Agent bar + Legend
+                // Right: Agent bar + aligned rows
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("share.agents")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                     
                     ShareProportionBar(rows: summary.agentRows, totalTokens: summary.totals.tokens)
                     
-                    Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 8) {
+                    Grid(alignment: .center, horizontalSpacing: 6, verticalSpacing: 8) {
                         let maxShown = 7
                         let shown = Array(summary.agentRows.prefix(maxShown))
                         let overflow = max(0, summary.agentRows.count - maxShown)
@@ -123,20 +119,33 @@ struct MultiImageView: View {
                             GridRow {
                                 HStack(spacing: 6) {
                                     Circle().fill(AgentPalette.color(for: row.agent)).frame(width: 6, height: 6)
-                                    Text(row.label).font(.system(size: 13)).lineLimit(1)
-                                    Spacer(minLength: 10)
+                                    Text(row.label)
+                                        .font(.system(size: 13))
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
                                 }
                                 .gridColumnAlignment(.leading)
                                 .layoutPriority(1)
-                                
-                                Text(Fmt.tokens(row.tokens)).font(.system(size: 13, design: .monospaced)).foregroundStyle(.secondary)
-                                Text(Fmt.money(row.cost)).font(.system(size: 13, design: .monospaced))
-                                
-                                if let m = row.multiplier, m > 0 {
-                                    Text(Fmt.multiple(m)).font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(AgentPalette.color(for: row.agent))
-                                } else {
-                                    Text("")
-                                }
+
+                                Text(Fmt.tokens(row.tokens))
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .gridColumnAlignment(.trailing)
+
+                                Text(Fmt.money(row.cost))
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .gridColumnAlignment(.trailing)
+
+                                Text(multiplierText(row))
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(multiplierColor(row))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .gridColumnAlignment(.trailing)
                             }
                         }
                         
@@ -145,19 +154,30 @@ struct MultiImageView: View {
                             GridRow {
                                 HStack(spacing: 6) {
                                     Circle().fill(Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
-                                    Text(L10n.tr("share.more_agents", overflow)).font(.system(size: 13)).foregroundStyle(.secondary)
-                                    Spacer(minLength: 10)
+                                    Text(L10n.tr("share.more_agents", overflow))
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
                                 }
                                 .gridColumnAlignment(.leading)
-                                
-                                Text("") // Tokens column empty
-                                Text(Fmt.money(overflowCost)).font(.system(size: 13, design: .monospaced))
-                                Text("")
+
+                                Text(verbatim: " ")
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .gridColumnAlignment(.trailing)
+                                Text(Fmt.money(overflowCost))
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .gridColumnAlignment(.trailing)
+                                Text(verbatim: " ")
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .gridColumnAlignment(.trailing)
                             }
                         }
                     }
                 }
-                .frame(width: 250)
+                .frame(width: agentsW, alignment: .leading)
             }
             
             // Bottom stat chips
@@ -190,6 +210,16 @@ struct MultiImageView: View {
         .frame(width: 640)
         .background(Color(white: 0.11))
         .environment(\.colorScheme, .dark)
+    }
+
+    private func multiplierText(_ row: ShareSummary.AgentRow) -> String {
+        if let m = row.multiplier, m > 0 { return Fmt.multiple(m) }
+        return " "
+    }
+
+    private func multiplierColor(_ row: ShareSummary.AgentRow) -> Color {
+        if let m = row.multiplier, m > 0 { return AgentPalette.color(for: row.agent) }
+        return .clear
     }
 
     private var header: some View {

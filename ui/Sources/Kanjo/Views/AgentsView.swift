@@ -46,8 +46,6 @@ struct AgentsView: View {
 
     private var cur: String { report.currency }
 
-    private var accentColor: Color { AgentPalette.color(for: row.agent) }
-
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
         let filtered: FilteredReport = {
@@ -257,8 +255,6 @@ struct AgentCopyButton: View {
     let accentColor: Color
     @State private var copied = false
 
-    private var accentColor: Color { AgentPalette.color(for: row.agent) }
-
     var body: some View {
         Button {
             let hiddenRaw = AppDefaults.store.string(forKey: SettingsKeys.hiddenProjects) ?? ""
@@ -285,7 +281,7 @@ struct AgentCopyButton: View {
 
 private struct AgentDetailRow: View {
     let row: AgentSummaryRow
-    let report: UsageReport // Add report
+    let report: UsageReport
     let rangeRaw: String
     let currency: String
     let quotaLabelWidth: CGFloat
@@ -293,8 +289,6 @@ private struct AgentDetailRow: View {
     let onTogglePin: () -> Void
     let onDismiss: () -> Void
     let onSelectProject: (String) -> Void
-
-    private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
     private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
@@ -803,8 +797,6 @@ struct QuotaTickBar: View {
     let color: Color
     var segments: Int = 20
 
-    private var accentColor: Color { AgentPalette.color(for: row.agent) }
-
     var body: some View {
         let filled: Int = {
             guard let p = percent else { return 0 }
@@ -837,8 +829,6 @@ private struct QuotaTickRow: View {
         case .critical: return AgentPalette.bad
         }
     }
-
-    private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
