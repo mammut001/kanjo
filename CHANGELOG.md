@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Antigravity per-account plan pickers in Settings apply instantly: the picker and the plan total update right away, changes are saved in the background one at a time (quick changes to several accounts no longer overwrite each other in overrides.json), and the numbers refresh quietly afterwards. Choosing "None" for an account now sticks.
+
 ## [0.6.7] - 2026-11-18
 
 ### Changed
