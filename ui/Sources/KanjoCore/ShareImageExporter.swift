@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import AppKit
 
 public enum ShareImageExporter {
@@ -6,10 +8,17 @@ public enum ShareImageExporter {
         pasteboard.writeObjects([image])
         
         // Also write PNG
-        if let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) {
-            if let png = bitmap.representation(using: .png, properties: [:]) {
-                pasteboard.setData(png, forType: .png)
-            }
+        if let png = pngData(image) {
+            pasteboard.setData(png, forType: .png)
         }
     }
+    
+    public static func pngData(_ image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else {
+            return nil
+        }
+        return bitmap.representation(using: .png, properties: [:])
+    }
 }
+
+#endif
