@@ -293,19 +293,13 @@ private struct AgentDetailRow: View {
     private var accentColor: Color { AgentPalette.color(for: row.agent) }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            Button(action: onTogglePin) {
-                rowHeader
-                    .padding(.horizontal, Metrics.listInset)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .padding(.trailing, 26)
-            }
-            .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
-            
-            AgentCopyButton(report: report, rangeRaw: rangeRaw, agentId: row.agent, accentColor: accentColor)
-                .padding(.trailing, Metrics.listInset)
+        Button(action: onTogglePin) {
+            rowHeader
+                .padding(.horizontal, Metrics.listInset)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
         .hoverCard(
             id: AgentsRoute.cardId(for: row.agent),
             isPinned: isPinned,
@@ -313,6 +307,8 @@ private struct AgentDetailRow: View {
         ) {
             AgentDetailCard(
                 row: row,
+                report: report,
+                rangeRaw: rangeRaw,
                 currency: currency,
                 onSelectProject: { projectId in
                     onDismiss()
@@ -412,6 +408,8 @@ private struct AgentDetailRow: View {
 
 private struct AgentDetailCard: View {
     let row: AgentSummaryRow
+    let report: UsageReport
+    let rangeRaw: String
     let currency: String
     let onSelectProject: (String) -> Void
 
@@ -453,6 +451,8 @@ private struct AgentDetailCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            Spacer()
+            AgentCopyButton(report: report, rangeRaw: rangeRaw, agentId: row.agent, accentColor: accentColor)
         }
     }
 
