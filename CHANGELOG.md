@@ -20,6 +20,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `kanjo usage` no longer uses a full CPU core while idle and stays responsive during background refreshes.
 - Grok usage now also comes from `updates.jsonl` (`turn_completed` records), so Grok sessions that never wrote `usage.json` (newer Grok CLI builds, and most sessions from August–September 2026) and turns that `usage.json` left out are counted. Turns already in `usage.json` are counted exactly as before.
 - The dark panel is solid instead of see-through Liquid Glass, so it no longer looks grey over a light desktop and the treemap keeps its full colours.
 

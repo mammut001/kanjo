@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 import math
 import os
+import subprocess
 import sys
+import tempfile
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
     import curses
@@ -260,23 +264,334 @@ class ColorManager:
             return 0
 
 
+def _config_has_custom_fields(config: Any) -> bool:
+    """True when an in-memory Config without ``source`` carries non-default rules."""
+    return bool(
+        getattr(config, "aliases", None)
+        or getattr(config, "overrides", None)
+        or getattr(config, "exclude", None)
+        or getattr(config, "no_network", False)
+        or getattr(config, "quota_windows", None)
+        or getattr(config, "subscriptions", None)
+        or getattr(config, "family_since", None)
+        or getattr(config, "family_agents", None) is not None
+        or getattr(config, "family_accounts", None) is not None
+        or getattr(config, "family_device_name", None)
+    )
+
+
+def _config_to_dict(config: Any) -> dict:
+    """Serialize a Config object to JSON matching ``attribution.json``."""
+    data: Dict[str, Any] = {}
+    if getattr(config, "aliases", None):
+        data["aliases"] = dict(config.aliases)
+    if getattr(config, "overrides", None):
+        data["overrides"] = dict(config.overrides)
+    if getattr(config, "exclude", None):
+        data["exclude"] = list(config.exclude)
+    if getattr(config, "dominant_threshold", None) is not None:
+        data["dominant_threshold"] = config.dominant_threshold
+    if getattr(config, "no_network", False):
+        data["no_network"] = True
+    if getattr(config, "quota_windows", None):
+        qw_out = {}
+        for agent, spec in config.quota_windows.items():
+            entry = dict(spec)
+            if "weekly_reset" in entry:
+                entry.pop("weekly_resets_at", None)
+            qw_out[agent] = entry
+        data["quota_windows"] = qw_out
+    if getattr(config, "subscriptions", None):
+        data["subscriptions"] = {k: dict(v) for k, v in config.subscriptions.items()}
+    fam: Dict[str, Any] = {}
+    if getattr(config, "family_since", None):
+        fam["since"] = config.family_since
+    if getattr(config, "family_agents", None) is not None:
+        fam["agents"] = config.family_agents
+    if getattr(config, "family_accounts", None) is not None:
+        fam["accounts"] = list(config.family_accounts)
+    if getattr(config, "family_device_name", None):
+        fam["device_name"] = config.family_device_name
+    if fam:
+        data["family"] = fam
+    return data
+
+
+def _build_export_subprocess_args(
+    out_path: str,
+    tmpdir: str,
+    config: Any = None,
+    cache: Any = None,
+    use_cache: bool = True,
+    reuse_within: Optional[int] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
+) -> Tuple[List[str], Dict[str, str]]:
+    """Build command and environment for ``python -m kanjo export``."""
+    cmd = [sys.executable, "-m", "kanjo", "export", "-o", out_path, "--compact"]
+    if config is not None:
+        source = getattr(config, "source", None)
+        if source:
+            cmd.extend(["--config", source])
+        elif _config_has_custom_fields(config):
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as handle:
+                json.dump(_config_to_dict(config), handle)
+            cmd.extend(["--config", cfg_path])
+        threshold = getattr(config, "dominant_threshold", None)
+        if threshold is not None:
+            cmd.extend(["--threshold", str(threshold)])
+
+    if not use_cache:
+        cmd.append("--no-cache")
+    elif reuse_within is not None and reuse_within > 0:
+        cmd.extend(["--reuse-within", str(int(reuse_within))])
+
+    env = os.environ.copy()
+    if cache is not None and getattr(cache, "dir", None):
+        env["KANJO_CACHE_DIR"] = cache.dir
+
+    # Ensure the child process imports the same kanjo package regardless of cwd.
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    cur_pp = env.get("PYTHONPATH", "")
+    pp_parts = [p for p in cur_pp.split(os.pathsep) if p] if cur_pp else []
+    if pkg_parent not in pp_parts:
+        env["PYTHONPATH"] = os.pathsep.join([pkg_parent] + pp_parts)
+
+    if env_overrides:
+        env.update(env_overrides)
+    return cmd, env
+
+
+def run_export_subprocess(
+    config: Any = None,
+    cache: Any = None,
+    use_cache: bool = True,
+    reuse_within: Optional[int] = None,
+    on_proc: Optional[Callable[[Optional[subprocess.Popen]], None]] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
+) -> dict:
+    """Run ``kanjo export`` in a child process and return the parsed JSON document."""
+    with tempfile.TemporaryDirectory(prefix="kanjo-tui-export-") as tmpdir:
+        out_path = os.path.join(tmpdir, "export.json")
+        cmd, env = _build_export_subprocess_args(
+            out_path=out_path,
+            tmpdir=tmpdir,
+            config=config,
+            cache=cache,
+            use_cache=use_cache,
+            reuse_within=reuse_within,
+            env_overrides=env_overrides,
+        )
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+        )
+        if on_proc is not None:
+            on_proc(proc)
+        try:
+            _out, stderr = proc.communicate()
+        finally:
+            if on_proc is not None:
+                on_proc(None)
+
+        if proc.returncode != 0:
+            detail = " ".join((stderr or "").splitlines()).strip()
+            if detail:
+                raise RuntimeError(f"export exited with {proc.returncode}: {detail}")
+            raise RuntimeError(f"export exited with {proc.returncode}")
+
+        with open(out_path, "r", encoding="utf-8") as handle:
+            doc = json.load(handle)
+        if not isinstance(doc, dict):
+            raise ValueError("export output is not a JSON object")
+        return doc
+
+
+def _project_sort_key(row: Any, col: str) -> Any:
+    if isinstance(row, ProjectRowViewModel):
+        if col == "tokens":
+            from .model import parse_tokens_str
+            return parse_tokens_str(row.tokens_str)
+        if col == "sessions":
+            try:
+                return int(row.sessions_str)
+            except ValueError:
+                return 0
+        if col == "name":
+            return row.name.lower()
+        try:
+            return float(row.cost_str.replace("$", "").replace(",", ""))
+        except ValueError:
+            return 0.0
+    return 0
+
+
+def _now_minute_bucket(now_dt: datetime, tz: Any) -> Tuple[int, int, int, int, int, str]:
+    return (
+        now_dt.year,
+        now_dt.month,
+        now_dt.day,
+        now_dt.hour,
+        now_dt.minute,
+        getattr(tz, "key", str(tz)),
+    )
+
+
+@dataclass
+class DerivedViewModels:
+    """Cached derived view models built from a report document and UI state."""
+    tz: Any
+    now_dt: datetime
+    filtered: FilteredData
+    total_vm: Any
+    meters: List[Any]
+    accounts_section: Optional[AntigravityAccountsSection]
+    project_rows: List[ProjectRowViewModel]
+    project_footers: List[ProjectRowViewModel]
+    model_rows: List[Any]
+    agent_rows: List[Any]
+    day_rows: List[Any]
+    detail_vm: Optional[Any]
+
+
+class ViewModelCache:
+    """Memoizes derived view models keyed by their semantic inputs."""
+
+    def __init__(self) -> None:
+        self._last_key: Optional[tuple] = None
+        self._last_value: Optional[DerivedViewModels] = None
+        # Hold references so id(...) cannot be recycled while cached.
+        self._last_doc: Optional[dict] = None
+        self._last_detail_project: Optional[dict] = None
+        self._last_ag_data: Optional[Any] = None
+
+    def get_or_build(
+        self,
+        doc: dict,
+        state: TUIState,
+        lang: str = "en",
+        doc_version: int = 0,
+        antigravity_accounts_data: Optional[Any] = None,
+        current_account: Optional[str] = None,
+        now: Optional[datetime] = None,
+    ) -> DerivedViewModels:
+        tz = get_tz(doc)
+        now_dt = now if now is not None else datetime.now(tz)
+        query = state.filter_query if not state.filter_active else state.filter_input
+        now_bucket = _now_minute_bucket(now_dt, tz)
+
+        key = (
+            doc_version,
+            id(doc),
+            state.time_range,
+            query,
+            state.view_mode,
+            state.sort_column,
+            state.sort_descending,
+            lang,
+            state.ascii_mode,
+            state.detail_open,
+            state.detail_agent,
+            id(state.detail_project) if state.detail_project is not None else None,
+            id(antigravity_accounts_data) if antigravity_accounts_data is not None else None,
+            current_account,
+            now_bucket,
+        )
+        if key == self._last_key and self._last_value is not None:
+            return self._last_value
+
+        filtered = filter_report(doc, state.time_range, now=now_dt)
+        total_vm = build_total_view_model(filtered, lang)
+        meters = build_subscription_meters(doc, now=now_dt, lang=lang)
+        accounts_sec = build_antigravity_accounts_section(
+            doc, now=now_dt,
+            antigravity_data=antigravity_accounts_data,
+            current_account=current_account,
+            lang=lang,
+        )
+
+        proj_rows = build_project_rows(
+            filtered, now_dt, tz,
+            ascii_mode=state.ascii_mode, filter_query=query, lang=lang,
+        )
+        proj_footers = build_project_footer_rows(
+            filtered, now_dt, tz,
+            ascii_mode=state.ascii_mode, lang=lang,
+        )
+        model_rows = build_model_rows(filtered, filter_query=query, lang=lang)
+        agent_rows = build_agent_rows(filtered, filter_query=query, lang=lang)
+        day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
+
+        if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
+            proj_rows.sort(
+                key=lambda r: _project_sort_key(r, state.sort_column),
+                reverse=state.sort_descending,
+            )
+
+        detail_vm = None
+        if state.detail_open:
+            if state.detail_agent:
+                detail_vm = build_agent_detail(
+                    doc, state.detail_agent, time_range=state.time_range,
+                    now=now_dt, filtered=filtered, lang=lang,
+                )
+            elif state.detail_project:
+                detail_vm = build_project_detail(
+                    state.detail_project, now_dt, tz,
+                    ascii_mode=state.ascii_mode, lang=lang,
+                )
+
+        value = DerivedViewModels(
+            tz=tz,
+            now_dt=now_dt,
+            filtered=filtered,
+            total_vm=total_vm,
+            meters=meters,
+            accounts_section=accounts_sec,
+            project_rows=proj_rows,
+            project_footers=proj_footers,
+            model_rows=model_rows,
+            agent_rows=agent_rows,
+            day_rows=day_rows,
+            detail_vm=detail_vm,
+        )
+        self._last_key = key
+        self._last_value = value
+        self._last_doc = doc
+        self._last_detail_project = state.detail_project
+        self._last_ag_data = antigravity_accounts_data
+        return value
+
+
 class BackgroundScanner:
-    """Runs Kanjo scans in the background and keeps session cache warm."""
+    """Runs Kanjo scans in a background subprocess without holding the UI GIL."""
     def __init__(self, config=None, cache=None, interval: float = 60.0,
-                 data_path: Optional[str] = None, use_cache: bool = True):
+                 data_path: Optional[str] = None, use_cache: bool = True,
+                 reuse_within: Optional[int] = None,
+                 export_fn: Optional[Callable[..., dict]] = None):
         self.config = config
         self.cache = cache
         self.interval = max(5.0, interval)
         self.data_path = data_path
         self.use_cache = use_cache
+        self.reuse_within = reuse_within
+        self._export_fn = export_fn or run_export_subprocess
         self.latest_doc: Optional[dict] = None
+        self.doc_version: int = 0
         self.antigravity_accounts_data: Optional[Any] = None
         self.current_account: Optional[str] = None
         self.is_scanning = False
         self.last_scan_time = ""
+        self.last_error: Optional[str] = None
+        self.error_seq: int = 0
         self._trigger = threading.Event()
         self._stop = threading.Event()
         self._lock = threading.Lock()
+        self._proc: Optional[subprocess.Popen] = None
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
@@ -286,9 +601,68 @@ class BackgroundScanner:
     def stop(self) -> None:
         self._stop.set()
         self._trigger.set()
+        with self._lock:
+            proc = self._proc
+        if proc is not None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
 
     def refresh_now(self) -> None:
         self._trigger.set()
+
+    def _set_proc(self, proc: Optional[subprocess.Popen]) -> None:
+        with self._lock:
+            self._proc = proc
+            stopped = self._stop.is_set()
+        if proc is not None and stopped:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+
+    def _scan_once(self) -> None:
+        with self._lock:
+            self.is_scanning = True
+        try:
+            doc = self._export_fn(
+                config=self.config,
+                cache=self.cache,
+                use_cache=self.use_cache,
+                reuse_within=self.reuse_within,
+                on_proc=self._set_proc,
+            )
+            if self._stop.is_set():
+                with self._lock:
+                    self.is_scanning = False
+                return
+
+            now_str = datetime.now().strftime("%H:%M:%S")
+            ag_accounts = None
+            cur_acc = None
+            if doc and isinstance(doc.get("antigravity_accounts"), dict):
+                ag_accounts = doc["antigravity_accounts"]
+                cur_acc = ag_accounts.get("current")
+
+            with self._lock:
+                self.latest_doc = doc
+                self.doc_version += 1
+                self.current_account = cur_acc
+                self.antigravity_accounts_data = ag_accounts
+                self.last_scan_time = now_str
+                self.last_error = None
+                self.is_scanning = False
+        except Exception as exc:
+            if self._stop.is_set():
+                with self._lock:
+                    self.is_scanning = False
+                return
+            msg = " ".join(str(exc).splitlines()).strip() or type(exc).__name__
+            with self._lock:
+                self.last_error = msg
+                self.error_seq += 1
+                self.is_scanning = False
 
     def _run(self) -> None:
         if self.data_path:
@@ -297,57 +671,8 @@ class BackgroundScanner:
                 self._trigger.clear()
             return
 
-        from ..export import build_export, source_fingerprint, save_fast_export, scan
-        from ..antigravity_accounts import get_account_index, compute_antigravity_accounts_window
-        from ..sources import antigravity
-
         while not self._stop.is_set():
-            with self._lock:
-                self.is_scanning = True
-            try:
-                # Run export scan
-                doc = build_export(config=self.config, cache=self.cache)
-                now_str = datetime.now().strftime("%H:%M:%S")
-
-                cur_acc = None
-                try:
-                    idx = get_account_index()
-                    cur_acc = idx.get_current_account()
-                except Exception:
-                    pass
-
-                ag_accounts = None
-                if doc and isinstance(doc.get("antigravity_accounts"), dict):
-                    ag_accounts = doc["antigravity_accounts"]
-                    cur_acc = ag_accounts.get("current") or cur_acc
-                else:
-                    try:
-                        roots = antigravity.roots()
-                        scan_res = scan({"antigravity": roots}, cache=self.cache)
-                        if scan_res.sessions:
-                            ag_accounts = compute_antigravity_accounts_window(
-                                scan_res.sessions, doc or {}, current_account=cur_acc
-                            )
-                    except Exception:
-                        pass
-
-                with self._lock:
-                    self.latest_doc = doc
-                    self.current_account = cur_acc
-                    self.antigravity_accounts_data = ag_accounts
-                    self.last_scan_time = now_str
-                    self.is_scanning = False
-
-                if self.use_cache and doc is not None:
-                    try:
-                        fp = source_fingerprint(config=self.config)
-                        save_fast_export(fp, doc)
-                    except Exception:
-                        pass
-            except Exception:
-                with self._lock:
-                    self.is_scanning = False
-
+            self._scan_once()
             # Wait for interval or immediate trigger
             self._trigger.wait(timeout=self.interval)
             self._trigger.clear()
@@ -455,35 +780,64 @@ def run_curses_tui(
         switch_thread = threading.Thread(target=run_switch, daemon=True)
         switch_thread.start()
 
-    def get_sort_key(row, col):
-        if isinstance(row, ProjectRowViewModel):
-            if col == "tokens":
-                from .model import parse_tokens_str
-                return parse_tokens_str(row.tokens_str)
-            if col == "sessions":
-                try: return int(row.sessions_str)
-                except ValueError: return 0
-            if col == "name":
-                return row.name.lower()
-            # default cost
-            try: return float(row.cost_str.replace("$", "").replace(",", ""))
-            except ValueError: return 0.0
-        return 0
-
-    accounts_sec = None
+    vm_cache = ViewModelCache()
+    doc = initial_doc
+    filtered: Optional[FilteredData] = None
+    proj_rows: List[ProjectRowViewModel] = []
+    proj_footers: List[ProjectRowViewModel] = []
+    model_rows: List[Any] = []
+    agent_rows: List[Any] = []
+    day_rows: List[Any] = []
+    accounts_sec: Optional[AntigravityAccountsSection] = None
     hit_boxes: List[HitBox] = []
+
+    dirty = True
+    last_doc_version = scanner.doc_version
+    last_error_seq = scanner.error_seq
+    last_screen_size: Optional[Tuple[int, int]] = None
+    last_now_bucket: Optional[Tuple[int, int, int, int, int, str]] = None
+    current_timeout = 50
+
     try:
         while True:
             # Check background scan results
             with scanner._lock:
-                doc = scanner.latest_doc or initial_doc
-                state.is_scanning = scanner.is_scanning
-                if scanner.last_scan_time:
-                    state.last_refresh_time = scanner.last_scan_time
-                if scanner.antigravity_accounts_data:
-                    antigravity_accounts_data = scanner.antigravity_accounts_data
-                if scanner.current_account:
-                    current_account = scanner.current_account
+                new_doc = scanner.latest_doc or initial_doc
+                new_doc_version = scanner.doc_version
+                new_is_scanning = scanner.is_scanning
+                new_scan_time = scanner.last_scan_time
+                new_ag_accounts = scanner.antigravity_accounts_data
+                new_cur_account = scanner.current_account
+                new_error = scanner.last_error
+                new_error_seq = scanner.error_seq
+
+            if new_doc_version != last_doc_version:
+                doc = new_doc
+                last_doc_version = new_doc_version
+                antigravity_accounts_data = new_ag_accounts
+                current_account = new_cur_account
+                dirty = True
+            elif new_doc is not doc:
+                doc = new_doc
+                dirty = True
+
+            if new_is_scanning != state.is_scanning:
+                state.is_scanning = new_is_scanning
+                dirty = True
+            if new_scan_time and new_scan_time != state.last_refresh_time:
+                state.last_refresh_time = new_scan_time
+                dirty = True
+            if new_ag_accounts is not None and new_ag_accounts is not antigravity_accounts_data:
+                antigravity_accounts_data = new_ag_accounts
+                dirty = True
+            if new_cur_account and new_cur_account != current_account:
+                current_account = new_cur_account
+                dirty = True
+            if new_error_seq != last_error_seq:
+                last_error_seq = new_error_seq
+                if new_error:
+                    set_status(t("refresh.error", lang, error=new_error))
+                dirty = True
 
             # Pick up a finished background login switch.
             pending = None
@@ -508,133 +862,161 @@ def run_curses_tui(
                     else:
                         set_status(t("accounts.error.generic", lang))
                 scanner.refresh_now()
+                dirty = True
 
-            # Spinner update
             now_ts = time.time()
-            if now_ts - last_spinner_tick > 0.1:
-                state.spinner_frame = (state.spinner_frame + 1) % 60
-                last_spinner_tick = now_ts
+            # Status message expiry
+            if state.status_message and state.status_until > 0 and now_ts >= state.status_until:
+                state.status_message = ""
+                state.status_until = 0.0
+                dirty = True
 
-            # Screen dimensions
+            # Spinner animation only while scanning or loading
+            if state.is_scanning or doc is None:
+                if now_ts - last_spinner_tick > 0.1:
+                    state.spinner_frame = (state.spinner_frame + 1) % 60
+                    last_spinner_tick = now_ts
+                    dirty = True
+
+            # Screen dimensions / resize
             scr_h, scr_w = stdscr.getmaxyx()
-            canvas = Canvas(scr_w, scr_h)
+            if (scr_h, scr_w) != last_screen_size:
+                last_screen_size = (scr_h, scr_w)
+                dirty = True
 
-            if doc is None:
-                hit_boxes = render_ui(
-                    canvas=canvas,
-                    state=state,
-                    filtered=None,
-                    static_mode=False,
-                )
-            else:
+            # Live minute rollover for relative dates / reset countdowns
+            fixed_now_dt: Optional[datetime] = None
+            if doc is not None:
                 tz = get_tz(doc)
                 if data_path and doc.get("generated_at"):
                     from .model import parse_iso_dt
-                    now_dt = parse_iso_dt(doc.get("generated_at"), default_tz=tz) or datetime.now(tz)
+                    fixed_now_dt = parse_iso_dt(doc.get("generated_at"), default_tz=tz)
+                if fixed_now_dt is None:
+                    cur_bucket = _now_minute_bucket(datetime.now(tz), tz)
+                    if cur_bucket != last_now_bucket:
+                        dirty = True
+
+            if dirty:
+                canvas = Canvas(scr_w, scr_h)
+
+                if doc is None:
+                    filtered = None
+                    proj_rows = []
+                    proj_footers = []
+                    model_rows = []
+                    agent_rows = []
+                    day_rows = []
+                    accounts_sec = None
+                    hit_boxes = render_ui(
+                        canvas=canvas,
+                        state=state,
+                        filtered=None,
+                        static_mode=False,
+                    )
                 else:
-                    now_dt = datetime.now(tz)
+                    derived = vm_cache.get_or_build(
+                        doc=doc,
+                        state=state,
+                        lang=lang,
+                        doc_version=last_doc_version,
+                        antigravity_accounts_data=antigravity_accounts_data,
+                        current_account=current_account,
+                        now=fixed_now_dt,
+                    )
+                    filtered = derived.filtered
+                    proj_rows = derived.project_rows
+                    proj_footers = derived.project_footers
+                    model_rows = derived.model_rows
+                    agent_rows = derived.agent_rows
+                    day_rows = derived.day_rows
+                    accounts_sec = derived.accounts_section
+                    last_now_bucket = _now_minute_bucket(derived.now_dt, derived.tz)
 
-                filtered = filter_report(doc, state.time_range, now=now_dt)
-                total_vm = build_total_view_model(filtered, lang)
-                meters = build_subscription_meters(doc, now=now_dt, lang=lang)
-                accounts_sec = build_antigravity_accounts_section(
-                    doc, now=now_dt,
-                    antigravity_data=antigravity_accounts_data,
-                    current_account=current_account,
-                    lang=lang
-                )
+                    # Render onto canvas
+                    hit_boxes = render_ui(
+                        canvas=canvas,
+                        state=state,
+                        filtered=filtered,
+                        total_vm=derived.total_vm,
+                        meters=derived.meters,
+                        accounts_section=accounts_sec,
+                        project_rows=proj_rows,
+                        project_footers=proj_footers,
+                        model_rows=model_rows,
+                        agent_rows=agent_rows,
+                        day_rows=day_rows,
+                        detail_vm=derived.detail_vm,
+                        static_mode=False,
+                    )
 
-                query = state.filter_query if not state.filter_active else state.filter_input
-                proj_rows = build_project_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode, filter_query=query, lang=lang)
-                proj_footers = build_project_footer_rows(filtered, now_dt, tz, ascii_mode=state.ascii_mode, lang=lang)
-                model_rows = build_model_rows(filtered, filter_query=query, lang=lang)
-                agent_rows = build_agent_rows(filtered, filter_query=query, lang=lang)
-                day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
+                # Draw Canvas onto curses screen
+                stdscr.erase()
+                for y in range(min(canvas.height, scr_h)):
+                    row = canvas.grid[y]
+                    x = 0
+                    while x < min(canvas.width, scr_w):
+                        cell = row[x]
+                        if cell.char == "":
+                            x += 1
+                            continue
+                        style = cell.style.normalized()
+                        attrs = curses.A_NORMAL
+                        if style.bold:
+                            attrs |= curses.A_BOLD
+                        if style.dim:
+                            attrs |= curses.A_DIM
+                        if style.inverse:
+                            attrs |= curses.A_REVERSE
+                        if style.underline:
+                            attrs |= curses.A_UNDERLINE
+                        pair = color_mgr.get_pair(style)
+                        if pair > 0:
+                            attrs |= curses.color_pair(pair)
 
-                # Apply sorting if requested
-                if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
-                    proj_rows.sort(key=lambda r: get_sort_key(r, state.sort_column), reverse=state.sort_descending)
-
-                detail_vm = None
-                if state.detail_open:
-                    if state.detail_agent:
-                        detail_vm = build_agent_detail(
-                            doc, state.detail_agent, time_range=state.time_range,
-                            now=now_dt, filtered=filtered, lang=lang,
-                        )
-                    elif state.detail_project:
-                        detail_vm = build_project_detail(
-                            state.detail_project, now_dt, tz,
-                            ascii_mode=state.ascii_mode, lang=lang,
-                        )
-
-                # Render onto canvas
-                hit_boxes = render_ui(
-                    canvas=canvas,
-                    state=state,
-                    filtered=filtered,
-                    total_vm=total_vm,
-                    meters=meters,
-                    accounts_section=accounts_sec,
-                    project_rows=proj_rows,
-                    project_footers=proj_footers,
-                    model_rows=model_rows,
-                    agent_rows=agent_rows,
-                    day_rows=day_rows,
-                    detail_vm=detail_vm,
-                    static_mode=False,
-                )
-
-            # Draw Canvas onto curses screen
-            stdscr.erase()
-            for y in range(min(canvas.height, scr_h)):
-                row = canvas.grid[y]
-                x = 0
-                while x < min(canvas.width, scr_w):
-                    cell = row[x]
-                    if cell.char == "":
+                        # Avoid lower right corner glitch
+                        if y == scr_h - 1 and x >= scr_w - 1:
+                            try:
+                                stdscr.insch(y, x, cell.char, attrs)
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                stdscr.addstr(y, x, cell.char, attrs)
+                            except Exception:
+                                pass
                         x += 1
-                        continue
-                    style = cell.style.normalized()
-                    attrs = curses.A_NORMAL
-                    if style.bold:
-                        attrs |= curses.A_BOLD
-                    if style.dim:
-                        attrs |= curses.A_DIM
-                    if style.inverse:
-                        attrs |= curses.A_REVERSE
-                    if style.underline:
-                        attrs |= curses.A_UNDERLINE
-                    pair = color_mgr.get_pair(style)
-                    if pair > 0:
-                        attrs |= curses.color_pair(pair)
 
-                    # Avoid lower right corner glitch
-                    if y == scr_h - 1 and x >= scr_w - 1:
-                        try:
-                            stdscr.insch(y, x, cell.char, attrs)
-                        except Exception:
-                            pass
-                    else:
-                        try:
-                            stdscr.addstr(y, x, cell.char, attrs)
-                        except Exception:
-                            pass
-                    x += 1
+                try:
+                    stdscr.noutrefresh()
+                    curses.doupdate()
+                except Exception:
+                    pass
+                dirty = False
 
-            try:
-                stdscr.noutrefresh()
-                curses.doupdate()
-            except Exception:
-                pass
+            # Pace getch timeout: fast when spinner/switch is active, quiet when idle
+            switch_active = switch_thread is not None and switch_thread.is_alive()
+            if state.is_scanning or doc is None or switch_active:
+                desired_timeout = 50
+            elif state.status_message and state.status_until > 0:
+                desired_timeout = 200
+            else:
+                desired_timeout = 250
+            if desired_timeout != current_timeout:
+                stdscr.timeout(desired_timeout)
+                current_timeout = desired_timeout
 
             # Handle keyboard input
+            t_before_getch = time.monotonic()
             try:
                 ch = stdscr.getch()
             except curses.error:
                 continue
 
             if ch == -1:
+                # In headless tests (FakeStdscr), getch() returns -1 immediately;
+                # yield briefly only while a background switch thread is finishing.
+                if switch_active and (time.monotonic() - t_before_getch) < 0.005:
+                    time.sleep(0.005)
                 continue
 
             # Mouse: clicks on the header tabs, the F-key bar, a table row or a
@@ -653,7 +1035,11 @@ def run_curses_tui(
                     if kind[0] == "click":
                         state.show_help = False
                         state.confirm_switch_email = None
+                        dirty = True
                     continue
+                prev_mouse_state = (
+                    state.selected_index, state.sort_column, state.sort_descending
+                )
                 synthetic = apply_mouse_event(
                     bstate, mx, my, hit_boxes, state,
                     visible_row_count(state, proj_rows, model_rows, agent_rows,
@@ -661,8 +1047,12 @@ def run_curses_tui(
                     if doc is not None else 0
                 )
                 if synthetic is None:
+                    if (state.selected_index, state.sort_column, state.sort_descending) != prev_mouse_state:
+                        dirty = True
                     continue
                 ch = synthetic
+
+            dirty = True
 
             # Antigravity login switch confirmation
             if state.confirm_switch_email:

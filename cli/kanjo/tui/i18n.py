@@ -167,6 +167,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "accounts.error.no_saved_login": "No saved login found",
         "accounts.error.unsaved_login": "Current login is not saved yet; run agy once and refresh Kanjo",
         "accounts.error.generic": "Switch failed",
+        "refresh.error": "Refresh failed: {error}",
 
         # project detail pane
         "detail.title": "Project: {name}",
@@ -327,6 +328,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "accounts.error.no_saved_login": "未找到已保存的登录信息",
         "accounts.error.unsaved_login": "当前登录尚未保存；请运行一次 agy 并刷新 Kanjo",
         "accounts.error.generic": "切换失败",
+        "refresh.error": "刷新失败: {error}",
 
         # project detail pane
         "detail.title": "项目：{name}",

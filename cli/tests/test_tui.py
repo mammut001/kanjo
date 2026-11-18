@@ -37,9 +37,10 @@ from kanjo.tui.render import (
 from kanjo import perf as kanjo_perf
 from kanjo.tui.static import canvas_to_ansi, render_static_snapshot
 from kanjo.tui.term import (
-    BUTTON1_BITS, MOUSE_WHEEL_ROWS, WHEEL_DOWN_BITS, WHEEL_UP_BITS,
+    BUTTON1_BITS, BackgroundScanner, MOUSE_WHEEL_ROWS, ViewModelCache,
+    WHEEL_DOWN_BITS, WHEEL_UP_BITS, _build_export_subprocess_args,
     apply_mouse_event, mouse_click_key, mouse_event_kind, run_curses_tui,
-    visible_row_count
+    run_export_subprocess, visible_row_count
 )
 from kanjo.tui.i18n import resolve_lang, t
 from kanjo.antigravity_accounts import compute_antigravity_accounts_window
@@ -2543,6 +2544,288 @@ class TUIAgentPerfAndDetailTest(unittest.TestCase):
         )
         self.assertEqual(rc, 0)
         self.assertTrue(any("Agent: Claude Code" in fr for fr in screen_frames(scr)))
+
+
+class TUIPerformanceAndSubprocessTest(unittest.TestCase):
+    def test_view_model_cache_memoizes_unchanged_inputs_and_minute_bucket(self):
+        doc = load_sample_fixture()
+        cache = ViewModelCache()
+        state = TUIState(version="0.9.0", view_mode=ViewMode.PROJECTS, lang="en")
+        tz = get_tz(doc)
+        t0 = datetime(2026, 11, 13, 12, 0, 10, tzinfo=tz)
+        t_same_min = datetime(2026, 11, 13, 12, 0, 55, tzinfo=tz)
+        t_next_min = datetime(2026, 11, 13, 12, 1, 5, tzinfo=tz)
+
+        with mock.patch("kanjo.tui.term.filter_report", wraps=filter_report) as m_filter, \
+                mock.patch("kanjo.tui.term.build_project_rows", wraps=build_project_rows) as m_proj:
+            vm1 = cache.get_or_build(doc, state, lang="en", doc_version=0, now=t0)
+            self.assertEqual(m_filter.call_count, 1)
+            self.assertEqual(m_proj.call_count, 1)
+
+            # Same inputs and same minute bucket -> cache hit, no recompute.
+            vm2 = cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_same_min)
+            self.assertIs(vm2, vm1)
+            self.assertEqual(m_filter.call_count, 1)
+            self.assertEqual(m_proj.call_count, 1)
+
+            # Render-only state changes (selection, scroll, help, meters) do not recompute.
+            state.selected_index = 2
+            state.scroll_top = 1
+            state.meters_expanded = True
+            state.show_help = True
+            vm3 = cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_same_min)
+            self.assertIs(vm3, vm1)
+            self.assertEqual(m_filter.call_count, 1)
+
+            # Minute rollover triggers recompute.
+            cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 2)
+
+            # Input changes invalidate cache: time_range, filter_query, sort, lang, ascii, detail, doc_version.
+            state.time_range = TimeRange.TODAY
+            cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 3)
+
+            state.filter_query = "kanjo"
+            cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 4)
+
+            state.sort_column = "tokens"
+            cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 5)
+
+            state.sort_descending = False
+            cache.get_or_build(doc, state, lang="en", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 6)
+
+            cache.get_or_build(doc, state, lang="zh", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 7)
+
+            state.ascii_mode = True
+            cache.get_or_build(doc, state, lang="zh", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 8)
+
+            state.detail_open = True
+            state.detail_agent = "claude"
+            cache.get_or_build(doc, state, lang="zh", doc_version=0, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 9)
+
+            cache.get_or_build(doc, state, lang="zh", doc_version=1, now=t_next_min)
+            self.assertEqual(m_filter.call_count, 10)
+
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_run_curses_tui_idle_ticks_do_not_recompute_or_redraw(self):
+        doc = load_sample_fixture()
+        scr_idle = FakeStdscr(width=100, height=30, keys=[-1] * 20 + [ord("q")])
+        with mock.patch("kanjo.tui.term.filter_report", wraps=filter_report) as m_filter:
+            rc = run_curses_tui(
+                scr_idle, initial_doc=doc, data_path="fake.json",
+                view_mode=ViewMode.PROJECTS, no_color=True,
+            )
+        self.assertEqual(rc, 0)
+        # FakeStdscr.frames starts at [0] and appends once per erase() redraw.
+        self.assertEqual(len(scr_idle.frames), 2)
+        self.assertEqual(m_filter.call_count, 1)
+
+        # Navigation redraws without recomputing; range change recomputes; -1 ticks do neither.
+        scr_nav = FakeStdscr(
+            width=100, height=30,
+            keys=[curses.KEY_DOWN, -1, -1, ord("2"), -1, ord("q")],
+        )
+        with mock.patch("kanjo.tui.term.filter_report", wraps=filter_report) as m_filter2:
+            rc2 = run_curses_tui(
+                scr_nav, initial_doc=doc, data_path="fake.json",
+                view_mode=ViewMode.PROJECTS, no_color=True,
+            )
+        self.assertEqual(rc2, 0)
+        # 3 redraws: initial + KEY_DOWN + '2'
+        self.assertEqual(len(scr_nav.frames), 4)
+        # Only 2 filter_report computations: initial + '2'
+        self.assertEqual(m_filter2.call_count, 2)
+
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_run_curses_tui_spinner_only_when_loading_and_status_expiry(self):
+        # Loading (initial_doc=None) advances spinner when > 0.1s passes.
+        times = iter([1000.0, 1000.01, 1000.05, 1000.20, 1000.25, 1000.40])
+        scr_load = FakeStdscr(width=80, height=24, keys=[-1, -1, -1, ord("q")])
+        with mock.patch("kanjo.tui.term.time.time", side_effect=lambda: next(times, 1000.50)):
+            rc = run_curses_tui(
+                scr_load, initial_doc=None, data_path="fake.json", no_color=True,
+            )
+        self.assertEqual(rc, 0)
+        # Initial draw + at least one spinner tick when time > 0.1s, but not on <0.1s ticks.
+        self.assertGreaterEqual(len(scr_load.frames), 3)
+        self.assertLess(len(scr_load.frames), 5)
+
+        # Status expiry triggers a single redraw to clear the expired status message.
+        doc = load_sample_fixture()
+        # t=1000.0 init; t=1000.1 enter on current row -> no status; let's trigger
+        # accounts.no_saved_login via KEY_DOWN, KEY_DOWN, Enter, then advance past +5s.
+        clock = [1000.0]
+
+        def fake_time():
+            return clock[0]
+
+        class AdvancingStdscr(FakeStdscr):
+            def getch(self):
+                k = super().getch()
+                if k == -1:
+                    clock[0] += 3.0
+                return k
+
+        scr_status = AdvancingStdscr(
+            width=100, height=30,
+            keys=[curses.KEY_DOWN, curses.KEY_DOWN, 10, -1, -1, -1, ord("q")],
+        )
+        with mock.patch("kanjo.tui.term.time.time", side_effect=fake_time):
+            rc2 = run_curses_tui(
+                scr_status, initial_doc=doc, data_path="fake.json",
+                view_mode=ViewMode.ACCOUNTS, no_color=True,
+            )
+        self.assertEqual(rc2, 0)
+        frames = screen_frames(scr_status)
+        self.assertTrue(any("Sign in once with `agy`" in fr for fr in frames))
+        self.assertNotIn("Sign in once with `agy`", frames[-1])
+
+    def test_build_export_subprocess_args_flags_and_env(self):
+        from kanjo.config import Config
+        from kanjo.cache import SessionCache
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = os.path.join(tmp, "attribution.toml")
+            cfg = Config(dominant_threshold=0.75, source=cfg_path)
+            cache = SessionCache(directory=tmp)
+
+            cmd, env = _build_export_subprocess_args(
+                out_path=os.path.join(tmp, "out.json"),
+                tmpdir=tmp,
+                config=cfg,
+                cache=cache,
+                use_cache=True,
+                reuse_within=120,
+            )
+            self.assertIn("--config", cmd)
+            self.assertIn(cfg_path, cmd)
+            self.assertIn("--threshold", cmd)
+            self.assertIn("0.75", cmd)
+            self.assertIn("--reuse-within", cmd)
+            self.assertIn("120", cmd)
+            self.assertNotIn("--no-cache", cmd)
+            self.assertEqual(env.get("KANJO_CACHE_DIR"), tmp)
+
+            # In-memory Config without source is serialized to a temp JSON config.
+            cfg_mem = Config(aliases={"proj": ["/tmp/p"]}, dominant_threshold=0.9)
+            cmd_mem, _ = _build_export_subprocess_args(
+                out_path=os.path.join(tmp, "out.json"),
+                tmpdir=tmp,
+                config=cfg_mem,
+                cache=None,
+                use_cache=False,
+            )
+            self.assertIn("--config", cmd_mem)
+            self.assertIn("--no-cache", cmd_mem)
+            gen_cfg = cmd_mem[cmd_mem.index("--config") + 1]
+            with open(gen_cfg, "r", encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["aliases"], {"proj": ["/tmp/p"]})
+
+    def test_run_export_subprocess_loads_fixture_doc(self):
+        import shutil
+        from kanjo.cache import SessionCache
+        from kanjo.config import Config
+
+        fixtures_claude = os.path.join(os.path.dirname(__file__), "fixtures", "claude")
+        with tempfile.TemporaryDirectory(prefix="kanjo-tui-subproc-") as tmp:
+            data_dir = os.path.join(tmp, "data")
+            cache_dir = os.path.join(tmp, "cache")
+            cfg_dir = os.path.join(tmp, "cfg")
+            empty_dir = os.path.join(tmp, "empty")
+            claude_dir = os.path.join(tmp, "claude")
+            for d in (data_dir, cache_dir, cfg_dir, empty_dir):
+                os.makedirs(d, exist_ok=True)
+            shutil.copytree(fixtures_claude, claude_dir)
+
+            env_overrides = {
+                "HOME": tmp,
+                "KANJO_NO_NETWORK": "1",
+                "KANJO_DATA_DIR": data_dir,
+                "KANJO_CACHE_DIR": cache_dir,
+                "KANJO_CONFIG_DIR": cfg_dir,
+                "KANJO_CLAUDE_DIR": claude_dir,
+                "KANJO_CLAUDE_CONFIG": os.path.join(tmp, "no-claude.json"),
+                "KANJO_CODEX_AUTH": os.path.join(tmp, "no-codex-auth.json"),
+                "KANJO_GROK_AUTH": os.path.join(tmp, "no-grok-auth.json"),
+                "KANJO_TOKEI_DIR": empty_dir,
+                "KANJO_CODEX_DIR": empty_dir,
+                "KANJO_ANTIGRAVITY_DIR": empty_dir,
+                "KANJO_GROK_DIR": empty_dir,
+                "KANJO_QWEN_DIR": empty_dir,
+                "KANJO_COMMANDCODE_DIR": empty_dir,
+                "KANJO_MINIMAX_DIR": empty_dir,
+                "KANJO_OPENCODE_DIR": empty_dir,
+                "KANJO_COPILOT_DIR": empty_dir,
+                "KANJO_PI_DIR": empty_dir,
+                "KANJO_AMP_DIR": empty_dir,
+                "KANJO_DROID_DIR": empty_dir,
+                "KANJO_KILOCODE_DIR": empty_dir,
+                "KANJO_KIMI_DIR": empty_dir,
+                "KANJO_MUSECODE_DIR": empty_dir,
+                "KANJO_OPENCLAW_DIR": empty_dir,
+                "KANJO_QODERCLI_DIR": empty_dir,
+                "KANJO_QWENWORK_DIR": empty_dir,
+                "KANJO_ROO_DIR": empty_dir,
+                "KANJO_TRAE_DIR": empty_dir,
+                "KANJO_WORKBUDDY_DIR": empty_dir,
+                "KANJO_ZCODE_DIR": empty_dir,
+            }
+            cache = SessionCache(directory=cache_dir)
+            cfg = Config(no_network=True)
+            doc = run_export_subprocess(
+                config=cfg,
+                cache=cache,
+                use_cache=True,
+                env_overrides=env_overrides,
+            )
+            self.assertIsInstance(doc, dict)
+            self.assertIn("projects", doc)
+            self.assertIn("totals", doc)
+            self.assertGreater(doc["totals"]["sessions"], 0)
+            self.assertTrue(os.path.isfile(os.path.join(cache_dir, "export-last.json")))
+
+    def test_run_export_subprocess_and_scanner_surface_errors(self):
+        fake_proc = mock.Mock()
+        fake_proc.returncode = 2
+        fake_proc.communicate.return_value = (None, "boom on stderr\n")
+        with mock.patch("kanjo.tui.term.subprocess.Popen", return_value=fake_proc):
+            with self.assertRaises(RuntimeError) as ctx:
+                run_export_subprocess()
+        self.assertIn("exited with 2", str(ctx.exception))
+        self.assertIn("boom on stderr", str(ctx.exception))
+
+        # BackgroundScanner records doc on success and surfaces errors on failure.
+        sample = load_sample_fixture()
+        calls = [sample, RuntimeError("subprocess crashed")]
+
+        def fake_export(**_kwargs):
+            item = calls.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        scanner = BackgroundScanner(use_cache=True, export_fn=fake_export)
+        scanner._scan_once()
+        self.assertEqual(scanner.latest_doc, sample)
+        self.assertEqual(scanner.doc_version, 1)
+        self.assertIsNone(scanner.last_error)
+        self.assertEqual(scanner.error_seq, 0)
+        self.assertFalse(scanner.is_scanning)
+        self.assertEqual(scanner.current_account, "alex@example.com")
+        self.assertIsInstance(scanner.antigravity_accounts_data, dict)
+
+        scanner._scan_once()
+        self.assertEqual(scanner.doc_version, 1)
+        self.assertEqual(scanner.last_error, "subprocess crashed")
+        self.assertEqual(scanner.error_seq, 1)
+        self.assertFalse(scanner.is_scanning)
 
 
 if __name__ == "__main__":
