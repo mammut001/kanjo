@@ -102,7 +102,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
     "unattributed": { /* Aggregate */ },
     "excluded":     { /* Aggregate */ },
     "parse_failed": { "sessions": 0, "files": [] }
-  },
+  }
 }
 ```
 
