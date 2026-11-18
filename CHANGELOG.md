@@ -6,6 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Opening the menu-bar panel never waits for a refresh: Kanjo refreshes in the background when there is new usage, at an interval you pick in Settings (30 seconds, 1 minute, 5 minutes or 10 minutes; default 1 minute), and puts it off while the Mac is busy (hot, heavily loaded or in Low Power Mode). Background refreshes no longer show "Refreshing…".
+- `kanjo export` no longer re-checks every non-repo path at once every 10 minutes; those checks are now spread out, so no single export takes several seconds longer.
+
 ## [0.6.5] - 2026-11-18
 
 ### Added
