@@ -11,6 +11,12 @@ public struct ShareSummary: Equatable {
         public var subscription: Subscription?
         public var multiplier: Double?
         public var sessionCount: Int?
+        public var projectShares: [AgentProjectShare]
+    }
+
+    public struct AgentProjectShare: Equatable {
+        public var name: String
+        public var cost: Double
     }
 
     public struct ProjectShare: Equatable {
@@ -34,6 +40,7 @@ public struct ShareSummary: Equatable {
     public var agentRows: [AgentRow]
     public var totals: Totals
     public var topProjects: [ProjectShare]
+    public var mosaicProjects: [Project]
     public var rangeLabel: String
     public var updated: Date
 
@@ -53,7 +60,11 @@ public struct ShareSummary: Equatable {
                 cost: row.cost,
                 subscription: row.subscription,
                 multiplier: row.multiplier,
-                sessionCount: filtered.projects.flatMap { $0.sessionsDetail }.filter { $0.agent == row.agent }.count
+                sessionCount: filtered.projects.flatMap { $0.sessionsDetail }.filter { $0.agent == row.agent }.count,
+                projectShares: filtered.projects.compactMap { p -> AgentProjectShare? in
+                    guard let agentCost = p.byAgent.first(where: { $0.agent == row.agent })?.cost, agentCost > 0 else { return nil }
+                    return AgentProjectShare(name: p.project.name, cost: agentCost)
+                }
             )
         }
         
@@ -93,10 +104,13 @@ public struct ShareSummary: Equatable {
             ProjectShare(name: p.name, cost: p.cost, share: p.cost / max(1, agentSummary.totalCost))
         }
         
+        let mosaicProjects = filtered.projects.filter { $0.cost > 0 && !hiddenProjects.contains($0.id) }.map { $0.projected }
+        
         return ShareSummary(
             agentRows: agentRows,
             totals: totals,
             topProjects: Array(topProjects),
+            mosaicProjects: mosaicProjects,
             rangeLabel: RangeCaptionBuilder.caption(for: resolved.range, report: report)?.text ?? resolved.range.longLabel,
             updated: ReportDates.parseTimestamp(report.generatedAt) ?? now
         )

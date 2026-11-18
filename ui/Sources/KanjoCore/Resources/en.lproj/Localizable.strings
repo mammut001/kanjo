@@ -614,3 +614,4 @@
 "share.agent_subscription_format" = "%@ · %@";
 "share.other_agents" = "Other agents";
 "share.tokens_sessions" = "%@ tokens · %d sessions";
+"share.projects" = "Projects";
