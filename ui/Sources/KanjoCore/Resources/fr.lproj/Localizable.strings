@@ -552,4 +552,9 @@
 "agents.detail.others" = "Autres";
 "agents.detail.no_project_cost" = "Aucun coût de projet sur cette période";
 "agents.detail.open_project_help" = "Ouvrir les détails de %@";
+"agents.detail.by_account" = "Par compte";
+"agents.detail.unattributed" = "Non attribué";
+"overview.agy.as_of" = "au %@";
+"overview.accounts_count" = "%d comptes";
+"settings.plan_none" = "Aucun";
 

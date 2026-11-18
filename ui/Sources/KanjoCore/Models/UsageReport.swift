@@ -110,7 +110,7 @@ public struct FamilyConfig: Codable, Equatable {
 }
 
 /// 额度附加窗口（如 Antigravity 中的第三方模型组 Claude / GPT 窗口）。
-public struct ExtraQuotaWindow: Codable, Equatable, Identifiable {
+public struct ExtraQuotaWindow: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var title: String
     public var usedPercent: Double?
@@ -186,12 +186,85 @@ public struct SubscriptionAccount: Codable, Equatable, Sendable {
     }
 }
 
+public struct AntigravityAccountDay: Codable, Equatable, Sendable {
+    public var day: String
+    public var email: String?
+    public var tokens: Int
+    public var costUsd: Double
+    public var messages: Int
+
+    enum CodingKeys: String, CodingKey {
+        case day
+        case email
+        case tokens
+        case costUsd = "cost_usd"
+        case messages
+    }
+
+    public init(day: String, email: String? = nil, tokens: Int, costUsd: Double, messages: Int = 0) {
+        self.day = day
+        self.email = email
+        self.tokens = tokens
+        self.costUsd = costUsd
+        self.messages = messages
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(String.self, forKey: .day)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        tokens = try c.decode(Int.self, forKey: .tokens)
+        costUsd = try c.decode(Double.self, forKey: .costUsd)
+        messages = try c.decodeIfPresent(Int.self, forKey: .messages) ?? 0
+    }
+}
+
+public struct AntigravityAccountPlan: Codable, Equatable, Sendable {
+    public var plan: String
+    public var planLabel: String
+    public var monthlyPriceUsd: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case plan
+        case planLabel = "plan_label"
+        case monthlyPriceUsd = "monthly_price_usd"
+    }
+
+    public init(plan: String, planLabel: String, monthlyPriceUsd: Double? = nil) {
+        self.plan = plan
+        self.planLabel = planLabel
+        self.monthlyPriceUsd = monthlyPriceUsd
+    }
+}
+
+public struct AntigravityAccountQuota: Codable, Equatable, Sendable {
+    public var capturedAt: String
+    public var windows: [ExtraQuotaWindow]
+
+    enum CodingKeys: String, CodingKey {
+        case capturedAt = "captured_at"
+        case windows
+    }
+
+    public init(capturedAt: String, windows: [ExtraQuotaWindow] = []) {
+        self.capturedAt = capturedAt
+        self.windows = windows
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        capturedAt = try c.decode(String.self, forKey: .capturedAt)
+        windows = try c.decodeIfPresent([ExtraQuotaWindow].self, forKey: .windows) ?? []
+    }
+}
+
 public struct AntigravityAccounts: Codable, Equatable, Sendable {
     public var windowStart: String
     public var windowKind: String
     public var current: String?
     public var accounts: [AntigravityAccount]
     public var unknown: AntigravityUnknown
+    public var byDay: [AntigravityAccountDay]?
 
     enum CodingKeys: String, CodingKey {
         case windowStart = "window_start"
@@ -199,6 +272,7 @@ public struct AntigravityAccounts: Codable, Equatable, Sendable {
         case current
         case accounts
         case unknown
+        case byDay = "by_day"
     }
 
     public init(
@@ -206,13 +280,15 @@ public struct AntigravityAccounts: Codable, Equatable, Sendable {
         windowKind: String,
         current: String? = nil,
         accounts: [AntigravityAccount] = [],
-        unknown: AntigravityUnknown = AntigravityUnknown(tokens: 0, costUsd: 0.0)
+        unknown: AntigravityUnknown = AntigravityUnknown(tokens: 0, costUsd: 0.0),
+        byDay: [AntigravityAccountDay]? = nil
     ) {
         self.windowStart = windowStart
         self.windowKind = windowKind
         self.current = current
         self.accounts = accounts
         self.unknown = unknown
+        self.byDay = byDay
     }
 }
 
@@ -224,6 +300,8 @@ public struct AntigravityAccount: Codable, Equatable, Identifiable, Sendable {
     public var messages: Int
     public var lastSeen: String?
     public var savedLogin: Bool
+    public var plan: AntigravityAccountPlan?
+    public var quota: AntigravityAccountQuota?
 
     enum CodingKeys: String, CodingKey {
         case email
@@ -232,6 +310,8 @@ public struct AntigravityAccount: Codable, Equatable, Identifiable, Sendable {
         case messages
         case lastSeen = "last_seen"
         case savedLogin = "saved_login"
+        case plan
+        case quota
     }
 
     public init(
@@ -240,7 +320,9 @@ public struct AntigravityAccount: Codable, Equatable, Identifiable, Sendable {
         costUsd: Double,
         messages: Int,
         lastSeen: String? = nil,
-        savedLogin: Bool = false
+        savedLogin: Bool = false,
+        plan: AntigravityAccountPlan? = nil,
+        quota: AntigravityAccountQuota? = nil
     ) {
         self.email = email
         self.tokens = tokens
@@ -248,6 +330,8 @@ public struct AntigravityAccount: Codable, Equatable, Identifiable, Sendable {
         self.messages = messages
         self.lastSeen = lastSeen
         self.savedLogin = savedLogin
+        self.plan = plan
+        self.quota = quota
     }
 }
 
@@ -278,6 +362,7 @@ public struct Subscription: Codable, Equatable {
     public var extraUsageEnabled: Bool
     public var source: String              // detected | manual
     public var account: SubscriptionAccount?
+    public var accountsPriced: Int?
 
     enum CodingKeys: String, CodingKey {
         case plan
@@ -290,11 +375,12 @@ public struct Subscription: Codable, Equatable {
         case extraUsageEnabled = "extra_usage_enabled"
         case source
         case account
+        case accountsPriced = "accounts_priced"
     }
 
     public init(plan: String, planLabel: String, monthlyPriceUsd: Double?, cycleStart: String, cycleEnd: String,
                 anchorDay: Int?, cycleSource: String, extraUsageEnabled: Bool, source: String,
-                account: SubscriptionAccount? = nil) {
+                account: SubscriptionAccount? = nil, accountsPriced: Int? = nil) {
         self.plan = plan
         self.planLabel = planLabel
         self.monthlyPriceUsd = monthlyPriceUsd
@@ -305,6 +391,7 @@ public struct Subscription: Codable, Equatable {
         self.extraUsageEnabled = extraUsageEnabled
         self.source = source
         self.account = account
+        self.accountsPriced = accountsPriced
     }
 }
 

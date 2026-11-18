@@ -290,7 +290,13 @@ struct MenuPanelView: View {
                 case .bucket(let kind):
                     BucketDetailView(kind: kind, report: r, onBack: { route = .overview })
                 default:
-                    let showAgents = activeRoute == .agents || (activeRoute == .overview && panelViewMode == PanelViewMode.agents.rawValue)
+                    let isExplicitOverviewAnchor = activeAnchor == OverviewView.bottomAnchor
+                        || (activeAnchor.map {
+                            QuotaCardRoute.agent(in: $0) != nil
+                                || MosaicCardRoute.index(in: $0) != nil
+                                || $0.hasPrefix("overview:hover:")
+                        } ?? false)
+                    let showAgents = activeRoute == .agents || (activeRoute == .overview && !isExplicitOverviewAnchor && panelViewMode == PanelViewMode.agents.rawValue)
                     VStack(spacing: 0) {
                         panelModeHeader(selected: showAgents ? .agents : .projects)
                         if showAgents {

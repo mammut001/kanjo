@@ -48,6 +48,7 @@ public struct AgentSummaryRow: Equatable, Identifiable {
     public var models: [AgentModelRow]
     public var projectShares: [AgentProjectShare]
     public var othersProjectShare: AgentProjectOthers?
+    public var antigravityAccountShares: [AntigravityAccountShare]
 
     public var id: String { agent }
 }
@@ -171,6 +172,9 @@ public enum AgentSummary {
             }
 
             let (projectShares, others) = buildProjectShares(agent: agent, projects: filtered.projects)
+            let agyAccountShares = agent == "antigravity"
+                ? AntigravityAccountLogic.shares(from: report.antigravityAccounts, range: filtered.spec)
+                : []
             let label = agentLabels[agent] ?? AgentColors.label(for: agent)
 
             rows.append(AgentSummaryRow(
@@ -187,7 +191,8 @@ public enum AgentSummary {
                 perf: perf,
                 models: agentModelRows,
                 projectShares: projectShares,
-                othersProjectShare: others
+                othersProjectShare: others,
+                antigravityAccountShares: agyAccountShares
             ))
         }
 

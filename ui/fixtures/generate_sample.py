@@ -381,9 +381,10 @@ subscriptions = {
         "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
     },
     "antigravity": {
-        "plan": "google_ai_pro", "plan_label": "Google AI Pro", "monthly_price_usd": 19.99,
+        "plan": "google_ai_ultra", "plan_label": "Google AI Ultra + Google AI Pro", "monthly_price_usd": 269.98,
+        "accounts_priced": 2,
         "cycle_start": rolling_start, "cycle_end": rolling_end, "anchor_day": None,
-        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "detected",
+        "cycle_source": "rolling_30d", "extra_usage_enabled": False, "source": "manual",
     },
     "grok": {
         "plan": "supergrok", "plan_label": "SuperGrok", "monthly_price_usd": 30.0,
@@ -401,6 +402,57 @@ antigravity_accounts = {
     "window_start": agy_window_start,
     "window_kind": "quota_week",
     "current": "alex@example.com",
+    "by_day": [
+        {
+            "day": "2026-09-12",
+            "email": "backup@gmail.com",
+            "tokens": 64000,
+            "cost_usd": 0.512,
+            "messages": 18,
+        },
+        {
+            "day": "2026-10-18",
+            "email": "alex@example.com",
+            "tokens": 162000,
+            "cost_usd": 1.296,
+            "messages": 48,
+        },
+        {
+            "day": "2026-10-18",
+            "email": "work@company.com",
+            "tokens": 45000,
+            "cost_usd": 0.45,
+            "messages": 14,
+        },
+        {
+            "day": "2026-10-20",
+            "email": "alex@example.com",
+            "tokens": 180000,
+            "cost_usd": 1.44,
+            "messages": 54,
+        },
+        {
+            "day": "2026-10-20",
+            "email": None,
+            "tokens": 12000,
+            "cost_usd": 0.096,
+            "messages": 4,
+        },
+        {
+            "day": "2026-10-22",
+            "email": "alex@example.com",
+            "tokens": 140000,
+            "cost_usd": 1.12,
+            "messages": 40,
+        },
+        {
+            "day": "2026-10-22",
+            "email": "work@company.com",
+            "tokens": 80000,
+            "cost_usd": 0.8,
+            "messages": 24,
+        },
+    ],
     "accounts": [
         {
             "email": "alex@example.com",
@@ -409,6 +461,30 @@ antigravity_accounts = {
             "messages": 142,
             "last_seen": (now_live - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "saved_login": True,
+            "plan": {
+                "plan": "google_ai_ultra",
+                "plan_label": "Google AI Ultra",
+                "monthly_price_usd": 249.99,
+            },
+            "quota": {
+                "captured_at": (now_live - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "windows": [
+                    {
+                        "id": "five_hour",
+                        "title": "5-hour",
+                        "used_percent": 18.5,
+                        "resets_at": agy_5h,
+                        "window_hours": 5,
+                    },
+                    {
+                        "id": "weekly",
+                        "title": "Weekly",
+                        "used_percent": 61.2,
+                        "resets_at": agy_weekly,
+                        "window_hours": 168,
+                    },
+                ],
+            },
         },
         {
             "email": "work@company.com",
@@ -417,6 +493,30 @@ antigravity_accounts = {
             "messages": 38,
             "last_seen": (now_live - timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "saved_login": True,
+            "plan": {
+                "plan": "google_ai_pro",
+                "plan_label": "Google AI Pro",
+                "monthly_price_usd": 19.99,
+            },
+            "quota": {
+                "captured_at": (now_live - timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "windows": [
+                    {
+                        "id": "five_hour",
+                        "title": "5-hour",
+                        "used_percent": 10.0,
+                        "resets_at": (now_live - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "window_hours": 5,
+                    },
+                    {
+                        "id": "weekly",
+                        "title": "Weekly",
+                        "used_percent": 4.0,
+                        "resets_at": agy_weekly,
+                        "window_hours": 168,
+                    },
+                ],
+            },
         },
         {
             "email": "backup@gmail.com",
@@ -526,8 +626,9 @@ for p in projects:
         assert set(d["by_agent_tokens"]) == set(d["by_agent"]), (p["id"], d["day"])
         assert sum(d["by_agent_tokens"].values()) == d["tokens"], (p["id"], d["day"])
 assert set(subscriptions) == {"claude", "codex", "antigravity", "grok", "copilot"}
-assert subscriptions["antigravity"]["plan"] == "google_ai_pro"
-assert subscriptions["antigravity"]["monthly_price_usd"] == 19.99
+assert subscriptions["antigravity"]["plan"] == "google_ai_ultra"
+assert subscriptions["antigravity"]["monthly_price_usd"] == 269.98
+assert subscriptions["antigravity"]["accounts_priced"] == 2
 assert subscriptions["copilot"]["plan"] == "pro"
 assert subscriptions["copilot"]["monthly_price_usd"] == 10.0
 assert subscriptions["claude"]["plan"] == "max_5x"

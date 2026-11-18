@@ -34,7 +34,8 @@ public struct KnownPlan: Codable, Equatable, Hashable, Identifiable {
             KnownPlan(key: "edu", label: "ChatGPT Edu", monthlyPriceUsd: 20.0)
         ],
         "antigravity": [
-            KnownPlan(key: "pro", label: "Antigravity Pro", monthlyPriceUsd: 20.0)
+            KnownPlan(key: "google_ai_pro", label: "Google AI Pro", monthlyPriceUsd: 19.99),
+            KnownPlan(key: "google_ai_ultra", label: "Google AI Ultra", monthlyPriceUsd: 249.99)
         ],
         "grok": [
             KnownPlan(key: "supergrok", label: "SuperGrok", monthlyPriceUsd: 30.0),

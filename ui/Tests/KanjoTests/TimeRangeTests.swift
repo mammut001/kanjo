@@ -442,7 +442,7 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertNotNil(r.quotaWindows?["antigravity"])
         XCTAssertNil(r.quotaWindows?["qwen"])
         XCTAssertEqual(r.subscriptions?["claude"]?.plan, "max_5x")
-        XCTAssertEqual(r.subscriptions?["antigravity"]?.plan, "google_ai_pro")
+        XCTAssertEqual(r.subscriptions?["antigravity"]?.plan, "google_ai_ultra")
         XCTAssertNil(r.subscriptions?["qwen"])
         for range in TimeRange.allCases {
             let f = RangeEngine.filtered(r, range: RangeEngine.spec(range, report: r, now: now), fallbackAgentFor: fallback)

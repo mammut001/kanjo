@@ -91,4 +91,28 @@ final class ConfigCommandTests: KanjoTestCase {
         XCTAssertEqual(ConfigCommand.familyAgentsArguments(agents: "   "),
                        ["config", "unset", "family.agents"])
     }
+
+    func testAntigravityAccountPlanArguments() throws {
+        XCTAssertEqual(
+            try ConfigCommand.antigravityAccountPlanArguments(email: "alex@example.com", plan: "google_ai_ultra"),
+            ["config", "set", "antigravity_accounts.alex@example.com.plan", "google_ai_ultra"]
+        )
+        XCTAssertEqual(
+            try ConfigCommand.antigravityAccountPlanArguments(email: "alex@example.com", plan: nil),
+            ["config", "unset", "antigravity_accounts.alex@example.com.plan"]
+        )
+        XCTAssertEqual(
+            try ConfigCommand.antigravityAccountPlanArguments(email: "alex@example.com", plan: "  "),
+            ["config", "unset", "antigravity_accounts.alex@example.com.plan"]
+        )
+        let cmd = try ConfigCommand.command(
+            from: CLIDataSource.defaultCommand,
+            arguments: try ConfigCommand.antigravityAccountPlanArguments(email: "alex@example.com", plan: "google_ai_pro")
+        )
+        XCTAssertEqual(cmd, "python3 -m kanjo config set 'antigravity_accounts.alex@example.com.plan' google_ai_pro")
+
+        for bad in ["", "not-an-email", "bad;email@example.com", "a b@example.com"] {
+            XCTAssertThrowsError(try ConfigCommand.antigravityAccountPlanArguments(email: bad, plan: "google_ai_pro"))
+        }
+    }
 }

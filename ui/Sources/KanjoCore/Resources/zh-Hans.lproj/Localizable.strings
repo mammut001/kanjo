@@ -552,4 +552,9 @@
 "agents.detail.others" = "其他项目";
 "agents.detail.no_project_cost" = "该范围内无项目花费";
 "agents.detail.open_project_help" = "打开 %@ 详情";
+"agents.detail.by_account" = "按账号";
+"agents.detail.unattributed" = "未归因";
+"overview.agy.as_of" = "截至 %@";
+"overview.accounts_count" = "%d 个账号";
+"settings.plan_none" = "无";
 
