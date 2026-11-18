@@ -5,6 +5,7 @@ struct OverviewView: View {
     static let bottomAnchor = "overview-bottom"
 
     let report: UsageReport
+    var panelData: PanelData? = nil
     var scrollAnchor: String? = nil
     let onSelect: (Route) -> Void
     let onSetRenewalDay: (String) -> Void
@@ -81,7 +82,12 @@ struct OverviewView: View {
     // 三段节奏：文字（hero）→ 图形（马赛克）→ 列表。列表行直接放在面板上，没有分组底色。
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
-        let f = ctx.filtered()
+        let f: FilteredReport
+        if let pd = panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
+            f = pd.filteredReport
+        } else {
+            f = ctx.filtered()
+        }
         let lists = arrange(f, isAll: ctx.isAll)
         ScrollViewReader { proxy in
             OptionalScrollView {
@@ -90,7 +96,7 @@ struct OverviewView: View {
                         hero(ctx, f, visible: lists.visible, hiddenCount: lists.hidden.count)
                         // 订阅价值紧挨 hero（cost note 下面、马赛克上面）。始终按各 agent 自己的账期，不跟当前范围走。
                         if !(report.subscriptions ?? [:]).isEmpty {
-                            SubscriptionValueCard(report: report, pinnedQuotaAgent: QuotaCardRoute.agent(in: scrollAnchor),
+                            SubscriptionValueCard(report: report, panelData: panelData, pinnedQuotaAgent: QuotaCardRoute.agent(in: scrollAnchor),
                                                   onSetRenewalDay: onSetRenewalDay)
                                 .zIndex(1) // 额度卡浮在下面的马赛克之上
                         }
@@ -407,6 +413,7 @@ struct OverviewView: View {
 /// 默认展示前 3 行；超过 3 行可折叠展开；支持拖拽行自定义排序。
 private struct SubscriptionValueCard: View {
     let report: UsageReport
+    var panelData: PanelData? = nil
     var pinnedQuotaAgent: String? = nil
     let onSetRenewalDay: (String) -> Void
     @State private var hoveredAgent: String?
@@ -426,7 +433,7 @@ private struct SubscriptionValueCard: View {
     }
 
     var body: some View {
-        let defaultRows = SubscriptionValue.rows(of: report)
+        let defaultRows = panelData?.subscriptionRows ?? SubscriptionValue.rows(of: report)
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
         let effectivePinnedAgent = userPinnedAgent ?? effectiveRoutePinnedAgent

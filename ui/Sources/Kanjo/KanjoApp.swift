@@ -177,14 +177,24 @@ struct MenuBarLabel: View {
     /// Since reset / Billing cycle 在报告没有对应数据时按 All 处理（RangeContext）。
     private func amount(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
-        let cost = ctx.isAll ? r.totals.cost : ctx.filtered().cost
+        let cost: Double
+        if let pd = store.panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
+            cost = pd.filteredReport.cost
+        } else {
+            cost = ctx.isAll ? r.totals.cost : ctx.filtered().cost
+        }
         return MenuBarText.make(cost: cost, currency: r.currency, range: ctx.range)
     }
 
     /// 当前范围过滤后的总 token 数（和总览 hero 同一个数）；All 下就是报告总 token 数。
     private func tokensText(_ r: UsageReport) -> String {
         let ctx = RangeContext(report: r, raw: rangeRaw)
-        let tokens = ctx.isAll ? r.totals.tokens.total : ctx.filtered().tokens
+        let tokens: Int
+        if let pd = store.panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end {
+            tokens = pd.filteredReport.tokens
+        } else {
+            tokens = ctx.isAll ? r.totals.tokens.total : ctx.filtered().tokens
+        }
         return MenuBarText.make(tokens: tokens, range: ctx.range)
     }
 }

@@ -782,7 +782,58 @@ public enum ReportDates {
     }()
 
     public static func parseTimestamp(_ s: String) -> Date? {
-        iso.date(from: s) ?? isoFractional.date(from: s)
+        if let d = fastParse(s) { return d }
+        return iso.date(from: s) ?? isoFractional.date(from: s)
+    }
+
+    private static func fastParse(_ s: String) -> Date? {
+        let bytes = Array(s.utf8)
+        guard bytes.count >= 20 else { return nil }
+        guard bytes[4] == 45, bytes[7] == 45, bytes[10] == 84, bytes[13] == 58, bytes[16] == 58 else { return nil }
+        let y = (Int(bytes[0]-48)*1000 + Int(bytes[1]-48)*100 + Int(bytes[2]-48)*10 + Int(bytes[3]-48))
+        let m = (Int(bytes[5]-48)*10 + Int(bytes[6]-48))
+        let d = (Int(bytes[8]-48)*10 + Int(bytes[9]-48))
+        let hh = (Int(bytes[11]-48)*10 + Int(bytes[12]-48))
+        let mm = (Int(bytes[14]-48)*10 + Int(bytes[15]-48))
+        let ss = (Int(bytes[17]-48)*10 + Int(bytes[18]-48))
+        
+        // Days from civil formula
+        var y_c = y - (m <= 2 ? 1 : 0)
+        let era = (y_c >= 0 ? y_c : y_c - 399) / 400
+        let yoe = y_c - era * 400
+        let doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        let days = era * 146097 + doe - 719468
+        
+        var pos = 19
+        var fraction: TimeInterval = 0
+        if pos < bytes.count, bytes[pos] == 46 { // .
+            pos += 1
+            var multiplier: TimeInterval = 0.1
+            while pos < bytes.count, bytes[pos] >= 48, bytes[pos] <= 57 {
+                if multiplier > 0.0001 {
+                    fraction += TimeInterval(bytes[pos]-48) * multiplier
+                    multiplier *= 0.1
+                }
+                pos += 1
+            }
+        }
+        
+        var secondsFromGMT = 0
+        if pos < bytes.count {
+            if bytes[pos] == 90 { // Z
+                secondsFromGMT = 0
+            } else if bytes[pos] == 43 || bytes[pos] == 45 { // + or -
+                if pos + 5 < bytes.count {
+                    let sign = bytes[pos] == 45 ? -1 : 1
+                    let h = (Int(bytes[pos+1]-48)*10 + Int(bytes[pos+2]-48))
+                    let m = (Int(bytes[pos+4]-48)*10 + Int(bytes[pos+5]-48))
+                    secondsFromGMT = sign * (h * 3600 + m * 60)
+                }
+            }
+        }
+        
+        return Date(timeIntervalSince1970: TimeInterval(days * 86400 + hh * 3600 + mm * 60 + ss) + fraction - TimeInterval(secondsFromGMT))
     }
 
     /// "YYYY-MM-DD"（契约里的本地日期）→ 本地零点。

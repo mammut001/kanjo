@@ -21,6 +21,7 @@ enum AgentsRoute {
 /// 悬停在行上方/下方浮出详情卡，点击固定，再次点击行/空白处或按 Esc 收起。
 struct AgentsView: View {
     let report: UsageReport
+    var panelData: PanelData? = nil
     var scrollAnchor: String? = nil
     let onSelectProject: (String) -> Void
 
@@ -45,8 +46,24 @@ struct AgentsView: View {
 
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
-        let filtered = ctx.filtered()
-        let summary = AgentSummary.build(report: report, filtered: filtered, quotaNow: effectiveQuotaNow)
+        let filtered: FilteredReport
+        let summary: AgentSummaryReport
+        
+        let now = Date()
+        let effectiveNow = effectiveQuotaNow
+        
+        if let pd = panelData, pd.rangeSpec.range.rawValue == rangeRaw, pd.rangeSpec.start == ctx.rangeSpec.start, pd.rangeSpec.end == ctx.rangeSpec.end, abs(pd.now.timeIntervalSince(now)) < 60 {
+            filtered = pd.filteredReport
+            
+            if abs(effectiveNow.timeIntervalSince(pd.now)) < 60 {
+                summary = pd.agentSummary
+            } else {
+                summary = AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: effectiveNow)
+            }
+        } else {
+            filtered = ctx.filtered()
+            summary = AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: effectiveNow)
+        }
 
         ScrollViewReader { proxy in
             OptionalScrollView {

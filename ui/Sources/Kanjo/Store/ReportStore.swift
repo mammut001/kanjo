@@ -9,6 +9,8 @@ final class ReportStore: ObservableObject {
 
     @Published private(set) var needsCommandLineTools = false
     @Published private(set) var report: UsageReport?
+    @Published private(set) var panelData: PanelData?
+    private var panelGeneration: Int = 0
     @Published private(set) var isStaleReport = false
     @Published private(set) var staleReportGeneratedAt: String?
     @Published private(set) var knownPlans: [String: [KnownPlan]]?
@@ -94,7 +96,7 @@ final class ReportStore: ObservableObject {
         setupWatcher()
     }
 
-    private func apply(_ state: ReportLoadState) {
+    func apply(_ state: ReportLoadState) {
         report = state.report
         isStaleReport = state.isStaleReport
         staleReportGeneratedAt = state.staleReportGeneratedAt
@@ -103,6 +105,37 @@ final class ReportStore: ObservableObject {
         loadingStartedAt = state.loadingStartedAt
         lastRefresh = state.lastRefresh
         sourceDescription = state.sourceDescription
+        
+        let gen = panelGeneration + 1
+        panelGeneration = gen
+        
+        if let report = report {
+            let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
+            Task.detached(priority: .userInitiated) {
+                let now = Date()
+                let data = PanelData.compute(report: report, rangeRaw: range, now: now)
+                await MainActor.run {
+                    if self.panelGeneration == gen {
+                        self.panelData = data
+                    }
+                }
+            }
+        }
+    }
+
+    func prepare(rangeRaw: String) {
+        guard let report = report else { return }
+        let gen = panelGeneration + 1
+        panelGeneration = gen
+        Task.detached(priority: .userInitiated) {
+            let now = Date()
+            let data = PanelData.compute(report: report, rangeRaw: rangeRaw, now: now)
+            await MainActor.run {
+                if self.panelGeneration == gen {
+                    self.panelData = data
+                }
+            }
+        }
     }
 
     private func setupNotifications() {

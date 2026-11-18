@@ -300,9 +300,9 @@ struct MenuPanelView: View {
                     VStack(spacing: 0) {
                         panelModeHeader(selected: showAgents ? .agents : .projects)
                         if showAgents {
-                            AgentsView(report: r, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
+                            AgentsView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
                         } else {
-                            OverviewView(report: r, scrollAnchor: activeAnchor, onSelect: { route = $0 },
+                            OverviewView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelect: { route = $0 },
                                          onSetRenewalDay: { agent in
                                 overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
                                 route = .settings
