@@ -78,6 +78,9 @@ public struct RefreshScheduler: Equatable {
             hasPendingEventWhileRefreshing = true
             return .none
         }
+        if hasScheduledRefresh {
+            return .none
+        }
         return scheduleFileEventRefresh(at: date, minIntervalAnchor: lastRefreshTime)
     }
 

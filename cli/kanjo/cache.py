@@ -17,13 +17,21 @@ import re
 import stat
 import tempfile
 import time
+import zlib
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .sources.base import Message, ParseError, Session
 
 CACHE_VERSION = 6
 REPO_CACHE_VERSION = 2
-NEGATIVE_TTL = 7 * 24 * 3600.0  # 7 days TTL for negative (no-repo) resolutions
+NEGATIVE_TTL_MIN = 1800.0  # 30 min
+NEGATIVE_TTL_MAX = 7200.0  # 2 h
+
+
+def _negative_ttl(path: str) -> float:
+    return NEGATIVE_TTL_MIN + (zlib.crc32(path.encode("utf-8", "surrogatepass")) % 10_000) / 10_000 * (NEGATIVE_TTL_MAX - NEGATIVE_TTL_MIN)
+
+
 _MSG_FIELDS = ("ts", "model", "input", "output", "cache_read", "cache_write", "cache_write_1h",
                "thinking", "cwd", "branch", "key", "account", "gen_s", "ttft_s")
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
@@ -183,7 +191,7 @@ class RepoCache:
                             ts = cand.get("ts")
                             if ts is not None and isinstance(ts, (int, float)):
                                 current_time = time.time() if now is None else now
-                                if current_time - ts < NEGATIVE_TTL:
+                                if current_time - ts < _negative_ttl(cur):
                                     if _FILE_LIKE.search(os.path.basename(path)):
                                         self.entries[path] = cand
                                         return True, None
@@ -197,20 +205,10 @@ class RepoCache:
             return False, None
 
         if entry.get("repo") is None:
-            # Check if it was a directory that might have been initialized as a git repo
-            if not _FILE_LIKE.search(os.path.basename(path)):
-                stat_path = (fs_root + path) if fs_root else path
-                if os.path.lexists(os.path.join(stat_path, ".git")):
-                    # It's now a git repo, invalidate negative entry
-                    if path in self.entries:
-                        del self.entries[path]
-                        self.dirty = True
-                    return False, None
-
             ts = entry.get("ts")
             if ts is not None and isinstance(ts, (int, float)):
                 current_time = time.time() if now is None else now
-                if current_time - ts < NEGATIVE_TTL:
+                if current_time - ts < _negative_ttl(path):
                     return True, None
             # Expired negative result
             return False, None
