@@ -179,7 +179,7 @@ struct OverviewView: View {
                     .layoutPriority(0)
             }
             HeroAmount(value: Fmt.money(f.cost, currency: cur)).contentTransition(.numericText())
-            Text("本周: \(Fmt.tokens(calculateWeeklyTokens()))")
+            Text(L10n.tr("overview.this_week_tokens", Fmt.tokens(calculateWeeklyTokens())))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {

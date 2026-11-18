@@ -68,6 +68,7 @@ final class LocalizationTests: KanjoTestCase {
             "overview.total_cost",
             "disk.clean_help",
             "menu.quit",
+            "overview.this_week_tokens",
         ]
         for key in sampleKeys {
             let en = L10n.tr(key, language: "en")
@@ -79,6 +80,13 @@ final class LocalizationTests: KanjoTestCase {
             XCTAssertNotEqual(zh, key, "Simplified Chinese translation should not be raw key for '\(key)'")
             XCTAssertNotEqual(fr, key, "French translation should not be raw key for '\(key)'")
         }
+    }
+
+    func testOverviewThisWeekTokensResolvesInEnglish() {
+        let key = "overview.this_week_tokens"
+        let en = L10n.tr(key, language: "en")
+        XCTAssertNotEqual(en, key, "Key should resolve in English")
+        XCTAssertFalse(en.contains("本周"), "English translation should not contain Chinese characters")
     }
 
     /// 验证有效语言推导逻辑

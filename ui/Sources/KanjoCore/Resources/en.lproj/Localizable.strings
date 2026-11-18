@@ -268,6 +268,7 @@
 "overview.count.session.singular" = "%d session";
 "overview.count.session.plural" = "%d sessions";
 "overview.tokens_count" = "%@ tokens";
+"overview.this_week_tokens" = "This week: %@ tokens";
 "overview.help.no_usage_range" = "No usage in this range.";
 "overview.help.cache_reads" = "%@ of the tokens are cache reads.";
 "overview.help.daily_summed" = "Cost and tokens summed from daily data; sessions counted by start time.";
