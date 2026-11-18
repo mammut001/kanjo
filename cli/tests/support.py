@@ -364,3 +364,36 @@ def validate_contract(tc, doc):
     tc.assertLessEqual(doc["totals"]["unique_sessions"], doc["totals"]["sessions"])
     if "ledger" in doc:
         check_ledger(tc, doc["ledger"])
+    if "perf_by_day" in doc:
+        check_perf_by_day(tc, doc["perf_by_day"])
+
+
+def check_perf_by_day(tc, rows):
+    """CONTRACT.md section 5.1 (optional top-level perf_by_day)."""
+    tc.assertIsInstance(rows, list, "perf_by_day")
+    keys = []
+    for i, row in enumerate(rows):
+        where = "perf_by_day[%d]" % i
+        tc.assertIsInstance(row, dict, where)
+        tc.assertEqual(set(row), {"day", "agent", "model", "o", "g", "n", "th"}, where)
+        tc.assertRegex(row["day"], DAY, where)
+        tc.assertIsInstance(row["agent"], str, where)
+        tc.assertTrue(row["agent"], where)
+        tc.assertIsInstance(row["model"], str, where)
+        tc.assertTrue(row["model"], where)
+        tc.assertIsInstance(row["o"], int, where)
+        tc.assertGreater(row["o"], 0, where)
+        tc.assertIsInstance(row["g"], (int, float), where)
+        tc.assertEqual(round(row["g"], 3), row["g"], where)
+        tc.assertGreater(row["g"], 0, where)
+        tc.assertIsInstance(row["n"], int, where)
+        tc.assertGreater(row["n"], 0, where)
+        tc.assertIsInstance(row["th"], dict, where)
+        for b, c in row["th"].items():
+            tc.assertIsInstance(b, str, where)
+            tc.assertRegex(b, r"^\d+$", where)
+            tc.assertIsInstance(c, int, where)
+            tc.assertGreater(c, 0, where)
+        keys.append((row["day"], row["agent"], row["model"]))
+    tc.assertEqual(keys, sorted(keys), "perf_by_day must be sorted by (day, agent, model)")
+    tc.assertEqual(len(keys), len(set(keys)), "perf_by_day must not have duplicate keys")

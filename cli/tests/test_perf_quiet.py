@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from kanjo import cli, disk, disk_cache, export, ledger
+from kanjo.cache import CACHE_VERSION
 from tests.support import FIXTURE_DIRS
 
 
@@ -106,7 +107,7 @@ class PerfQuietTest(unittest.TestCase):
         self.assertEqual(code1, 0)
 
         ledger_file = os.path.join(self.data_dir, "ledger.json")
-        parse_cache = os.path.join(self.cache_dir, "parse-cache-v4.json")
+        parse_cache = os.path.join(self.cache_dir, "parse-cache-v%d.json" % CACHE_VERSION)
         self.assertTrue(os.path.isfile(ledger_file))
         self.assertTrue(os.path.isfile(parse_cache))
 

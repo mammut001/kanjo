@@ -14,6 +14,15 @@ public struct QuotaRow: Equatable, Identifiable {
     public var title: String
     public var percent: Double?    // 0–100
     public var detail: String      // 重置文案，或「窗口已结束」
+    public var compactDetail: String
+
+    public init(id: String, title: String, percent: Double?, detail: String, compactDetail: String? = nil) {
+        self.id = id
+        self.title = title
+        self.percent = percent
+        self.detail = detail
+        self.compactDetail = compactDetail ?? detail
+    }
 }
 
 /// 进度条色调：≥ 80% 警示，≥ 95% 才用红色。
@@ -63,19 +72,26 @@ public enum SubscriptionValue {
         var rows: [QuotaRow] = []
         if let hours = window.fiveHourWindowHours {
             let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp).flatMap { $0 > now ? $0 : nil }
+            let endedText = L10n.tr("overview.quota.ended")
             rows.append(QuotaRow(id: "five_hour", title: windowName(hours: hours),
                                  percent: reset == nil ? nil : clampPercent(window.fiveHourUsedPercent),
                                  detail: reset.map { resetText($0, timezone: timezone, now: now, language: language) }
-                                    ?? L10n.tr("overview.quota.ended")))
+                                    ?? endedText,
+                                 compactDetail: reset.map { compactResetText($0, timezone: timezone, now: now, language: language) }
+                                    ?? endedText))
         }
         if let reset = ReportDates.parseTimestamp(window.weeklyResetsAt) {
             let ended = reset <= now
+            let endedText = L10n.tr("overview.quota.ended")
             rows.append(QuotaRow(id: "weekly", title: windowName(hours: window.weeklyWindowHours),
                                  percent: ended ? nil : clampPercent(window.weeklyUsedPercent),
-                                 detail: ended ? L10n.tr("overview.quota.ended")
-                                    : resetText(reset, timezone: timezone, now: now, language: language)))
+                                 detail: ended ? endedText
+                                    : resetText(reset, timezone: timezone, now: now, language: language),
+                                 compactDetail: ended ? endedText
+                                    : compactResetText(reset, timezone: timezone, now: now, language: language)))
         }
         if let extra = window.extraWindows {
+            let endedText = L10n.tr("overview.quota.ended")
             for ew in extra {
                 let reset = ew.resetsAt.flatMap(ReportDates.parseTimestamp).flatMap { $0 > now ? $0 : nil }
                 rows.append(QuotaRow(
@@ -83,7 +99,9 @@ public enum SubscriptionValue {
                     title: extraWindowTitle(ew, language: language),
                     percent: reset == nil ? nil : clampPercent(ew.usedPercent),
                     detail: reset.map { resetText($0, timezone: timezone, now: now, language: language) }
-                        ?? L10n.tr("overview.quota.ended")
+                        ?? endedText,
+                    compactDetail: reset.map { compactResetText($0, timezone: timezone, now: now, language: language) }
+                        ?? endedText
                 ))
             }
         }
@@ -112,19 +130,32 @@ public enum SubscriptionValue {
 
     /// 「2 小时 5 分后重置 · 周二 10:00」：相对时间 + 报告时区的绝对时间（当天只给时刻）。
     public static func resetText(_ reset: Date, timezone: TimeZone, now: Date = Date(), language: String? = nil) -> String {
+        let (rel, abs) = resetParts(reset, timezone: timezone, now: now, language: language)
+        return L10n.tr("overview.quota.resets_in", rel, abs)
+    }
+
+    /// 紧凑重置文案：「2d 14h · Fri 4:40 PM」，省略前缀以适配 Agent 行单行展示。
+    public static func compactResetText(_ reset: Date, timezone: TimeZone, now: Date = Date(), language: String? = nil) -> String {
+        let (rel, abs) = resetParts(reset, timezone: timezone, now: now, language: language)
+        return "\(rel) · \(abs)"
+    }
+
+    private static func resetParts(_ reset: Date, timezone: TimeZone, now: Date, language: String?) -> (String, String) {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timezone
-        let template = cal.isDate(reset, inSameDayAs: now) ? "jmm" : "EEEjmm"
+        // 24 小时以内省略星期（只显示时刻），避免跨午夜后变成 "4h 49m · Wed 1:25 AM" 导致过长。
+        let minutes = max(1, Int((reset.timeIntervalSince(now) / 60).rounded(.up)))
+        let template = minutes < 1440 ? "jmm" : "EEEjmm"
         let absolute = RangeCaptionBuilder.templateFormatter(template, cal, language: language).string(from: reset)
-        return L10n.tr("overview.quota.resets_in", relative(from: now, to: reset), absolute)
+        return (relative(from: now, to: reset, language: language), absolute)
     }
 
     /// 剩余时长，向上取整到分钟：不到 1 小时给分钟，不到 1 天给时+分，否则天+时。
-    public static func relative(from now: Date, to date: Date) -> String {
+    public static func relative(from now: Date, to date: Date, language: String? = nil) -> String {
         let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
-        if minutes < 60 { return L10n.tr("overview.quota.rel_m", minutes) }
-        if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", minutes / 60, minutes % 60) }
-        return L10n.tr("overview.quota.rel_dh", minutes / 1440, minutes % 1440 / 60)
+        if minutes < 60 { return L10n.tr("overview.quota.rel_m", language: language, minutes) }
+        if minutes < 1440 { return L10n.tr("overview.quota.rel_hm", language: language, minutes / 60, minutes % 60) }
+        return L10n.tr("overview.quota.rel_dh", language: language, minutes / 1440, minutes % 1440 / 60)
     }
 
     public static func level(_ percent: Double?) -> QuotaLevel {

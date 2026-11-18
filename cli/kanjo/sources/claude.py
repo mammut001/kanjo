@@ -22,6 +22,57 @@ PATH_KEYS = {"file_path", "path", "notebook_path", "filepath", "directory", "dir
              "workdir", "paths", "target_file", "absolute_path"}
 CMD_KEYS = {"command", "cmd"}
 _TS = re.compile(rb'"timestamp"\s*:\s*"([^"]+)"')
+_LINE_TIME = re.compile(rb'"uuid"\s*:\s*"([^"]+)"\s*,\s*"timestamp"\s*:\s*"([^"]+)"')
+_ATTACHMENT_LINE = re.compile(rb'"type"\s*:\s*"attachment"\s*,\s*"uuid"\s*:\s*"([^"]+)"')
+_LINE_PARENT = re.compile(rb'"parentUuid"\s*:\s*"([^"]+)"')
+
+
+def _note_line_time(raw: bytes, when: Dict[str, float], via: Dict[str, Optional[str]]) -> None:
+    if b'"uuid"' not in raw:
+        return
+    head = raw[:2048]
+    att = _ATTACHMENT_LINE.search(head)
+    if att:
+        uid = att.group(1).decode("utf-8", "replace")
+        par = _LINE_PARENT.search(head)
+        via[uid] = par.group(1).decode("utf-8", "replace") if par else None
+        return
+    m = _LINE_TIME.search(head)
+    if m:
+        ts = parse_iso(m.group(2).decode("ascii", "replace"))
+        if ts is not None:
+            when[m.group(1).decode("utf-8", "replace")] = ts
+        return
+    if len(raw) <= 8192:
+        try:
+            obj = json.loads(raw)
+        except ValueError:
+            return
+        if not isinstance(obj, dict):
+            return
+        uid = obj.get("uuid")
+        if not isinstance(uid, str):
+            return
+        if obj.get("type") == "attachment":
+            par = obj.get("parentUuid")
+            via[uid] = par if isinstance(par, str) else None
+        else:
+            ts = parse_iso(obj.get("timestamp"))
+            if ts is not None:
+                when[uid] = ts
+
+
+def _request_start(parent: Optional[str], when: Dict[str, float],
+                   via: Dict[str, Optional[str]]) -> Optional[float]:
+    for _ in range(64):
+        if parent is None:
+            return None
+        if parent in when:
+            return when[parent]
+        if parent not in via:
+            return None
+        parent = via[parent]
+    return None
 
 
 def roots() -> List[str]:
@@ -77,6 +128,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     tools: Dict[str, Set[str]] = {}
     tool_order: List[str] = []
     branches: Dict[str, int] = {}
+    when: Dict[str, float] = {}
+    via: Dict[str, Optional[str]] = {}
+    req_events: Dict[str, List[Tuple[float, Optional[str], object, str]]] = {}
     good = bad = 0
     try:
         handle = open(path, "rb")
@@ -99,6 +153,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                         good += 1
                     except ValueError:
                         bad += 1
+                _note_line_time(raw, when, via)
                 continue
             try:
                 obj = json.loads(raw)
@@ -111,6 +166,14 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             good += 1
             kind = obj.get("type")
             ts = parse_iso(obj.get("timestamp"))
+            uid = obj.get("uuid")
+            if kind == "attachment":
+                if isinstance(uid, str):
+                    par = obj.get("parentUuid")
+                    via[uid] = par if isinstance(par, str) else None
+                continue
+            if isinstance(uid, str) and ts is not None:
+                when[uid] = ts
             cwd = obj.get("cwd") if isinstance(obj.get("cwd"), str) else None
             if kind == "custom-title":
                 ct = obj.get("customTitle")
@@ -180,6 +243,11 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             if k not in messages:
                 order.append(k)
             messages[k] = m  # last line of a message id wins
+            request_id = obj.get("requestId") or obj.get("request_id")
+            req_key = request_id or mid or k
+            req_events.setdefault(req_key, []).append(
+                (ts, obj.get("parentUuid"), obj.get("thinkingDurationMs"), k)
+            )
             if cwd:
                 session.note_cwd(cwd)
             if branch:
@@ -188,6 +256,34 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 session.id = obj["sessionId"]
     if good == 0 and bad > 0:
         raise ParseError("no valid JSON lines")
+    for group in req_events.values():
+        end = max(ev_ts for ev_ts, _, _, _ in group)
+        first = None
+        for ev_ts, _, think_ms, _ in group:
+            if think_ms:
+                try:
+                    tms = float(think_ms)
+                except (TypeError, ValueError):
+                    continue
+                if tms > 0:
+                    first = ev_ts - tms / 1000.0
+                    break
+        start = _request_start(group[0][1], when, via)
+        gen = ttft = None
+        if first is not None and end > first:
+            gen = end - first
+            if start is not None and first >= start:
+                ttft = first - start
+        elif start is not None and end > start:
+            gen = end - start
+        if gen:
+            gen_s = round(gen, 3)
+            ttft_s = round(ttft, 3) if ttft is not None else None
+            for _, _, _, k in group:
+                m = messages.get(k)
+                if m is not None:
+                    m.gen_s = gen_s
+                    m.ttft_s = ttft_s
     session.messages = [messages[k] for k in order]
     session.tool_paths = [unique(sorted(tools[t])) for t in tool_order if tools[t]]
     if branches:

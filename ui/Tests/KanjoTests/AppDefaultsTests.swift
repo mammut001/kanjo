@@ -111,4 +111,22 @@ final class AppDefaultsTests: XCTestCase {
         defer { UserDefaults.standard.removeObject(forKey: "standardOnlyKey") }
         XCTAssertNil(store.string(forKey: "standardOnlyKey"))
     }
+
+    func testAppAppearanceDefaultAndMapping() {
+        XCTAssertEqual(SettingsKeys.appAppearance, "appAppearance")
+        XCTAssertEqual(AppAppearance.defaultValue, .dark)
+        XCTAssertEqual(AppAppearance.defaultValue.rawValue, "dark")
+        XCTAssertEqual(AppAppearance.allCases, [.dark, .light, .system])
+
+        XCTAssertEqual(AppAppearance.resolve(nil), .dark)
+        XCTAssertEqual(AppAppearance.resolve(""), .dark)
+        XCTAssertEqual(AppAppearance.resolve("unknown"), .dark)
+        XCTAssertEqual(AppAppearance.resolve("dark"), .dark)
+        XCTAssertEqual(AppAppearance.resolve("light"), .light)
+        XCTAssertEqual(AppAppearance.resolve("system"), .system)
+
+        XCTAssertEqual(AppAppearance.dark.explicitIsDark, true)
+        XCTAssertEqual(AppAppearance.light.explicitIsDark, false)
+        XCTAssertNil(AppAppearance.system.explicitIsDark)
+    }
 }

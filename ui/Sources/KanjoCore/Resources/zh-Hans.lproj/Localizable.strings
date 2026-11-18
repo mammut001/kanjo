@@ -521,3 +521,35 @@
 "overview.agy.quit_confirm_cancel" = "取消";
 "overview.agy.still_running" = "有 agy 没能退出，未做任何更改";
 
+/* Agent 视图 */
+"view_mode.projects" = "项目";
+"view_mode.agents" = "Agent";
+"view_mode.toggle_help" = "在项目视图与 Agent 视图之间切换";
+"settings.section.general" = "通用";
+"settings.panel_view" = "面板视图";
+"settings.appearance" = "外观";
+"settings.appearance.dark" = "深色";
+"settings.appearance.light" = "浅色";
+"settings.appearance.system" = "跟随系统";
+"agents.empty" = "该范围内没有 Agent 用量。";
+"agents.proportion_other" = "其他";
+"agents.tokens_share_help" = "该范围内总 Token 占比";
+"agents.row.expand_help" = "悬停预览明细，点击固定展开";
+"agents.row.collapse_help" = "点击或按 Esc 收起明细";
+"agents.detail.tokens" = "Token 明细";
+"agents.detail.cache_hit" = "缓存命中率";
+"agents.detail.performance" = "生成性能";
+"agents.detail.output_speed" = "输出速度";
+"agents.detail.ttft_median" = "首字延迟中位数";
+"agents.detail.samples.singular" = "%d 个样本";
+"agents.detail.samples.plural" = "%d 个样本";
+"agents.detail.no_samples" = "该范围内无速度样本";
+"agents.detail.tok_per_sec" = "%@ tok/s";
+"agents.detail.models" = "按模型";
+"agents.detail.models.hit" = "命中";
+"agents.detail.models.speed" = "速度";
+"agents.detail.where_money_went" = "花费去向";
+"agents.detail.others" = "其他项目";
+"agents.detail.no_project_cost" = "该范围内无项目花费";
+"agents.detail.open_project_help" = "打开 %@ 详情";
+

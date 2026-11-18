@@ -521,3 +521,35 @@
 "overview.agy.quit_confirm_cancel" = "Annuler";
 "overview.agy.still_running" = "Certaines sessions agy ne se sont pas fermées ; rien n'a été modifié";
 
+/* Vue Agents */
+"view_mode.projects" = "Projets";
+"view_mode.agents" = "Agents";
+"view_mode.toggle_help" = "Basculer entre la vue Projets et la vue Agents";
+"settings.section.general" = "Général";
+"settings.panel_view" = "Vue du panneau";
+"settings.appearance" = "Apparence";
+"settings.appearance.dark" = "Sombre";
+"settings.appearance.light" = "Clair";
+"settings.appearance.system" = "Système";
+"agents.empty" = "Aucune utilisation d'agent sur cette période.";
+"agents.proportion_other" = "Autres";
+"agents.tokens_share_help" = "Part des tokens totaux sur cette période";
+"agents.row.expand_help" = "Survoler pour prévisualiser, cliquer pour épingler";
+"agents.row.collapse_help" = "Cliquer ou appuyer sur Échap pour fermer";
+"agents.detail.tokens" = "Tokens";
+"agents.detail.cache_hit" = "Taux de cache";
+"agents.detail.performance" = "Performance";
+"agents.detail.output_speed" = "Vitesse de sortie";
+"agents.detail.ttft_median" = "TTFT médian";
+"agents.detail.samples.singular" = "%d échantillon";
+"agents.detail.samples.plural" = "%d échantillons";
+"agents.detail.no_samples" = "Aucun échantillon sur cette période";
+"agents.detail.tok_per_sec" = "%@ tok/s";
+"agents.detail.models" = "Par modèle";
+"agents.detail.models.hit" = "Cache";
+"agents.detail.models.speed" = "Vitesse";
+"agents.detail.where_money_went" = "Répartition par projet";
+"agents.detail.others" = "Autres";
+"agents.detail.no_project_cost" = "Aucun coût de projet sur cette période";
+"agents.detail.open_project_help" = "Ouvrir les détails de %@";
+

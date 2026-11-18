@@ -189,7 +189,16 @@ enum SnapshotRunner {
         // 滚动路由：离屏渲染时从顶部开始渲染，完整内容高度（TALL）。
         let isTall = true
 
-        if let app = config.appearance {
+        // 显式 --snapshot-appearance 优先；未传时遵循 AppAppearance（默认 dark）。
+        let effectiveAppearance: SnapshotAppearance? = config.appearance ?? {
+            switch AppAppearance.resolve(AppDefaults.store.string(forKey: SettingsKeys.appAppearance)) {
+            case .dark: return .dark
+            case .light: return .light
+            case .system: return nil
+            }
+        }()
+
+        if let app = effectiveAppearance {
             let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
             NSApp.appearance = NSAppearance(named: appearanceName)
         }
@@ -209,7 +218,7 @@ enum SnapshotRunner {
                 .environmentObject(DiskStore.shared)
         )
 
-        if let app = config.appearance {
+        if let app = effectiveAppearance {
             let scheme: ColorScheme = app == .dark ? .dark : .light
             view = AnyView(
                 view
@@ -221,7 +230,7 @@ enum SnapshotRunner {
         let standardSize = MenuPanelView.size
 
         let hosting = NSHostingView(rootView: view)
-        if let app = config.appearance {
+        if let app = effectiveAppearance {
             let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
             hosting.appearance = NSAppearance(named: appearanceName)
         }
@@ -240,7 +249,7 @@ enum SnapshotRunner {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.alphaValue = 0
-        if let app = config.appearance {
+        if let app = effectiveAppearance {
             let appearanceName: NSAppearance.Name = app == .dark ? .darkAqua : .aqua
             window.appearance = NSAppearance(named: appearanceName)
         }

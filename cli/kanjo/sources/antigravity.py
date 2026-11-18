@@ -16,7 +16,8 @@ MIT License; the rest was mapped from local databases):
 ``gen_metadata.data``
     1    one generation record: 19 model, 4 {2 input (non-cached), 3 output
          (incl. thinking), 5 cache read, 9 thinking, 10 response},
-         9.4.1 generation start (seconds), 20 key/value pairs
+         9.4.1 generation start (seconds), 11 TTFT (Duration), 12 stream
+         duration (Duration), 20 key/value pairs
          (``root_cascade_id`` names the parent conversation of a sub-agent)
     2    packed step indexes this generation produced
 """
@@ -205,14 +206,31 @@ def _uri_path(uri: Optional[str]) -> Optional[str]:
     return uri if is_path else None
 
 
+def _duration_seconds(data: bytes) -> float:
+    seconds = nanos = 0
+    for fn, wt, value in parse_fields(data, wanted={1, 2}):
+        if wt == 0 and fn == 1:
+            seconds = value
+        elif wt == 0 and fn == 2:
+            nanos = value
+    return seconds + nanos / 1e9
+
+
 def gen_record(record: bytes, fallback_ts=None):
     """One generation record -> dict or None (port of Tokei's _antigravity_gen_step)."""
     model = "unknown"
     inp = out = cached = thoughts = 0
     ts = None
+    ttft = stream = None
     root_cascade_id = None
-    for fn, wt, val in parse_fields(record, wanted={4, 9, 19, 20}):
-        if fn == 19 and wt == 2:
+    for fn, wt, val in parse_fields(record, wanted={4, 9, 11, 12, 19, 20}):
+        if fn in (11, 12) and wt == 2:
+            value = _duration_seconds(val)
+            if fn == 11:
+                ttft = value
+            else:
+                stream = value
+        elif fn == 19 and wt == 2:
             model = _text(val) or model
         elif fn == 4 and wt == 2:
             for tfn, twt, tval in parse_fields(val, wanted={2, 3, 5, 9}):
@@ -253,6 +271,10 @@ def gen_record(record: bytes, fallback_ts=None):
         model = "unknown"
     res = {"model": model, "input": inp, "output": out, "cache_read": cached,
            "thinking": min(thoughts, out) if out else thoughts, "ts": ts}
+    if stream is not None and stream > 0:
+        res["gen_s"] = round(stream, 3)
+        if ttft is not None and ttft >= 0:
+            res["ttft_s"] = round(ttft, 3)
     if root_cascade_id:
         res["root_cascade_id"] = root_cascade_id
     return res
@@ -389,7 +411,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                         ts=float(rec["ts"]), model=rec["model"], input=rec["input"], output=rec["output"],
                         cache_read=rec["cache_read"], thinking=rec["thinking"], cwd=workspace, branch=branch,
                         key="antigravity:%s:%s:%d" % (sid, idx, record_index),
-                        account=acc))
+                        account=acc, gen_s=rec.get("gen_s"), ttft_s=rec.get("ttft_s")))
                     session.note_time(float(rec["ts"]))
                     record_index += 1
         except sqlite3.Error as exc:

@@ -114,8 +114,6 @@ class GrokUpdatesFormatTest(unittest.TestCase):
         self.assertEqual(session.ended, 1794564300.0)
 
     def test_turn_completed_generation_time(self):
-        if not grok._HAS_GEN_S:
-            self.skipTest("Message has no gen_s in this build")
         session = grok.parse_file(_acp("grok-acp-1"))
         self.assertEqual([m.gen_s for m in session.messages], [6.0, 2.0, 0.5])
 

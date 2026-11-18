@@ -17,6 +17,11 @@ Token usage comes from two files:
 adds a turn only when no ``usage.json`` turn ended at the same moment, so
 sessions without ``usage.json``, and turns that ``usage.json`` dropped, are
 counted once.
+
+Output speed (``Message.gen_s``): ``usage.json`` turns are timed from the
+``shell.turn.inference_done`` records in ``~/.grok/logs/unified.jsonl``;
+``turn_completed`` turns from each model's ``apiDurationMs``. Neither carries a
+usable time to first token, so ``ttft_s`` stays unset.
 """
 
 from __future__ import annotations
@@ -34,9 +39,101 @@ AGENT = "grok"
 # A turn_completed record and a usage.json turn describe the same turn when their
 # end times are this close (seconds). Grok writes both at the same moment.
 _SAME_TURN_S = 1.0
+_UNIFIED_CACHE: Dict[str, Tuple[tuple, Dict[str, List[Tuple[float, float]]]]] = {}
 
-# Per-turn generation time needs Message.gen_s, which not every build has yet.
-_HAS_GEN_S = "gen_s" in getattr(Message, "__dataclass_fields__", {})
+
+def _find_unified_log(session_dir: str) -> Optional[str]:
+    cur = os.path.abspath(session_dir)
+    for _ in range(4):
+        parent = os.path.dirname(cur)
+        if not parent or parent == cur:
+            break
+        cand = os.path.join(parent, "logs", "unified.jsonl")
+        if os.path.isfile(cand):
+            return cand
+        cur = parent
+    return None
+
+
+def _unified_inference_by_sid(log_path: str) -> Dict[str, List[Tuple[float, float]]]:
+    try:
+        st = os.stat(log_path)
+    except OSError:
+        return {}
+    real_path = os.path.realpath(log_path)
+    sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    cached = _UNIFIED_CACHE.get(real_path)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+
+    by_sid: Dict[str, List[Tuple[float, float]]] = {}
+    seen = set()
+    try:
+        with open(real_path, "rb") as fh:
+            for raw in fh:
+                if b"shell.turn.inference_done" not in raw:
+                    continue
+                try:
+                    obj = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(obj, dict) or obj.get("msg") != "shell.turn.inference_done":
+                    continue
+                ctx = obj.get("ctx")
+                if not isinstance(ctx, dict):
+                    continue
+                sid = str(obj.get("sid") or "")
+                ts_str = str(obj.get("ts") or "")
+                ts = parse_iso(ts_str)
+                if not sid or ts is None:
+                    continue
+                try:
+                    prompt = max(int(ctx.get("prompt_tokens") or 0), 0)
+                    cached_tok = max(int(ctx.get("cached_prompt_tokens") or 0), 0)
+                    completion = max(int(ctx.get("completion_tokens") or 0), 0)
+                    reasoning = max(int(ctx.get("reasoning_tokens") or 0), 0)
+                    loop_index = int(ctx.get("loop_index") or 0)
+                    attempts = int(ctx.get("attempts") or 0)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                cached_tok = min(cached_tok, prompt)
+                reasoning = min(reasoning, completion)
+                record_id = f"{sid}:{ts_str}:{loop_index}:{attempts}:{prompt}:{cached_tok}:{completion}:{reasoning}"
+                if record_id in seen:
+                    continue
+                seen.add(record_id)
+                elapsed = ctx.get("model_elapsed_ms")
+                if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool) and elapsed > 0:
+                    by_sid.setdefault(sid, []).append((ts, float(elapsed)))
+    except OSError:
+        return {}
+
+    for recs in by_sid.values():
+        recs.sort(key=lambda item: item[0])
+    if len(_UNIFIED_CACHE) >= 4:
+        _UNIFIED_CACHE.clear()
+    _UNIFIED_CACHE[real_path] = (sig, by_sid)
+    return by_sid
+
+
+def _turn_elapsed_ms(turn_timestamps: List[Optional[float]],
+                     inf_records: List[Tuple[float, float]]) -> Dict[int, float]:
+    timed = sorted(
+        ((i, t) for i, t in enumerate(turn_timestamps) if t is not None),
+        key=lambda item: (item[1], item[0]),
+    )
+    if not timed or not inf_records:
+        return {}
+    out: Dict[int, float] = {}
+    last = len(timed) - 1
+    for rec_ts, elapsed_ms in inf_records:
+        for pos, (turn_idx, turn_ts) in enumerate(timed):
+            cutoff = turn_ts + 0.5 if pos == last else min(turn_ts + 0.5, (turn_ts + timed[pos + 1][1]) / 2.0)
+            if rec_ts <= cutoff:
+                out[turn_idx] = out.get(turn_idx, 0.0) + elapsed_ms
+                break
+    return out
+
 
 
 def roots() -> List[str]:
@@ -125,8 +222,13 @@ def _gen_s(u: dict) -> Optional[float]:
 
 def _append_usage(session: Session, usage: dict, fallback_model: str, ts: float,
                   key_base: str, cwd: Optional[str], branch: Optional[str],
-                  timed: bool) -> None:
-    """Add the Messages for one turn's usage object (usage.json turn or turn_completed)."""
+                  turn_gen_s: Optional[float] = None, per_model_timing: bool = False) -> None:
+    """Add the Messages for one turn's usage object (usage.json turn or turn_completed).
+
+    ``turn_gen_s`` (usage.json turns, timed from logs/unified.jsonl) applies only
+    when the turn used one model. ``per_model_timing`` (turn_completed) takes each
+    model's own ``apiDurationMs``.
+    """
     model_usage = usage.get("modelUsage")
     if isinstance(model_usage, dict) and model_usage:
         parts = [(str(name), u) for name, u in model_usage.items() if isinstance(u, dict)]
@@ -139,11 +241,7 @@ def _append_usage(session: Session, usage: dict, fallback_model: str, ts: float,
     for model_name, u in parts:
         inp = _int(u.get("inputTokens"))
         cache_r = _int(u.get("cachedReadTokens"))
-        extra = {}
-        if timed and _HAS_GEN_S:
-            gen = _gen_s(u)
-            if gen is not None:
-                extra["gen_s"] = gen
+        gen_s = _gen_s(u) if per_model_timing else (None if multi else turn_gen_s)
         session.messages.append(
             Message(
                 ts=ts,
@@ -156,7 +254,7 @@ def _append_usage(session: Session, usage: dict, fallback_model: str, ts: float,
                 cwd=cwd,
                 branch=branch,
                 key=f"{key_base}:{model_name}" if multi else key_base,
-                **extra,
+                gen_s=gen_s,
             )
         )
 
@@ -280,18 +378,30 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
 
         turns = usage_data.get("turns") or []
         if isinstance(turns, list):
-            for turn in turns:
+            turn_timestamps = [
+                parse_iso(turn.get("endedAt")) if isinstance(turn, dict) else None
+                for turn in turns
+            ]
+            turn_ms: Dict[int, float] = {}
+            unified_path = _find_unified_log(session_dir)
+            if unified_path:
+                inf_records = _unified_inference_by_sid(unified_path).get(session.id)
+                if inf_records:
+                    turn_ms = _turn_elapsed_ms(turn_timestamps, inf_records)
+            for idx, turn in enumerate(turns):
                 if not isinstance(turn, dict):
                     continue
-                ts = parse_iso(turn.get("endedAt"))
+                ts = turn_timestamps[idx]
                 session.note_time(ts)
+                elapsed_ms = turn_ms.get(idx, 0.0)
                 if ts is not None:
                     usage_ends.append(ts)
                 turn_num = turn.get("turnNumber", len(session.messages))
                 _append_usage(
                     session, turn, turn.get("primaryModelId") or "grok",
                     ts or session.origin_ts or 0.0,
-                    f"grok:{session.id}:{turn_num}", cwd, branch, timed=False,
+                    f"grok:{session.id}:{turn_num}", cwd, branch,
+                    turn_gen_s=round(elapsed_ms / 1000.0, 3) if elapsed_ms > 0 else None,
                 )
 
     # --- updates.jsonl turn_completed (all builds) ---
@@ -305,7 +415,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             _append_usage(
                 session, usage, current_model,
                 ts or session.origin_ts or 0.0,
-                f"grok:{session.id}:p:{turn_id}", cwd, branch, timed=True,
+                f"grok:{session.id}:p:{turn_id}", cwd, branch, per_model_timing=True,
             )
 
     return session

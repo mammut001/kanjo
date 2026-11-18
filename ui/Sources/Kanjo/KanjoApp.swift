@@ -71,6 +71,7 @@ final class WindowPreviewAppDelegate: NSObject, NSApplicationDelegate {
         w.center()
         w.makeKeyAndOrderFront(nil)
         debugWindow = w
+        AppearanceController.applyStored()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -88,6 +89,7 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         // 应用内更新要在启动时就跑起来，否则第一次定时检查得等用户打开面板才发生。
         // 不是打包的 .app（或缺 SU 键）时 UpdateController 自己就是空转的。
         _ = UpdateController.shared
+        AppearanceController.applyStored()
         syncTerminalCLIIfNeeded()
     }
 
@@ -182,5 +184,72 @@ struct MenuBarLabel: View {
         let ctx = RangeContext(report: r, raw: rangeRaw)
         let tokens = ctx.isAll ? r.totals.tokens.total : ctx.filtered().tokens
         return MenuBarText.make(tokens: tokens, range: ctx.range)
+    }
+}
+
+@MainActor
+enum AppearanceController {
+    static func nsAppearance(for appearance: AppAppearance) -> NSAppearance? {
+        switch appearance.explicitIsDark {
+        case true?: return NSAppearance(named: .darkAqua)
+        case false?: return NSAppearance(named: .aqua)
+        case nil: return nil
+        }
+    }
+
+    static func colorScheme(for appearance: AppAppearance) -> ColorScheme? {
+        switch appearance.explicitIsDark {
+        case true?: return .dark
+        case false?: return .light
+        case nil: return nil
+        }
+    }
+
+    static func apply(_ appearance: AppAppearance, to targetWindow: NSWindow? = nil) {
+        let nsApp = nsAppearance(for: appearance)
+        if let targetWindow, !isStatusBarWindow(targetWindow) {
+            targetWindow.appearance = nsApp
+        }
+        for window in NSApp.windows where !isStatusBarWindow(window) {
+            window.appearance = nsApp
+        }
+    }
+
+    static func applyStored(defaults: UserDefaults = AppDefaults.store) {
+        apply(AppAppearance.resolve(defaults.string(forKey: SettingsKeys.appAppearance)))
+    }
+
+    private static func isStatusBarWindow(_ window: NSWindow) -> Bool {
+        String(describing: type(of: window)).contains("StatusBar")
+    }
+}
+
+/// 将 `AppAppearance` 实时同步到宿主 `NSPanel` / `NSWindow`（包括 MenuBarExtra 窗口及附属窗口），
+/// 不影响状态栏图标所在的 `NSStatusBarWindow`。
+struct WindowAppearanceBridge: NSViewRepresentable {
+    let appearance: AppAppearance
+
+    func makeNSView(context: Context) -> BridgeView {
+        let view = BridgeView()
+        view.appearanceSetting = appearance
+        return view
+    }
+
+    func updateNSView(_ nsView: BridgeView, context: Context) {
+        nsView.appearanceSetting = appearance
+        AppearanceController.apply(appearance, to: nsView.window)
+    }
+
+    final class BridgeView: NSView {
+        var appearanceSetting: AppAppearance = .defaultValue
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window {
+                Task { @MainActor [appearanceSetting] in
+                    AppearanceController.apply(appearanceSetting, to: window)
+                }
+            }
+        }
     }
 }
