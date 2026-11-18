@@ -113,7 +113,7 @@ class TUIInstantStartTest(unittest.TestCase):
         self.assertNotIn("updating", line0)
 
     def test_stale_time_string_format(self):
-        doc = {"generated_at": "2026-11-17T19:30:00Z", "timezone": "America/Toronto"}
+        doc = {"generated_at": "2026-11-17T19:30:00Z", "timezone": "Etc/GMT+5"}
         tz = get_tz(doc)
         dt = parse_iso_dt(doc["generated_at"], default_tz=tz)
         self.assertIsNotNone(dt)
@@ -126,7 +126,7 @@ class TUIInstantStartTest(unittest.TestCase):
     def test_cmd_usage_fallback_logic(self):
         full_doc = {
             "generated_at": "2026-11-17T19:30:00Z",
-            "timezone": "America/Toronto",
+            "timezone": "Etc/GMT+5",
             "projects": [],
             "totals": {"cost": 0.0, "tokens": 0, "sessions": 0},
         }
@@ -192,7 +192,7 @@ class TUIInstantStartTest(unittest.TestCase):
     def test_run_curses_tui_doc_swap_regression(self):
         stale_doc = {
             "generated_at": "2026-11-17T19:30:00Z",
-            "timezone": "America/Toronto",
+            "timezone": "Etc/GMT+5",
             "projects": [
                 {
                     "name": "stale-proj",
@@ -207,7 +207,7 @@ class TUIInstantStartTest(unittest.TestCase):
         }
         fresh_doc = {
             "generated_at": "2026-11-18T00:15:00Z",
-            "timezone": "America/Toronto",
+            "timezone": "Etc/GMT+5",
             "projects": [
                 {
                     "name": "fresh-proj",
