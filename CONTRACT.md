@@ -97,22 +97,12 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
   },
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
+  "perf_by_day": [ /* PerfByDay */ ],         // 可选：按 day × agent × model 累加的输出速度与 TTFT 直方图；无样本时不出现；--mobile / --family-report / --public-summary 不含
   "buckets": {
     "unattributed": { /* Aggregate */ },
     "excluded":     { /* Aggregate */ },
     "parse_failed": { "sessions": 0, "files": [] }
   },
-  "perf_by_day": [                            // 可选：按 day, agent, model 排序；无样本时省略或为空数组；--mobile / --family-report / --public-summary 不含该字段
-    {
-      "day": "2026-11-17",                    // 请求结束时间的本地日期（报告 timezone）
-      "agent": "claude",
-      "model": "claude-opus-5-5",             // 与 by_model 行相同的模型 id
-      "o": 51234,                             // 采样请求的输出 token 之和
-      "g": 412.337,                           // 采样请求的生成秒数之和（保留 3 位小数）
-      "n": 180,                               // 采样请求数
-      "th": { "47": 3, "52": 10 }             // TTFT 直方图：桶索引字符串 -> 计数；可为 {}
-    }
-  ]
 }
 ```
 
@@ -278,6 +268,33 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 
 ---
 
+## 5.1 性能统计 (`perf_by_day`)
+
+可选顶层数组，按本地自然日 × `agent` × `model` 累加模型输出速度与首字延迟（TTFT）；没有任何有效样本时省略或为空。按 `(day, agent, model)` 升序排列。
+
+```jsonc
+"perf_by_day": [                       // 按 day、agent、model 升序；无样本时不出现或为空
+  { "day": "2026-11-17",               // 请求结束时刻所在本地自然日（按顶层 timezone）
+    "agent": "claude",
+    "model": "claude-opus-5-5",        // 与 by_model 行相同的模型标识
+    "o": 51234,                        // 有效样本的输出 token 之和
+    "g": 412.337,                      // 生成耗时之和（秒，保留 3 位小数）
+    "n": 180,                          // 有效样本请求数
+    "th": { "47": 3, "52": 10 } }      // TTFT 直方图：分桶下标（字符串） -> 计数；无 TTFT 时可为 {}
+]
+```
+
+规则：
+- 每次模型请求记为一个样本：输出 token、生成秒数、以及拿得到时的 TTFT 秒数。去重后的每条消息只计入一次，不按项目拆分重复计算。
+- 过滤条件：丢弃 `output < 20`、`gen <= 0.2` 或 `gen > 1800` 秒、以及 `output / gen > 3000` 的异常样本（Antigravity 的流式时长仅覆盖回复文本，样本输出 token 取 `max(output - thinking, 0)`）。
+- TTFT 仅在 `0 <= ttft <= 120` 秒时记入直方图 `th`。第 0 桶为 `[0, 0.05)` 秒；第 `k >= 1` 桶为 `[0.05 * 1.05^(k-1), 0.05 * 1.05^k)` 秒。
+- 消费端（UI）任选一天/agent/模型集合时，将所选行的 `o`、`g`、`n` 及 `th` 各桶计数直接相加：
+  - 平均输出速度 = `Σo / Σg`（tokens/s）。
+  - TTFT 中位数 = 直方图分位数桶内线性插值（偶数样本取中间两个秩的均值）。
+- `--mobile`、`--family-report` 与 `--public-summary` 输出均**不包含** `perf_by_day`。
+
+---
+
 ## 6. 桶 (Buckets)
 
 `unattributed` 和 `excluded` 是 Aggregate，另加 `sessions_detail`（Session 数组，`share = 1`，`attribution` 分别为 `"none"` 和 `"excluded"`）。
@@ -299,15 +316,6 @@ UI 提供范围切换：`All`、`7d`（含今天的最近 7 个自然日）、`3
 `Billing cycle`（各 agent 自己的 `subscriptions[agent].cycle_start` 到现在，缺 `subscriptions` 的 agent 不计入并标明）。
 范围内的项目 cost / tokens 由 `by_day` 的 `by_agent` / `by_agent_tokens` 按天累加得出；sessions 数按会话在该范围内有用量计入（优先使用会话的按日数据，否则以 [started, ended] 与范围区间有重叠即计入）。非 All 范围下的 By model 及桶的花费与 tokens 仅计入范围内的份额（优先使用会话按日数据，否则按范围用量比例与区间重叠缩放，使得模型行总 token 数与总览 hero 保持严格一致）。
 对账行只在 `All` 下显示。`cost_note` 在任何范围下都显示。
-
-## 6.2 性能统计 (`perf_by_day`)
-
-顶层可选数组 `perf_by_day` 按本地日期（报告 `timezone`）× `agent` × `model` 累加输出速度与首字延迟（TTFT）样本，按 `(day, agent, model)` 升序排列；无样本时可省略或为 `[]`：
-
-- **采样规则**：每次模型请求计 1 个样本（输出 token、生成秒数、已知时的 TTFT 秒数）。当 `output < 20`、生成秒数不在 `(0.2, 1800]` 区间、或 `output / gen > 3000` 时丢弃该样本。
-- **TTFT 分桶**：仅保留 `0 <= ttft <= 120` 秒。第 `0` 桶为 `[0, 0.05)`；第 `k >= 1` 桶为 `[0.05 · 1.05^(k-1), 0.05 · 1.05^k)`。
-- **合并与计算**：消费方对任意日期/agent/model 子集只需将 `o`、`g`、`n` 与 `th` 各桶计数逐项相加。平均输出速度为 `Σo / Σg`（tok/s）；TTFT 中位数按直方图桶内线性插值计算（样本数为偶数时取中间两个秩的均值）。
-- `--mobile`、`--family-report` 与 `--public-summary` 导出不包含 `perf_by_day`。
 
 ## 7. UI 必须展示的内容
 

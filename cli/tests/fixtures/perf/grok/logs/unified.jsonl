@@ -1,0 +1,1 @@
+{"msg":"shell.turn.inference_done","sid":"perf-grok-1","ts":"2026-11-17T10:00:04.800Z","ctx":{"prompt_tokens":1000,"cached_prompt_tokens":200,"completion_tokens":240,"reasoning_tokens":40,"loop_index":0,"attempts":1,"model_elapsed_ms":3200}}

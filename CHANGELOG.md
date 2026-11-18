@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Agent view in the menu-bar panel (toggle in the header): one row per agent with tokens, cost, quota tick bars; hover or click for token breakdown, output speed, TTFT, models and where the money went.
+- `kanjo export` now includes per-day output speed and time-to-first-token per agent and model (`perf_by_day`) for Claude Code, Codex, Antigravity and Grok CLI sessions that still write `usage.json`.
 
 ### Changed
 

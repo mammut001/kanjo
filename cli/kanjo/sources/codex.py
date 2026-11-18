@@ -32,6 +32,16 @@ _MARKERS = (
     b'"turn_context"', b'"session_meta"', b'"user_message"',
     b'"role": "user"', b'"role":"user"', b'"instructions"', b'"instruction"',
 )
+_FAST_HEADER = re.compile(
+    rb'^\{"timestamp"\s*:\s*"([^"]+)"(?:\s*,\s*"ordinal"\s*:\s*\d+)?\s*,\s*"type"\s*:\s*"(\w+)"\s*,\s*"payload"\s*:\s*\{"type"\s*:\s*"(\w+)"'
+)
+_TRIGGER_FAST = {
+    (b"response_item", b"function_call_output"),
+    (b"response_item", b"custom_tool_call_output"),
+    (b"event_msg", b"task_started"),
+}
+_OUTPUT_ITEM = re.compile(rb'"item"\s*:\s*\{\s*"type"\s*:\s*"(Reasoning|AgentMessage)"')
+_ITEM_STARTED = re.compile(rb'"started_at_ms"\s*:\s*(\d+)')
 
 
 def roots() -> List[str]:
@@ -100,6 +110,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     cwd = None
     model = "unknown"
     branch = None
+    perf_trigger: Optional[int] = None
+    perf_first: Optional[int] = None
     good = bad = 0
     try:
         handle = open(path, "rb")
@@ -113,6 +125,30 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 if marker in head:
                     matched = True
                     break
+            if not matched:
+                if b'"function_call_output"' in head or b'"custom_tool_call_output"' in head or b'"task_started"' in head:
+                    fast = _FAST_HEADER.match(head)
+                    if fast and (fast.group(2), fast.group(3)) in _TRIGGER_FAST:
+                        t = parse_iso(fast.group(1).decode("ascii", "replace"))
+                        if t is not None:
+                            perf_trigger = int(round(t * 1000))
+                            perf_first = None
+                        continue
+                    if len(raw) <= 4096:
+                        matched = True
+                elif b'"item_completed"' in head or (len(raw) <= 4096 and b'"item_completed"' in raw):
+                    fast = _FAST_HEADER.match(head)
+                    if fast and fast.group(3) == b"item_completed":
+                        if _OUTPUT_ITEM.search(raw[:1024]):
+                            ms_m = _ITEM_STARTED.search(raw[-512:] if len(raw) > 512 else raw)
+                            if ms_m:
+                                sms = int(ms_m.group(1))
+                                if (perf_trigger is None or sms >= perf_trigger) and (
+                                        perf_first is None or sms < perf_first):
+                                    perf_first = sms
+                        continue
+                    if len(raw) <= 4096:
+                        matched = True
             if not matched:
                 if good == 0 and bad == 0 and raw.strip():
                     try:
@@ -169,6 +205,22 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                             if t:
                                 session.title = t
                     session.note_time(ts)
+                    if ts is not None:
+                        perf_trigger = int(round(ts * 1000))
+                        perf_first = None
+                elif ptype == "task_started":
+                    if ts is not None:
+                        perf_trigger = int(round(ts * 1000))
+                        perf_first = None
+                elif ptype == "item_completed":
+                    item = payload.get("item")
+                    if isinstance(item, dict) and item.get("type") in ("Reasoning", "AgentMessage"):
+                        started_ms = item.get("started_at_ms")
+                        if isinstance(started_ms, (int, float)) and not isinstance(started_ms, bool):
+                            sms = int(started_ms)
+                            if (perf_trigger is None or sms >= perf_trigger) and (
+                                    perf_first is None or sms < perf_first):
+                                perf_first = sms
                 elif ptype == "token_count":
                     info = payload.get("info")
                     if not isinstance(info, dict) or ts is None:
@@ -180,15 +232,30 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     reasoning = int(last.get("reasoning_output_tokens") or 0)
                     if not (inp or out or cached):
                         continue
+                    end_ms = ts * 1000.0
+                    gen_s = ttft_s = None
+                    if perf_first is not None and end_ms > perf_first:
+                        gen_s = round((end_ms - perf_first) / 1000.0, 3)
+                        if perf_trigger is not None and perf_first >= perf_trigger:
+                            ttft_s = round((perf_first - perf_trigger) / 1000.0, 3)
+                    elif perf_trigger is not None and end_ms > perf_trigger:
+                        gen_s = round((end_ms - perf_trigger) / 1000.0, 3)
                     session.messages.append(Message(
                         ts=ts, model=model, input=max(inp - cached, 0), output=out,
                         cache_read=min(cached, inp) if inp else cached,
                         thinking=min(reasoning, out) if out else reasoning,
-                        cwd=cwd, branch=branch, key=_usage_key(info)))
+                        cwd=cwd, branch=branch, key=_usage_key(info),
+                        gen_s=gen_s, ttft_s=ttft_s))
+                    perf_trigger = perf_first = None
                     session.note_time(ts)
                     session.note_cwd(cwd)
                 continue
             if kind == "response_item":
+                if payload.get("type") in ("function_call_output", "custom_tool_call_output"):
+                    if ts is not None:
+                        perf_trigger = int(round(ts * 1000))
+                        perf_first = None
+                    continue
                 if session.title is None and payload.get("role") == "user":
                     content = payload.get("content")
                     text = None
