@@ -12,7 +12,7 @@ from unittest import mock
 from kanjo import cli
 import sqlite3
 from kanjo.sources import base, antigravity, codex
-from kanjo.cache import REPO_CACHE_VERSION, RepoCache, SessionCache, _dump_session, _load_session
+from kanjo.cache import REPO_CACHE_VERSION, RepoCache, SessionCache, _dump_session, _load_session, _negative_ttl
 from kanjo.sources.base import Message, Session, open_sqlite_ro, extract_paths
 from kanjo.config import Config
 from kanjo.export import _apportion_by_weight, build_export, check_invariants, dedupe
@@ -326,12 +326,15 @@ class CacheExportComparisonTest(unittest.TestCase):
         # Fresh negative entry (current timestamp)
         now = 1000.0
         repo_cache.put(dummy_path, None, now=now)
-        hit, val = repo_cache.get(dummy_path, now=now + 300)  # 5 min later: within 10 min TTL
+        
+        # Test TTL-1 and TTL+1
+        ttl = _negative_ttl(dummy_path)
+        hit, val = repo_cache.get(dummy_path, now=now + ttl - 1)
         self.assertTrue(hit)
         self.assertIsNone(val)
 
-        # Expired negative entry (11 min later)
-        hit_expired, _ = repo_cache.get(dummy_path, now=now + 660)  # 11 min later: past 10 min TTL
+        # Expired negative entry
+        hit_expired, _ = repo_cache.get(dummy_path, now=now + ttl + 1)
         self.assertFalse(hit_expired)
 
     def test_multi_file_session_cache_growth_regression(self):

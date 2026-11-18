@@ -14,7 +14,7 @@ import time
 import unittest
 
 from kanjo import attribution as attr
-from kanjo.cache import AttributionCache, RepoCache, SessionCache, WorktreeCache
+from kanjo.cache import AttributionCache, RepoCache, SessionCache, WorktreeCache, _negative_ttl
 from kanjo.config import Config
 from kanjo.export import ScanResult, build_export, build_units, dedupe
 from kanjo.identity import Resolver, ScratchpadDecoder
@@ -172,7 +172,8 @@ class PerfCachesTest(unittest.TestCase):
         self.assertIsNone(val)
 
         # TTL expiration
-        hit, val = loaded_repo_cache.get(non_repo, fs_root=self.fs.root, now=time.time() + 700)
+        ttl = _negative_ttl(non_repo)
+        hit, val = loaded_repo_cache.get(non_repo, fs_root=self.fs.root, now=time.time() + ttl + 1)
         self.assertFalse(hit, "RepoCache should invalidate negative entry after TTL expires")
 
     def test_cached_results_equal_uncached_path(self):
