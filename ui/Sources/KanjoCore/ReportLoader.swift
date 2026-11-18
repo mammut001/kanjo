@@ -50,6 +50,8 @@ public final class ReportLoader {
     private var hasStartedInitialLoad = false
     private var cacheTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    /// 刷新进行中又请求了静默刷新（例如刚写完配置）：当前这次可能读到旧数据，结束后再静默刷新一次。
+    private var refreshAfterCurrent = false
 
     private let makeSource: @MainActor () -> SourceDescriptor
     private let loadCachedReport: (@Sendable () -> UsageReport?)?
@@ -95,7 +97,12 @@ public final class ReportLoader {
     }
 
     public func refresh(qualityOfService: QualityOfService = .userInitiated, quiet: Bool = false) {
-        if quiet && scheduler.isRefreshing { return }
+        if quiet && scheduler.isRefreshing {
+            refreshAfterCurrent = true
+            return
+        }
+        // 新开始的这次会读到最新数据，之前排着的补刷就不需要了；被它取代的旧任务也不会再去补刷。
+        refreshAfterCurrent = false
         scheduler.onRefreshStarted()
         generation += 1
         let gen = generation
@@ -158,6 +165,9 @@ public final class ReportLoader {
             self.state = finished
             let followUpAction = self.scheduler.onRefreshFinished()
             self.onFollowUpAction(followUpAction)
+            if self.refreshAfterCurrent, !self.scheduler.isRefreshing {
+                self.refresh(qualityOfService: qualityOfService, quiet: true)
+            }
         }
     }
 

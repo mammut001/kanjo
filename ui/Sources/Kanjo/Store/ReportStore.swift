@@ -19,7 +19,10 @@ final class ReportStore: ObservableObject {
     @Published private(set) var loadingStartedAt: Date?
     @Published private(set) var lastRefresh: Date?
     @Published private(set) var sourceDescription = ""
+    /// Antigravity 账号 -> 已选但报告里还没体现的套餐 key（"" 表示无套餐）。
     @Published private(set) var pendingAntigravityAccountPlans: [String: String] = [:]
+    /// 最近一次账号套餐写入失败的 CLI 错误信息。
+    @Published private(set) var accountPlanError: String?
 
     /// `--data` / `KANJO_DATA` 指定的文件，优先于设置。
     let dataOverride: URL?
@@ -32,6 +35,9 @@ final class ReportStore: ObservableObject {
     private let defaults: UserDefaults
     private var defaultsObserver: NSObjectProtocol?
     private var pendingReport: (report: UsageReport, isStale: Bool, staleAt: String?)?
+    private var writeQueue = WriteQueue()
+    private var writeQueueTask: Task<Void, Never>?
+    private var writingAccountEmail: String?
 
     init(defaults: UserDefaults = AppDefaults.store) {
         self.defaults = defaults
@@ -133,14 +139,6 @@ final class ReportStore: ObservableObject {
             panelGeneration = gen
             
             if let newReport = state.report {
-                if let agyAccounts = newReport.antigravityAccounts {
-                    for acc in agyAccounts.accounts {
-                        if let pendingPlan = pendingAntigravityAccountPlans[acc.email], 
-                           (acc.plan?.plan ?? "") == pendingPlan {
-                            pendingAntigravityAccountPlans.removeValue(forKey: acc.email)
-                        }
-                    }
-                }
                 pendingReport = (newReport, state.isStaleReport, state.staleReportGeneratedAt)
                 let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
                 Task.detached(priority: .userInitiated) {
@@ -149,6 +147,7 @@ final class ReportStore: ObservableObject {
                     await MainActor.run {
                         guard self.panelGeneration == gen else { return }
                         self.report = newReport
+                        self.reconcilePendingAccountPlans(with: newReport)
                         self.isStaleReport = state.isStaleReport
                         self.staleReportGeneratedAt = state.staleReportGeneratedAt
                         self.panelData = data
@@ -484,22 +483,64 @@ final class ReportStore: ObservableObject {
         refresh()
     }
 
-    func setAntigravityAccountPlan(email: String, plan: String?) async throws {
-        guard canEditSubscriptions else {
-            throw DataSourceError.launchFailed("Editing needs the CLI data source")
+    /// 立即记下选择（选择器和合计马上更新），再排队交给唯一的写入任务逐个写 overrides.json。
+    /// `plan` 为 nil / "" / "none" 时写入显式的 "none"，免得 unset 后又回落到 attribution.toml 里的套餐。
+    func setAntigravityAccountPlan(email: String, plan: String?) {
+        guard canEditSubscriptions else { return }
+        let key = AntigravityAggregation.normalizedPlanKey(plan)
+        pendingAntigravityAccountPlans[email] = key
+        accountPlanError = nil
+        writeQueue.enqueue(WriteQueue.Write(email: email, plan: key.isEmpty ? "none" : key))
+        startWriteQueueIfNeeded()
+    }
+
+    /// 同一时间只有一个写入任务：依次写完队列，队列空着满 1 秒才退出并静默刷新一次；
+    /// 等待期间来的新选择会在下一轮循环里写掉。任务在主 actor 上，CLI 调用本身在后台线程跑。
+    private func startWriteQueueIfNeeded() {
+        guard writeQueueTask == nil else { return }
+        writeQueueTask = Task { @MainActor [weak self] in
+            while let self {
+                let batch = self.writeQueue.dequeueAllAndCoalesce()
+                if batch.isEmpty {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard self.writeQueue.isEmpty else { continue }
+                    self.writeQueueTask = nil
+                    self.loader.refresh(quiet: true)
+                    return
+                }
+                let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: self.defaults),
+                                              workingDirectory: CLILaunch.workingDirectory(defaults: self.defaults))
+                for write in batch {
+                    self.writingAccountEmail = write.email
+                    do {
+                        try await source.setAntigravityAccountPlan(email: write.email, plan: write.plan)
+                    } catch {
+                        await self.checkPython()
+                        // 写失败就撤回这次选择（后面又排了新选择的话以新的为准）。
+                        if !self.writeQueue.emails.contains(write.email),
+                           self.pendingAntigravityAccountPlans[write.email]
+                            == AntigravityAggregation.normalizedPlanKey(write.plan) {
+                            self.pendingAntigravityAccountPlans.removeValue(forKey: write.email)
+                        }
+                        self.accountPlanError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    }
+                    self.writingAccountEmail = nil
+                }
+            }
         }
-        pendingAntigravityAccountPlans[email] = plan ?? ""
-        let source = ConfigDataSource(cliCommand: CLILaunch.command(defaults: defaults),
-                                      workingDirectory: CLILaunch.workingDirectory(defaults: defaults))
-        do { 
-            try await source.setAntigravityAccountPlan(email: email, plan: plan)
+    }
+
+    /// 报告已显示所选套餐的账号不再 pending；还在排队或正在写的账号先不动。
+    private func reconcilePendingAccountPlans(with report: UsageReport) {
+        guard !pendingAntigravityAccountPlans.isEmpty,
+              let accounts = report.antigravityAccounts?.accounts else { return }
+        var busy = writeQueue.emails
+        if let writingAccountEmail { busy.insert(writingAccountEmail) }
+        let remaining = AntigravityAggregation.remainingPending(pendingAntigravityAccountPlans,
+                                                                report: accounts, busy: busy)
+        if remaining != pendingAntigravityAccountPlans {
+            pendingAntigravityAccountPlans = remaining
         }
-        catch { 
-            await checkPython()
-            pendingAntigravityAccountPlans.removeValue(forKey: email)
-            throw error 
-        }
-        refresh(quiet: true)
     }
 
     func refresh(quiet: Bool = false, qualityOfService: QualityOfService = .userInitiated) {

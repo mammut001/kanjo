@@ -147,6 +147,7 @@
 "settings.error.plan_required" = "Le nom du forfait est requis.";
 "settings.error.price_required" = "Le prix est requis pour ce forfait.";
 "settings.error.invalid_price" = "Le prix doit être un nombre positif ou nul.";
+"settings.error.account_plan_failed" = "Impossible d’enregistrer le forfait : %@";
 "settings.saving" = "Enregistrement…";
 "settings.source.not_set" = "non défini · 30 derniers jours";
 "settings.source.manual" = "manuel";

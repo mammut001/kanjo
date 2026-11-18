@@ -736,7 +736,12 @@ class SubscriptionTest(unittest.TestCase):
         result = _aggregate_antigravity_accounts(accounts)
         self.assertEqual(result["accounts_priced"], 2)
         self.assertEqual(result["monthly_price_usd"], 39.98)
-        self.assertIn("×2", result["plan_label"])
+        self.assertEqual(result["plan_label"], "Google AI Pro \u00d72")
+        self.assertEqual(result["plan"], "google_ai_pro")
+        # "none" (any case, even with a price) and empty plans never count.
+        self.assertIsNone(_aggregate_antigravity_accounts({
+            "a@test.com": {"plan": "None", "monthly_price_usd": 5.0}, "b@test.com": {"plan": " "},
+        }))
 
 
 if __name__ == "__main__":

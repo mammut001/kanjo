@@ -147,6 +147,7 @@
 "settings.error.plan_required" = "套餐名称为必填项。";
 "settings.error.price_required" = "该套餐必须填写月费。";
 "settings.error.invalid_price" = "金额必须为非负数。";
+"settings.error.account_plan_failed" = "套餐保存失败：%@";
 "settings.saving" = "正在保存…";
 "settings.source.not_set" = "未设置 · 使用最近30天";
 "settings.source.manual" = "手动";

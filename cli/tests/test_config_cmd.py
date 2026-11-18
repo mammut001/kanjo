@@ -235,13 +235,15 @@ class ConfigCommandTest(unittest.TestCase):
         src, dst = replace.call_args[0]
         self.assertEqual(os.path.dirname(src), self.config_dir)
         self.assertEqual(dst, self.overrides)
-        self.assertEqual(os.listdir(self.config_dir), ["overrides.json"])
+        files = [f for f in os.listdir(self.config_dir) if not f.endswith(".lock")]
+        self.assertEqual(sorted(files), ["overrides.json"])
         with mock.patch.object(config_cmd.os, "replace", side_effect=OSError("rename failed")):
             code, _, err = self.run_cli("config", "set", key, "9")
         self.assertEqual(code, 2)
         self.assertIn("rename failed", err)
         self.assertEqual(self.read_overrides()["subscriptions"]["codex"]["anchor_day"], 8)
-        self.assertEqual(os.listdir(self.config_dir), ["overrides.json"])
+        files = [f for f in os.listdir(self.config_dir) if not f.endswith(".lock")]
+        self.assertEqual(sorted(files), ["overrides.json"])
 
     def test_bad_overrides_are_not_overwritten(self):
         for text in ('{not json', '[]', '{"subscriptions": []}', '{"subscriptions": {"codex": 8}}'):

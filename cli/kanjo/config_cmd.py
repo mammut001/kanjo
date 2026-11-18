@@ -1,8 +1,14 @@
 """Read effective subscription and quota fields and atomically edit overrides.json."""
 
+import contextlib
 import json
 import os
 import tempfile
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
 
 from .config import (
     ConfigError, _antigravity_accounts, _subscriptions, _validate_agy_email,
@@ -89,6 +95,40 @@ def _value(section, agent, key, text):
     return value
 
 
+@contextlib.contextmanager
+def _locked_overrides(path):
+    """Serialize read-modify-write of overrides.json across processes via ``overrides.json.lock``."""
+    lock_path = path + ".lock"
+    try:
+        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+        handle = open(lock_path, "a+")
+    except OSError as exc:
+        raise ConfigError("cannot open %s: %s" % (lock_path, exc))
+    with handle:
+        if os.name == "nt":
+            import msvcrt
+            # msvcrt locks byte ranges from the current position; the file may be empty, which is fine.
+            # LK_LOCK itself retries for about 10 s before raising.
+            handle.seek(0)
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            except OSError as exc:
+                raise ConfigError("cannot lock %s: %s" % (lock_path, exc))
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        elif fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        else:
+            yield
+
+
 def _write(path, data):
     tmp = None
     try:
@@ -146,37 +186,38 @@ def cmd_config(args):
     if args.config_cmd == "get":
         cfg = load(args.config)
     else:
-        data = read_overrides(path)
-        raw = data.setdefault(section, {})
-        if not isinstance(raw, dict):
-            raise ConfigError("overrides %s must be an object" % section)
-        if section == "family":
-            if args.config_cmd == "set":
-                raw[key] = value
+        with _locked_overrides(path):
+            data = read_overrides(path)
+            raw = data.setdefault(section, {})
+            if not isinstance(raw, dict):
+                raise ConfigError("overrides %s must be an object" % section)
+            if section == "family":
+                if args.config_cmd == "set":
+                    raw[key] = value
+                else:
+                    raw.pop(key, None)
+                    if not raw:
+                        data.pop(section, None)
             else:
-                raw.pop(key, None)
-                if not raw:
-                    data.pop(section, None)
-        else:
-            target_key = agent
-            if section == "antigravity_accounts" and target_key not in raw:
-                for existing_k in raw:
-                    if isinstance(existing_k, str) and existing_k.strip().lower() == agent:
-                        target_key = existing_k
-                        break
-            spec = raw.setdefault(target_key, {})
-            if not isinstance(spec, dict):
-                raise ConfigError("overrides %s.%s must be an object" % (section, target_key))
-            if args.config_cmd == "set":
-                spec[key] = value
-            else:
-                spec.pop(key, None)
-                if not spec:
-                    raw.pop(target_key, None)
-                if section == "antigravity_accounts" and not raw:
-                    data.pop(section, None)
-        cfg = load(args.config, overrides=data)
-        _write(path, data)
+                target_key = agent
+                if section == "antigravity_accounts" and target_key not in raw:
+                    for existing_k in raw:
+                        if isinstance(existing_k, str) and existing_k.strip().lower() == agent:
+                            target_key = existing_k
+                            break
+                spec = raw.setdefault(target_key, {})
+                if not isinstance(spec, dict):
+                    raise ConfigError("overrides %s.%s must be an object" % (section, target_key))
+                if args.config_cmd == "set":
+                    spec[key] = value
+                else:
+                    spec.pop(key, None)
+                    if not spec:
+                        raw.pop(target_key, None)
+                    if section == "antigravity_accounts" and not raw:
+                        data.pop(section, None)
+            cfg = load(args.config, overrides=data)
+            _write(path, data)
 
     if section == "subscriptions":
         value, origin = subscription_value(
