@@ -527,6 +527,10 @@
 "view_mode.toggle_help" = "Basculer entre la vue Projets et la vue Agents";
 "settings.section.general" = "Général";
 "settings.panel_view" = "Vue du panneau";
+"settings.appearance" = "Apparence";
+"settings.appearance.dark" = "Sombre";
+"settings.appearance.light" = "Clair";
+"settings.appearance.system" = "Système";
 "agents.empty" = "Aucune utilisation d'agent sur cette période.";
 "agents.proportion_other" = "Autres";
 "agents.tokens_share_help" = "Part des tokens totaux sur cette période";

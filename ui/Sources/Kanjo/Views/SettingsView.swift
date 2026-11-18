@@ -11,6 +11,7 @@ struct SettingsView: View {
     let onBack: () -> Void
 
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appAppearance, store: AppDefaults.store) private var appAppearance = AppAppearance.defaultValue.rawValue
     @AppStorage(SettingsKeys.panelViewMode, store: AppDefaults.store) private var panelViewMode = PanelViewMode.projects.rawValue
     @AppStorage(SettingsKeys.sourceKind, store: AppDefaults.store) private var sourceKind =
         (DefaultPaths.cliDirectoryExists ? SourceKind.cli : SourceKind.file).rawValue
@@ -92,6 +93,12 @@ struct SettingsView: View {
                 PanelSection(L10n.tr("settings.section.general"), inset: true) {
                     Picker(L10n.tr("settings.panel_view"), selection: $panelViewMode) {
                         ForEach(PanelViewMode.allCases) { mode in
+                            Text(mode.label).tag(mode.rawValue)
+                        }
+                    }
+                    .font(.system(size: 12))
+                    Picker(L10n.tr("settings.appearance"), selection: $appAppearance) {
+                        ForEach(AppAppearance.allCases) { mode in
                             Text(mode.label).tag(mode.rawValue)
                         }
                     }

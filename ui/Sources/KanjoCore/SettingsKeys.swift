@@ -2,6 +2,7 @@ import Foundation
 
 public enum SettingsKeys {
     public static let appLanguage = "appLanguage"
+    public static let appAppearance = "appAppearance"        // "dark" | "light" | "system"；默认 dark
     public static let sourceKind = "sourceKind"              // "file" | "cli"；默认 cli（仓库里有 cli/ 时）
     public static let filePath = "filePath"                  // 空 = 用 ui/fixtures/sample.json
     public static let cliCommand = "cliCommand"
@@ -102,6 +103,41 @@ public enum AppLanguage: String, CaseIterable, Identifiable {
             return "简体中文"
         case .fr:
             return "Français"
+        }
+    }
+}
+
+/// 面板与附属窗口外观：Dark（默认）/ Light / System。
+public enum AppAppearance: String, CaseIterable, Identifiable {
+    case dark = "dark"
+    case light = "light"
+    case system = "system"
+
+    public static let defaultValue: AppAppearance = .dark
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .dark: return L10n.tr("settings.appearance.dark")
+        case .light: return L10n.tr("settings.appearance.light")
+        case .system: return L10n.tr("settings.appearance.system")
+        }
+    }
+
+    public static func resolve(_ raw: String?) -> AppAppearance {
+        guard let raw, let parsed = AppAppearance(rawValue: raw) else {
+            return defaultValue
+        }
+        return parsed
+    }
+
+    /// 显式深浅偏好；`nil` 表示跟随系统外观。
+    public var explicitIsDark: Bool? {
+        switch self {
+        case .dark: return true
+        case .light: return false
+        case .system: return nil
         }
     }
 }

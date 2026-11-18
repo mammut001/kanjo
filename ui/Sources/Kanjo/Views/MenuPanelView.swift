@@ -97,7 +97,9 @@ struct MenuPanelView: View {
 
     @EnvironmentObject var store: ReportStore
     @EnvironmentObject var disk: DiskStore
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.appAppearance, store: AppDefaults.store) private var appAppearance = AppAppearance.defaultValue.rawValue
     @AppStorage(SettingsKeys.panelViewMode, store: AppDefaults.store) private var panelViewMode = PanelViewMode.projects.rawValue
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
@@ -144,6 +146,7 @@ struct MenuPanelView: View {
         .frame(minHeight: isTall ? Self.size.height : nil)
         .frame(height: isTall ? nil : Self.size.height)
         .panelBackground()
+        .modifier(PanelAppearanceModifier(appAppearanceRaw: appAppearance, isSnapshotMode: isSnapshotMode))
         .environment(\.pinnedHoverId, activeAnchor)
         .overlayPreferenceValue(HoverCardPreferenceKey.self) { payload in
             GeometryReader { rootGeo in
@@ -485,6 +488,26 @@ struct InitialLoadingView: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 280, maxHeight: .infinity)
             .animation(.easeInOut(duration: 0.25), value: showHint)
+        }
+    }
+}
+
+private struct PanelAppearanceModifier: ViewModifier {
+    let appAppearanceRaw: String
+    let isSnapshotMode: Bool
+
+    func body(content: Content) -> some View {
+        if isSnapshotMode {
+            content
+        } else {
+            let resolved = AppAppearance.resolve(appAppearanceRaw)
+            content
+                .preferredColorScheme(AppearanceController.colorScheme(for: resolved))
+                .background(WindowAppearanceBridge(appearance: resolved).frame(width: 0, height: 0))
+                .onAppear { AppearanceController.apply(resolved) }
+                .onChange(of: appAppearanceRaw) { newValue in
+                    AppearanceController.apply(AppAppearance.resolve(newValue))
+                }
         }
     }
 }
