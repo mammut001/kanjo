@@ -721,7 +721,8 @@ struct SettingsView: View {
                         SubscriptionSettingsRow(agent: agent, sub: subs[agent],
                                                 label: r.agentLabels[agent] ?? AgentColors.defaultLabels[agent] ?? agent,
                                                 currency: r.currency,
-                                                initiallyEditing: agent == initiallyEditingAgent)
+                                                initiallyEditing: agent == initiallyEditingAgent,
+                                                antigravityAccounts: agent == "antigravity" ? r.antigravityAccounts : nil)
                             .id(item.anchor)
                             .onAppear {
                                 if item.anchor == scrollTo {
@@ -792,6 +793,7 @@ private struct SubscriptionSettingsRow: View {
     let label: String
     let currency: String
     let initiallyEditing: Bool
+    let antigravityAccounts: AntigravityAccounts?
 
     @State private var day: Int
     @State private var isEditingOverride: Bool? = nil
@@ -802,19 +804,29 @@ private struct SubscriptionSettingsRow: View {
     @State private var selectedPlanKey: String = ""
     @State private var customPlanText: String = ""
     @State private var inputPrice: String = ""
+    @State private var accountPlanSelections: [String: String] = [:]
     @State private var saving = false
     @State private var actionError: String?
 
     private let otherPlanTag = "__custom_other__"
 
-    init(agent: String, sub: Subscription?, label: String, currency: String, initiallyEditing: Bool = false) {
+    init(agent: String, sub: Subscription?, label: String, currency: String,
+         initiallyEditing: Bool = false, antigravityAccounts: AntigravityAccounts? = nil) {
         self.agent = agent
         self.sub = sub
         self.label = label
         self.currency = currency
         self.initiallyEditing = initiallyEditing
+        self.antigravityAccounts = antigravityAccounts
         _isEditingOverride = State(initialValue: initiallyEditing ? true : nil)
         _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
+
+        var initialAccountPlans: [String: String] = [:]
+        for acc in antigravityAccounts?.accounts ?? [] {
+            let k = acc.plan?.plan ?? ""
+            initialAccountPlans[acc.email] = (k.lowercased() == "none") ? "" : k
+        }
+        _accountPlanSelections = State(initialValue: initialAccountPlans)
 
         let plans = KnownPlan.fallbackPlans[agent] ?? []
         if let currentPlan = sub?.plan, !currentPlan.isEmpty {
@@ -877,6 +889,7 @@ private struct SubscriptionSettingsRow: View {
                 isEditingOverride = true
             }
             syncInputs()
+            syncAccountPlans()
             Task { await store.loadKnownPlans() }
         }
         .onChange(of: initiallyEditing) { editing in
@@ -892,6 +905,9 @@ private struct SubscriptionSettingsRow: View {
             if !isEditing {
                 syncInputs()
             }
+        }
+        .onChange(of: antigravityAccounts) { _ in
+            syncAccountPlans()
         }
         .onChange(of: store.knownPlans) { _ in
             if !isEditing || initiallyEditing {
@@ -926,6 +942,14 @@ private struct SubscriptionSettingsRow: View {
         Text("\(sub.planLabel) · \(Fmt.perMonth(sub.monthlyPriceUsd, currency: currency))")
             .font(.system(size: 10)).foregroundStyle(.secondary)
             .padding(.leading, 11)
+        if let n = sub.accountsPriced, n > 1 {
+            Text(L10n.tr("overview.accounts_count", n))
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .padding(.leading, 11)
+        }
+        if agent == "antigravity", let accounts = antigravityAccounts?.accounts, !accounts.isEmpty {
+            antigravityAccountPickers(accounts)
+        }
         Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
             .font(.system(size: 11)).monospacedDigit()
             .lineLimit(1)
@@ -974,6 +998,9 @@ private struct SubscriptionSettingsRow: View {
             .disabled(!store.canEditSubscriptions || saving || store.isLoading)
         }
         .padding(.leading, 11)
+        if agent == "antigravity", let accounts = antigravityAccounts?.accounts, !accounts.isEmpty {
+            antigravityAccountPickers(accounts)
+        }
         if let url = SubscriptionValue.billingPage(for: agent) {
             Button(L10n.tr("settings.open_billing_page")) { NSWorkspace.shared.open(url) }
                 .buttonStyle(.link)
@@ -1039,6 +1066,86 @@ private struct SubscriptionSettingsRow: View {
         }
         .disabled(saving || store.isLoading)
         .padding(.leading, 11)
+    }
+
+    @ViewBuilder
+    private func antigravityAccountPickers(_ accounts: [AntigravityAccount]) -> some View {
+        let plans = agentKnownPlans ?? []
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(accounts) { acc in
+                let currentSelection = accountPlanSelections[acc.email] ?? {
+                    let k = acc.plan?.plan ?? ""
+                    return k.lowercased() == "none" ? "" : k
+                }()
+                let selection = Binding<String>(
+                    get: { currentSelection },
+                    set: { newValue in
+                        saveAntigravityAccountPlan(email: acc.email, planKey: newValue)
+                    }
+                )
+                HStack(spacing: 6) {
+                    Text(acc.email)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .hoverTip(acc.email)
+                    Spacer(minLength: 6)
+                    Picker("", selection: selection) {
+                        Text(L10n.tr("settings.plan_none")).tag("")
+                        ForEach(plans) { plan in
+                            Text(planMenuLabel(plan)).tag(plan.key)
+                        }
+                        if let custom = acc.plan,
+                           !custom.plan.isEmpty,
+                           custom.plan.lowercased() != "none",
+                           !plans.contains(where: { $0.key == custom.plan }) {
+                            let customLabel = custom.monthlyPriceUsd.map {
+                                "\(custom.planLabel) · \(Fmt.perMonth($0, currency: currency))"
+                            } ?? custom.planLabel
+                            Text(customLabel).tag(custom.plan)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .fixedSize()
+                    .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                }
+            }
+        }
+        .padding(.leading, 11)
+        .padding(.vertical, 2)
+    }
+
+    private func syncAccountPlans() {
+        guard let accounts = antigravityAccounts?.accounts else { return }
+        var next: [String: String] = [:]
+        for acc in accounts {
+            let k = acc.plan?.plan ?? ""
+            next[acc.email] = (k.lowercased() == "none") ? "" : k
+        }
+        accountPlanSelections = next
+    }
+
+    private func saveAntigravityAccountPlan(email: String, planKey: String) {
+        let previous = accountPlanSelections[email] ?? ""
+        guard planKey != previous else { return }
+        accountPlanSelections[email] = planKey
+        saving = true
+        actionError = nil
+        Task {
+            do {
+                try await store.setAntigravityAccountPlan(
+                    email: email,
+                    plan: planKey.isEmpty ? nil : planKey
+                )
+            } catch {
+                accountPlanSelections[email] = previous
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            saving = false
+        }
     }
 
     private func planMenuLabel(_ plan: KnownPlan) -> String {

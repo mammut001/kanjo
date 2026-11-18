@@ -632,6 +632,7 @@ struct QuotaCard: View {
     let rows: [QuotaRow]
     var antigravityAccounts: AntigravityAccounts? = nil
     var currency: String = "USD"
+    var timezone: TimeZone = .current
 
     @State private var switchingEmail: String? = nil
     @State private var statusMessage: String? = nil
@@ -642,13 +643,15 @@ struct QuotaCard: View {
         planLabel: String,
         rows: [QuotaRow],
         antigravityAccounts: AntigravityAccounts? = nil,
-        currency: String = "USD"
+        currency: String = "USD",
+        timezone: TimeZone = .current
     ) {
         self.agent = agent
         self.planLabel = planLabel
         self.rows = rows
         self.antigravityAccounts = antigravityAccounts
         self.currency = currency
+        self.timezone = timezone
     }
 
     var body: some View {
@@ -726,36 +729,49 @@ struct QuotaCard: View {
     private func accountRow(_ acc: AntigravityAccount, currentEmail: String?, displayName: String) -> some View {
         let isCurrent = (acc.email.lowercased() == (currentEmail ?? "").lowercased())
         let state = AntigravityAccountLogic.buttonState(for: acc, currentEmail: currentEmail)
+        let quotaText: String? = (!isCurrent && acc.quota != nil)
+            ? AntigravityAccountLogic.compactQuotaText(acc.quota!, timezone: timezone)
+            : nil
 
-        return HStack(alignment: .center, spacing: 6) {
-            HStack(spacing: 4) {
-                Text(displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-                    .hoverTip(acc.email)
+        return VStack(alignment: .leading, spacing: 2.5) {
+            HStack(alignment: .center, spacing: 6) {
+                HStack(spacing: 4) {
+                    Text(displayName)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .hoverTip(acc.email)
 
-                if isCurrent {
-                    Text(L10n.tr("overview.agy.current_badge"))
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundStyle(AgentPalette.color(for: "antigravity"))
+                    if isCurrent {
+                        Text(L10n.tr("overview.agy.current_badge"))
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(AgentPalette.color(for: "antigravity"))
+                    }
                 }
+
+                Spacer(minLength: 4)
+
+                HStack(spacing: 3) {
+                    Text(Fmt.tokens(acc.tokens))
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(acc.tokens == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                    Text("·")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                    Text(Fmt.money(acc.costUsd, currency: currency))
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(acc.costUsd == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                }
+
+                actionButton(for: acc, state: state)
             }
 
-            Spacer(minLength: 4)
-
-            HStack(spacing: 3) {
-                Text(Fmt.tokens(acc.tokens))
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(acc.tokens == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
-                Text("·")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                Text(Fmt.money(acc.costUsd, currency: currency))
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(acc.costUsd == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+            if let quotaText {
+                Text(quotaText)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            actionButton(for: acc, state: state)
         }
     }
 

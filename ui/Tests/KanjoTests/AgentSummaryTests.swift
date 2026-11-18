@@ -69,4 +69,21 @@ final class AgentSummaryTests: KanjoTestCase {
         let t = Tokens(input: 100, output: 50, cacheRead: 900, cacheWrite: 20, total: 1070)
         XCTAssertEqual(try! XCTUnwrap(AgentSummary.cacheHitRate(for: t)), 0.9, accuracy: 1e-9)
     }
+
+    func testAntigravityAccountSharesPopulatedForAntigravityOnly() throws {
+        let report = try loadFixture()
+        let spec = RangeEngine.spec(.all, report: report)
+        let filtered = RangeEngine.filtered(report, range: spec) {
+            dominantAgent($0.byAgent)?.agent ?? $0.byAgent.first?.agent ?? "unknown"
+        }
+        let summary = AgentSummary.build(report: report, filtered: filtered)
+
+        let agy = try XCTUnwrap(summary.rows.first { $0.agent == "antigravity" })
+        XCTAssertFalse(agy.antigravityAccountShares.isEmpty)
+        XCTAssertEqual(agy.antigravityAccountShares.reduce(0.0) { $0 + $1.share }, 1.0, accuracy: 1e-9)
+        XCTAssertTrue(agy.antigravityAccountShares.contains { $0.isUnattributed && $0.tokens > 0 })
+
+        let claude = try XCTUnwrap(summary.rows.first { $0.agent == "claude" })
+        XCTAssertTrue(claude.antigravityAccountShares.isEmpty)
+    }
 }

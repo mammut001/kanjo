@@ -375,6 +375,10 @@ private struct AgentDetailCard: View {
             tokensBlock
             Divider().opacity(0.45)
             perfBlock
+            if !row.antigravityAccountShares.isEmpty {
+                Divider().opacity(0.45)
+                byAccountBlock
+            }
             if !row.models.isEmpty {
                 Divider().opacity(0.45)
                 modelsBlock
@@ -501,6 +505,48 @@ private struct AgentDetailCard: View {
                         .foregroundStyle(perf?.ttftMedian == nil ? .tertiary : .primary)
                 }
                 Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var byAccountBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionTitle(L10n.tr("agents.detail.by_account"))
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(row.antigravityAccountShares) { acc in
+                    let isDimmed = acc.tokens == 0 && acc.costUsd == 0
+                    VStack(alignment: .leading, spacing: 2.5) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(acc.displayName)
+                                .font(.system(size: 10.5, weight: isDimmed ? .regular : .medium))
+                                .foregroundStyle(isDimmed ? .secondary : .primary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .hoverTip(acc.email)
+                            Spacer(minLength: 6)
+                            Text(Fmt.tokens(acc.tokens))
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(isDimmed ? .tertiary : .primary)
+                                .fixedSize(horizontal: true, vertical: false)
+                            Text("·")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.tertiary)
+                            Text(Fmt.percent(acc.share))
+                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(isDimmed ? AnyShapeStyle(.tertiary) : AnyShapeStyle(accentColor))
+                                .fixedSize(horizontal: true, vertical: false)
+                            Text("·")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.tertiary)
+                            Text(Fmt.money(acc.costUsd, currency: currency))
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(isDimmed ? .tertiary : .secondary)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        QuotaBar(fraction: acc.share, color: accentColor, height: 3)
+                    }
+                    .opacity(isDimmed ? 0.5 : 1.0)
+                }
             }
         }
     }

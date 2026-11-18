@@ -60,6 +60,24 @@ public enum ConfigCommand {
         return ["config", "set", key, a.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
 
+    public static func antigravityAccountPlanArguments(email: String, plan: String?) throws -> [String] {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowedEmail = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-@")
+        guard !trimmedEmail.isEmpty,
+              trimmedEmail.contains("@"),
+              !trimmedEmail.contains(".."),
+              !trimmedEmail.hasPrefix("."),
+              !trimmedEmail.hasSuffix("."),
+              trimmedEmail.unicodeScalars.allSatisfy({ allowedEmail.contains($0) }) else {
+            throw DataSourceError.launchFailed("Invalid Antigravity account email: \(email)")
+        }
+        let key = "antigravity_accounts.\(trimmedEmail).plan"
+        guard let plan, !plan.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ["config", "unset", key]
+        }
+        return ["config", "set", key, plan.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
     /// 和 DiskCommand 一样只替换最后一个 export，保留 PATH 等 shell 前缀。
     public static func command(from cliCommand: String, arguments: [String]) throws -> String {
         let trimmed = cliCommand.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -195,6 +213,11 @@ public struct ConfigDataSource {
 
     public func setFamilyAgents(_ agents: String?) async throws {
         let args = ConfigCommand.familyAgentsArguments(agents: agents)
+        try await execute(args: args)
+    }
+
+    public func setAntigravityAccountPlan(email: String, plan: String?) async throws {
+        let args = try ConfigCommand.antigravityAccountPlanArguments(email: email, plan: plan)
         try await execute(args: args)
     }
 }

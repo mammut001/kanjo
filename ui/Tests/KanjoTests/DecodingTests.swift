@@ -152,12 +152,13 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertEqual(grok.cycleSource, "rolling_30d")
         XCTAssertEqual(grok.source, "detected")
         let antigravity = try XCTUnwrap(r.subscriptions?["antigravity"])
-        XCTAssertEqual(antigravity.plan, "google_ai_pro")
-        XCTAssertEqual(antigravity.planLabel, "Google AI Pro")
-        XCTAssertEqual(antigravity.monthlyPriceUsd, 19.99)
+        XCTAssertEqual(antigravity.plan, "google_ai_ultra")
+        XCTAssertEqual(antigravity.planLabel, "Google AI Ultra + Google AI Pro")
+        XCTAssertEqual(antigravity.monthlyPriceUsd, 269.98)
+        XCTAssertEqual(antigravity.accountsPriced, 2)
         XCTAssertNil(antigravity.anchorDay)
         XCTAssertEqual(antigravity.cycleSource, "rolling_30d")
-        XCTAssertEqual(antigravity.source, "detected")
+        XCTAssertEqual(antigravity.source, "manual")
         let copilot = try XCTUnwrap(r.subscriptions?["copilot"])
         XCTAssertEqual(copilot.plan, "pro")
         XCTAssertEqual(copilot.planLabel, "Copilot Pro")
@@ -386,6 +387,14 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertEqual(alex.messages, 142)
         XCTAssertTrue(alex.savedLogin)
         XCTAssertNotNil(alex.lastSeen)
+        XCTAssertEqual(alex.plan?.plan, "google_ai_ultra")
+        XCTAssertEqual(alex.plan?.planLabel, "Google AI Ultra")
+        XCTAssertEqual(alex.plan?.monthlyPriceUsd, 249.99)
+        XCTAssertEqual(alex.quota?.windows.count, 2)
+
+        let work = agy.accounts[1]
+        XCTAssertEqual(work.plan?.plan, "google_ai_pro")
+        XCTAssertEqual(work.quota?.windows.first?.usedPercent, 10.0)
 
         let backup = agy.accounts[2]
         XCTAssertEqual(backup.email, "backup@gmail.com")
@@ -393,9 +402,43 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertEqual(backup.costUsd, 0.0)
         XCTAssertEqual(backup.messages, 0)
         XCTAssertFalse(backup.savedLogin)
+        XCTAssertNil(backup.plan)
+        XCTAssertNil(backup.quota)
+
+        let byDay = try XCTUnwrap(agy.byDay)
+        XCTAssertFalse(byDay.isEmpty)
+        XCTAssertTrue(byDay.contains { $0.email == nil && $0.tokens == 12000 })
+        XCTAssertTrue(byDay.contains { $0.email == "backup@gmail.com" })
 
         XCTAssertEqual(agy.unknown.tokens, 12000)
         XCTAssertEqual(agy.unknown.costUsd, 0.096)
+    }
+
+    func testAntigravityAccountsLegacyWithoutNewFieldsDecodes() throws {
+        let stripped = try mutatedFixture { obj in
+            if var subs = obj["subscriptions"] as? [String: Any],
+               var agySub = subs["antigravity"] as? [String: Any] {
+                agySub.removeValue(forKey: "accounts_priced")
+                subs["antigravity"] = agySub
+                obj["subscriptions"] = subs
+            }
+            if var agy = obj["antigravity_accounts"] as? [String: Any] {
+                agy.removeValue(forKey: "by_day")
+                if var accounts = agy["accounts"] as? [[String: Any]] {
+                    for i in accounts.indices {
+                        accounts[i].removeValue(forKey: "plan")
+                        accounts[i].removeValue(forKey: "quota")
+                    }
+                    agy["accounts"] = accounts
+                }
+                obj["antigravity_accounts"] = agy
+            }
+        }
+        let r = try ReportDecoder.decode(stripped)
+        XCTAssertNil(r.subscriptions?["antigravity"]?.accountsPriced)
+        let agy = try XCTUnwrap(r.antigravityAccounts)
+        XCTAssertNil(agy.byDay)
+        XCTAssertTrue(agy.accounts.allSatisfy { $0.plan == nil && $0.quota == nil })
     }
 
     func testAntigravityAccountsTolerantOfAbsence() throws {

@@ -540,6 +540,12 @@ private struct SubscriptionValueCard: View {
                 currency: cur
             ))
             .accessibilityHint(help(row))
+            if let n = row.accountsPriced, n > 1 {
+                Text(L10n.tr("overview.accounts_count", n))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 11)
+            }
             if let sub = report.subscriptions?[row.agent] {
                 Group {
                     if SubscriptionValue.needsRenewalDay(sub) {
@@ -601,7 +607,8 @@ private struct SubscriptionValueCard: View {
                             planLabel: row.planLabel,
                             rows: quota,
                             antigravityAccounts: isAgy ? report.antigravityAccounts : nil,
-                            currency: cur
+                            currency: cur,
+                            timezone: RangeEngine.timezone(of: report)
                         )
                     }
                     .simultaneousGesture(

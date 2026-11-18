@@ -193,7 +193,8 @@ public enum SubscriptionValue {
                 agent: agent, planLabel: sub.planLabel, monthlyPriceUsd: sub.monthlyPriceUsd,
                 usage: cost, multiplier: multiplier(usage: cost, monthlyPriceUsd: sub.monthlyPriceUsd),
                 extraUsageEnabled: sub.extraUsageEnabled,
-                account: sub.account)
+                account: sub.account,
+                accountsPriced: sub.accountsPriced)
         }.sorted { a, b in
             a.usage != b.usage ? a.usage > b.usage : a.agent < b.agent
         }
@@ -295,6 +296,7 @@ public struct SubscriptionRow: Equatable, Identifiable {
     public var multiplier: Double?
     public var extraUsageEnabled: Bool
     public var account: SubscriptionAccount?
+    public var accountsPriced: Int?
     public var id: String { agent }
 
     public init(
@@ -304,7 +306,8 @@ public struct SubscriptionRow: Equatable, Identifiable {
         usage: Double,
         multiplier: Double?,
         extraUsageEnabled: Bool,
-        account: SubscriptionAccount? = nil
+        account: SubscriptionAccount? = nil,
+        accountsPriced: Int? = nil
     ) {
         self.agent = agent
         self.planLabel = planLabel
@@ -313,6 +316,7 @@ public struct SubscriptionRow: Equatable, Identifiable {
         self.multiplier = multiplier
         self.extraUsageEnabled = extraUsageEnabled
         self.account = account
+        self.accountsPriced = accountsPriced
     }
 }
 
