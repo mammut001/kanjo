@@ -39,6 +39,7 @@ public enum SettingsKeys {
     public static let familyReportLastSuccessAt = "familyReportLastSuccessAt"
     public static let familyReportLastResult = "familyReportLastResult"
     public static let familyReportMigrationDone = "familyReportMigrationDone"
+    public static let diskAutoCleanMergedWorktrees = "diskAutoCleanMergedWorktrees" // 默认关闭（Disk 页开关）
 }
 
 public enum BackgroundRefreshInterval: Int, CaseIterable, Identifiable {

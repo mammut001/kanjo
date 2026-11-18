@@ -137,18 +137,80 @@ public struct DiskEntry: Codable, Equatable, Identifiable {
     public var deletable: DiskDeletable
     public var blocked: [String]
     public var note: String?
+    /// 只有 worktrees 条目有：分支是否已合并进默认分支（nil = 未知或旧 CLI）。
+    public var merged: Bool? = nil
+    /// 比较用的默认分支，例如 `origin/main`。
+    public var mergedInto: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, path, bytes, files, oldest, newest, deletable, blocked, note, merged
+        case mergedInto = "merged_into"
+    }
 
     /// 现在可以交给 `disk clean` 的条目。never 永久留下；blocked 非空时 CLI 会跳过。
     public var isReclaimable: Bool { deletable != .never && blocked.isEmpty }
+
+    /// 分支已合并的 git worktree。
+    public var isMergedWorktree: Bool { kind == .worktrees && merged == true }
+}
+
+/// Disk 页顶部“N 个工作树已合并 · X 可清理”那一行用的数字。
+public struct MergedWorktreeSummary: Equatable {
+    /// 分支已合并的 worktree 数（包括暂时被阻止的）。
+    public var mergedCount: Int
+    /// 其中现在就能清理的 id（已合并、没有改动、空闲）。
+    public var reclaimableIDs: [String]
+    public var reclaimableBytes: Int
+
+    public init(report: DiskReport) {
+        let merged = report.allEntries.filter(\.isMergedWorktree)
+        let ready = merged.filter(\.isReclaimable)
+        mergedCount = merged.count
+        reclaimableIDs = ready.map(\.id)
+        reclaimableBytes = ready.reduce(0) { $0 + $1.bytes }
+    }
+
+    public var isEmpty: Bool { mergedCount == 0 }
+    public var reclaimableCount: Int { reclaimableIDs.count }
+
+    public var text: String {
+        mergedCount == 1
+            ? L10n.tr("disk.merged.summary.singular", mergedCount, Fmt.bytes(reclaimableBytes))
+            : L10n.tr("disk.merged.summary.plural", mergedCount, Fmt.bytes(reclaimableBytes))
+    }
+}
+
+/// 自动清理已合并 worktree：何时运行、结果怎么说。
+public enum MergedWorktreeAutoClean {
+    /// 打开开关且有可清理的已合并 worktree 时返回它们的 id。和上一次尝试的集合相同则返回 nil，
+    /// 这样 git 拒绝移除的 worktree 不会在每次扫描后被反复尝试。
+    public static func candidates(enabled: Bool, report: DiskReport, lastAttempt: Set<String>) -> Set<String>? {
+        guard enabled else { return nil }
+        let ids = Set(MergedWorktreeSummary(report: report).reclaimableIDs)
+        guard !ids.isEmpty, ids != lastAttempt else { return nil }
+        return ids
+    }
+
+    /// “已自动清理 3 个已合并的工作树，释放 2.1 GB · 14:05”
+    public static func line(result: CleanResult, at date: Date) -> String {
+        let n = result.moved.count
+        let freed = Fmt.bytes(result.freedBytes)
+        return n == 1
+            ? L10n.tr("disk.merged.auto_result.singular", n, freed, Fmt.clock(date))
+            : L10n.tr("disk.merged.auto_result.plural", n, freed, Fmt.clock(date))
+    }
 }
 
 public struct CleanSkip: Codable, Equatable {
     public var id: String
     public var reason: String
+    /// git 自己的错误信息（`worktree_remove_failed` 时可能有）。
+    public var detail: String?
 
-    public init(id: String, reason: String) {
+    public init(id: String, reason: String, detail: String? = nil) {
         self.id = id
         self.reason = reason
+        self.detail = detail
     }
 }
 
@@ -177,6 +239,9 @@ public enum DiskBlock {
         case "not_imported": return L10n.tr("disk.block.not_imported")
         case "uncommitted_changes": return L10n.tr("disk.block.uncommitted_changes")
         case "active": return L10n.tr("disk.block.active")
+        case "not_merged": return L10n.tr("disk.block.not_merged")
+        case "worktree_remove_failed": return L10n.tr("disk.block.worktree_remove_failed")
+        case "nothing_to_move": return L10n.tr("disk.block.nothing_to_move")
         default: return reason.replacingOccurrences(of: "_", with: " ")
         }
     }
@@ -191,6 +256,12 @@ public enum DiskBlock {
             return L10n.tr("disk.block.explanation.uncommitted_changes")
         case "active":
             return L10n.tr("disk.block.explanation.active")
+        case "not_merged":
+            return L10n.tr("disk.block.explanation.not_merged")
+        case "worktree_remove_failed":
+            return L10n.tr("disk.block.explanation.worktree_remove_failed")
+        case "nothing_to_move":
+            return L10n.tr("disk.block.explanation.nothing_to_move")
         default:
             return L10n.tr("disk.block.explanation.default")
         }

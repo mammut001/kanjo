@@ -439,8 +439,32 @@
 "disk.blocked_reason" = "已阻止：%@";
 "disk.block.explanation.not_imported" = "账本尚未导入此处的所有文件，清理将丢失未保存的记录。";
 "disk.block.explanation.uncommitted_changes" = "此 Git 工作树有未提交的更改，在提交或丢弃更改前将予以保留。";
-"disk.block.explanation.active" = "过去 24 小时内有写入操作，或有运行中的进程正在使用它。";
+"disk.block.explanation.active" = "最近有写入（已合并的工作树为 1 小时内，其余为 24 小时内），或有运行中的进程正在使用它。";
 "disk.block.explanation.default" = "在解除阻止之前，CLI 不会移动此条目。";
+"disk.badge.merged" = "已合并";
+"disk.badge.merged_help" = "分支已合并到 %@，可以安全清理。";
+"disk.merged.section" = "工作树";
+"disk.merged.summary.singular" = "%d 个工作树已合并 · %@ 可清理";
+"disk.merged.summary.plural" = "%d 个工作树已合并 · %@ 可清理";
+"disk.merged.clean_button" = "清理已合并的工作树…";
+"disk.merged.clean_help" = "先运行 kanjo disk clean --merged-worktrees --dry-run，确认后才会移除。";
+"disk.merged.none_ready" = "已合并的工作树暂时都不能清理：有改动或最近用过。";
+"disk.merged.auto_toggle" = "自动清理已合并的工作树";
+"disk.merged.auto_explanation" = "每次磁盘扫描后，在后台对分支已合并、没有改动且空闲一小时以上的工作树运行 git worktree remove。它会删除工作树文件夹（包括被忽略的构建产物），但保留分支和提交。";
+"disk.merged.auto_result.singular" = "已自动清理 %d 个已合并的工作树，释放 %@ · %@";
+"disk.merged.auto_result.plural" = "已自动清理 %d 个已合并的工作树，释放 %@ · %@";
+"disk.merged.dismiss" = "关闭";
+"disk.merged.confirm_title" = "移除已合并的工作树？";
+"disk.merged.caption" = "只包括分支已合并、没有未提交改动且空闲的工作树。";
+"disk.merged.warning" = "通过 git worktree remove 移除（从不加 --force）。工作树文件夹会被删除，包括被忽略的构建产物；分支和提交都保留。";
+"disk.merged.remove_button" = "移除工作树";
+"disk.merged.removed_title" = "已移除工作树";
+"disk.block.not_merged" = "未合并";
+"disk.block.worktree_remove_failed" = "git 拒绝移除";
+"disk.block.nothing_to_move" = "没有可移动的内容";
+"disk.block.explanation.not_merged" = "分支还没有合并进默认分支，清理已合并工作树时不会动它。";
+"disk.block.explanation.worktree_remove_failed" = "git worktree remove 拒绝移除这个工作树（例如已锁定或有改动），文件夹原样保留。";
+"disk.block.explanation.nothing_to_move" = "这里除了单独列出的条目之外没有别的内容。";
 
 /* 会话 */
 "session.untitled" = "(无标题)";

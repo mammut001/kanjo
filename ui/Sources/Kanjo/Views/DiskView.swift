@@ -30,6 +30,7 @@ struct DiskView: View {
     var onSettings: () -> Void = {}
 
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var appLanguage = AppLanguage.system.rawValue
+    @AppStorage(SettingsKeys.diskAutoCleanMergedWorktrees, store: AppDefaults.store) private var autoCleanMerged = false
     @EnvironmentObject private var disk: DiskStore
     @State private var expanded: Set<String> = []
     @State private var selected: Set<String> = []
@@ -39,6 +40,8 @@ struct DiskView: View {
     @State private var pending: CleanResult?
     @State private var finished: CleanResult?
     @State private var actionError: String?
+    /// 确认卡和结果卡来自“清理已合并的工作树”，而不是勾选的条目。
+    @State private var mergedMode = false
 
     init(expandAll: Bool = false, onBack: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.expandAll = expandAll
@@ -126,6 +129,10 @@ struct DiskView: View {
                 VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
                     back
                     hero(report).padding(.horizontal, Metrics.rowInset)
+                    if report.allEntries.contains(where: { $0.kind == .worktrees })
+                        || autoCleanMerged || disk.autoCleanRecord != nil {
+                        mergedSection(report)
+                    }
                     agePicker.padding(.horizontal, Metrics.rowInset)
                     PanelSection(L10n.tr("disk.by_agent"), inset: true) {
                         if agents.isEmpty {
@@ -185,6 +192,73 @@ struct DiskView: View {
                 .foregroundStyle(.secondary)
             }
             CostNote(text: L10n.tr("disk.ledger_note"))
+        }
+    }
+
+    /// 已合并的 worktree：一行汇总、清理按钮、自动清理开关和上一次自动清理的结果。
+    private func mergedSection(_ report: DiskReport) -> some View {
+        let summary = MergedWorktreeSummary(report: report)
+        return PanelSection(L10n.tr("disk.merged.section"), inset: true) {
+            VStack(alignment: .leading, spacing: 8) {
+                if !summary.isEmpty {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "arrow.triangle.merge")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(AgentPalette.good)
+                        Text(summary.text)
+                            .font(.system(size: 12, weight: .medium))
+                            .monospacedDigit()
+                    }
+                    if summary.reclaimableCount > 0 {
+                        Button(action: dryRunMerged) {
+                            Text(checking && mergedMode ? L10n.tr("disk.checking") : L10n.tr("disk.merged.clean_button"))
+                                .font(.system(size: 11.5))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(checking || applying || pending != nil)
+                        .hoverTip(L10n.tr("disk.merged.clean_help"))
+                    } else {
+                        Text(L10n.tr("disk.merged.none_ready"))
+                            .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let record = disk.autoCleanRecord {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(AgentPalette.good)
+                        Text(MergedWorktreeAutoClean.line(result: record.result, at: record.date))
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 4)
+                        Button {
+                            disk.autoCleanRecord = nil
+                        } label: {
+                            Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tertiary)
+                        .hoverTip(L10n.tr("disk.merged.dismiss"))
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle(L10n.tr("disk.merged.auto_toggle"), isOn: $autoCleanMerged)
+                        .toggleStyle(.checkbox)
+                        .controlSize(.small)
+                        .font(.system(size: 11.5))
+                    Text(L10n.tr("disk.merged.auto_explanation"))
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                }
+                .onChange(of: autoCleanMerged) { on in
+                    // 打开后立刻扫描一次，扫描结束时 DiskStore 会按开关运行清理。
+                    if on { disk.refresh(rescan: true) }
+                }
+            }
         }
     }
 
@@ -266,6 +340,10 @@ struct DiskView: View {
                 }
                 .frame(width: slot, height: slot)
                 Badge(text: entry.kind.rawValue)
+                if entry.isMergedWorktree {
+                    Badge(text: L10n.tr("disk.badge.merged"), style: .good,
+                          help: L10n.tr("disk.badge.merged_help", entry.mergedInto ?? "main"))
+                }
                 Spacer(minLength: 4)
                 statePill(entry)
             }
@@ -337,24 +415,31 @@ struct DiskView: View {
     @ViewBuilder private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let result = finished {
-                Text(L10n.tr("disk.card.moved_title")).font(.system(size: 14, weight: .semibold))
+                Text(mergedMode ? L10n.tr("disk.merged.removed_title") : L10n.tr("disk.card.moved_title"))
+                    .font(.system(size: 14, weight: .semibold))
                 Text(L10n.tr("disk.card.freed", Fmt.bytes(result.freedBytes)))
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Color.accentColor)
+                if mergedMode && !result.moved.isEmpty {
+                    planBody(CleanResult(moved: result.moved, freedBytes: result.freedBytes, skipped: []))
+                }
                 skippedList(result)
-                Button(L10n.tr("common.done")) { finished = nil; actionError = nil }
+                Button(L10n.tr("common.done")) { finished = nil; actionError = nil; mergedMode = false }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             } else if let result = pending {
-                Text(L10n.tr("disk.card.confirm_title")).font(.system(size: 14, weight: .semibold))
-                Text(age.caption).font(.system(size: 10.5)).foregroundStyle(.secondary)
+                Text(mergedMode ? L10n.tr("disk.merged.confirm_title") : L10n.tr("disk.card.confirm_title"))
+                    .font(.system(size: 14, weight: .semibold))
+                Text(mergedMode ? L10n.tr("disk.merged.caption") : age.caption)
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 ScrollView {
                     planBody(result)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 320)
-                Text(L10n.tr("disk.card.warning"))
+                Text(mergedMode ? L10n.tr("disk.merged.warning") : L10n.tr("disk.card.warning"))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionError {
@@ -365,7 +450,7 @@ struct DiskView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    Button(L10n.tr("common.cancel")) { pending = nil; actionError = nil }
+                    Button(L10n.tr("common.cancel")) { pending = nil; actionError = nil; mergedMode = false }
                         .buttonStyle(.bordered)
                         .keyboardShortcut(.cancelAction)
                         .disabled(applying)
@@ -374,7 +459,7 @@ struct DiskView: View {
                         if applying {
                             ProgressView().controlSize(.small).frame(width: 88)
                         } else {
-                            Text(L10n.tr("disk.card.move_button"))
+                            Text(mergedMode ? L10n.tr("disk.merged.remove_button") : L10n.tr("disk.card.move_button"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -417,16 +502,24 @@ struct DiskView: View {
     }
 
     @ViewBuilder private func skippedList(_ result: CleanResult) -> some View {
-        if !result.skipped.isEmpty {
+        // 清理已合并的工作树时，未合并的 worktree 本来就不在候选里，不逐条列出。
+        let skipped = mergedMode ? result.skipped.filter { $0.reason != "not_merged" } : result.skipped
+        if !skipped.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 Text(L10n.tr("disk.card.skipped")).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-                ForEach(Array(result.skipped.enumerated()), id: \.offset) { _, skip in
+                ForEach(Array(skipped.enumerated()), id: \.offset) { _, skip in
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(skip.id) — \(DiskBlock.short(skip.reason))")
                             .font(.system(size: 11)).foregroundStyle(AgentPalette.warnInk)
                         Text(DiskBlock.explanation(skip.reason))
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if let detail = skip.detail {
+                            Text(detail)
+                                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
@@ -465,11 +558,29 @@ struct DiskView: View {
         }
     }
 
+    /// “清理已合并的工作树…”：`disk clean --merged-worktrees --dry-run`，再进同一张确认卡。
+    private func dryRunMerged() {
+        guard !checking, !applying else { return }
+        checking = true
+        mergedMode = true
+        actionError = nil
+        Task {
+            do {
+                pending = try await disk.cleanMergedWorktrees(confirmed: false)
+            } catch {
+                mergedMode = false
+                actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            checking = false
+        }
+    }
+
     private func dryRun() {
         guard !checking, !applying else { return }
         let ids = selected.sorted()
         guard !ids.isEmpty else { return }
         checking = true
+        mergedMode = false
         actionError = nil
         let older = age.argument
         Task {
@@ -489,12 +600,15 @@ struct DiskView: View {
         actionError = nil
         let ids = selected.sorted()
         let older = age.argument
+        let merged = mergedMode
         Task {
             do {
-                let result = try await disk.clean(ids: ids, olderThan: older, confirmed: true)
+                let result = merged
+                    ? try await disk.cleanMergedWorktrees(confirmed: true)
+                    : try await disk.clean(ids: ids, olderThan: older, confirmed: true)
                 pending = nil
                 finished = result
-                selected.removeAll()
+                if !merged { selected.removeAll() }
                 disk.refresh(rescan: true)
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

@@ -439,8 +439,32 @@
 "disk.blocked_reason" = "Bloqué : %@";
 "disk.block.explanation.not_imported" = "Le registre n'a pas encore importé tous les fichiers ici ; le nettoyage supprimerait des données non enregistrées.";
 "disk.block.explanation.uncommitted_changes" = "Cet arbre de travail Git a des modifications non validées ; il reste jusqu'à ce qu'elles soient validées ou abandonnées.";
-"disk.block.explanation.active" = "Une écriture a eu lieu au cours des 24 dernières heures, ou un processus en cours d'exécution l'utilise.";
+"disk.block.explanation.active" = "Une écriture a eu lieu récemment (dans l'heure pour un worktree fusionné, sinon dans les 24 dernières heures), ou un processus en cours d'exécution l'utilise.";
 "disk.block.explanation.default" = "Le CLI ne déplacera pas cette entrée tant que le blocage n'est pas levé.";
+"disk.badge.merged" = "Fusionné";
+"disk.badge.merged_help" = "La branche est fusionnée dans %@. Nettoyage sans risque.";
+"disk.merged.section" = "Worktrees";
+"disk.merged.summary.singular" = "%d worktree fusionné · %@ récupérables";
+"disk.merged.summary.plural" = "%d worktrees fusionnés · %@ récupérables";
+"disk.merged.clean_button" = "Nettoyer les worktrees fusionnés…";
+"disk.merged.clean_help" = "Lance d'abord kanjo disk clean --merged-worktrees --dry-run et demande confirmation avant de supprimer quoi que ce soit.";
+"disk.merged.none_ready" = "Aucun worktree fusionné ne peut être nettoyé pour l'instant : modifications en cours ou utilisation récente.";
+"disk.merged.auto_toggle" = "Nettoyer automatiquement les worktrees fusionnés";
+"disk.merged.auto_explanation" = "Après chaque analyse du disque, lance git worktree remove en arrière-plan sur les worktrees dont la branche est fusionnée, sans modifications et inactifs depuis une heure. Le dossier du worktree est supprimé (sorties de compilation ignorées comprises), mais la branche et ses commits sont conservés.";
+"disk.merged.auto_result.singular" = "%d worktree fusionné nettoyé automatiquement, %@ libérés · %@";
+"disk.merged.auto_result.plural" = "%d worktrees fusionnés nettoyés automatiquement, %@ libérés · %@";
+"disk.merged.dismiss" = "Masquer";
+"disk.merged.confirm_title" = "Supprimer les worktrees fusionnés ?";
+"disk.merged.caption" = "Uniquement les worktrees dont la branche est fusionnée, sans modifications non validées et inactifs.";
+"disk.merged.warning" = "Supprimés avec git worktree remove (jamais --force). Le dossier du worktree est effacé, sorties de compilation ignorées comprises ; la branche et ses commits sont conservés.";
+"disk.merged.remove_button" = "Supprimer les worktrees";
+"disk.merged.removed_title" = "Worktrees supprimés";
+"disk.block.not_merged" = "non fusionné";
+"disk.block.worktree_remove_failed" = "refusé par git";
+"disk.block.nothing_to_move" = "rien à déplacer";
+"disk.block.explanation.not_merged" = "La branche n'est pas encore fusionnée dans la branche par défaut ; le nettoyage des worktrees fusionnés n'y touche pas.";
+"disk.block.explanation.worktree_remove_failed" = "git worktree remove a refusé ce worktree (par exemple verrouillé ou modifié). Le dossier est resté tel quel.";
+"disk.block.explanation.nothing_to_move" = "Il n'y a rien ici en dehors des entrées listées séparément.";
 
 /* Session */
 "session.untitled" = "(sans titre)";

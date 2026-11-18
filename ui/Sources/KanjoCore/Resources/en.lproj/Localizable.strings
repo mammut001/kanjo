@@ -439,8 +439,32 @@
 "disk.blocked_reason" = "Blocked: %@";
 "disk.block.explanation.not_imported" = "The ledger has not imported every file here yet, so cleaning would drop numbers that are not saved.";
 "disk.block.explanation.uncommitted_changes" = "This git worktree has uncommitted changes, so it stays until those changes are committed or discarded.";
-"disk.block.explanation.active" = "Something wrote here in the last 24 hours, or a running process is using it.";
+"disk.block.explanation.active" = "Something wrote here recently (in the last hour for a merged worktree, the last 24 hours otherwise), or a running process is using it.";
 "disk.block.explanation.default" = "The CLI will not move this entry until the block is cleared.";
+"disk.badge.merged" = "Merged";
+"disk.badge.merged_help" = "The branch is merged into %@. Safe to clean up.";
+"disk.merged.section" = "Worktrees";
+"disk.merged.summary.singular" = "%d worktree merged · %@ reclaimable";
+"disk.merged.summary.plural" = "%d worktrees merged · %@ reclaimable";
+"disk.merged.clean_button" = "Clean up merged worktrees…";
+"disk.merged.clean_help" = "Runs kanjo disk clean --merged-worktrees --dry-run first and asks before removing anything.";
+"disk.merged.none_ready" = "None of the merged worktrees can be cleaned right now: they have changes or were used recently.";
+"disk.merged.auto_toggle" = "Automatically clean up merged worktrees";
+"disk.merged.auto_explanation" = "After each disk scan, runs git worktree remove in the background on worktrees whose branch is merged, with no changes and idle for an hour. It deletes the worktree folder (ignored build outputs included) but keeps the branch and its commits.";
+"disk.merged.auto_result.singular" = "Automatically cleaned up %d merged worktree, freed %@ · %@";
+"disk.merged.auto_result.plural" = "Automatically cleaned up %d merged worktrees, freed %@ · %@";
+"disk.merged.dismiss" = "Dismiss";
+"disk.merged.confirm_title" = "Remove merged worktrees?";
+"disk.merged.caption" = "Only worktrees whose branch is merged, with no uncommitted changes and idle.";
+"disk.merged.warning" = "Removed with git worktree remove (never --force). The worktree folder is deleted, ignored build outputs included; the branch and its commits are kept.";
+"disk.merged.remove_button" = "Remove worktrees";
+"disk.merged.removed_title" = "Worktrees removed";
+"disk.block.not_merged" = "not merged";
+"disk.block.worktree_remove_failed" = "git refused";
+"disk.block.nothing_to_move" = "nothing to move";
+"disk.block.explanation.not_merged" = "The branch is not merged into the default branch yet, so merged-worktree cleanup leaves it alone.";
+"disk.block.explanation.worktree_remove_failed" = "git worktree remove refused this worktree (for example it is locked or has changes). The folder was left as it is.";
+"disk.block.explanation.nothing_to_move" = "Nothing is here besides the entries listed on their own.";
 
 /* Session */
 "session.untitled" = "(untitled)";

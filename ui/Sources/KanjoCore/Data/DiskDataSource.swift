@@ -16,11 +16,13 @@ public enum DiskCommand {
             .trimmingCharacters(in: .whitespaces)
     }
 
-    /// `disk clean <id>... [--older-than Nd] --dry-run|--yes`
+    /// `disk clean <id>... [--merged-worktrees] [--older-than Nd] --dry-run|--yes`
     /// olderThan 为空时不带 `--older-than`。confirmed 为 false 时用 `--dry-run`。
-    public static func clean(from cliCommand: String, ids: [String], olderThan: String?, confirmed: Bool) -> String {
+    public static func clean(from cliCommand: String, ids: [String], olderThan: String?, confirmed: Bool,
+                             mergedWorktrees: Bool = false) -> String {
         var parts = [replacingExport(in: cliCommand, with: "disk clean").trimmingCharacters(in: .whitespaces)]
         parts.append(contentsOf: ids.map(shellWord))
+        if mergedWorktrees { parts.append("--merged-worktrees") }
         if let olderThan, !olderThan.isEmpty {
             parts.append("--older-than")
             parts.append(shellWord(olderThan))
@@ -64,6 +66,8 @@ public enum DiskCommand {
 public protocol DiskSource {
     func load() async throws -> DiskReport
     func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult
+    /// `disk clean --merged-worktrees`：所有已合并且空闲、没有改动的 worktree。
+    func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult
 }
 
 #if os(macOS)
@@ -96,6 +100,12 @@ public struct DiskDataSource: DiskSource {
     public func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
         let command = DiskCommand.clean(from: cliCommand, ids: ids, olderThan: olderThan, confirmed: confirmed)
         return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .userInitiated))
+    }
+
+    public func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
+        let command = DiskCommand.clean(from: cliCommand, ids: [], olderThan: nil, confirmed: confirmed,
+                                        mergedWorktrees: true)
+        return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .utility))
     }
 
     private func run(_ command: String, qualityOfService: QualityOfService = .background) async throws -> Data {
@@ -140,6 +150,10 @@ public struct FileDiskSource: DiskSource {
         _ = (ids, olderThan, confirmed)
         throw DataSourceError.launchFailed(
             "Disk cleanup only runs through the kanjo CLI (disk clean). This report was loaded from a JSON file, so nothing was moved.")
+    }
+
+    public func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
+        try await clean(ids: [], olderThan: nil, confirmed: confirmed)
     }
 }
 

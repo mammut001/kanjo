@@ -281,6 +281,96 @@ final class DiskTests: KanjoTestCase {
         }
     }
 
+    private func worktreeReport() throws -> DiskReport {
+        try DiskDecoder.decode(Data("""
+        {"schema_version":1,"generated_at":"2026-11-18T10:00:00Z","total_bytes":0,"reclaimable_bytes":0,
+         "agents":[{"agent":"claude","label":"Claude Code","bytes":0,"entries":[
+           {"id":"claude:worktree:p/s1/scratchpad/wt-a","kind":"worktrees","path":"/tmp/claude-501/p/s1/scratchpad/wt-a",
+            "bytes":2000000000,"files":10,"oldest":"2026-11-01","newest":"2026-11-10","deletable":"when_clean",
+            "blocked":[],"merged":true,"merged_into":"origin/main"},
+           {"id":"claude:worktree:p/s2/scratchpad/wt-b","kind":"worktrees","path":"/tmp/claude-501/p/s2/scratchpad/wt-b",
+            "bytes":100000000,"files":3,"oldest":"2026-11-01","newest":"2026-11-10","deletable":"when_clean",
+            "blocked":[],"merged":true,"merged_into":"origin/main"},
+           {"id":"claude:worktree:p/s3/scratchpad/wt-c","kind":"worktrees","path":"/tmp/claude-501/p/s3/scratchpad/wt-c",
+            "bytes":500000000,"files":3,"oldest":"2026-11-01","newest":"2026-11-18","deletable":"when_clean",
+            "blocked":["uncommitted_changes"],"merged":true,"merged_into":"main"},
+           {"id":"claude:worktree:p/s4/scratchpad/wt-d","kind":"worktrees","path":"/tmp/claude-501/p/s4/scratchpad/wt-d",
+            "bytes":700000000,"files":3,"oldest":"2026-11-01","newest":"2026-11-10","deletable":"when_clean",
+            "blocked":[],"merged":false,"merged_into":"origin/main"},
+           {"id":"codex:worktree:x/repo","kind":"worktrees","path":"/Users/alice/.codex/worktrees/x/repo",
+            "bytes":900000000,"files":3,"oldest":"2026-11-01","newest":"2026-11-10","deletable":"when_clean",
+            "blocked":[],"merged":null,"merged_into":null},
+           {"id":"claude:scratch","kind":"scratch","path":"/tmp/claude-501","bytes":1,"files":1,
+            "oldest":"2026-11-01","newest":"2026-11-10","deletable":"when_clean","blocked":[]}
+         ]}]}
+        """.utf8))
+    }
+
+    func testMergedFieldsDecode() throws {
+        let entries = try worktreeReport().allEntries
+        XCTAssertEqual(entries[0].merged, true)
+        XCTAssertEqual(entries[0].mergedInto, "origin/main")
+        XCTAssertTrue(entries[0].isMergedWorktree)
+        XCTAssertEqual(entries[3].merged, false)
+        XCTAssertFalse(entries[3].isMergedWorktree)
+        XCTAssertNil(entries[4].merged)
+        XCTAssertNil(entries[4].mergedInto)
+        // Older CLIs (and non-worktree entries) leave both fields out.
+        XCTAssertNil(entries[5].merged)
+        XCTAssertNil(entries[5].mergedInto)
+        XCTAssertFalse(entries[5].isMergedWorktree)
+        XCTAssertTrue(try loadFixture().allEntries.allSatisfy { $0.merged == nil })
+    }
+
+    func testMergedWorktreeSummary() throws {
+        let summary = MergedWorktreeSummary(report: try worktreeReport())
+        XCTAssertEqual(summary.mergedCount, 3)
+        XCTAssertEqual(summary.reclaimableCount, 2)
+        XCTAssertEqual(summary.reclaimableIDs, ["claude:worktree:p/s1/scratchpad/wt-a",
+                                                "claude:worktree:p/s2/scratchpad/wt-b"])
+        XCTAssertEqual(summary.reclaimableBytes, 2_100_000_000)
+        XCTAssertEqual(summary.text, "3 worktrees merged · 2.1 GB reclaimable")
+        XCTAssertFalse(summary.isEmpty)
+        let none = MergedWorktreeSummary(report: try loadFixture())
+        XCTAssertTrue(none.isEmpty)
+        XCTAssertEqual(none.reclaimableBytes, 0)
+    }
+
+    func testMergedWorktreeAutoClean() throws {
+        let report = try worktreeReport()
+        let ids: Set<String> = ["claude:worktree:p/s1/scratchpad/wt-a", "claude:worktree:p/s2/scratchpad/wt-b"]
+        XCTAssertNil(MergedWorktreeAutoClean.candidates(enabled: false, report: report, lastAttempt: []))
+        XCTAssertEqual(MergedWorktreeAutoClean.candidates(enabled: true, report: report, lastAttempt: []), ids)
+        // The same set again (git refused last time) is not retried after every scan.
+        XCTAssertNil(MergedWorktreeAutoClean.candidates(enabled: true, report: report, lastAttempt: ids))
+        XCTAssertNil(MergedWorktreeAutoClean.candidates(enabled: true, report: try loadFixture(), lastAttempt: []))
+        let date = try XCTUnwrap(ReportDates.parseTimestamp("2026-11-18T10:00:00Z"))
+        let result = CleanResult(moved: ["/a", "/b", "/c"], freedBytes: 2_100_000_000, skipped: [])
+        XCTAssertEqual(MergedWorktreeAutoClean.line(result: result, at: date),
+                       "Automatically cleaned up 3 merged worktrees, freed 2.1 GB · \(Fmt.clock(date))")
+        let one = CleanResult(moved: ["/a"], freedBytes: 1000, skipped: [])
+        XCTAssertTrue(MergedWorktreeAutoClean.line(result: one, at: date).hasPrefix("Automatically cleaned up 1 merged worktree,"))
+    }
+
+    func testMergedCleanCommandAndSkipDetail() throws {
+        XCTAssertEqual(
+            DiskCommand.clean(from: "python3 -m kanjo export", ids: [], olderThan: nil, confirmed: false,
+                              mergedWorktrees: true),
+            "python3 -m kanjo disk clean --merged-worktrees --dry-run")
+        XCTAssertEqual(
+            DiskCommand.clean(from: "kanjo export", ids: [], olderThan: nil, confirmed: true, mergedWorktrees: true),
+            "kanjo disk clean --merged-worktrees --yes")
+        let result = try DiskDecoder.decodeClean(Data("""
+        {"moved":["/tmp/wt"],"freed_bytes":10,"skipped":[
+          {"id":"claude:worktree:a","reason":"worktree_remove_failed","detail":"fatal: cannot remove a locked working tree"},
+          {"id":"claude:worktree:b","reason":"not_merged"}]}
+        """.utf8))
+        XCTAssertEqual(result.skipped[0].detail, "fatal: cannot remove a locked working tree")
+        XCTAssertNil(result.skipped[1].detail)
+        XCTAssertEqual(DiskBlock.short("not_merged"), "not merged")
+        XCTAssertEqual(DiskBlock.short("worktree_remove_failed"), "git refused")
+    }
+
     func testDiskDataSourceReadsFixture() async throws {
         let path = try fixtureURL().path
         let src = DiskDataSource(cliCommand: "cat '\(path)' # export")

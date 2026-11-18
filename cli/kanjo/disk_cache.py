@@ -17,6 +17,12 @@ def cache_path() -> str:
     return os.path.join(_cache_dir(), "disk-report.json")
 
 
+# Bumped when the same roots produce different entries: 2 splits Claude scratch per
+# session and lists worktrees inside it, so entries cached by version 1 (one
+# scratch entry holding everything) must not be reused next to the new ones.
+CACHE_FORMAT = 2
+
+
 # ``scanned_at`` is written as ISO 8601 with microsecond resolution, while the
 # clock that stamps it advances in coarser ticks (``time.time()`` only moves every
 # ~15.6 ms on Windows, NTFS stores 100 ns). A file written in the same tick can
@@ -55,7 +61,7 @@ def load_cached_report(roots: dict, now: float, max_age: float) -> Tuple[Optiona
     try:
         with open(cache_path(), encoding="utf-8") as handle:
             payload = json.load(handle)
-        if payload.get("roots") != roots:
+        if payload.get("roots") != roots or payload.get("format") != CACHE_FORMAT:
             return None, {}, {}
         doc = payload.get("report")
         if not isinstance(doc, dict):
@@ -98,7 +104,7 @@ def load_worktrees(roots: dict) -> dict:
     try:
         with open(cache_path(), encoding="utf-8") as handle:
             payload = json.load(handle)
-        if payload.get("roots") != roots:
+        if payload.get("roots") != roots or payload.get("format") != CACHE_FORMAT:
             return {}
         worktrees = payload.get("worktrees")
         return worktrees if isinstance(worktrees, dict) else {}
@@ -118,7 +124,7 @@ def save(doc: dict, roots: dict, worktrees: Optional[dict] = None) -> None:
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".disk-report-", dir=directory)
-        payload = {"roots": roots, "report": doc, "worktrees": worktrees or {}}
+        payload = {"format": CACHE_FORMAT, "roots": roots, "report": doc, "worktrees": worktrees or {}}
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(data)

@@ -11,6 +11,8 @@ final class DiskStore: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var lastRefresh: Date?
     @Published private(set) var sourceDescription = ""
+    /// 上一次后台自动清理已合并 worktree 的结果，Disk 页显示一次，用户关掉后清空。
+    @Published var autoCleanRecord: AutoCleanRecord?
 
     var report: DiskReport? { state.report }
     var hasReport: Bool { state.hasReport }
@@ -23,6 +25,13 @@ final class DiskStore: ObservableObject {
     private var pendingRefresh = false
     private var pendingRescan = false
     private var source: (any DiskSource)?
+    private var autoCleanRunning = false
+    private var autoCleanLastAttempt: Set<String> = []
+
+    struct AutoCleanRecord: Equatable {
+        let result: CleanResult
+        let date: Date
+    }
 
     init() {
         // 文件演示不读写真实 CLI 的缓存，也不会从缓存继承清理数据源。
@@ -71,6 +80,7 @@ final class DiskStore: ObservableObject {
             }
             state.finishRefresh(report: gen == generation ? loaded : nil)
             lastRefresh = Date()
+            if let loaded { autoCleanMergedWorktrees(after: loaded) }
             if pendingRefresh || pendingRescan {
                 let force = pendingRescan
                 pendingRefresh = false
@@ -86,6 +96,34 @@ final class DiskStore: ObservableObject {
         source = nil
         pendingRefresh = false
         pendingRescan = false
+    }
+
+    /// `disk clean --merged-worktrees`，同样先 dry-run 再确认。
+    func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
+        let src = source ?? makeSource().0
+        do { return try await src.cleanMergedWorktrees(confirmed: confirmed) }
+        catch {
+            if src is DiskDataSource { await ReportStore.shared.checkPython() }
+            throw error
+        }
+    }
+
+    /// 打开“自动清理已合并的工作树”后，每次扫描完成都在后台跑一次
+    /// `disk clean --merged-worktrees --yes`。CLI 会重新扫描并重新检查每个 worktree，
+    /// 这里只决定要不要启动。文件演示（--disk-data）从不清理。
+    private func autoCleanMergedWorktrees(after report: DiskReport) {
+        guard DefaultPaths.diskDataOverride() == nil, !autoCleanRunning else { return }
+        let enabled = AppDefaults.store.bool(forKey: SettingsKeys.diskAutoCleanMergedWorktrees)
+        guard let ids = MergedWorktreeAutoClean.candidates(enabled: enabled, report: report,
+                                                           lastAttempt: autoCleanLastAttempt) else { return }
+        autoCleanLastAttempt = ids
+        autoCleanRunning = true
+        Task {
+            defer { autoCleanRunning = false }
+            guard let result = try? await cleanMergedWorktrees(confirmed: true), !result.moved.isEmpty else { return }
+            autoCleanRecord = AutoCleanRecord(result: result, date: Date())
+            refresh(rescan: true)
+        }
     }
 
     /// 先 dry-run（confirmed: false），用户确认后再带 --yes。文件来源会拒绝，不会动磁盘。
