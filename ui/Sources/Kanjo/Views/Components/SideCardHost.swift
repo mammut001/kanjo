@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 import KanjoCore
 
@@ -52,6 +53,8 @@ struct SideCardHostBridge: NSViewRepresentable {
     final class BridgeNSView: NSView {
         var onWindowChanged: ((NSWindow?) -> Void)?
 
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             onWindowChanged?(window)
@@ -74,9 +77,9 @@ struct SideCardHostBridge: NSViewRepresentable {
                     SideCardController.shared.reposition()
                 }
             }
-            let close: () -> Void = {
+            let close: (String) -> Void = { reason in
                 DispatchQueue.main.async {
-                    SideCardController.shared.closeAndDismiss()
+                    SideCardController.shared.closeAndDismiss(reason: reason)
                 }
             }
 
@@ -84,11 +87,11 @@ struct SideCardHostBridge: NSViewRepresentable {
                 nc.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { _ in reposition() },
                 nc.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { _ in reposition() },
                 nc.addObserver(forName: NSWindow.didChangeScreenNotification, object: window, queue: .main) { _ in reposition() },
-                nc.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in close() },
-                nc.addObserver(forName: NSWindow.didMiniaturizeNotification, object: window, queue: .main) { _ in close() },
+                nc.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in close("window willClose") },
+                nc.addObserver(forName: NSWindow.didMiniaturizeNotification, object: window, queue: .main) { _ in close("window miniaturized") },
                 nc.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak window] _ in
                     if let window, !window.isVisible {
-                        close()
+                        close("window not visible")
                     }
                 },
                 nc.addObserver(forName: NSView.boundsDidChangeNotification, object: nil, queue: .main) { [weak window] note in
@@ -130,6 +133,7 @@ struct SideCardHostBridge: NSViewRepresentable {
 final class SideCardController {
     static let shared = SideCardController()
     static let cardWidth: CGFloat = 340
+    private static let logger = Logger(subsystem: "com.lanshuagent.kanjo", category: "side-card")
 
     private var panel: SideCardPanel?
     private var containerView: SideCardMouseContainerView?
@@ -146,38 +150,13 @@ final class SideCardController {
     private var closeGraceTask: Task<Void, Never>?
     private var scheduledSyncWork: DispatchWorkItem?
     private var escMonitor: Any?
-    private var appDeactivateObserver: NSObjectProtocol?
 
-    private var isWindowPreview: Bool {
-        CommandLine.arguments.contains(AppDefaults.windowArgument)
-    }
-
-    private init() {
-        appDeactivateObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                // 在 `--window` 预览窗口模式下，主窗口失活不会自动关闭；固定卡片应保留到用户显式收起或关闭窗口。
-                if self.isWindowPreview && self.activePayload?.isPinned == true {
-                    return
-                }
-                self.closeAndDismiss()
-            }
-        }
-    }
-
-    deinit {
-        if let appDeactivateObserver {
-            NotificationCenter.default.removeObserver(appDeactivateObserver)
-        }
-    }
+    private init() {}
 
     // MARK: - 来自 HoverCardModifier 的悬停状态
 
     func noteRowHoverEntered(id: String) {
+        Self.logger.info("hover start id=\(id, privacy: .public)")
         hoveredRowIds.insert(id)
         if activePayload?.id == id {
             closeGraceTask?.cancel()
@@ -199,8 +178,12 @@ final class SideCardController {
     func noteRowDisappeared(id: String) {
         hoveredRowIds.remove(id)
         if activePayload?.id == id && activePayload?.isPinned != true {
-            closeAndDismiss()
+            closeAndDismiss(reason: "row disappeared")
         }
+    }
+
+    func notePinChanged(id: String, pinned: Bool) {
+        Self.logger.info("\(pinned ? "pin" : "unpin", privacy: .public) id=\(id, privacy: .public)")
     }
 
     func noteAnchorWindowChanged() {
@@ -213,12 +196,22 @@ final class SideCardController {
 
     func updatePendingState(payload: HoverCardPayload?, panelWindow: NSWindow?, appearance: AppAppearance) {
         let previousId = activePayload?.id
+        let previousPinned = activePayload?.isPinned ?? false
         if let previous = activePayload, let next = payload, previous.id != next.id {
             previous.onHoverClosed?()
             naturalHeightsById.removeValue(forKey: previous.id)
         }
         if payload == nil, let previous = activePayload {
             naturalHeightsById.removeValue(forKey: previous.id)
+        }
+        if let next = payload {
+            if previousId != next.id && next.isPinned {
+                Self.logger.info("pin id=\(next.id, privacy: .public)")
+            } else if previousId == next.id && previousPinned != next.isPinned {
+                Self.logger.info("\(next.isPinned ? "pin" : "unpin", privacy: .public) id=\(next.id, privacy: .public)")
+            }
+        } else if let previous = activePayload, previousPinned {
+            Self.logger.info("unpin id=\(previous.id, privacy: .public)")
         }
 
         activePayload = payload
@@ -249,9 +242,12 @@ final class SideCardController {
         scheduleSync()
     }
 
-    func closeAndDismiss() {
+    func closeAndDismiss(reason: String = "dismiss") {
         let previous = activePayload
-        hidePanelOnly()
+        if let previous {
+            Self.logger.info("close id=\(previous.id, privacy: .public) reason=\(reason, privacy: .public)")
+        }
+        hidePanelOnly(reason: reason)
         previous?.onDismiss?()
         previous?.onHoverClosed?()
     }
@@ -269,10 +265,12 @@ final class SideCardController {
 
     private func performSync() {
         scheduledSyncWork = nil
-        guard let payload = activePayload,
-              let panelWindow,
-              panelWindow.isVisible else {
-            hidePanelOnly()
+        guard let payload = activePayload else {
+            hidePanelOnly(reason: "payload cleared")
+            return
+        }
+        guard let panelWindow, panelWindow.isVisible else {
+            hidePanelOnly(reason: panelWindow == nil ? "panelWindow nil" : "panelWindow not visible")
             return
         }
 
@@ -281,6 +279,9 @@ final class SideCardController {
 
         guard let rowScreenRect = screenRowRect(for: payload, in: panelWindow) else {
             // 触发行当前在 ScrollView 可视区外（例如启动自动滚动尚未完成），暂隐窗口但保留状态。
+            if panel.isVisible {
+                Self.logger.info("hide id=\(payload.id, privacy: .public) reason=anchor outside visible clip or unattached")
+            }
             panel.orderOut(nil)
             return
         }
@@ -330,12 +331,19 @@ final class SideCardController {
             }
         }
 
-        panel.level = NSWindow.Level(rawValue: panelWindow.level.rawValue + 1)
-        panel.setFrame(NSRect(origin: placement.origin, size: placement.size), display: true)
-        if !panel.isVisible {
-            panel.orderFront(nil)
-        }
+        let targetLevel = NSWindow.Level(rawValue: max(panelWindow.level.rawValue, NSWindow.Level.statusBar.rawValue) + 1)
+        let wasVisible = panel.isVisible
+        let previousFrame = panel.frame
+        let newFrame = NSRect(origin: placement.origin, size: placement.size)
+        panel.level = targetLevel
+        panel.setFrame(newFrame, display: true)
+        panel.orderFrontRegardless()
         panel.invalidateShadow()
+        if !wasVisible || previousFrame != newFrame {
+            Self.logger.info(
+                "show id=\(payload.id, privacy: .public) frame=(\(Int(newFrame.origin.x)),\(Int(newFrame.origin.y)),\(Int(newFrame.size.width)),\(Int(newFrame.size.height))) level=\(panel.level.rawValue) panelLevel=\(panelWindow.level.rawValue) isActive=\(NSApp.isActive)"
+            )
+        }
         installEscMonitorIfNeeded()
     }
 
@@ -367,12 +375,12 @@ final class SideCardController {
         )
         p.isFloatingPanel = true
         p.becomesKeyOnlyIfNeeded = true
-        p.hidesOnDeactivate = !CommandLine.arguments.contains(AppDefaults.windowArgument)
+        p.hidesOnDeactivate = false
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = true
         p.isMovable = false
-        p.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary]
+        p.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .canJoinAllSpaces]
         p.animationBehavior = .none
 
         let root = SideCardRootView(
@@ -415,7 +423,10 @@ final class SideCardController {
         self.hostingView = host
     }
 
-    private func hidePanelOnly() {
+    private func hidePanelOnly(reason: String) {
+        if let activeId = activePayload?.id, panel?.isVisible == true {
+            Self.logger.info("hide id=\(activeId, privacy: .public) reason=\(reason, privacy: .public)")
+        }
         scheduledSyncWork?.cancel()
         scheduledSyncWork = nil
         closeGraceTask?.cancel()
@@ -447,13 +458,14 @@ final class SideCardController {
             if NSApp.modalWindow != nil {
                 return
             }
-            self.closeAndDismiss()
+            self.closeAndDismiss(reason: "mouse exit grace expired")
         }
     }
 
     private func screenRowRect(for payload: HoverCardPayload, in panelWindow: NSWindow) -> CGRect? {
         guard let anchorView = payload.anchorBox.view,
-              anchorView.window === panelWindow else {
+              anchorView.window === panelWindow,
+              !anchorView.bounds.isEmpty else {
             return nil
         }
         let rectInWindow = anchorView.convert(anchorView.bounds, to: nil)
@@ -476,7 +488,7 @@ final class SideCardController {
                   panel.isVisible else {
                 return event
             }
-            self.closeAndDismiss()
+            self.closeAndDismiss(reason: "escape key")
             return nil
         }
     }

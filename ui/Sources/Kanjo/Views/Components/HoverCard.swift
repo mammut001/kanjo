@@ -434,6 +434,8 @@ private final class AnchorProbeNSView: NSView {
     override var isFlipped: Bool { true }
     private var lastReportedSize: CGSize = .zero
 
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         enableScrollNotifications()

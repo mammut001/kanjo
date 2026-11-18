@@ -171,6 +171,7 @@ struct MenuPanelView: View {
                     payload: sidePayload,
                     appearance: AppAppearance.resolve(appAppearance)
                 )
+                .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
             }
         }
@@ -181,7 +182,7 @@ struct MenuPanelView: View {
         .onDisappear {
             store.onPanelClosed()
             if !isSnapshotMode {
-                SideCardController.shared.closeAndDismiss()
+                SideCardController.shared.closeAndDismiss(reason: "panel onDisappear")
             }
         }
         .onReceive(store.$report) { applyDevRoute(report: $0) }
