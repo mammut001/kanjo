@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 纯数据：每个 agent 的 light / dark 颜色定义（16 进制 RGB UInt32）。
 /// 移入 KanjoCore 以便 KanjoTests 能够测试颜色区分度（CIEDE2000）。
@@ -9,6 +10,14 @@ public struct AgentColorPair: Equatable, Sendable {
     public init(light: UInt32, dark: UInt32) {
         self.light = light
         self.dark = dark
+    }
+    
+    public var darkColor: Color {
+        Color(
+            red: Double((dark >> 16) & 0xFF) / 255.0,
+            green: Double((dark >> 8) & 0xFF) / 255.0,
+            blue: Double(dark & 0xFF) / 255.0
+        )
     }
 }
 

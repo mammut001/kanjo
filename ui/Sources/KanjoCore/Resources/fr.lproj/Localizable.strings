@@ -592,4 +592,6 @@
 "overview.agy.as_of" = "au %@";
 "overview.accounts_count" = "%d comptes";
 "settings.plan_none" = "Aucun";
+"menu.copy_usage_image" = "Copier l'image d'utilisation";
+"menu.copied" = "Copié";
 

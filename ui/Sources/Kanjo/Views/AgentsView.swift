@@ -78,6 +78,7 @@ struct AgentsView: View {
                                 let isPinned = pinnedAgent == row.agent
                                 AgentDetailRow(
                                     row: row,
+                                    report: report,
                                     currency: cur,
                                     quotaLabelWidth: quotaLabelWidth,
                                     isPinned: isPinned,
@@ -250,6 +251,7 @@ struct AgentsView: View {
 
 private struct AgentDetailRow: View {
     let row: AgentSummaryRow
+    let report: UsageReport // Add report
     let currency: String
     let quotaLabelWidth: CGFloat
     let isPinned: Bool
@@ -261,10 +263,21 @@ private struct AgentDetailRow: View {
 
     var body: some View {
         Button(action: onTogglePin) {
-            rowHeader
-                .padding(.horizontal, Metrics.listInset)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
+            HStack {
+                rowHeader
+                CopyButton {
+                    let rangeSpec = RangeEngine.defaultSpec(report: report) // Need to match range in view
+                    let summary = ShareSummary.build(report: report, rangeSpec: rangeSpec)
+                    let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: row.agent))
+                    renderer.scale = 2.0
+                    if let nsImage = renderer.nsImage {
+                        ShareImageExporter.copyToPasteboard(image: nsImage)
+                    }
+                }
+            }
+            .padding(.horizontal, Metrics.listInset)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(RowButtonStyle(highlighted: isPinned, cornerRadius: Metrics.rowRadius))
         .hoverCard(

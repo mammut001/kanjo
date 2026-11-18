@@ -11,6 +11,8 @@ enum KanjoAppLauncher {
         FamilyReportMigration.migrate()
         if SnapshotConfig.isSnapshotMode {
             SnapshotRunner.runCLI()
+        } else if CommandLine.arguments.contains("--share-image") {
+            ShareImageRunner.runCLI()
         } else if CommandLine.arguments.contains("--window") {
             let app = NSApplication.shared
             let delegate = WindowPreviewAppDelegate()

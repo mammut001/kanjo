@@ -105,6 +105,7 @@ struct MenuPanelView: View {
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
     @State private var editingSubscriptionAgent: String?
+    @State private var copied: Bool = false
     @State private var footerHeight: CGFloat = 0
     @StateObject private var updates = UpdateController.shared
     var initialRoute: Route? = nil
@@ -377,6 +378,24 @@ struct MenuPanelView: View {
             .buttonStyle(IconButtonStyle())
             .hoverTip(L10n.tr("menu.refresh_now"))
             .disabled(route == .disk ? disk.isLoading : store.isLoading)
+
+            if route == .overview || route == .agents {
+                Button {
+                    let rangeSpec = store.panelData?.rangeSpec ?? RangeEngine.defaultSpec(report: store.report!)
+                    let summary = ShareSummary.build(report: store.report!, rangeSpec: rangeSpec)
+                    let renderer = ImageRenderer(content: ShareImage(summary: summary, agentId: nil))
+                    renderer.scale = 2.0
+                    if let nsImage = renderer.nsImage {
+                        ShareImageExporter.copyToPasteboard(image: nsImage)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { copied = false }
+                    }
+                } label: {
+                    Image(systemName: copied ? "checkmark" : "photo.on.rectangle")
+                }
+                .buttonStyle(IconButtonStyle())
+                .hoverTip(L10n.tr("menu.copy_usage_image"))
+            }
 
             Group {
                 if route == .disk {

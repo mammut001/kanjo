@@ -592,4 +592,6 @@
 "overview.agy.as_of" = "截至 %@";
 "overview.accounts_count" = "%d 个账号";
 "settings.plan_none" = "无";
+"menu.copy_usage_image" = "复制用量图片";
+"menu.copied" = "已复制";
 
