@@ -93,6 +93,9 @@ class ScanResult:
     ledger: Optional[dict] = None
 
 
+# Agents whose session start comes from the session's own creation time.
+_START_FROM_ORIGIN = frozenset({"grok"})
+
 def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Optional[Ledger] = None) -> ScanResult:
     """Parse every log file. ``dirs`` maps agent -> directories (defaults to the
     standard locations, overridable with KANJO_<AGENT>_DIR).
@@ -692,6 +695,12 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
         else:
             unit_started = None
             unit_ended = None
+        # Grok print-mode sessions record one priced turn at the very end, so the
+        # first message time is the end time. Its summary.json created_at (origin_ts)
+        # is when the session really began.
+        if (agent in _START_FROM_ORIGIN and unit_started is not None
+                and unit.top.origin_ts is not None and unit.top.origin_ts < unit_started):
+            unit_started = unit.top.origin_ts
 
         if len(decision.shares) == 1:
             target, share = decision.shares[0]
