@@ -10,6 +10,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Windows: copy usage as a share image from the footer.
 
+### Changed
+
+- Windows: tidier overview — long subscription names no longer overlap amounts; roomier range pills, project rows and legend.
+
+### Fixed
+
+- Windows overview: English range pills fit without scrolling, subscription captions break only between the dot-separated parts, and legend labels are never clipped (each item sizes to its text and wraps whole).
+
 ## [0.6.9] - 2026-11-18
 
 ### Added

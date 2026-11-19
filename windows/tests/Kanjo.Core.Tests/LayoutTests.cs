@@ -91,8 +91,73 @@ public sealed class LayoutTests : KanjoTestCase
             Assert.True(lastRight <= scroller.Viewport.Width + maxScroll + 1,
                 $"last pill right {lastRight:F1} unreachable (viewport {scroller.Viewport.Width:F1} + scroll {maxScroll:F1})");
 
+            // 英文词本身放得下时，整行必须落在视口里（不需要横向滚动，Cycle 不被右缘裁掉）。
+            // 有的 headless 字体每个字形都是固定宽度，七个英文词加起来比视口还宽，那种情况只能滚动。
+            AssertEnglishPillsFitWhenLabelsFit(chips, scroller);
+
             window.Close();
         });
+    }
+
+    /// <summary>简体中文的七个范围胶囊也必须放进 360pt 的视口，不靠滚动。</summary>
+    [Fact]
+    public void TestOverviewRangePillsFitInChineseWithoutScrolling()
+    {
+        OnUi(() =>
+        {
+            var settings = AppSettings.InMemory();
+            settings.Set(SettingsKeys.AppLanguage, "zh-Hans");
+            L10n.Store = settings;
+            L10n.ResetCache();
+            var services = new AppServices(settings, ["--snapshot", "--data", FixturePath], TempDir());
+            services.LoadQuietly();
+            var page = new OverviewPage(services, null, snapshot: false);
+            var window = Show(page);
+
+            var picker = page.GetVisualDescendants().OfType<RangePicker>().First();
+            var chips = PillChips(picker);
+            Assert.Equal(TimeRanges.All.Count, chips.Count);
+            var scroller = picker.PillsScroller!;
+            AssertPillsFitWhenLabelsFit(chips, scroller, "zh-Hans");
+
+            window.Close();
+        });
+    }
+
+    private static List<Border> PillChips(RangePicker picker) =>
+        picker.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.Child is TextBlock { Text.Length: > 0 } tb && Math.Abs(tb.FontSize - 11) < 0.1)
+            .ToList();
+
+    private static void AssertEnglishPillsFitWhenLabelsFit(IReadOnlyList<Border> chips, ScrollViewer scroller) =>
+        AssertPillsFitWhenLabelsFit(chips, scroller, "en");
+
+    /// <summary>
+    /// 最小内边距下文字放得进视口时，extent 不能宽过 viewport。
+    /// 放不进（stub 字体）则只要求没有为了「撑满」而把内边距加大到不得不滚。
+    /// </summary>
+    private static void AssertPillsFitWhenLabelsFit(IReadOnlyList<Border> chips, ScrollViewer scroller, string language)
+    {
+        double text = 0;
+        foreach (var chip in chips)
+        {
+            var block = (TextBlock)chip.Child!;
+            text += Kanjo.App.Type.MeasureWidth(block.Text!, block.FontSize, block.FontWeight);
+        }
+        const double minPad = 4;
+        var viewport = scroller.Viewport.Width;
+        var minRow = text + chips.Count * minPad * 2;
+        if (minRow <= viewport)
+        {
+            Assert.True(scroller.Extent.Width <= viewport + 0.5,
+                $"{language} pills scroll: extent {scroller.Extent.Width:F1} viewport {viewport:F1} " +
+                $"pad={chips[0].Padding.Left:F1} text={text:F1}");
+        }
+        else
+        {
+            Assert.True(chips[0].Padding.Left <= minPad + 0.05,
+                $"{language} labels ({text:F1}) exceed viewport {viewport:F1} but pad is {chips[0].Padding.Left:F1}");
+        }
     }
 
     /// <summary>概览 hero 里的 "Total cost" 标签必须在胶囊那一行之上（不能挤在一起）。</summary>
@@ -138,6 +203,14 @@ public sealed class LayoutTests : KanjoTestCase
                             (t.Text?.Contains("sessions", StringComparison.Ordinal) ?? false))
                 .ToList();
             Assert.NotEmpty(subtitles);
+            foreach (var text in subtitles)
+            {
+                // 最近活跃在最前面，可见宽度至少要容得下这一段。
+                var head = text.Text!.Split(" · ", 2)[0];
+                var headWidth = Kanjo.App.Type.MeasureWidth(head, 12);
+                Assert.True(text.Bounds.Width + 0.5 >= headWidth,
+                    $"subtitle '{text.Text}' hides last-active '{head}' ({text.Bounds.Width:F1} < {headWidth:F1})");
+            }
 
             foreach (var strip in strips)
             {
@@ -391,5 +464,235 @@ public sealed class LayoutTests : KanjoTestCase
 
             window.Close();
         });
+    }
+
+    /// <summary>
+    /// 长套餐名不能压到右侧金额上。月费在说明行里，金额和倍数各自右对齐、各行对齐，中间没有单独的「·」。
+    /// </summary>
+    [Fact]
+    public void TestSubscriptionRowLongPlanDoesNotOverlapAmount()
+    {
+        OnUi(() =>
+        {
+            var services = NewServices();
+            services.SubscriptionCardExpanded = true;
+            var page = new OverviewPage(services, null, snapshot: false);
+            var window = Show(page);
+
+            var plan = page.GetVisualDescendants().OfType<TextBlock>()
+                .First(t => t.Text == "Google AI Ultra + Google AI Pro");
+            Assert.DoesNotContain("/mo", plan.Text, StringComparison.Ordinal);
+            var planPos = plan.TranslatePoint(new Point(0, 0), page)!.Value;
+            var planRight = planPos.X + plan.Bounds.Width;
+
+            // 订阅金额设了固定 Width；项目行的金额没有，不能混进来比右缘。
+            var amounts = page.GetVisualDescendants().OfType<TextBlock>()
+                .Where(t => t.FontSize == 14 && t.FontWeight == FontWeight.Medium &&
+                            !double.IsNaN(t.Width) && t.Width > 0 &&
+                            t.Text != null && t.Text.StartsWith('$'))
+                .ToList();
+            Assert.True(amounts.Count >= 2, $"expected aligned subscription amounts, found {amounts.Count}");
+
+            var amount = amounts
+                .Select(a => (Block: a, Pos: a.TranslatePoint(new Point(0, 0), page)!.Value))
+                .First(t => Math.Abs(t.Pos.Y - planPos.Y) < 14);
+            Assert.True(planRight <= amount.Pos.X + 0.5,
+                $"plan right {planRight:F1} overlaps amount at {amount.Pos.X:F1} ('{amount.Block.Text}')");
+            var amountMeasured = Kanjo.App.Type.MeasureWidth(amount.Block.Text!, 14, FontWeight.Medium,
+                Kanjo.App.Type.Rounded);
+            Assert.True(amount.Block.Bounds.Width + 0.5 >= amountMeasured,
+                $"amount '{amount.Block.Text}' clipped");
+            var amountRight = amount.Pos.X + amount.Block.Bounds.Width;
+            Assert.True(amountRight <= Metrics.PanelWidth - Metrics.PagePadding + 1,
+                $"amount right {amountRight:F1} leaves the panel");
+
+            var captions = page.GetVisualDescendants().OfType<TextBlock>()
+                .Where(t => t.Text?.Contains("/mo", StringComparison.Ordinal) == true)
+                .Select(t => (Block: t, Pos: t.TranslatePoint(new Point(0, 0), page)!.Value))
+                .ToList();
+            Assert.Contains(captions, t => t.Pos.Y > planPos.Y && t.Block.Text!.Contains("$269.98/mo",
+                StringComparison.Ordinal));
+            AssertSubscriptionCaptionDoesNotOrphan(page);
+
+            var loneDots = page.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "·").ToList();
+            Assert.Empty(loneDots);
+
+            static double Right(TextBlock block, Control root)
+            {
+                var p = block.TranslatePoint(new Point(block.Bounds.Width, 0), root)!.Value;
+                return p.X;
+            }
+
+            var amountRights = amounts.Select(a => Right(a, page)).ToList();
+            Assert.True(amountRights.Max() - amountRights.Min() < 1.5,
+                $"amount right edges {amountRights.Min():F1}…{amountRights.Max():F1}");
+
+            var multiples = page.GetVisualDescendants().OfType<TextBlock>()
+                .Where(t => t.FontSize == 13 && t.FontWeight == FontWeight.Medium &&
+                            t.Text != null && (t.Text.EndsWith('×') || t.Text == "—"))
+                .ToList();
+            Assert.Equal(amounts.Count, multiples.Count);
+            var multipleRights = multiples.Select(m => Right(m, page)).ToList();
+            Assert.True(multipleRights.Max() - multipleRights.Min() < 1.5,
+                $"multiplier right edges {multipleRights.Min():F1}…{multipleRights.Max():F1}");
+            Assert.True(multipleRights.Min() > amountRights.Max() - 0.5,
+                "multiplier column should sit to the right of the amounts");
+
+            window.Close();
+        });
+    }
+
+    /// <summary>法文短标签也必须在一行里完整可见；放不下时滚动范围要盖住最后一个，选中项在视口内。</summary>
+    [Fact]
+    public void TestOverviewRangePillsNotClippedInFrench()
+    {
+        OnUi(() =>
+        {
+            var settings = AppSettings.InMemory();
+            settings.Set(SettingsKeys.AppLanguage, "fr");
+            settings.Set(SettingsKeys.TimeRange, "billingCycle");
+            L10n.Store = settings;
+            L10n.ResetCache();
+            var services = new AppServices(settings, ["--snapshot", "--data", FixturePath], TempDir());
+            services.LoadQuietly();
+            var page = new OverviewPage(services, null, snapshot: false);
+            var window = Show(page);
+
+            var picker = page.GetVisualDescendants().OfType<RangePicker>().First();
+            var chips = picker.GetVisualDescendants().OfType<Border>()
+                .Where(b => b.Child is TextBlock { Text.Length: > 0 } tb && tb.FontSize == 11)
+                .ToList();
+            Assert.Equal(TimeRanges.All.Count, chips.Count);
+
+            var ys = chips.Select(c => c.Bounds.Y).ToList();
+            Assert.True(ys.Max() - ys.Min() < 1, "French pills wrapped onto a second row");
+
+            foreach (var chip in chips)
+            {
+                var text = (TextBlock)chip.Child!;
+                Assert.Equal(TextWrapping.NoWrap, text.TextWrapping);
+                var measured = Kanjo.App.Type.MeasureWidth(text.Text!, 11, text.FontWeight);
+                Assert.True(text.Bounds.Width + 0.5 >= measured,
+                    $"pill '{text.Text}' text width {text.Bounds.Width:F1} < measured {measured:F1}");
+                Assert.True(chip.Bounds.Right <= (picker.PillsScroller?.Extent.Width ?? 0) + 1,
+                    $"pill '{text.Text}' sits outside the scroll extent");
+            }
+
+            var scroller = picker.PillsScroller!;
+            var maxScroll = Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            var lastRight = chips[^1].Bounds.Right;
+            Assert.True(lastRight <= scroller.Viewport.Width + maxScroll + 1,
+                $"last pill right {lastRight:F1} unreachable (viewport {scroller.Viewport.Width:F1} + scroll {maxScroll:F1})");
+
+            var selected = chips.First(c => ((TextBlock)c.Child!).FontWeight == FontWeight.SemiBold);
+            var offset = scroller.Offset.X;
+            var viewRight = offset + scroller.Viewport.Width;
+            Assert.True(selected.Bounds.X >= offset - 1 && selected.Bounds.Right <= viewRight + 1,
+                $"selected '{((TextBlock)selected.Child!).Text}' x {selected.Bounds.X:F1}–{selected.Bounds.Right:F1} " +
+                $"outside view {offset:F1}–{viewRight:F1}");
+
+            window.Close();
+        });
+    }
+
+    /// <summary>图例每一项按内容排开，文字的排列宽度不小于期望宽度（不裁切）。</summary>
+    [Fact]
+    public void TestOverviewLegendLabelsAreNotClipped()
+    {
+        OnUi(() =>
+        {
+            var page = new OverviewPage(NewServices(), null, snapshot: false);
+            var window = Show(page);
+
+            var legend = page.GetVisualDescendants().OfType<AgentLegend>().First();
+            var chips = legend.Children.OfType<Control>().ToList();
+            Assert.NotEmpty(chips);
+            AssertLegendSpacing(chips);
+
+            foreach (var row in chips.GroupBy(c => Math.Round(c.Bounds.Y)))
+            {
+                var top = row.Min(c => c.Bounds.Y);
+                Assert.All(row, c => Assert.True(Math.Abs(c.Bounds.Y - top) < 0.5,
+                    "legend items on one row are not vertically aligned"));
+            }
+
+            foreach (var chip in chips)
+            {
+                var label = chip.GetVisualDescendants().OfType<TextBlock>().First();
+                Assert.Equal(TextWrapping.NoWrap, label.TextWrapping);
+                Assert.Equal(TextTrimming.None, label.TextTrimming);
+                Assert.True(label.Bounds.Width >= label.DesiredSize.Width - 0.5,
+                    $"legend '{label.Text}' arranged {label.Bounds.Width:F1} < desired {label.DesiredSize.Width:F1}");
+            }
+
+            window.Close();
+        });
+    }
+
+    /// <summary>色点到文字约 4pt，相邻项约 10pt。</summary>
+    private static void AssertLegendSpacing(IReadOnlyList<Control> chips)
+    {
+        double? itemGap = null;
+        for (var i = 0; i < chips.Count; i++)
+        {
+            var dot = chips[i].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First();
+            var label = chips[i].GetVisualDescendants().OfType<TextBlock>().First();
+            var dotToLabel = label.Bounds.X - (dot.Bounds.X + dot.Bounds.Width);
+            Assert.InRange(dotToLabel, 3.0, 5.5);
+            if (i + 1 < chips.Count && Math.Abs(chips[i + 1].Bounds.Y - chips[i].Bounds.Y) < 1)
+            {
+                itemGap = chips[i + 1].Bounds.X - chips[i].Bounds.Right;
+                Assert.InRange(itemGap.Value, 8.0, 12.0);
+            }
+        }
+        Assert.NotNull(itemGap);
+    }
+
+    /// <summary>
+    /// 「$269.98/mo · Last 30 days · set renewal day for exact cycle」只能在「 · 」处断行，
+    /// 不能把 cycle 一个词单独留在下一行。
+    /// </summary>
+    private static void AssertSubscriptionCaptionDoesNotOrphan(Control page)
+    {
+        const string caption = "$269.98/mo · Last 30 days · set renewal day for exact cycle";
+        var segments = caption.Split(" · ");
+        var blocks = page.GetVisualDescendants().OfType<TextBlock>()
+            .Select(block => (Block: block, Y: block.TranslatePoint(new Point(0, 0), page)?.Y ?? 0))
+            .ToList();
+        var headY = blocks.Where(t => t.Block.Text?.Contains("$269.98/mo", StringComparison.Ordinal) == true)
+            .Select(t => t.Y)
+            .DefaultIfEmpty(double.NaN)
+            .Min();
+        Assert.True(double.IsFinite(headY), "missing $269.98/mo caption");
+
+        var lines = new List<string>();
+        foreach (var (block, y) in blocks.Where(t => Math.Abs(t.Y - headY) < 36).OrderBy(t => t.Y))
+        {
+            var text = block.Text ?? "";
+            if (text.Length == 0 || !caption.Contains(text, StringComparison.Ordinal)) continue;
+            if (block.TextLayout is { TextLines.Count: > 0 } layout)
+            {
+                foreach (var line in layout.TextLines)
+                {
+                    var start = Math.Clamp(line.FirstTextSourceIndex, 0, text.Length);
+                    var len = Math.Clamp(line.Length, 0, text.Length - start);
+                    var piece = text.Substring(start, len).Trim();
+                    if (piece.Length > 0) lines.Add(piece);
+                }
+            }
+            else
+            {
+                lines.Add(text.Trim());
+            }
+        }
+
+        Assert.NotEmpty(lines);
+        Assert.DoesNotContain(lines, line => line == "cycle");
+        foreach (var line in lines)
+        {
+            foreach (var part in line.Split(" · ", StringSplitOptions.RemoveEmptyEntries))
+                Assert.Contains(segments, segment => segment == part);
+        }
+        Assert.Equal(caption, string.Join(" · ", lines));
     }
 }

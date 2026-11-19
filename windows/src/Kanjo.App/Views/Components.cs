@@ -18,12 +18,24 @@ public interface ISnapshotPage
 /// 范围选择器（Fluent 胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
 /// 选中项是强调色填充 + 强调色上的文字；不可用的范围是禁用色文字、不可点。
 ///
-/// 360px 的面板里 7 个胶囊一行放不下，硬挤会把「Cycle」切成「Cy」。
-/// 所以这里做成**横向滚动的单行**：不显示滚动条（`ScrollBarVisibility.Hidden`），
-/// 滚轮 / 触摸板 / 拖动都能挪，每个胶囊都不会被折行或截断。
+/// 单行、不折行。宽度够时把多余空间均匀分给每个胶囊的左右内边距，
+/// 并留出几 pt，避免布局取整后最后一个胶囊被右缘淡出裁掉。
+/// 某种语言放不下时横向滚动（滚动条隐藏），并把选中项滚进视口。
 /// </summary>
 public sealed class RangePicker : Border
 {
+    private const double MinChipPad = 4;
+    private const double MaxChipPad = 12;
+
+    /// <summary>右缘留白。再小的话，每个胶囊取整多出来的 1px 会把最后一个词推出视口。</summary>
+    private const double FitSpare = 6;
+
+    private readonly List<Border> _chips = [];
+    private readonly ScrollViewer _scroller;
+    private Border? _selected;
+    private bool _scrolledToSelected;
+    private double _chipPad = MinChipPad;
+
     public RangePicker(string rangeRaw, TimeRange effective, bool resetAvailable, bool cycleAvailable,
         Action<string> onChange)
     {
@@ -35,19 +47,17 @@ public sealed class RangePicker : Border
         HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Center;
 
-        // 7 个英文胶囊（All/Today/7d/30d/Last week/Since reset/Cycle）在 310px 的可用宽度里
-        // 放不下（需要约 314px），所以做成**横向可滚动**的单行：不画滚动条，
-        // 每个胶囊保持自然宽度、绝不折行、绝不切词，最后那个可以滚出来。
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var range in TimeRanges.All)
         {
             var selected = range == effective;
             var label = Ui.Text(range.ShortLabel(), 11, selected ? FontWeight.SemiBold : FontWeight.Normal,
                 selected ? Palette.ContrastOn(Palette.Accent) : Palette.Secondary, maxLines: 1);
+            label.TextWrapping = TextWrapping.NoWrap;
             var chip = new Border
             {
                 CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(5, 4, 5, 4),
+                Padding = new Thickness(MinChipPad, 4, MinChipPad, 4),
                 Background = selected ? Palette.Accent : Brushes.Transparent,
                 Child = label,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -72,12 +82,14 @@ public sealed class RangePicker : Border
                     if (!selected) chip.Background = Brushes.Transparent;
                 };
             }
+            if (selected) _selected = chip;
+            _chips.Add(chip);
             row.Children.Add(chip);
         }
 
         // ScrollViewer 明确 Stretch + 左对齐内容：视口跟父级宽度走（不按内容撑宽），
         // 内容更宽时出现横向滚动（滚动条隐藏，滚轮 / 触摸板 / 拖动都能挪）。
-        var scroller = new ScrollViewer
+        _scroller = new ScrollViewer
         {
             Content = row,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
@@ -94,7 +106,8 @@ public sealed class RangePicker : Border
         };
 
         // 视口右缘的淡出：内容还有没滚出来的部分时，最后一个胶囊是「渐隐」而不是
-        // 「被切掉半个词」。这是横向滚动的标准提示，也满足「不能切在词中间」。
+        // 「被切掉半个词」。起止色都取当前 GroupFill，深色模式也不会露出一条浅色。
+        var fill = Palette.GroupFillColor;
         var fade = new Border
         {
             Width = 18,
@@ -107,29 +120,114 @@ public sealed class RangePicker : Border
                 EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
                 GradientStops =
                 {
-                    new GradientStop(Color.FromArgb(0, 247, 247, 247), 0),
-                    new GradientStop(Palette.GroupFillColor, 1),
+                    new GradientStop(Color.FromArgb(0, fill.R, fill.G, fill.B), 0),
+                    new GradientStop(fill, 1),
                 },
             },
         };
         void UpdateFade()
         {
-            var more = Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
-            fade.IsVisible = more > 0.5 && scroller.Offset.X < more - 0.5;
+            var more = Math.Max(0, _scroller.Extent.Width - _scroller.Viewport.Width);
+            fade.IsVisible = more > 0.5 && _scroller.Offset.X < more - 0.5;
         }
-        scroller.ScrollChanged += (_, _) => UpdateFade();
-        scroller.PropertyChanged += (_, e) =>
+        _scroller.ScrollChanged += (_, _) =>
+        {
+            UpdateFade();
+            ScrollSelectedIntoView();
+        };
+        _scroller.PropertyChanged += (_, e) =>
         {
             if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty)
                 UpdateFade();
         };
+        _scroller.SizeChanged += (_, _) => ScrollSelectedIntoView();
 
-        Child = new Panel { Children = { scroller, fade } };
+        Child = new Panel { Children = { _scroller, fade } };
         MinHeight = 34;
     }
 
     /// <summary>测试 / 调试用：胶囊那一行的横向滚动条（内容放不下时可滚到最后一个）。</summary>
-    public ScrollViewer? PillsScroller => (Child as Panel)?.Children.OfType<ScrollViewer>().FirstOrDefault();
+    public ScrollViewer? PillsScroller => _scroller;
+
+    /// <summary>
+    /// 把多余宽度均匀加进每个胶囊的左右内边距（有上限），并留出 <see cref="FitSpare"/>。
+    /// 文字测量值会比排版后的胶囊窄（每个胶囊布局取整最多多 1px），所以用实际 DesiredSize
+    /// 再往下收，直到整行放进视口。最小内边距仍放不下时保持最小值，交给滚动。
+    /// </summary>
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var chrome = Padding.Left + Padding.Right + BorderThickness.Left + BorderThickness.Right;
+        var inner = double.IsFinite(availableSize.Width)
+            ? Math.Max(0, availableSize.Width - chrome)
+            : double.PositiveInfinity;
+        ApplyChipPad(inner);
+        return base.MeasureOverride(availableSize);
+    }
+
+    private void ApplyChipPad(double inner)
+    {
+        var pad = ChoosePad(inner);
+        if (Math.Abs(pad - _chipPad) < 0.05) return;
+        _chipPad = pad;
+        var next = new Thickness(pad, 4, pad, 4);
+        foreach (var chip in _chips) chip.Padding = next;
+    }
+
+    private double ChoosePad(double inner)
+    {
+        if (!double.IsFinite(inner) || inner <= 0 || _chips.Count == 0) return MaxChipPad;
+
+        double text = 0;
+        foreach (var chip in _chips)
+        {
+            if (chip.Child is not TextBlock tb) continue;
+            text += Type.MeasureWidth(tb.Text ?? "", tb.FontSize, tb.FontWeight);
+        }
+
+        var raw = (inner - FitSpare - text) / (2 * _chips.Count);
+        var tenths = (int)Math.Floor(Math.Clamp(raw, MinChipPad, MaxChipPad) * 10);
+        var minTenths = (int)Math.Round(MinChipPad * 10);
+        var limit = inner - FitSpare;
+        for (var i = 0; i < 40; i++)
+        {
+            var pad = tenths / 10.0;
+            if (MeasureRow(pad) <= limit + 0.25) return pad;
+            if (tenths <= minTenths) return MinChipPad;
+            tenths--;
+        }
+        return MinChipPad;
+    }
+
+    private double MeasureRow(double pad)
+    {
+        var thickness = new Thickness(pad, 4, pad, 4);
+        double width = 0;
+        foreach (var chip in _chips)
+        {
+            chip.Padding = thickness;
+            chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            width += chip.DesiredSize.Width;
+        }
+        return width;
+    }
+
+    /// <summary>只自动滚一次，避免和用户之后的滚动抢位置。</summary>
+    private void ScrollSelectedIntoView()
+    {
+        if (_scrolledToSelected || _selected is null) return;
+        if (_scroller.Viewport.Width <= 1 || _selected.Bounds.Width <= 1) return;
+        var x = _selected.Bounds.X;
+        var right = x + _selected.Bounds.Width;
+        var max = Math.Max(0, _scroller.Extent.Width - _scroller.Viewport.Width);
+        var offset = _scroller.Offset.X;
+        var viewRight = offset + _scroller.Viewport.Width;
+        _scrolledToSelected = true;
+        if (x >= offset - 0.5 && right <= viewRight + 0.5) return;
+        var target = right > viewRight ? right - _scroller.Viewport.Width : x;
+        target = Math.Clamp(target, 0, max);
+        if (Math.Abs(target - offset) > 0.5)
+            _scroller.Offset = new Vector(target, _scroller.Offset.Y);
+    }
 
     private static string? Unavailable(TimeRange r, bool resetAvailable, bool cycleAvailable)
     {

@@ -115,25 +115,49 @@ public static class Widgets
         return border;
     }
 
-    /// <summary>agent 图例：色点 + 名称，流式折行，按花费降序。</summary>
+    /// <summary>agent 图例：色点 + 名称，按花费降序。每一项按内容宽度排，整项换行，不截断。</summary>
     public static Control Legend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items,
-        string currency)
+        string currency) =>
+        new AgentLegend(items, currency);
+}
+
+/// <summary>
+/// 项目卡顶部的 agent 图例。WrapPanel 里每一项按自己的内容宽度排：
+/// 色点距文字 4pt，项与项约 10pt，放不下就整项换到下一行。不测量字宽、不截断。
+/// 悬停 id 与原来一致（第一项 <c>overview:hover:legend</c>）。
+/// </summary>
+public sealed class AgentLegend : WrapPanel
+{
+    public AgentLegend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items, string currency)
     {
-        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        Orientation = Orientation.Horizontal;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+
         for (var i = 0; i < items.Count; i++)
         {
             var (agent, label, cost, tokens) = items[i];
-            var chip = Ui.H(5);
-            chip.Margin = new Thickness(0, 0, 12, 4);
-            chip.Children.Add(Ui.Dot(agent, 8));
-            chip.Children.Add(Ui.Text(label, Type.CaptionSize, null, Palette.Secondary));
+            // 不设 MaxLines / Width：宽度完全跟文字走，换行只发生在项与项之间。
+            var text = Ui.Text(label, 10, null, Palette.Secondary);
+            text.TextWrapping = TextWrapping.NoWrap;
+            text.TextTrimming = TextTrimming.None;
+            text.HorizontalAlignment = HorizontalAlignment.Left;
+            text.VerticalAlignment = VerticalAlignment.Center;
+            var chip = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                Margin = new Thickness(0, 0, 10, 4),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            chip.Children.Add(Ui.Dot(agent, 6));
+            chip.Children.Add(text);
             var rows = new List<HoverCardRowItem> { new(agent, label, cost, tokens, 1.0) };
             HoverLayer.Attach(chip, i == 0 ? "overview:hover:legend" : $"overview:hover:legend:{agent}",
                 () => HoverCards.AgentRows(label, agent, cost, tokens, currency, rows));
             ToolTip.SetTip(chip, TooltipBuilder.AgentLine(label, cost, tokens, currency));
-            wrap.Children.Add(chip);
+            Children.Add(chip);
         }
-        return wrap;
     }
 }
 

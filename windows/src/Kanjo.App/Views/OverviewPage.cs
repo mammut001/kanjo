@@ -189,8 +189,7 @@ public sealed class OverviewPage : ScrollPage
                 _services.NotifyChanged();
             });
 
-        // 标签独占一行，胶囊单独一行横向滚动：360px 里 7 个胶囊不可能一行放下，
-        // 挤在一起会把「Cycle」切掉。
+        // 标签独占一行。胶囊在 RangePicker 里按可用宽度均匀留白，放不下再横向滚动。
         box.Children.Add(title);
         box.Children.Add(picker);
 
@@ -199,15 +198,69 @@ public sealed class OverviewPage : ScrollPage
         var rangeText = filtered.FirstActive is null && !ctx.IsAll
             ? L10n.Tr("overview.no_usage")
             : ShortDate.Range(filtered.FirstActive, filtered.LastActive, compact: true);
-        var summary = OverviewSummaryText.Make(ctx.Range, rangeText, visible.Count, filtered.Sessions,
-            filtered.Tokens, hiddenCount);
-        box.Children.Add(Ui.Text(summary, Type.CaptionSize, null, Palette.Secondary, wrap: true));
+        box.Children.Add(HeroMeta(ctx.Range, rangeText, visible.Count, filtered.Sessions,
+            filtered.Tokens, hiddenCount));
 
         if (ctx.CaptionResult is { } caption)
         {
             box.Children.Add(new RangeCaptionLine(caption));
         }
         return box;
+    }
+
+    /// <summary>
+    /// 大数字下面的摘要。一行放得下就一行；放不下时日期独占第一行，计数按「 · 」整段换行，
+    /// 避免「tokens」单独掉到下一行。
+    /// </summary>
+    private static Control HeroMeta(TimeRange range, string rangeText, int projects, int sessions, long tokens,
+        int hiddenCount)
+    {
+        var counts = OverviewSummaryText.Counts(projects, sessions, tokens, hiddenCount);
+        var full = range == TimeRange.Today ? counts : $"{rangeText} · {counts}";
+        // 比卡片内容宽度少 2px，避免刚好卡在折行边界上把最后一个词挤下去。
+        var width = Metrics.RowContentWidth - 2;
+        var meta = Ui.V(0);
+        if (Type.MeasureWidth(full, Type.CaptionSize) <= width)
+        {
+            meta.Children.Add(MetaLine(full));
+            return meta;
+        }
+        if (range != TimeRange.Today && rangeText.Length > 0)
+            meta.Children.Add(MetaLine(rangeText));
+        AddPackedMeta(meta, counts, width);
+        return meta;
+    }
+
+    private static void AddPackedMeta(StackPanel box, string text, double width)
+    {
+        if (text.Length == 0) return;
+        if (Type.MeasureWidth(text, Type.CaptionSize) <= width)
+        {
+            box.Children.Add(MetaLine(text));
+            return;
+        }
+        var line = "";
+        foreach (var part in text.Split(" · ", StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = line.Length == 0 ? part : $"{line} · {part}";
+            if (line.Length > 0 && Type.MeasureWidth(next, Type.CaptionSize) > width)
+            {
+                box.Children.Add(MetaLine(line));
+                line = part;
+            }
+            else
+            {
+                line = next;
+            }
+        }
+        if (line.Length > 0) box.Children.Add(MetaLine(line));
+    }
+
+    private static TextBlock MetaLine(string text)
+    {
+        var block = Ui.Text(text, Type.CaptionSize, null, Palette.Secondary, maxLines: 1);
+        block.TextTrimming = TextTrimming.CharacterEllipsis;
+        return block;
     }
 
     /// <summary>
@@ -250,13 +303,26 @@ public sealed class OverviewPage : ScrollPage
         var expanded = _services.SubscriptionCardExpanded || autoExpand;
         var visible = SubscriptionOrder.Visible(ordered, expanded, limit: 3);
 
+        var amountWidth = 1d;
+        var multipleWidth = 42d;
+        foreach (var row in visible)
+        {
+            amountWidth = Math.Max(amountWidth, Type.MeasureWidth(
+                Fmt.Money(row.Usage, report.Currency), 14, FontWeight.Medium, Type.Rounded));
+            multipleWidth = Math.Max(multipleWidth, Type.MeasureWidth(
+                Fmt.Multiple(row.Multiplier), 13, FontWeight.Medium));
+        }
+        amountWidth = Math.Ceiling(amountWidth) + 1;
+        multipleWidth = Math.Max(42, Math.Ceiling(multipleWidth) + 1);
+
         var body = Ui.V(0);
         body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
 
         for (var i = 0; i < visible.Count; i++)
         {
             if (i > 0) body.Children.Add(Widgets.RowDivider(Metrics.RowInset, Metrics.RowInset));
-            var line = SubscriptionLine(report, visible[i]).WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8);
+            var line = SubscriptionLine(report, visible[i], amountWidth, multipleWidth)
+                .WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8);
             MakeReorderable(line, visible[i].Agent, ordered.Select(r => r.Agent).ToList());
             body.Children.Add(line);
         }
@@ -374,52 +440,101 @@ public sealed class OverviewPage : ScrollPage
             () => HoverCards.Subscription(row, report.Currency));
     }
 
-    /// <summary>一行：色点 + 名称 + 月费 …… 用量 + 「·」+ 倍数（右侧两列）。</summary>
-    private Control SubscriptionLine(UsageReport report, SubscriptionRow row)
+    /// <summary>
+    /// 一行：色点 + 名称（超出省略）…… 用量、倍数（右对齐定宽列，各行对齐）。
+    /// 月费放在第二行说明开头，长套餐名不会画到金额下面。
+    /// </summary>
+    private Control SubscriptionLine(UsageReport report, SubscriptionRow row, double amountWidth, double multipleWidth)
     {
         var box = Ui.V(2);
 
-        var left = Ui.H(5);
-        left.Children.Add(Ui.Dot(row.Agent));
-        var plan = Ui.Text(row.PlanLabel, 12);
-        plan.VerticalAlignment = VerticalAlignment.Center;
-        left.Children.Add(plan);
-        left.Children.Add(Ui.Text($"· {Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency)}", 12, null,
-            Palette.Secondary));
+        var name = Ui.Text(row.PlanLabel, 12, maxLines: 1);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        name.TextWrapping = TextWrapping.NoWrap;
+        name.HorizontalAlignment = HorizontalAlignment.Stretch;
+        name.VerticalAlignment = VerticalAlignment.Center;
+        name.MinWidth = 0;
+        name.Margin = new Thickness(5, 0, 0, 0);
+
+        var left = new Grid
+        {
+            MinWidth = 0,
+            ClipToBounds = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(new GridLength(1, GridUnitType.Star)) { MinWidth = 0 },
+            },
+        };
+        var dot = Ui.Dot(row.Agent);
+        Grid.SetColumn(dot, 0);
+        Grid.SetColumn(name, 1);
+        left.Children.Add(dot);
+        left.Children.Add(name);
         if (row.ExtraUsageEnabled)
         {
-            left.Children.Add(Widgets.Badge(L10n.Tr("overview.extra_usage_on"), BadgeStyle.Warn,
-                L10n.Tr("overview.extra_usage_help")));
+            left.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            var badge = Widgets.Badge(L10n.Tr("overview.extra_usage_on"), BadgeStyle.Warn,
+                L10n.Tr("overview.extra_usage_help"));
+            badge.Margin = new Thickness(5, 0, 0, 0);
+            Grid.SetColumn(badge, 2);
+            left.Children.Add(badge);
         }
 
         var amount = Ui.Text(Fmt.Money(row.Usage, report.Currency), 14, FontWeight.Medium, family: Type.Rounded);
         amount.TextAlignment = TextAlignment.Right;
-        var dot = Ui.Text("·", 12, null, Palette.Tertiary);
+        amount.Width = amountWidth;
+        amount.VerticalAlignment = VerticalAlignment.Center;
+        amount.Margin = new Thickness(8, 0, 8, 0);
         var multiple = Ui.Text(Fmt.Multiple(row.Multiplier), 13, FontWeight.Medium, Palette.Secondary);
         multiple.TextAlignment = TextAlignment.Right;
-        multiple.MinWidth = 42;
+        multiple.Width = multipleWidth;
+        multiple.VerticalAlignment = VerticalAlignment.Center;
 
-        var top = Ui.Columns(
-            (left, new GridLength(1, GridUnitType.Star)),
-            (amount, GridLength.Auto),
-            (dot.WithMargin(6, 0, 4, 0), GridLength.Auto),
-            (multiple, GridLength.Auto));
+        var top = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(1, GridUnitType.Star)) { MinWidth = 0 },
+                new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Auto),
+            },
+        };
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(amount, 1);
+        Grid.SetColumn(multiple, 2);
+        top.Children.Add(left);
+        top.Children.Add(amount);
+        top.Children.Add(multiple);
         box.Children.Add(top);
 
         // 额度卡（有 quota_windows 才挂）：悬停 0.35 秒后浮出。
         AttachSubscriptionHover(top, report, row);
 
+        var price = Fmt.PerMonth(row.MonthlyPriceUsd, report.Currency);
+        var caption = price;
+        string? tip = null;
         if (report.Subscriptions is { } subs && subs.TryGetValue(row.Agent, out var sub))
         {
             var timezone = RangeEngine.TimezoneOf(report);
-            var caption = Fmt.CycleCaption(sub, timezone, _services.Now);
-            var captionText = Ui.Text(caption, 12, null, Palette.Secondary, wrap: true)
-                .WithMargin(11, 0, 0, 0);
-            if (SubscriptionValue.NeedsRenewalDay(sub)) ToolTip.SetTip(captionText, SubscriptionValue.AssumedDayHelp);
-            else ToolTip.SetTip(captionText, Fmt.CycleDates(sub, timezone));
-            box.Children.Add(captionText);
+            caption = $"{price} · {Fmt.CycleCaption(sub, timezone, _services.Now)}";
+            tip = SubscriptionValue.NeedsRenewalDay(sub)
+                ? SubscriptionValue.AssumedDayHelp
+                : Fmt.CycleDates(sub, timezone);
         }
-        return box;
+        // 8px 色点 + 5px 间距，和套餐名左缘对齐。
+        // 和 hero 摘要一样：只在「 · 」处断行，第二行从整段开始，不会把「cycle」一个词丢到下一行。
+        const double captionIndent = 13;
+        var captionText = Ui.V(0);
+        captionText.Margin = new Thickness(captionIndent, 0, 0, 0);
+        AddPackedMeta(captionText, caption, Metrics.RowContentWidth - captionIndent);
+        if (tip is not null) ToolTip.SetTip(captionText, tip);
+        box.Children.Add(captionText);
+
+        // Border 才能挂上拖拽排序（MakeReorderable 只认 Border）。
+        return new Border { Background = Brushes.Transparent, Child = box };
     }
 
     // MARK: - 项目列表
@@ -432,7 +547,7 @@ public sealed class OverviewPage : ScrollPage
         if (legend.Count > 0)
         {
             body.Children.Add(Widgets.Legend(legend, report.Currency)
-                .WithMargin(Metrics.RowInset, 10, Metrics.RowInset - 6, 4));
+                .WithMargin(8, 8, 8, 2));
         }
 
         if (lists.Visible.Count == 0)
@@ -493,12 +608,12 @@ public sealed class OverviewPage : ScrollPage
                 if (!labels.TryGetValue(a.Agent, out var existing) || existing == a.Agent) labels[a.Agent] = a.Label;
             }
         }
-        return cost.Keys.Union(tokens.Keys, StringComparer.Ordinal)
-            .Where(k => cost.GetValueOrDefault(k) > 0 || tokens.GetValueOrDefault(k) > 0)
-            .OrderByDescending(k => cost.GetValueOrDefault(k))
-            .ThenBy(k => k, StringComparer.Ordinal)
-            .Select(k => (k, labels.GetValueOrDefault(k) ?? AgentColors.Label(k),
-                cost.GetValueOrDefault(k), tokens.GetValueOrDefault(k)))
+        return cost
+            .Where(kv => kv.Value > 0)
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => (kv.Key, labels.GetValueOrDefault(kv.Key) ?? AgentColors.Label(kv.Key),
+                kv.Value, tokens.GetValueOrDefault(kv.Key)))
             .ToList();
     }
 
@@ -513,7 +628,7 @@ public sealed class OverviewPage : ScrollPage
 
     /// <summary>
     /// 项目行，两行：名称 + agent 色点 + local / path missing 标签 …… 金额（右上）；
-    /// sessions · tokens · 最近活跃 …… 8 周热力条（右下）。悬停整行高亮并显示置顶 / 隐藏按钮，
+    /// 最近活跃 · sessions · token 数 …… 8 周热力条（右下）。悬停整行高亮并显示置顶 / 隐藏按钮，
     /// 右键菜单有更多动作。
     /// </summary>
     private Control ProjectRow(Project project, string currency, DateTimeOffset heatEnd, TimeZoneInfo timezone,
@@ -557,11 +672,11 @@ public sealed class OverviewPage : ScrollPage
         box.Children.Add(top);
 
         var sessions = project.Sessions == 1
-            ? L10n.TrL(null, "overview.row.subtitle.singular", project.Sessions,
-                Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive))
-            : L10n.TrL(null, "overview.row.subtitle.plural", project.Sessions,
-                Fmt.Tokens(project.Tokens.Total), ShortDate.Relative(project.LastActive));
-        var subtitle = Ui.Text(sessions, 12, null, Palette.Secondary, maxLines: 1);
+            ? L10n.TrL(null, "overview.count.session.singular", project.Sessions)
+            : L10n.TrL(null, "overview.count.session.plural", project.Sessions);
+        // 最近活跃放前面：360px 里放不下时省略号吃掉的是 token 数，而不是日期。
+        var subtitleText = $"{ShortDate.Relative(project.LastActive)} · {sessions} · {Fmt.Tokens(project.Tokens.Total)}";
+        var subtitle = Ui.Text(subtitleText, 12, null, Palette.Secondary, maxLines: 1);
         // 必须在热力条之前截断：不然「active Oct 23」会画到 8 周热力条下面（TextBlock 默认不裁剪）。
         subtitle.TextTrimming = TextTrimming.CharacterEllipsis;
         subtitle.ClipToBounds = true;
