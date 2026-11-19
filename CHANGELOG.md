@@ -6,17 +6,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-11-19
+
 ### Added
 
-- Windows: copy usage as a share image from the footer.
+- Windows: copy your usage as a share image from the photo button in the panel footer — the same wide card as on the Mac (total, project mosaic, agents with tokens, cost and value multiplier, input/output/cache totals), ready to paste into chats, documents or posts.
 
 ### Changed
 
-- Windows: tidier overview — long subscription names no longer overlap amounts; roomier range pills, project rows and legend.
+- Windows: tidier overview. Long subscription names no longer run under the amount (the monthly price moves to the second line), amounts and multipliers line up in columns, all range pills fit in English and Chinese (longer languages scroll), the summary under the total breaks cleanly, project rows show when each project was last active, and the agent legend never cuts off names.
 
 ### Fixed
 
-- Windows overview: English range pills fit without scrolling, subscription captions break only between the dot-separated parts, and legend labels are never clipped (each item sizes to its text and wraps whole).
+- Grok CLI sessions now show their real start time instead of starting and ending at the same moment.
 
 ## [0.6.9] - 2026-11-18
 
