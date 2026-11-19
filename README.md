@@ -6,12 +6,13 @@
 
 <p align="center">
   <strong>How much AI money did each git repo cost?</strong><br>
-  <sub>A macOS menu bar app and CLI that turn Claude Code, Codex, Antigravity, Grok, Qwen, Command Code, MiniMax, OpenCode and Copilot CLI logs into one bill per repo.</sub><br><br>
+  <sub>A macOS menu bar app, a Windows tray app and a CLI that turn the logs of Claude Code, Codex, Antigravity, Grok, Copilot CLI, Qwen, Command Code, MiniMax, OpenCode and 20 more coding agents into one bill per repo.</sub><br><br>
   <a href="#中文">中文</a> · <a href="https://github.com/mammut001/kanjo/releases/latest">Download</a> · <a href="ATTRIBUTION.md">How attribution works</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS_13+-black?style=flat-square&logo=apple&logoColor=white" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/platform-Windows_10+-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Windows 10+">
   <img src="https://img.shields.io/badge/swift-5.9+-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 5.9+">
   <img src="https://img.shields.io/badge/python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT">
@@ -21,9 +22,11 @@
 ---
 
 <p align="center">
+  <img src="docs/screenshots/overview-dark.png" width="360" alt="Kanjo overview, dark (default)">
   <img src="docs/screenshots/overview-light.png" width="360" alt="Kanjo overview, light">
-  <img src="docs/screenshots/overview-dark.png" width="360" alt="Kanjo overview, dark">
 </p>
+
+<p align="center"><sub>All screenshots use the bundled sample data (<code>ui/fixtures/sample.json</code>), not real usage.</sub></p>
 
 ## Why
 
@@ -33,30 +36,75 @@ Kanjo scans the local logs of your AI coding agents once, attributes every sessi
 
 ## What you get
 
-- **A treemap of your repos by cost.** One glance tells you where the money went.
-- **An 8-week burn strip per repo**, colored by agent across all 9 supported tools.
-- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Shows top 3 rows by default with a "Show N more" collapse toggle, and rows can be dragged to choose which 3 stay on top. Detected automatically for Claude, Codex, Grok, and Antigravity, or configured manually in Settings for any agent. Hover a plan to see its 5-hour and weekly quota: how much is used and when each window resets (Antigravity also includes Claude/GPT extra windows; Command Code has no quota bar). Hover a treemap tile for its per-agent cost and tokens.
-- **Standalone quota fetching.** Kanjo is fully standalone — it reads local agent logs and fetches quota itself directly using local credentials (Antigravity via local language server on 127.0.0.1, ChatGPT, Claude, and Grok). Read-only, credentials stay in memory only, nothing is uploaded, and `KANJO_NO_NETWORK=1` (or `no_network = true` in config) disables all network requests. Tokei caches serve as an optional fallback only.
+### Overview: every repo, one bill
+
+- **A treemap of your repos by cost.** One glance tells you where the money went. Hover a tile for its per-agent cost and tokens.
+- **Total cost and this week's tokens** (since Monday) at the top, with the date span, project, session and token counts below.
+- **An 8-week burn strip per repo**, colored by agent, plus dots for the agents that worked on it.
 - **Time ranges**: all time, Today, 7 days, 30 days, last week, *since your last quota reset*, or *this billing cycle*.
-- **Menu bar in cost or tokens mode.** Displays either spend (`$`) or total tokens with compact formatting and range suffixes.
-- **Languages.** Fully localized into English, 简体中文, and Français, with localized token units (`k`/`M`/`B`, `万`/`亿`, `k`/`M`/`Md`).
-- **Per-repo detail and overview model breakdown**: by agent, by model, by day, by branch, every session with how it was attributed, and the repo's share of each plan's cycle.
-- **Disk.** How much space each agent's logs, scratch worktrees and caches take, what is safe to reclaim, and a cleanup that goes through the Trash. Your statistics stay in a permanent ledger, so deleting logs never deletes history.
+- **By model**: tokens and cost per model across all repos, and a *Not in any project* section for sessions that could not be attributed or were excluded — so the total always reconciles.
 - **Hide and pin** repos you don't care about or care about most.
-- **Liquid Glass** on macOS 26, a plain material on 13–25.
+
+### Subscriptions and quotas
+
+- **Subscription value for all agents.** Your plan's flat fee next to what this billing cycle's work would have cost on API billing, and the multiplier. Shows the top 3 rows with a "Show N more" toggle; drag rows to choose which 3 stay on top. Detected automatically for Claude, Codex, Grok and Antigravity, or set manually in Settings for any agent.
+- **Quota on hover.** Hover a plan to see its 5-hour and weekly windows: how much is used and when each one resets (Antigravity also shows its Claude/GPT windows; Command Code has no quota bar).
+- **Standalone quota fetching.** Kanjo reads local agent logs and fetches quota itself with your local credentials (Antigravity via its local language server on 127.0.0.1, ChatGPT, Claude and Grok). Read-only, credentials stay in memory, nothing is uploaded, and `KANJO_NO_NETWORK=1` (or `no_network = true` in config) turns off all network requests. Tokei caches are only an optional fallback.
 
 <p align="center">
   <img src="docs/screenshots/quota-hover-claude.png" width="360" alt="Quota card on hover: Claude Max 5-hour and weekly windows">
-  <img src="docs/screenshots/quota-hover-antigravity.png" width="360" alt="Quota card on hover: Antigravity Google AI Pro with Gemini and Claude/GPT extra windows">
+  <img src="docs/screenshots/quota-hover-antigravity.png" width="360" alt="Quota card on hover: Google AI Ultra with Gemini and Claude/GPT windows">
 </p>
 
+### Agents view
+
+- **One row per agent** (toggle *Projects / Agents* at the top of the panel): tokens, cost, value multiplier and quota tick bars for each window with its reset countdown.
+- **Hover or click an agent** for its token breakdown, output speed, time to first token, models and where the money went. Antigravity also shows each Google account's share.
+
+### Project detail
+
+- **Per repo**: tokens by type (input, output, thinking, cache read/write), by agent, by model, by day, by branch, every session with how it was attributed, and the repo's share of each plan's cycle.
+
 <p align="center">
-  <img src="docs/screenshots/mosaic-hover.png" width="360" alt="Treemap hover card: per-agent cost and tokens">
+  <img src="docs/screenshots/agents-dark.png" width="360" alt="Agents view: per-agent tokens, cost, multiplier and quota bars">
   <img src="docs/screenshots/detail-light.png" width="360" alt="Project detail">
 </p>
 
+### Share your usage as an image
+
+- **One click copies a share card** (the photo button in the panel footer): total cost, your projects as a mosaic, each agent with tokens, cost and value multiplier, and input / output / cache totals for the selected range. Paste it into a chat or a post. Mac and Windows render the same card.
+
 <p align="center">
+  <img src="docs/screenshots/share.png" width="640" alt="Share image: total, project mosaic, agents and token totals">
+</p>
+
+### Disk
+
+- **How much space** each agent's logs, scratch worktrees and caches take, and what is safe to reclaim. Cleanup goes through the Trash.
+- **Merged worktrees.** Finds git worktrees inside Claude Code scratch folders and `.claude/worktrees`, tells you which are already merged (squash merges too), and can clean merged, unchanged ones automatically.
+- Your statistics stay in a permanent ledger, so deleting logs never deletes history.
+
+<p align="center">
+  <img src="docs/screenshots/mosaic-hover.png" width="360" alt="Treemap hover card: per-agent cost and tokens">
   <img src="docs/screenshots/disk-light.png" width="360" alt="Disk page">
+</p>
+
+### Everyday use
+
+- **Opens instantly.** Kanjo refreshes in the background when agents write new usage, at an interval you choose (30 s, 1 min, 5 min or 10 min), and waits while the Mac is busy or in Low Power Mode. Opening the panel never waits for a refresh.
+- **Menu bar in cost or tokens mode**, with compact formatting and range suffixes.
+- **Dark by default**; Settings → General → Appearance switches to light or follows the system.
+- **Languages.** English, 简体中文 and Français, with localized token units (`k`/`M`/`B`, `万`/`亿`, `k`/`M`/`Md`).
+- **In-app updates** (Sparkle on macOS; the Windows app updates itself), or `brew upgrade --cask kanjo`.
+- **In a terminal:** `kanjo usage` is an htop-style view of the same numbers, for Linux servers over SSH.
+
+### Windows
+
+Kanjo for Windows is a native tray app with the same pages, hover cards, share image and background refresh as the Mac app, and the Python CLI bundled. See [Install](#install).
+
+<p align="center">
+  <img src="docs/screenshots/windows-overview-dark.png" width="360" alt="Kanjo for Windows: overview">
+  <img src="docs/screenshots/windows-project-dark.png" width="360" alt="Kanjo for Windows: project detail">
 </p>
 
 Every number is an **API-equivalent cost**: tokens × public API price. It is what the same work would have cost on pay-as-you-go billing. If you pay a subscription, it is not what you paid. The app shows this note via an ⓘ tooltip next to Total cost and does not let you hide it.
@@ -322,9 +370,13 @@ ATTRIBUTION.md   attribution rules (normative)
 CONTRACT.md      JSON format between CLI and app (the only interface)
 cli/             Python CLI: parsers, attribution, pricing, export
 ui/              SwiftUI menu bar app (SwiftPM; KanjoCore library + Kanjo executable)
+windows/         Windows tray app (Avalonia / .NET; Kanjo.Core + Kanjo.App)
+ios/             iPhone companion app
+family-server/   optional self-hosted family usage server
+docs/screenshots README screenshots, rendered from ui/fixtures/sample.json
 ```
 
-The CLI and the app are developed independently and meet only at the JSON in [CONTRACT.md](CONTRACT.md). Pricing comes from Tokei's `pricing.json` (MIT); models missing from the table are priced by their closest known relative and marked *estimated*.
+The CLI and the apps are developed independently and meet only at the JSON in [CONTRACT.md](CONTRACT.md). Pricing comes from Tokei's `pricing.json` (MIT); models missing from the table are priced by their closest known relative and marked *estimated*.
 
 ## Kanjo and Tokei
 
@@ -348,19 +400,70 @@ MIT.
 
 Kanjo 扫一遍本机 AI 编程工具的日志，把每个会话归到一个 git 仓库，然后按项目算账：不按天，不按工具，按 repo，跨所有 agent。
 
+<p align="center">
+  <img src="docs/screenshots/overview-dark-zh.png" width="360" alt="Kanjo 总览（中文界面）">
+  <img src="docs/screenshots/agents-dark-zh.png" width="360" alt="Agent 视图（中文界面）">
+</p>
+
+<p align="center"><sub>截图均使用内置示例数据（<code>ui/fixtures/sample.json</code>），不是真实用量。</sub></p>
+
 ### 功能
 
-- **按花费的 treemap**：一眼看出钱去哪了。
-- **每个 repo 一条 8 周燃烧热力条**，按 9 种 agent 分色，每周花费构成一目了然。
-- **所有 agent 的订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。默认展示前 3 行，提供“展开其余 N 项”折叠切换，并支持拖拽自定义前 3 项排序。Claude、Codex、Grok 和 Antigravity 自动识别，其他 agent 均可在设置中手动配置。悬停可查看 5 小时与周额度窗口及重置倒计时（Antigravity 额外展示 Claude/GPT 附加窗口；Command Code 无额度条）。
-- **完全独立取数**：直接从本机日志与本地凭据获取额度（Antigravity 走本地 127.0.0.1 语言服务、ChatGPT、Claude、Grok），凭据仅留存内存、绝不上传，可设 `KANJO_NO_NETWORK=1` 禁用联网。Tokei 仅作为可选后备。Antigravity 同时自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`。
-- **时间范围**：全部、**今天**、7 天、30 天、上周、自上次额度重置以来、或本账期。
-- **菜单栏金额与 Token 模式**：可在设置中切换显示金额或 Token 数，带紧凑进位与时间范围后缀。
-- **多语言界面**：原生支持 English、简体中文与 Français，以及本地化的 Token 计数单位（万/亿、k/M/B、k/M/Md）。
-- **项目详情与总览模型分布**：按 agent、按模型、按天、按分支，每个会话是怎么归属的，以及这个 repo 占了你各订阅本账期的多少。
-- **Disk**：每个工具的日志、临时 worktree、缓存各占多少空间，哪些能安全回收，清理走废纸篓。统计数据存在永久账本里，删日志不丢历史。
+**总览：每个 repo 一张账单**
+
+- **按花费的 treemap**：一眼看出钱去哪了。悬停色块可看各 agent 的花费和 token。
+- **总花费与本周 token**（从周一算起），下方是日期范围、项目数、会话数和 token 总量。
+- **每个 repo 一条 8 周燃烧热力条**，按 agent 分色，旁边的小圆点是参与过的 agent。
+- **时间范围**：全部、今天、7 天、30 天、上周、自上次额度重置以来、或本账期。
+- **按模型**：所有 repo 合计的各模型 token 与花费；「不属于任何项目」一栏列出无法归属或被排除的会话，总数始终对得上。
 - **隐藏与置顶**。
-- macOS 26 用 **Liquid Glass**，13 到 25 用普通材质。
+
+**订阅与额度**
+
+- **所有 agent 的订阅价值**：左边是你实际付的月费，右边是本账期的活按 API 计费要多少，以及倍数。默认展示前 3 行，可「展开其余 N 项」，也可拖拽决定哪 3 项排在前面。Claude、Codex、Grok 和 Antigravity 自动识别，其他 agent 可在设置中手动配置。
+- **悬停看额度**：5 小时与每周窗口用了多少、什么时候重置（Antigravity 额外显示 Claude/GPT 窗口；Command Code 没有额度条）。
+- **完全独立取数**：直接读本机日志，并用本地凭据获取额度（Antigravity 走本地 127.0.0.1 语言服务、ChatGPT、Claude、Grok）。只读，凭据只留在内存，绝不上传；设 `KANJO_NO_NETWORK=1`（或配置里 `no_network = true`）可禁用全部联网。Tokei 缓存仅作可选后备。Antigravity 同时自动识别 `~/.gemini/antigravity-cli` 与 `~/.gemini/antigravity`。
+
+**Agent 视图**
+
+- 面板顶部切换「项目 / Agent」：每个 agent 一行，显示 token、花费、价值倍数，以及每个额度窗口的刻度条和重置倒计时。
+- 悬停或点击某个 agent，可看 token 构成、输出速度、首 token 延迟、模型分布和钱花在哪；Antigravity 还会显示每个 Google 账号的占比。
+
+**项目详情**
+
+- 按 token 类型（输入、输出、思考、缓存读写）、按 agent、按模型、按天、按分支，每个会话是怎么归属的，以及这个 repo 占了你各订阅本账期的多少。
+
+**分享图**
+
+- 面板底部的图片按钮一键复制分享卡片：总花费、项目马赛克、各 agent 的 token、花费和价值倍数，以及输入 / 输出 / 缓存合计。可以直接粘贴到聊天或帖子里。Mac 和 Windows 生成的是同一张卡片。
+
+<p align="center">
+  <img src="docs/screenshots/share-zh.png" width="640" alt="分享图（中文界面）">
+</p>
+
+**Disk**
+
+- 每个工具的日志、临时 worktree、缓存各占多少空间，哪些能安全回收，清理走废纸篓。
+- 能找到 Claude Code 临时目录和 `.claude/worktrees` 里的 git worktree，告诉你哪些已经合并（包括 squash 合并），并可自动清理已合并且无改动的 worktree。
+- 统计数据存在永久账本里，删日志不丢历史。
+
+**日常使用**
+
+- **打开即用**：agent 写入新用量时在后台刷新，间隔可选（30 秒、1 分钟、5 分钟、10 分钟）；电脑忙或低电量模式时会推迟。打开面板从不等待刷新。
+- **菜单栏金额或 Token 模式**，带紧凑进位与时间范围后缀。
+- **默认深色**；设置 → 通用 → 外观可切换浅色或跟随系统。
+- **多语言界面**：English、简体中文与 Français，以及本地化的 Token 单位（万/亿、k/M/B、k/M/Md）。
+- **应用内更新**（macOS 用 Sparkle，Windows 版自动更新），或 `brew upgrade --cask kanjo`。
+- **终端里**：`kanjo usage` 是同样数据的 htop 风格视图，适合通过 SSH 看 Linux 服务器。
+
+**Windows 版**
+
+原生托盘应用，页面、悬停卡片、分享图和后台刷新与 Mac 版一致，内置 Python CLI。安装方法见下方「安装」。
+
+<p align="center">
+  <img src="docs/screenshots/windows-overview-dark.png" width="360" alt="Windows 版总览">
+  <img src="docs/screenshots/windows-project-dark.png" width="360" alt="Windows 版项目详情">
+</p>
 
 所有数字都是 **API 等价成本**：token 乘以公开 API 单价。订阅用户的实际支出不是这个数，app 在 Total cost 旁的 ⓘ 提示中醒目标注，并且不能隐藏。
 
