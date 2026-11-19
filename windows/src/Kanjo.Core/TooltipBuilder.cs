@@ -140,6 +140,15 @@ public static class OverviewSummaryText
         TimeRange range, string dateRange, int projectsCount, int sessionsCount, long tokensCount,
         int hiddenCount = 0, string? language = null)
     {
+        var counts = Counts(projectsCount, sessionsCount, tokensCount, hiddenCount, language);
+        return range == TimeRange.Today ? counts : $"{dateRange} · {counts}";
+    }
+
+    /// <summary>项目 / 会话 / token 计数，用「 · 」接起来。日期另算，方便总览把日期和计数分成两行。</summary>
+    public static string Counts(
+        int projectsCount, int sessionsCount, long tokensCount,
+        int hiddenCount = 0, string? language = null)
+    {
         var lang = language ?? L10n.CurrentLanguage;
         var projCountStr = projectsCount == 1
             ? L10n.TrL(lang, "overview.count.project.singular", projectsCount)
@@ -154,8 +163,7 @@ public static class OverviewSummaryText
         var tokensFormatted = Fmt.Tokens(tokensCount, lang);
         var tokensStr = L10n.TrL(lang, "overview.tokens_count", tokensFormatted);
 
-        var counts = string.Join(" · ", new[] { projects, sessCountStr, tokensStr });
-        return range == TimeRange.Today ? counts : $"{dateRange} · {counts}";
+        return string.Join(" · ", new[] { projects, sessCountStr, tokensStr });
     }
 }
 

@@ -10,6 +10,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Windows: copy usage as a share image from the footer.
 
+### Changed
+
+- Windows: tidier overview — long subscription names no longer overlap amounts; roomier range pills, project rows and legend.
+
 ## [0.6.9] - 2026-11-18
 
 ### Added
