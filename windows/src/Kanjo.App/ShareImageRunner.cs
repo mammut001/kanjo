@@ -1,9 +1,13 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.TextFormatting;
+using Avalonia.Platform;
+using Avalonia.Skia;
 using Avalonia.Threading;
 using Kanjo.App.Views;
 using Kanjo.Core;
@@ -28,6 +32,9 @@ public static class ShareImageRunner
         Window? window = null;
         try
         {
+            // 单测会话的绘图桩 Save 不写 PNG。命令行 --share-image 用的是 Skia，所以那边是好的。
+            EnsurePaintable();
+
             var view = new ShareImageView(summary);
             window = new Window
             {
@@ -69,15 +76,23 @@ public static class ShareImageRunner
             using var stream = new MemoryStream();
             bitmap.Save(stream);
             var png = stream.ToArray();
-            if (png.Length < 32) return null;
+            if (png.Length < 32)
+            {
+                Trace.WriteLine($"kanjo: share image png {png.Length} bytes");
+                return null;
+            }
 
             var bgra = ReadBgra(bitmap, pixelW, pixelH);
-            if (!bgra.Any(b => b != 0)) return null;
+            if (!bgra.Any(b => b != 0))
+            {
+                Trace.WriteLine("kanjo: share image blank");
+                return null;
+            }
             return new ShareRender(png, bgra, pixelW, pixelH);
         }
         catch (Exception e)
         {
-            Trace.WriteLine($"kanjo: share render failed: {e.Message}");
+            Trace.WriteLine($"kanjo: share render failed: {e}");
             return null;
         }
         finally
@@ -154,6 +169,65 @@ public static class ShareImageRunner
         {
             L10n.ResourcesRoot = previousRoot;
         }
+    }
+
+    /// <summary>
+    /// Headless 单元测试默认 <c>UseHeadlessDrawing</c>：位图 Save 是空操作，字形也不是 Skia 的。
+    /// 这种宿主里改换成 Skia，并换掉已经缓存的 FontManager / TextShaper，否则画文字会抛异常然后被吞掉。
+    /// 正式界面和 <c>--share-image</c> 本来就能写出 PNG，探测成功就什么都不做。
+    /// </summary>
+    private static void EnsurePaintable()
+    {
+        if (ProbeEncodesPng()) return;
+
+        Trace.WriteLine("kanjo: share render switching to skia");
+        SkiaPlatform.Initialize();
+        Rebind(new FontManager(Resolve<IFontManagerImpl>()));
+        Rebind(new TextShaper(Resolve<ITextShaperImpl>()));
+    }
+
+    private static bool ProbeEncodesPng()
+    {
+        try
+        {
+            using var bitmap = new RenderTargetBitmap(new PixelSize(1, 1));
+            using var stream = new MemoryStream();
+            bitmap.Save(stream);
+            return stream.Length >= 32;
+        }
+        catch (Exception e)
+        {
+            Trace.WriteLine($"kanjo: share render probe failed: {e.Message}");
+            return false;
+        }
+    }
+
+    private static T Resolve<T>() where T : class
+    {
+        var current = LocatorMember("Current");
+        var get = current.GetType().GetMethod("GetService", new[] { typeof(System.Type) })
+            ?? throw new MissingMethodException("GetService");
+        return (T)(get.Invoke(current, new object[] { typeof(T) })
+            ?? throw new InvalidOperationException($"Missing {typeof(T).FullName}"));
+    }
+
+    private static void Rebind<T>(T instance) where T : class
+    {
+        var mutable = LocatorMember("CurrentMutable");
+        var bind = mutable.GetType().GetMethod("Bind") ?? throw new MissingMethodException("Bind");
+        var helper = bind.MakeGenericMethod(typeof(T)).Invoke(mutable, null)
+            ?? throw new InvalidOperationException("Bind");
+        var toConstant = helper.GetType().GetMethod("ToConstant") ?? throw new MissingMethodException("ToConstant");
+        toConstant.MakeGenericMethod(typeof(T)).Invoke(helper, new object[] { instance });
+    }
+
+    /// <summary>AvaloniaLocator 在引用程序集里是内部 API，运行时仍然在。</summary>
+    private static object LocatorMember(string name)
+    {
+        var type = System.Type.GetType("Avalonia.AvaloniaLocator, Avalonia.Base")
+            ?? throw new InvalidOperationException("AvaloniaLocator");
+        return type.GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+            ?? throw new InvalidOperationException(name);
     }
 
     /// <summary>自上而下的 BGRA8888。渲染目标读不出来时，把 PNG 再解码一次。</summary>

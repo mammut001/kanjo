@@ -12,15 +12,17 @@ public static class ShareClipboard
 {
     /// <summary>
     /// <paramref name="bgra"/> 是自上而下的 BGRA8888，长度必须是 <c>width * height * 4</c>。
+    /// <paramref name="owner"/> 是打开剪贴板的窗口。传 <see cref="IntPtr.Zero"/> 时，
+    /// EmptyClipboard 会把所有者设成 NULL，随后 SetClipboardData 会失败。
     /// </summary>
-    public static bool TrySetPng(byte[] png, int width, int height, byte[] bgra)
+    public static bool TrySetPng(byte[] png, int width, int height, byte[] bgra, IntPtr owner)
     {
         if (!OperatingSystem.IsWindows()) return false;
         try
         {
             if (png.Length == 0 || width <= 0 || height <= 0) return false;
             if (bgra.Length != width * height * 4) return false;
-            return Native.Set(png, Dib(width, height, bgra));
+            return Native.Set(png, Dib(width, height, bgra), owner);
         }
         catch (Exception e)
         {
@@ -70,9 +72,9 @@ public static class ShareClipboard
         private const uint CfDib = 8;
         private const uint GmemMoveable = 0x0002;
 
-        internal static bool Set(byte[] png, byte[] dib)
+        internal static bool Set(byte[] png, byte[] dib, IntPtr owner)
         {
-            if (!Open())
+            if (!Open(owner))
             {
                 Trace.WriteLine("kanjo: OpenClipboard failed");
                 return false;
@@ -102,11 +104,11 @@ public static class ShareClipboard
             }
         }
 
-        private static bool Open()
+        private static bool Open(IntPtr owner)
         {
             for (var i = 0; i < 5; i++)
             {
-                if (OpenClipboard(IntPtr.Zero)) return true;
+                if (OpenClipboard(owner)) return true;
                 Thread.Sleep(15);
             }
             return false;

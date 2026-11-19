@@ -18,6 +18,8 @@ public sealed class ShareSummaryTests : KanjoTestCase
             var codexCost = cost * 4 / 10;
             var claudeTokens = cost * 600;
             var codexTokens = cost * 400;
+            // $$""" 里连续两个 '}' 会被当成内容而编译失败，所以多出来的那层对象结束用插值。
+            var endObject = "}";
             projects.Append($$"""
                 {
                     "id": "p{{i}}", "name": "Project {{i}}", "cost": {{cost}}, "tokens": {"total": {{cost * 1000}}}, "sessions": 2,
@@ -26,7 +28,7 @@ public sealed class ShareSummaryTests : KanjoTestCase
                         {"agent": "codex", "label": "Codex", "cost": {{codexCost}}, "tokens": {"total": {{codexTokens}}}, "sessions": 1}
                     ],
                     "by_model": [],
-                    "by_day": [{"day": "2026-11-17", "cost": {{cost}}, "tokens": {{cost * 1000}}, "by_agent": {"claude": {{claudeCost}}, "codex": {{codexCost}}}, "by_agent_tokens": {"claude": {{claudeTokens}}, "codex": {{codexTokens}}}],
+                    "by_day": [{"day": "2026-11-17", "cost": {{cost}}, "tokens": {{cost * 1000}}, "by_agent": {"claude": {{claudeCost}}, "codex": {{codexCost}}}, "by_agent_tokens": {"claude": {{claudeTokens}}, "codex": {{codexTokens}}}{{endObject}}],
                     "sessions_detail": [
                         {"id": "s1-{{i}}", "agent": "claude", "label": "Claude Code", "started": "2026-11-17T10:00:00Z", "ended": "2026-11-17T11:00:00Z", "cost": {{claudeCost}}, "tokens": {"input": 100, "output": 100, "cache_read": 100, "cache_write": 100, "thinking": 200, "total": {{claudeTokens}}}, "share": 0.6, "attribution": "none", "subagents": 0},
                         {"id": "s2-{{i}}", "agent": "codex", "label": "Codex", "started": "2026-11-17T10:00:00Z", "ended": "2026-11-17T11:00:00Z", "cost": {{codexCost}}, "tokens": {"input": 100, "output": 100, "cache_read": 100, "cache_write": 100, "thinking": 0, "total": {{codexTokens}}}, "share": 0.4, "attribution": "none", "subagents": 0}

@@ -30,10 +30,10 @@ public sealed class ShareImageRenderTests : KanjoTestCase
             Assert.Equal(image.Width * image.Height * 4, image.Bgra.Length);
             Assert.Contains(image.Bgra, pixel => pixel != 0);
 
-            Assert.False(ShareClipboard.TrySetPng([], 0, 0, []));
+            Assert.False(ShareClipboard.TrySetPng([], 0, 0, [], IntPtr.Zero));
             if (!OperatingSystem.IsWindows())
             {
-                Assert.False(ShareClipboard.TrySetPng(image.Png, image.Width, image.Height, image.Bgra));
+                Assert.False(ShareClipboard.TrySetPng(image.Png, image.Width, image.Height, image.Bgra, IntPtr.Zero));
             }
         });
     }

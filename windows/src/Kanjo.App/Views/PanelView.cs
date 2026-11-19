@@ -404,7 +404,8 @@ public sealed class PanelView : Grid
             return;
         }
 
-        if (image is null || !ShareClipboard.TrySetPng(image.Png, image.Width, image.Height, image.Bgra)) return;
+        var owner = TopLevel.GetTopLevel(this)?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (image is null || !ShareClipboard.TrySetPng(image.Png, image.Width, image.Height, image.Bgra, owner)) return;
 
         var epoch = _shareEpoch;
         SetShareGlyph(true);
