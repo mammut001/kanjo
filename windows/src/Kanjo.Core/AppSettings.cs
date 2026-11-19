@@ -79,7 +79,9 @@ public sealed class AppSettings : ILanguageSettings
         }
         if (arguments.Contains("--window") ||
             arguments.Contains("--snapshot") ||
-            arguments.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal)))
+            arguments.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal)) ||
+            arguments.Contains("--share-image") ||
+            arguments.Any(a => a.StartsWith("--share-image=", StringComparison.Ordinal)))
         {
             return PreviewSuiteName;
         }

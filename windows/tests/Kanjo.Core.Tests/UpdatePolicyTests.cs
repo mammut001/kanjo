@@ -38,6 +38,8 @@ public sealed class UpdatePolicyTests : KanjoTestCase
         Assert.False(UpdatePolicy.ShouldRun(["--snapshot=out.png", "--route", "overview"], false, true));
         Assert.False(UpdatePolicy.ShouldRun(["--window"], false, true));
         Assert.False(UpdatePolicy.ShouldRun(["--window", "--route", "settings"], false, true));
+        Assert.False(UpdatePolicy.ShouldRun(["--share-image", "out.png"], false, true));
+        Assert.False(UpdatePolicy.ShouldRun(["--share-image=out.png", "--data", "sample.json"], false, true));
     }
 
     [Fact]
@@ -46,6 +48,8 @@ public sealed class UpdatePolicyTests : KanjoTestCase
         Assert.True(UpdatePolicy.IsDisabledMode(["--snapshot", "a.png"]));
         Assert.True(UpdatePolicy.IsDisabledMode(["--snapshot=a.png"]));
         Assert.True(UpdatePolicy.IsDisabledMode(["--window"]));
+        Assert.True(UpdatePolicy.IsDisabledMode(["--share-image", "a.png"]));
+        Assert.True(UpdatePolicy.IsDisabledMode(["--share-image=a.png"]));
         Assert.False(UpdatePolicy.IsDisabledMode([]));
         Assert.False(UpdatePolicy.IsDisabledMode(["--data", "sample.json"]));
         // 值里出现 --snapshot 字样不算：参数必须自己就是开关。

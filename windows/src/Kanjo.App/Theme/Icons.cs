@@ -224,6 +224,18 @@ public static class Icons
         Fill = brush,
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
     };
+
+    /// <summary>photo.on.rectangle：分享图按钮（相框 + 山 + 太阳）。</summary>
+    public static Control Photo(double size = 14, IBrush? brush = null) => Glyph(
+        "M1.4,2.7 L10.6,2.7 L10.6,9.7 L1.4,9.7 Z " +
+        "M2.1,8.3 L4.3,5.8 L5.9,7.3 L7.5,5.5 L10.1,8.3 " +
+        "M8.2,3.7 A0.65,0.65 0 1 0 8.2,5.0 A0.65,0.65 0 1 0 8.2,3.7",
+        size, brush, filled: false);
+
+    /// <summary>checkmark：复制成功后短暂换上的勾。</summary>
+    public static Control Check(double size = 14, IBrush? brush = null) => Glyph(
+        "M2.2,6.4 L5.0,9.0 L9.8,3.4",
+        size, brush, filled: false);
 }
 
 internal static class IconHelpers

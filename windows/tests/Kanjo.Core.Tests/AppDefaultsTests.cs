@@ -47,6 +47,8 @@ public sealed class AppDefaultsTests : KanjoTestCase
         Assert.Equal(AppSettings.PreviewSuiteName, AppSettings.SuiteName(["--snapshot=out.png"], NoEnv));
         Assert.Equal(AppSettings.PreviewSuiteName, AppSettings.SuiteName(
             ["--snapshot", "out.png", "--route", "overview", "--snapshot-scale", "2"], NoEnv));
+        Assert.Equal(AppSettings.PreviewSuiteName, AppSettings.SuiteName(["--share-image", "out.png"], NoEnv));
+        Assert.Equal(AppSettings.PreviewSuiteName, AppSettings.SuiteName(["--share-image=out.png"], NoEnv));
     }
 
     [Fact]

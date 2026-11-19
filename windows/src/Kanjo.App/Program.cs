@@ -15,6 +15,7 @@ public static class Program
     /// <summary>
     /// 启动模式：
     /// - `--snapshot &lt;out.png&gt; [...]`：离屏渲染成 PNG 后退出 0（macOS 上也能跑，用于开发对图）。
+    /// - `--share-image &lt;out.png&gt; --data &lt;json&gt;`：离屏渲染用量分享图后退出 0。
     /// - `--window`：普通窗口（开发调试用）。
     /// - 默认：托盘应用（Windows 上是通知区域图标 + 弹出面板）。
     /// </summary>
@@ -50,6 +51,11 @@ public static class Program
             var scale = SnapshotRunner.ParseScale(DefaultPaths.FlagValue("--snapshot-scale", args));
             var appearance = SnapshotRunner.ParseAppearance(DefaultPaths.FlagValue("--snapshot-appearance", args));
             return SnapshotRunner.Run(snapshotPath, route, scale, appearance);
+        }
+
+        if (DefaultPaths.FlagValue("--share-image", args) is { } sharePath)
+        {
+            return ShareImageRunner.Run(sharePath, args);
         }
 
         // 单实例：托盘应用第二次启动时把「激活面板」发给已运行的实例，然后自己退出。

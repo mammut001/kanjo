@@ -1,14 +1,16 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Kanjo.Core;
 
 namespace Kanjo.App.Views;
 
 /// <summary>
 /// 面板外壳：360×620，圆角、无标题栏。内容区按路由切换，顶部可能有一条警告 / 错误横幅，
-/// 底部一条玻璃条：刷新按钮 + 「Updated HH:MM」+ 右侧磁盘 / 设置 / 退出。
+/// 底部一条玻璃条：刷新按钮 + 「Updated HH:MM」+ 右侧分享图 / 磁盘 / 设置 / 退出。
 /// </summary>
 public sealed class PanelView : Grid
 {
@@ -20,6 +22,10 @@ public sealed class PanelView : Grid
     // 底栏里的两个控件随外观重建（图标的取色是构造时的），所以不是 readonly。
     private Clickable _refreshButton = null!;
     private TextBlock _statusText = null!;
+    private Clickable? _shareButton;
+    private Panel? _shareGlyphs;
+    private DispatcherTimer? _shareTimer;
+    private int _shareEpoch;
     private readonly StackPanel _banners;
     private readonly HoverLayer _hover = new();
     private Border? _footer;
@@ -184,6 +190,9 @@ public sealed class PanelView : Grid
             ToolTip.SetTip(_statusText, _services.DescribeSource());
         }
 
+        // 底栏不随路由重建，分享按钮的显隐在这里切（总览 / 项目 / 桶，且已经有报告）。
+        if (_shareButton is not null) _shareButton.IsVisible = ShareButtonVisible();
+
         // 固定悬停卡（截图用）：内容建好后按 id 显示。
         if (HoverLayer.PinnedId is { } pinned && pinned.Contains(":hover:", StringComparison.Ordinal))
         {
@@ -296,10 +305,15 @@ public sealed class PanelView : Grid
     private void RestartToUpdate() => _services.Updates.RestartToUpdate();
 
     /// <summary>底栏：一条玻璃条，里面是无底的图标按钮。</summary>
-    /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边三个图标按钮（带 tooltip）。</summary>
+    /// <summary>底栏（Windows 11 的命令栏）：左边刷新 + 「Updated HH:MM」，右边分享图 / 磁盘 / 设置 / 退出。</summary>
     private Border BuildFooter()
     {
-        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
+        // 外观重建会换掉按钮宿主。停掉上一轮的勾，避免把勾画进新的底栏。
+        _shareEpoch++;
+        _shareTimer?.Stop();
+        _shareTimer = null;
+
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto") };
 
         // 底栏的图标 / 文字都按当前外观取色，所以每次构建都重新造（外观切换时会重建底栏）。
         _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
@@ -330,13 +344,29 @@ public sealed class PanelView : Grid
             return button;
         }
 
+        _shareGlyphs = new Panel { Width = 32, Height = 32 };
+        SetShareGlyph(false);
+        var shareInner = new Border
+        {
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Child = _shareGlyphs,
+        };
+        _shareButton = new Clickable(shareInner, CopyUsageImage, L10n.Tr("menu.copy_usage_image"), radius: 6);
+        _shareButton.VerticalAlignment = VerticalAlignment.Center;
+        _shareButton.IsVisible = ShareButtonVisible();
+        Grid.SetColumn(_shareButton, 2);
+        bar.Children.Add(_shareButton);
+
         bar.Children.Add(IconCell(
             Icons.Disk(14, Route.Kind == AppRouteKind.Disk ? Palette.Link : Palette.Secondary),
-            ToggleDisk, L10n.Tr("menu.disk"), Route.Kind == AppRouteKind.Disk, 2));
+            ToggleDisk, L10n.Tr("menu.disk"), Route.Kind == AppRouteKind.Disk, 3));
         bar.Children.Add(IconCell(
             Icons.Gear(14, Route.Kind == AppRouteKind.Settings ? Palette.Link : Palette.Secondary),
-            ToggleSettings, L10n.Tr("menu.settings"), Route.Kind == AppRouteKind.Settings, 3));
-        bar.Children.Add(IconCell(Icons.Power(14, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 4));
+            ToggleSettings, L10n.Tr("menu.settings"), Route.Kind == AppRouteKind.Settings, 4));
+        bar.Children.Add(IconCell(Icons.Power(14, Palette.Secondary), Quit, L10n.Tr("menu.quit"), false, 5));
 
         return new Border
         {
@@ -346,6 +376,57 @@ public sealed class PanelView : Grid
             Background = Palette.CardBackground,
             Padding = new Thickness(10, 4, 8, 4),
         };
+    }
+
+    /// <summary>总览、项目、桶有报告时才显示。磁盘 / 设置 / 加载中不显示。</summary>
+    private bool ShareButtonVisible() =>
+        _services.Report is not null &&
+        Route.Kind is AppRouteKind.Overview or AppRouteKind.Project or AppRouteKind.Bucket;
+
+    /// <summary>用当前时间范围和隐藏项目出一张分享图，放上剪贴板。成功后勾停留约 1.5 秒。</summary>
+    private void CopyUsageImage()
+    {
+        if (_services.Report is not { } report) return;
+        ShareRender? image;
+        try
+        {
+            var hidden = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.HiddenProjects, ""));
+            var summary = ShareSummary.Build(
+                report,
+                _services.Settings.GetString(SettingsKeys.TimeRange),
+                _services.Now,
+                hidden);
+            image = ShareImageRunner.Render(summary);
+        }
+        catch (Exception e)
+        {
+            Trace.WriteLine($"kanjo: share image failed: {e.Message}");
+            return;
+        }
+
+        if (image is null || !ShareClipboard.TrySetPng(image.Png, image.Width, image.Height, image.Bgra)) return;
+
+        var epoch = _shareEpoch;
+        SetShareGlyph(true);
+        _shareTimer?.Stop();
+        _shareTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        _shareTimer.Tick += (_, _) =>
+        {
+            _shareTimer?.Stop();
+            if (epoch != _shareEpoch) return;
+            SetShareGlyph(false);
+        };
+        _shareTimer.Start();
+    }
+
+    private void SetShareGlyph(bool copied)
+    {
+        if (_shareGlyphs is null) return;
+        _shareGlyphs.Children.Clear();
+        var glyph = copied ? Icons.Check(14, Palette.Secondary) : Icons.Photo(14, Palette.Secondary);
+        glyph.HorizontalAlignment = HorizontalAlignment.Center;
+        glyph.VerticalAlignment = VerticalAlignment.Center;
+        _shareGlyphs.Children.Add(glyph);
     }
 
     /// <summary>磁盘图标：从磁盘页回到总览，其它情况进磁盘页（设置页切走时先应用设置）。</summary>

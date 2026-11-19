@@ -32,6 +32,7 @@
 | `TimeRangeTests.swift` | `TimeRangeTests.cs` | 23 | 23 | |
 | `TooltipBuilderTests.swift` | `TooltipBuilderTests.cs` | 11 | 11 | |
 | `TreemapTests.swift` | `TreemapTests.cs` | 12 | 12 | CGRect → `TreemapRect` |
+| `ShareSummaryTests.swift` | `ShareSummaryTests.cs` | 4 | 4 | agent 行对照内联了 Mac `AgentSummary` 的花费 / token 汇总（Windows 没有完整的 AgentSummary 类型） |
 
 C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 
@@ -50,6 +51,7 @@ C# 额外的文件（Swift 里没有对应测试文件的纯新增覆盖）：
 | `LogWatchPathsTests.cs` | 只有 CLI 数据源且没有 `--data` 才监听、`paths --json` 跨 agent 去重（Windows 路径忽略大小写）、过滤不存在的目录 |
 | `FileSystemLogWatcherTests.cs` | 真实 `FileSystemWatcher`：缺失目录不建监听、写文件会触发回调、释放后不再触发 |
 | `AppServicesBackgroundTests.cs` | 后台接线：刷新保留上一份报告、磁盘预取（含 `--disk-data` 跳过）、文件来源 / `--data` 不挂监听、兜底定时器跟着设置、电源事件到达调度器、截图模式静止、`ApplySettings` 重排 |
+| `ShareImageRenderTests.cs` | 分享图离屏渲染出非空 PNG（宽 1280、有像素），以及非 Windows 上剪贴板返回 false |
 
 ## 跳过的 Mac 专属用例
 

@@ -6,6 +6,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Windows: copy usage as a share image from the footer.
+
 ## [0.6.9] - 2026-11-18
 
 ### Added

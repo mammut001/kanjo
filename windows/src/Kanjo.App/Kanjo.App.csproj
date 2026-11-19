@@ -56,6 +56,7 @@
     <!-- 托盘图标（正常 / 出错）按资源嵌入：Windows 上 Avalonia 会用 ICO 里最合适的一档尺寸。
          应用图标走 ApplicationIcon（编译进 exe），这里不重复。 -->
     <AvaloniaResource Include="Assets\Kanjo.ico" Link="Assets\Kanjo.ico" />
+    <AvaloniaResource Include="Assets\Kanjo-icon.png" Link="Assets\Kanjo-icon.png" />
     <AvaloniaResource Include="Assets\Tray.ico" Link="Assets\Tray.ico" />
     <AvaloniaResource Include="Assets\TrayError.ico" Link="Assets\TrayError.ico" />
   </ItemGroup>

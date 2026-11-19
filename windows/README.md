@@ -68,12 +68,14 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- --window --route pro
 | `--data <file>` / `KANJO_DATA` | 直接读一份导出的 JSON，不跑 CLI |
 | `--disk-data <file>` | 磁盘页读这份磁盘报告 JSON，不跑 `kanjo disk` |
 | `--window` | 普通窗口（开发 / 调试），不使用托盘 |
-| `--defaults-suite <name>` / `KANJO_DEFAULTS_SUITE` | 用 `settings-<name>.json` 隔离设置；`--window` / `--snapshot` 会自动用 `kanjo-preview` |
+| `--defaults-suite <name>` / `KANJO_DEFAULTS_SUITE` | 用 `settings-<name>.json` 隔离设置；`--window` / `--snapshot` / `--share-image` 会自动用 `kanjo-preview` |
 | `--route <value>` | 启动时打开哪一页（见下） |
 | `--snapshot <out.png>` | 离屏渲染面板到 PNG 后退出 0 |
 | `--snapshot-scale <n>` | 截图倍率（默认 2） |
 | `--snapshot-appearance light\|dark` | 截图外观 |
 | `--snapshot-update idle\|up-to-date\|downloading\|ready\|not-installed` | 截图时注入假的更新状态（画横幅 / Updates 卡片） |
+| `--share-image <out.png>` | 离屏渲染当前范围的用量分享图（始终深色、2 倍）后退出 0 |
+| `--share-range <raw>` | 分享图的时间范围（默认跟设置里的 timeRange，缺省 `all`） |
 
 ### 路由
 
@@ -110,6 +112,18 @@ $HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
 **相对日期与「现在」：** 正常运行（托盘 / `--window`）时「现在」就是真实时钟，和 Mac 一致
 （「active yesterday」「renews in 2 days」都跟着当天走）。只有 `--snapshot` 会把「现在」固定在报告的
 `generated_at`，这样同一份数据每次截出的图逐像素一致。
+
+### 分享图
+
+```bash
+$HOME/.dotnet/dotnet run --project windows/src/Kanjo.App -- \
+  --share-image /tmp/kanjo-share.png --data ui/fixtures/sample.json
+# 可选：--share-range days7
+```
+
+`--share-image` 和 `--snapshot` 一样走 Avalonia.Headless，不依赖显示器。卡片始终是深色（不跟应用外观走），倍率固定 2。
+「现在」钉在报告的 `generated_at`。语言跟 `--snapshot` 同一套设置（自动用 `kanjo-preview`，没有单独的语言开关）。
+命令行不套用隐藏项目；面板底栏的按钮会用当前时间范围和隐藏项目。
 
 ## 设计（Design）
 
