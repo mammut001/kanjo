@@ -91,8 +91,73 @@ public sealed class LayoutTests : KanjoTestCase
             Assert.True(lastRight <= scroller.Viewport.Width + maxScroll + 1,
                 $"last pill right {lastRight:F1} unreachable (viewport {scroller.Viewport.Width:F1} + scroll {maxScroll:F1})");
 
+            // 英文词本身放得下时，整行必须落在视口里（不需要横向滚动，Cycle 不被右缘裁掉）。
+            // 有的 headless 字体每个字形都是固定宽度，七个英文词加起来比视口还宽，那种情况只能滚动。
+            AssertEnglishPillsFitWhenLabelsFit(chips, scroller);
+
             window.Close();
         });
+    }
+
+    /// <summary>简体中文的七个范围胶囊也必须放进 360pt 的视口，不靠滚动。</summary>
+    [Fact]
+    public void TestOverviewRangePillsFitInChineseWithoutScrolling()
+    {
+        OnUi(() =>
+        {
+            var settings = AppSettings.InMemory();
+            settings.Set(SettingsKeys.AppLanguage, "zh-Hans");
+            L10n.Store = settings;
+            L10n.ResetCache();
+            var services = new AppServices(settings, ["--snapshot", "--data", FixturePath], TempDir());
+            services.LoadQuietly();
+            var page = new OverviewPage(services, null, snapshot: false);
+            var window = Show(page);
+
+            var picker = page.GetVisualDescendants().OfType<RangePicker>().First();
+            var chips = PillChips(picker);
+            Assert.Equal(TimeRanges.All.Count, chips.Count);
+            var scroller = picker.PillsScroller!;
+            AssertPillsFitWhenLabelsFit(chips, scroller, "zh-Hans");
+
+            window.Close();
+        });
+    }
+
+    private static List<Border> PillChips(RangePicker picker) =>
+        picker.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.Child is TextBlock { Text.Length: > 0 } tb && Math.Abs(tb.FontSize - 11) < 0.1)
+            .ToList();
+
+    private static void AssertEnglishPillsFitWhenLabelsFit(IReadOnlyList<Border> chips, ScrollViewer scroller) =>
+        AssertPillsFitWhenLabelsFit(chips, scroller, "en");
+
+    /// <summary>
+    /// 最小内边距下文字放得进视口时，extent 不能宽过 viewport。
+    /// 放不进（stub 字体）则只要求没有为了「撑满」而把内边距加大到不得不滚。
+    /// </summary>
+    private static void AssertPillsFitWhenLabelsFit(IReadOnlyList<Border> chips, ScrollViewer scroller, string language)
+    {
+        double text = 0;
+        foreach (var chip in chips)
+        {
+            var block = (TextBlock)chip.Child!;
+            text += Kanjo.App.Type.MeasureWidth(block.Text!, block.FontSize, block.FontWeight);
+        }
+        const double minPad = 4;
+        var viewport = scroller.Viewport.Width;
+        var minRow = text + chips.Count * minPad * 2;
+        if (minRow <= viewport)
+        {
+            Assert.True(scroller.Extent.Width <= viewport + 0.5,
+                $"{language} pills scroll: extent {scroller.Extent.Width:F1} viewport {viewport:F1} " +
+                $"pad={chips[0].Padding.Left:F1} text={text:F1}");
+        }
+        else
+        {
+            Assert.True(chips[0].Padding.Left <= minPad + 0.05,
+                $"{language} labels ({text:F1}) exceed viewport {viewport:F1} but pad is {chips[0].Padding.Left:F1}");
+        }
     }
 
     /// <summary>概览 hero 里的 "Total cost" 标签必须在胶囊那一行之上（不能挤在一起）。</summary>
@@ -447,6 +512,7 @@ public sealed class LayoutTests : KanjoTestCase
                 .ToList();
             Assert.Contains(captions, t => t.Pos.Y > planPos.Y && t.Block.Text!.Contains("$269.98/mo",
                 StringComparison.Ordinal));
+            AssertSubscriptionCaptionDoesNotOrphan(page);
 
             var loneDots = page.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "·").ToList();
             Assert.Empty(loneDots);
@@ -549,6 +615,7 @@ public sealed class LayoutTests : KanjoTestCase
             if (wide - narrow > 8)
             {
                 Assert.InRange(rows, 1, 2);
+                AssertLegendSpacing(chips);
             }
 
             foreach (var chip in chips)
@@ -563,5 +630,72 @@ public sealed class LayoutTests : KanjoTestCase
 
             window.Close();
         });
+    }
+
+    /// <summary>色点到文字约 4pt，相邻项约 10pt。</summary>
+    private static void AssertLegendSpacing(IReadOnlyList<Control> chips)
+    {
+        double? itemGap = null;
+        for (var i = 0; i < chips.Count; i++)
+        {
+            var dot = chips[i].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First();
+            var label = chips[i].GetVisualDescendants().OfType<TextBlock>().First();
+            var dotToLabel = label.Bounds.X - (dot.Bounds.X + dot.Bounds.Width);
+            Assert.InRange(dotToLabel, 3.0, 5.5);
+            if (i + 1 < chips.Count && Math.Abs(chips[i + 1].Bounds.Y - chips[i].Bounds.Y) < 1)
+            {
+                itemGap = chips[i + 1].Bounds.X - chips[i].Bounds.Right;
+                Assert.InRange(itemGap.Value, 8.0, 12.0);
+            }
+        }
+        Assert.NotNull(itemGap);
+    }
+
+    /// <summary>
+    /// 「$269.98/mo · Last 30 days · set renewal day for exact cycle」只能在「 · 」处断行，
+    /// 不能把 cycle 一个词单独留在下一行。
+    /// </summary>
+    private static void AssertSubscriptionCaptionDoesNotOrphan(Control page)
+    {
+        const string caption = "$269.98/mo · Last 30 days · set renewal day for exact cycle";
+        var segments = caption.Split(" · ");
+        var blocks = page.GetVisualDescendants().OfType<TextBlock>()
+            .Select(block => (Block: block, Y: block.TranslatePoint(new Point(0, 0), page)?.Y ?? 0))
+            .ToList();
+        var headY = blocks.Where(t => t.Block.Text?.Contains("$269.98/mo", StringComparison.Ordinal) == true)
+            .Select(t => t.Y)
+            .DefaultIfEmpty(double.NaN)
+            .Min();
+        Assert.True(double.IsFinite(headY), "missing $269.98/mo caption");
+
+        var lines = new List<string>();
+        foreach (var (block, y) in blocks.Where(t => Math.Abs(t.Y - headY) < 36).OrderBy(t => t.Y))
+        {
+            var text = block.Text ?? "";
+            if (text.Length == 0 || !caption.Contains(text, StringComparison.Ordinal)) continue;
+            if (block.TextLayout is { TextLines.Count: > 0 } layout)
+            {
+                foreach (var line in layout.TextLines)
+                {
+                    var start = Math.Clamp(line.FirstTextSourceIndex, 0, text.Length);
+                    var len = Math.Clamp(line.Length, 0, text.Length - start);
+                    var piece = text.Substring(start, len).Trim();
+                    if (piece.Length > 0) lines.Add(piece);
+                }
+            }
+            else
+            {
+                lines.Add(text.Trim());
+            }
+        }
+
+        Assert.NotEmpty(lines);
+        Assert.DoesNotContain(lines, line => line == "cycle");
+        foreach (var line in lines)
+        {
+            foreach (var part in line.Split(" · ", StringSplitOptions.RemoveEmptyEntries))
+                Assert.Contains(segments, segment => segment == part);
+        }
+        Assert.Equal(caption, string.Join(" · ", lines));
     }
 }

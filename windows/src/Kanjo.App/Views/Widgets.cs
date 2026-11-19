@@ -122,24 +122,23 @@ public static class Widgets
 }
 
 /// <summary>
-/// 项目卡顶部的 agent 图例。优先 10pt、间距宽松；360px 里放不下两行时逐级收紧字号和间距。
+/// 项目卡顶部的 agent 图例。色点到文字约 4pt，项与项约 10pt；
+/// 360px 的样例放不进两行时先收字号，再收间距。
 /// 悬停 id 与原来的 WrapPanel 一致（第一项 <c>overview:hover:legend</c>）。
 /// </summary>
 public sealed class AgentLegend : Panel
 {
     private readonly record struct Style(double Font, double Gap, double Inner, double Dot);
 
-    // 从宽松到紧。9 个英文名在约 318px 里，10pt 排成两行不够，9pt 可以。
+    // 从宽松到紧。间距先保持 4 / 10，字号收到 8.5 时 9 个英文名能排成两行。
     private static readonly Style[] Fits =
     [
-        new(10, 8, 3, 6),
-        new(10, 5, 3, 6),
-        new(10, 3, 2, 6),
-        new(9.5, 4, 2, 6),
-        new(9, 4, 2, 6),
-        new(9, 3, 2, 6),
-        new(9, 2, 2, 5),
-        new(8.5, 2, 2, 5),
+        new(9, 10, 4, 6),
+        new(8.5, 10, 4, 6),
+        new(8, 10, 4, 6),
+        new(8, 8, 4, 6),
+        new(8, 6, 4, 5),
+        new(8, 4, 3, 5),
     ];
 
     private const double RowGap = 2;
@@ -149,7 +148,6 @@ public sealed class AgentLegend : Panel
     private readonly List<Control> _dots = [];
     private double _gap = 6;
     private int _applied = -1;
-    private double _appliedWidth = -1;
 
     public AgentLegend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items, string currency)
     {
@@ -161,7 +159,7 @@ public sealed class AgentLegend : Panel
             var chip = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 3,
+                Spacing = 4,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
@@ -183,11 +181,10 @@ public sealed class AgentLegend : Panel
         var width = availableSize.Width;
         if (!double.IsFinite(width) || width <= 1) width = Metrics.RowContentWidth;
 
-        var start = 0;
-        if (_applied >= 0 && width <= _appliedWidth + 0.5) start = _applied;
-
+        // 每次都从最松的一档重新挑。前一轮测量时字体可能还没就绪（字形更宽），
+        // 如果沿用那一档，后面变窄了也不会把间距放回 4 / 10。
         var chosen = Fits.Length - 1;
-        for (var i = start; i < Fits.Length; i++)
+        for (var i = 0; i < Fits.Length; i++)
         {
             if (_applied != i) Apply(Fits[i]);
             _applied = i;
@@ -200,7 +197,6 @@ public sealed class AgentLegend : Panel
             }
         }
         _applied = chosen;
-        _appliedWidth = width;
         _gap = Fits[chosen].Gap;
         return WrappedSize(width);
     }

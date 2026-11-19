@@ -525,8 +525,11 @@ public sealed class OverviewPage : ScrollPage
                 : Fmt.CycleDates(sub, timezone);
         }
         // 8px 色点 + 5px 间距，和套餐名左缘对齐。
-        var captionText = Ui.Text(caption, 12, null, Palette.Secondary, wrap: true)
-            .WithMargin(13, 0, 0, 0);
+        // 和 hero 摘要一样：只在「 · 」处断行，第二行从整段开始，不会把「cycle」一个词丢到下一行。
+        const double captionIndent = 13;
+        var captionText = Ui.V(0);
+        captionText.Margin = new Thickness(captionIndent, 0, 0, 0);
+        AddPackedMeta(captionText, caption, Metrics.RowContentWidth - captionIndent);
         if (tip is not null) ToolTip.SetTip(captionText, tip);
         box.Children.Add(captionText);
 

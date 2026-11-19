@@ -18,13 +18,17 @@ public interface ISnapshotPage
 /// 范围选择器（Fluent 胶囊）：All · Today · 7d · 30d · Last week · Since reset · Cycle。
 /// 选中项是强调色填充 + 强调色上的文字；不可用的范围是禁用色文字、不可点。
 ///
-/// 单行、不折行。宽度够时把多余空间均匀分给每个胶囊的左右内边距；
+/// 单行、不折行。宽度够时把多余空间均匀分给每个胶囊的左右内边距，
+/// 并留出几 pt，避免布局取整后最后一个胶囊被右缘淡出裁掉。
 /// 某种语言放不下时横向滚动（滚动条隐藏），并把选中项滚进视口。
 /// </summary>
 public sealed class RangePicker : Border
 {
     private const double MinChipPad = 4;
     private const double MaxChipPad = 12;
+
+    /// <summary>右缘留白。再小的话，每个胶囊取整多出来的 1px 会把最后一个词推出视口。</summary>
+    private const double FitSpare = 6;
 
     private readonly List<Border> _chips = [];
     private readonly ScrollViewer _scroller;
@@ -146,7 +150,9 @@ public sealed class RangePicker : Border
     public ScrollViewer? PillsScroller => _scroller;
 
     /// <summary>
-    /// 把多余宽度均匀加进每个胶囊的左右内边距（有上限）。最小内边距仍放不下时保持最小值，交给滚动。
+    /// 把多余宽度均匀加进每个胶囊的左右内边距（有上限），并留出 <see cref="FitSpare"/>。
+    /// 文字测量值会比排版后的胶囊窄（每个胶囊布局取整最多多 1px），所以用实际 DesiredSize
+    /// 再往下收，直到整行放进视口。最小内边距仍放不下时保持最小值，交给滚动。
     /// </summary>
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -160,22 +166,49 @@ public sealed class RangePicker : Border
 
     private void ApplyChipPad(double inner)
     {
-        var pad = MaxChipPad;
-        if (double.IsFinite(inner) && inner > 0 && _chips.Count > 0)
-        {
-            double text = 0;
-            foreach (var chip in _chips)
-            {
-                if (chip.Child is not TextBlock tb) continue;
-                text += Type.MeasureWidth(tb.Text ?? "", tb.FontSize, tb.FontWeight);
-            }
-            var raw = (inner - 1 - text) / (2 * _chips.Count);
-            pad = Math.Round(Math.Clamp(raw, MinChipPad, MaxChipPad), 1);
-        }
+        var pad = ChoosePad(inner);
         if (Math.Abs(pad - _chipPad) < 0.05) return;
         _chipPad = pad;
         var next = new Thickness(pad, 4, pad, 4);
         foreach (var chip in _chips) chip.Padding = next;
+    }
+
+    private double ChoosePad(double inner)
+    {
+        if (!double.IsFinite(inner) || inner <= 0 || _chips.Count == 0) return MaxChipPad;
+
+        double text = 0;
+        foreach (var chip in _chips)
+        {
+            if (chip.Child is not TextBlock tb) continue;
+            text += Type.MeasureWidth(tb.Text ?? "", tb.FontSize, tb.FontWeight);
+        }
+
+        var raw = (inner - FitSpare - text) / (2 * _chips.Count);
+        var tenths = (int)Math.Floor(Math.Clamp(raw, MinChipPad, MaxChipPad) * 10);
+        var minTenths = (int)Math.Round(MinChipPad * 10);
+        var limit = inner - FitSpare;
+        for (var i = 0; i < 40; i++)
+        {
+            var pad = tenths / 10.0;
+            if (MeasureRow(pad) <= limit + 0.25) return pad;
+            if (tenths <= minTenths) return MinChipPad;
+            tenths--;
+        }
+        return MinChipPad;
+    }
+
+    private double MeasureRow(double pad)
+    {
+        var thickness = new Thickness(pad, 4, pad, 4);
+        double width = 0;
+        foreach (var chip in _chips)
+        {
+            chip.Padding = thickness;
+            chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            width += chip.DesiredSize.Width;
+        }
+        return width;
     }
 
     /// <summary>只自动滚一次，避免和用户之后的滚动抢位置。</summary>
