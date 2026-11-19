@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-11-18
+
 ### Added
 
 - Copy your usage as an image: the photo button in the panel footer puts a wide share card for the current range on the clipboard — the Kanjo icon, total cost, your projects as a mosaic, each agent with tokens, cost and value multiplier, and input/output/cache totals (hidden projects are left out). The button in each agent's detail card copies that card as an image. Inspired by the share images in Tokei.
