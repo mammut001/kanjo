@@ -595,9 +595,9 @@ public sealed class LayoutTests : KanjoTestCase
         });
     }
 
-    /// <summary>样例数据的图例在 360px 里最多两行，名称不被截断。</summary>
+    /// <summary>图例每一项按内容排开，文字的排列宽度不小于期望宽度（不裁切）。</summary>
     [Fact]
-    public void TestOverviewLegendFitsInTwoRows()
+    public void TestOverviewLegendLabelsAreNotClipped()
     {
         OnUi(() =>
         {
@@ -607,25 +607,22 @@ public sealed class LayoutTests : KanjoTestCase
             var legend = page.GetVisualDescendants().OfType<AgentLegend>().First();
             var chips = legend.Children.OfType<Control>().ToList();
             Assert.NotEmpty(chips);
-            var rows = chips.Select(c => Math.Round(c.Bounds.Y)).Distinct().Count();
-            // 字号真的会改变宽度时，样例数据必须落在两行里。有的 headless 字体
-            // 各字号 advance 一样，缩字号也折不成两行，那种情况只要求不裁切。
-            var wide = Kanjo.App.Type.MeasureWidth("Claude Code", 12);
-            var narrow = Kanjo.App.Type.MeasureWidth("Claude Code", 6);
-            if (wide - narrow > 8)
+            AssertLegendSpacing(chips);
+
+            foreach (var row in chips.GroupBy(c => Math.Round(c.Bounds.Y)))
             {
-                Assert.InRange(rows, 1, 2);
-                AssertLegendSpacing(chips);
+                var top = row.Min(c => c.Bounds.Y);
+                Assert.All(row, c => Assert.True(Math.Abs(c.Bounds.Y - top) < 0.5,
+                    "legend items on one row are not vertically aligned"));
             }
 
             foreach (var chip in chips)
             {
-                Assert.True(chip.Bounds.Right <= legend.Bounds.Width + 1,
-                    $"legend chip right {chip.Bounds.Right:F1} exceeds {legend.Bounds.Width:F1}");
                 var label = chip.GetVisualDescendants().OfType<TextBlock>().First();
-                var measured = Kanjo.App.Type.MeasureWidth(label.Text!, label.FontSize);
-                Assert.True(label.Bounds.Width + 0.5 >= measured,
-                    $"legend '{label.Text}' truncated at size {label.FontSize}");
+                Assert.Equal(TextWrapping.NoWrap, label.TextWrapping);
+                Assert.Equal(TextTrimming.None, label.TextTrimming);
+                Assert.True(label.Bounds.Width >= label.DesiredSize.Width - 0.5,
+                    $"legend '{label.Text}' arranged {label.Bounds.Width:F1} < desired {label.DesiredSize.Width:F1}");
             }
 
             window.Close();

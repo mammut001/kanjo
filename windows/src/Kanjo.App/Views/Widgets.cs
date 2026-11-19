@@ -115,181 +115,49 @@ public static class Widgets
         return border;
     }
 
-    /// <summary>agent 图例：色点 + 名称，按花费降序，尽量两行排完。</summary>
+    /// <summary>agent 图例：色点 + 名称，按花费降序。每一项按内容宽度排，整项换行，不截断。</summary>
     public static Control Legend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items,
         string currency) =>
         new AgentLegend(items, currency);
 }
 
 /// <summary>
-/// 项目卡顶部的 agent 图例。色点到文字约 4pt，项与项约 10pt；
-/// 360px 的样例放不进两行时先收字号，再收间距。
-/// 悬停 id 与原来的 WrapPanel 一致（第一项 <c>overview:hover:legend</c>）。
+/// 项目卡顶部的 agent 图例。WrapPanel 里每一项按自己的内容宽度排：
+/// 色点距文字 4pt，项与项约 10pt，放不下就整项换到下一行。不测量字宽、不截断。
+/// 悬停 id 与原来一致（第一项 <c>overview:hover:legend</c>）。
 /// </summary>
-public sealed class AgentLegend : Panel
+public sealed class AgentLegend : WrapPanel
 {
-    private readonly record struct Style(double Font, double Gap, double Inner, double Dot);
-
-    // 从宽松到紧。间距先保持 4 / 10，字号收到 8.5 时 9 个英文名能排成两行。
-    private static readonly Style[] Fits =
-    [
-        new(9, 10, 4, 6),
-        new(8.5, 10, 4, 6),
-        new(8, 10, 4, 6),
-        new(8, 8, 4, 6),
-        new(8, 6, 4, 5),
-        new(8, 4, 3, 5),
-    ];
-
-    private const double RowGap = 2;
-
-    private readonly List<StackPanel> _chips = [];
-    private readonly List<TextBlock> _labels = [];
-    private readonly List<Control> _dots = [];
-    private double _gap = 6;
-    private int _applied = -1;
-
     public AgentLegend(IReadOnlyList<(string Agent, string Label, double Cost, long Tokens)> items, string currency)
     {
+        Orientation = Orientation.Horizontal;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+
         for (var i = 0; i < items.Count; i++)
         {
             var (agent, label, cost, tokens) = items[i];
-            var dot = Ui.Dot(agent, 6);
-            var text = Ui.Text(label, 10, null, Palette.Secondary, maxLines: 1);
+            // 不设 MaxLines / Width：宽度完全跟文字走，换行只发生在项与项之间。
+            var text = Ui.Text(label, 10, null, Palette.Secondary);
+            text.TextWrapping = TextWrapping.NoWrap;
+            text.TextTrimming = TextTrimming.None;
+            text.HorizontalAlignment = HorizontalAlignment.Left;
+            text.VerticalAlignment = VerticalAlignment.Center;
             var chip = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 4,
+                Margin = new Thickness(0, 0, 10, 4),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
-            chip.Children.Add(dot);
+            chip.Children.Add(Ui.Dot(agent, 6));
             chip.Children.Add(text);
             var rows = new List<HoverCardRowItem> { new(agent, label, cost, tokens, 1.0) };
             HoverLayer.Attach(chip, i == 0 ? "overview:hover:legend" : $"overview:hover:legend:{agent}",
                 () => HoverCards.AgentRows(label, agent, cost, tokens, currency, rows));
             ToolTip.SetTip(chip, TooltipBuilder.AgentLine(label, cost, tokens, currency));
             Children.Add(chip);
-            _chips.Add(chip);
-            _labels.Add(text);
-            _dots.Add(dot);
         }
-    }
-
-    protected override Size MeasureOverride(Size availableSize)
-    {
-        var width = availableSize.Width;
-        if (!double.IsFinite(width) || width <= 1) width = Metrics.RowContentWidth;
-
-        // 每次都从最松的一档重新挑。前一轮测量时字体可能还没就绪（字形更宽），
-        // 如果沿用那一档，后面变窄了也不会把间距放回 4 / 10。
-        var chosen = Fits.Length - 1;
-        for (var i = 0; i < Fits.Length; i++)
-        {
-            if (_applied != i) Apply(Fits[i]);
-            _applied = i;
-            foreach (var chip in _chips)
-                chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (RowCount(width) <= 2)
-            {
-                chosen = i;
-                break;
-            }
-        }
-        _applied = chosen;
-        _gap = Fits[chosen].Gap;
-        return WrappedSize(width);
-    }
-
-    protected override Size ArrangeOverride(Size finalSize)
-    {
-        double x = 0, y = 0, rowH = 0;
-        var row = new List<Control>();
-        void Flush()
-        {
-            double cx = 0;
-            foreach (var chip in row)
-            {
-                var w = chip.DesiredSize.Width;
-                var h = chip.DesiredSize.Height;
-                chip.Arrange(new Rect(cx, y + Math.Max(0, (rowH - h) / 2), w, h));
-                cx += w + _gap;
-            }
-            row.Clear();
-        }
-
-        foreach (var chip in _chips)
-        {
-            var w = chip.DesiredSize.Width;
-            var h = chip.DesiredSize.Height;
-            if (x > 0 && x + _gap + w > finalSize.Width + 0.5)
-            {
-                Flush();
-                y += rowH + RowGap;
-                x = 0;
-                rowH = 0;
-            }
-            if (x > 0) x += _gap;
-            x += w;
-            rowH = Math.Max(rowH, h);
-            row.Add(chip);
-        }
-        Flush();
-        return finalSize;
-    }
-
-    private void Apply(Style style)
-    {
-        _gap = style.Gap;
-        for (var i = 0; i < _chips.Count; i++)
-        {
-            _labels[i].FontSize = style.Font;
-            _labels[i].LineHeight = Math.Round(style.Font * 1.35, 1);
-            _chips[i].Spacing = style.Inner;
-            _dots[i].Width = style.Dot;
-            _dots[i].Height = style.Dot;
-        }
-    }
-
-    private int RowCount(double width)
-    {
-        if (_chips.Count == 0) return 0;
-        var rows = 1;
-        double x = 0;
-        foreach (var chip in _chips)
-        {
-            var w = chip.DesiredSize.Width;
-            if (x > 0 && x + _gap + w > width + 0.5)
-            {
-                rows++;
-                x = w;
-            }
-            else
-            {
-                x = x > 0 ? x + _gap + w : w;
-            }
-        }
-        return rows;
-    }
-
-    private Size WrappedSize(double width)
-    {
-        double x = 0, y = 0, rowH = 0;
-        foreach (var chip in _chips)
-        {
-            var w = chip.DesiredSize.Width;
-            var h = chip.DesiredSize.Height;
-            if (x > 0 && x + _gap + w > width + 0.5)
-            {
-                y += rowH + RowGap;
-                x = 0;
-                rowH = 0;
-            }
-            if (x > 0) x += _gap;
-            x += w;
-            rowH = Math.Max(rowH, h);
-        }
-        return new Size(width, y + rowH);
     }
 }
 

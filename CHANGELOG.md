@@ -16,7 +16,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Windows overview: English range pills fit without scrolling, subscription captions break only between the dot-separated parts, and the legend gives the colour dot and each item more room.
+- Windows overview: English range pills fit without scrolling, subscription captions break only between the dot-separated parts, and legend labels are never clipped (each item sizes to its text and wraps whole).
 
 ## [0.6.9] - 2026-11-18
 
