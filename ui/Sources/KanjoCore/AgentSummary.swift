@@ -345,12 +345,13 @@ public enum AgentSummary {
         return (top, others)
     }
 
-    private static func buildProjectShares(
+    static func buildProjectShares(
         agent: String,
-        projects: [FilteredProject]
+        projects: [FilteredProject],
+        excluding hidden: Set<String> = []
     ) -> (top: [AgentProjectShare], others: AgentProjectOthers?) {
         var raw: [(id: String, name: String, cost: Double)] = []
-        for fp in projects {
+        for fp in projects where !hidden.contains(fp.id) {
             if let a = fp.byAgent.first(where: { $0.agent == agent }), a.cost > 0 {
                 raw.append((id: fp.id, name: fp.project.name, cost: a.cost))
             }
