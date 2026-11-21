@@ -22,7 +22,7 @@ from . import quota
 from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
 from .device import build_device_info
-from .ledger import Ledger, entry_key, marker_key
+from .ledger import Ledger, ScanScope, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
@@ -121,6 +121,7 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     seen = set()
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}
+    scope = ScanScope()
     for agent, module in SOURCES.items():
         if dirs is not None:
             roots = dirs.get(agent, [])
@@ -130,19 +131,23 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             roots = module.roots()
         st = SourceStats(agent=agent, dirs=[r for r in roots])
         stats[agent] = st
+        scope.note_roots(agent, roots)
         for path, parent in module.discover(roots):
+            scope.note_path(agent, path)
             st.files += 1
             try:
                 session = cache.get(agent, path, parent, module.parse_file) if cache else module.parse_file(path, parent)
             except ParseError as exc:
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             except Exception as exc:  # unknown format change: count it, never abort the scan
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             if not session.messages:
                 m_key = marker_key(agent, path)
@@ -159,6 +164,12 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             sessions.append(session)
             grouped.setdefault(key, []).append(session)
             grouped_paths.setdefault(key, []).append(path)
+        skipped = getattr(module, "skipped_paths", None)
+        if callable(skipped):
+            for path in skipped():
+                scope.note_path(agent, path)
+    if hasattr(ledger, "set_scan_scope"):
+        ledger.set_scan_scope(scope)
     modified_keys = getattr(cache, "modified_keys", None) if cache else None
     changed = [key for key, paths in grouped_paths.items()
                if modified_keys is None or any(path in modified_keys for path in paths)]
@@ -1549,12 +1560,20 @@ _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE = re.compile(
 )
 
 
+_MODEL_FILE_RE = re.compile(r"^(?:[/~\\]|[A-Za-z]:[/\\])|\\|\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+_MODEL_FILE_EXT_RE = re.compile(r"\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+
+
 def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) -> Optional[str]:
     if not raw_model or raw_model == "<synthetic>":
         return None
     model_id, estimated = prices.resolve(raw_model, agent)
     if model_id and not estimated:
         return strip_vendor_prefix(model_id)
+    if _MODEL_FILE_RE.search(raw_model.strip()):
+        # A local server reports the model file path: keep only the file name.
+        name = _MODEL_FILE_EXT_RE.sub("", re.split(r"[/\\]", raw_model.strip())[-1])
+        return name or None
     name = strip_vendor_prefix(raw_model)
     while True:
         m = _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE.search(name)
@@ -1562,6 +1581,31 @@ def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) 
             break
         name = name[:m.start()]
     return name
+
+
+def _reconcile_costs(items: List[dict], period_cost_usd: float, tokens: Callable[[dict], int]) -> None:
+    """Make the rounded ``cost_usd`` of ``items`` add up to ``period_cost_usd``.
+
+    The rounding residual goes to the costliest item. A negative residual larger
+    than that item is taken from the next ones, so no item drops below zero.
+    """
+    if not items:
+        return
+    diff = round(period_cost_usd - round(sum(x["cost_usd"] for x in items), 2), 2)
+    if diff == 0:
+        return
+    ordered = sorted(items, key=lambda x: (x["cost_usd"], tokens(x)), reverse=True)
+    if diff > 0:
+        ordered[0]["cost_usd"] = round(ordered[0]["cost_usd"] + diff, 2)
+        return
+    for item in ordered:
+        take = min(item["cost_usd"], -diff)
+        if take <= 0:
+            continue
+        item["cost_usd"] = round(item["cost_usd"] - take, 2)
+        diff = round(diff + take, 2)
+        if diff >= 0:
+            break
 
 
 class PublicPeriodAgg:
@@ -1648,12 +1692,7 @@ class PublicPeriodAgg:
                 "cost_usd": round(data["cost"], 2),
                 "models": p_models[:5],
             })
-        if provider_items:
-            sum_prov_cost = round(sum(p["cost_usd"] for p in provider_items), 2)
-            diff = round(period_cost_usd - sum_prov_cost, 2)
-            if diff != 0:
-                largest = max(provider_items, key=lambda x: (x["tokens"]["total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(provider_items, period_cost_usd, lambda x: x["tokens"]["total"])
         provider_items.sort(key=lambda x: (-x["tokens"]["total"], -x["cost_usd"], x["provider"]))
 
         agent_items = []
@@ -1664,12 +1703,7 @@ class PublicPeriodAgg:
                 "tokens_total": data["tokens_total"],
                 "cost_usd": round(data["cost"], 2),
             })
-        if agent_items:
-            sum_agent_cost = round(sum(a["cost_usd"] for a in agent_items), 2)
-            diff = round(period_cost_usd - sum_agent_cost, 2)
-            if diff != 0:
-                largest = max(agent_items, key=lambda x: (x["tokens_total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(agent_items, period_cost_usd, lambda x: x["tokens_total"])
         agent_items.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["agent"]))
 
         model_items = []
@@ -1871,6 +1905,16 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         cleaned_entry = dict(entry)
         if agent == "antigravity" and filter_accounts is not None:
             live_email = cleaned_entry.get("email") or cleaned_entry.get("user_email")
+            if not live_email and cleaned_entry.get("source") == "live":
+                # quota_windows drops the email; the live reading it used is in
+                # the quota cache it just wrote (no network here).
+                try:
+                    from .quota_fetch import fetch_all_quotas
+                    raw = fetch_all_quotas(now=now.timestamp(), no_network=True).get("antigravity") or {}
+                    found = raw.get("email") or raw.get("user_email")
+                    live_email = found.strip() if isinstance(found, str) and found.strip() else None
+                except Exception:
+                    live_email = None
             if not live_email:
                 try:
                     from .antigravity_accounts import get_account_index
@@ -1950,6 +1994,12 @@ def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[
         if agent_tokens_sum != p_tokens["total"]:
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens["total"]))
+
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
 
         prov_cost = sum(prov["cost_usd"] for prov in p["by_provider"])
         if abs(prov_cost - p["cost_usd"]) > tolerance + 1e-6:
@@ -2082,6 +2132,12 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
         if agent_tokens_sum != p_tokens.get("total", 0):
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens.get("total", 0)))
+
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
 
         prov_cost = sum(prov.get("cost_usd", 0.0) for prov in p.get("by_provider", []))
         if abs(prov_cost - p.get("cost_usd", 0.0)) > tolerance + 1e-6:

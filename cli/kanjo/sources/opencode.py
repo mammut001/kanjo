@@ -106,9 +106,18 @@ def _is_minimax_session(directory: Optional[str], session_id: str, mm_ids: Set[s
     return "/.minimax/" in norm or "/.mavis/" in norm or norm.endswith("/.minimax") or norm.endswith("/.mavis")
 
 
+_SKIPPED: List[str] = []
+
+
+def skipped_paths() -> List[str]:
+    """Paths the last ``discover`` left out on purpose (MiniMax sessions)."""
+    return list(_SKIPPED)
+
+
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
     """[(path_with_session_id, parent_session_id)]"""
     found: List[Tuple[str, Optional[str]]] = []
+    del _SKIPPED[:]
     mm_ids = _minimax_session_ids()
     if mm_ids is None:
         return []
@@ -126,6 +135,7 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                     directory = row["directory"]
                     parent = row["parent_id"]
                     if _is_minimax_session(directory, sid, mm_ids):
+                        _SKIPPED.append(f"{db}::{sid}")
                         continue
                     found.append((f"{db}::{sid}", parent or None))
         except (ParseError, sqlite3.Error):
