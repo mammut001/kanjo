@@ -158,7 +158,7 @@ class PriceBook:
     def sig(self) -> str:
         if not hasattr(self, "_sig"):
             import hashlib
-            self._sig = hashlib.sha1(json.dumps(["resolver-v5", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
+            self._sig = hashlib.sha1(json.dumps(["resolver-v6", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
         return self._sig
 
     # ---- catalog helpers -------------------------------------------------
@@ -254,6 +254,7 @@ class PriceBook:
         m = re.sub(r"-trial$", "", m)
         if m.startswith("grok") or m.startswith("x-ai/grok") or m.startswith("xai/grok"):
             m = re.sub(r"-(?:build-fast|build)$", "", m)
+        m = re.sub(r"(^|/)claude-(\d+)-(\d)-(opus|sonnet|haiku)(?=-|$)", r"\1claude-\2.\3-\4", m)
         seg = m.rsplit("/", 1)[-1]
         if seg.startswith("muse-"):
             return "meta/" + seg
@@ -305,6 +306,7 @@ class PriceBook:
         clean = re.sub(r"-v\d+:\d+$", "", clean)
         clean = re.sub(r"@\d{8}$", "", clean)
         clean = re.sub(r"(?:-(?:latest|thinking|high|medium|low|\d{8}|\d{4}-\d{2}-\d{2}|\d{4}))+$", "", clean)
+        clean = re.sub(r"(^|/)claude-(\d+)-(\d)-(opus|sonnet|haiku)(?=-|$)", r"\1claude-\2.\3-\4", clean)
         # Only interpret a dashed version as a decimal for these model families.
         clean = re.sub(r"((?:claude-(?:opus|sonnet|haiku)|gpt)-\d+)-(\d{1,2})(?=-|$)", r"\1.\2", clean)
         normalized = self.aliases.get(clean) or self.normalize(clean)

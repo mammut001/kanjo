@@ -34,6 +34,15 @@ class PricingCorrectness(unittest.TestCase):
         self.assertAlmostEqual(self.book.cost('gpt-5-2025-08-07', 'codex',
                                               1000000, 100000, 10000000)[0], 3.5)
 
+    def test_legacy_dashed_claude_versions(self):
+        self.assertEqual(self.book.resolve('claude-3-5-haiku-20241022'),
+                         ('anthropic/claude-3.5-haiku', False))
+        for dashed, dotted in [('claude-3-7-sonnet-20250219', 'claude-3.7-sonnet'),
+                               ('anthropic.claude-3-5-sonnet-20241022-v2:0', 'claude-3.5-sonnet'),
+                               ('anthropic/claude-3-5-haiku-20241022', 'claude-3.5-haiku')]:
+            with self.subTest(dashed=dashed):
+                self.assertEqual(self.book.resolve(dashed), self.book.resolve(dotted))
+
     def test_fallback_preserves_tier(self):
         for name, tier in [('gpt-5.1-ultra-mini', 'mini'), ('gpt-4.0-mini', 'mini'),
                            ('gpt-99-nano', 'nano'), ('gpt-99-pro', 'pro'),
