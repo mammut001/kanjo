@@ -16,6 +16,12 @@ from .. import perf as _perf
 from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
+from .range_engine import (
+    aggregate_models,
+    build_range_helpers as _build_range_helpers,
+    filtered_usage,
+    window_start,
+)
 
 # Agent colours from ui/Sources/KanjoCore/AgentColors.swift, except that the TUI
 # lightens the few entries that were too dark on a black terminal (commandcode,
@@ -344,37 +350,6 @@ def get_tz(doc: Optional[dict] = None) -> datetime.tzinfo:
             return timezone.utc
 
 
-def window_start(quota_entry: Optional[dict], now: datetime, tz: datetime.tzinfo) -> Optional[datetime]:
-    """Calculate current weekly quota window start for an agent (weekly_resets_at - window_hours)."""
-    if not quota_entry or not isinstance(quota_entry, dict):
-        return None
-    reset_iso = quota_entry.get("weekly_resets_at")
-    hours = quota_entry.get("weekly_window_hours", 168)
-    try:
-        hours = float(hours if hours is not None else 168)
-    except (ValueError, TypeError):
-        hours = 168.0
-    reset = parse_iso_dt(reset_iso, default_tz=tz)
-    if not reset or hours <= 0:
-        return None
-    now_utc = (ensure_aware(now, tz) or datetime.now(tz)).astimezone(timezone.utc)
-    reset_utc = reset.astimezone(timezone.utc)
-    period_sec = hours * 3600
-    if hours == 168:
-        # 7-day cadence
-        diff = (now_utc - reset_utc).total_seconds()
-        k = math.floor(diff / period_sec)
-        start = reset_utc + timedelta(seconds=k * period_sec)
-        while start > now_utc:
-            start -= timedelta(seconds=period_sec)
-        while (start + timedelta(seconds=period_sec)) <= now_utc:
-            start += timedelta(seconds=period_sec)
-        return start
-    diff = (now_utc - reset_utc).total_seconds()
-    k = math.floor(diff / period_sec)
-    return reset_utc + timedelta(seconds=k * period_sec)
-
-
 def format_month_day_time(dt: datetime, tz: datetime.tzinfo, lang: str = "en",
                           now: Optional[datetime] = None) -> str:
     """Format e.g. ``Nov 8 16:55`` (en) or ``11月8日 16:55`` / ``今天 16:55`` (zh)."""
@@ -566,132 +541,6 @@ class PerfSummary:
     ttft_median: Optional[float]
 
 
-def _build_range_helpers(doc: dict, time_range: TimeRange = TimeRange.ALL,
-                         now: Optional[datetime] = None):
-    """Build timezone-aware window predicates matching TimeRange.swift semantics."""
-    doc = doc or {}
-    tz = get_tz(doc)
-    now = ensure_aware(now, tz) or datetime.now(tz)
-    qw = doc.get("quota_windows") or {}
-    subs = doc.get("subscriptions") or {}
-
-    now_local = now.astimezone(tz)
-    today_start = datetime(now_local.year, now_local.month, now_local.day, tzinfo=tz)
-
-    range_start: Optional[datetime] = None
-    range_end: Optional[datetime] = now
-    agent_starts: Dict[str, datetime] = {}
-
-    if time_range == TimeRange.ALL:
-        range_end = None
-    elif time_range == TimeRange.TODAY:
-        range_start = today_start
-    elif time_range == TimeRange.DAYS_7:
-        range_start = today_start - timedelta(days=6)
-    elif time_range == TimeRange.DAYS_30:
-        range_start = today_start - timedelta(days=29)
-    elif time_range == TimeRange.RESET:
-        for ag, q in (qw if isinstance(qw, dict) else {}).items():
-            if isinstance(q, dict):
-                s = window_start(q, now, tz)
-                if s is not None:
-                    agent_starts[ag] = ensure_aware(s, tz)
-    elif time_range == TimeRange.CYCLE:
-        for ag, sub in (subs if isinstance(subs, dict) else {}).items():
-            if isinstance(sub, dict):
-                s_iso = sub.get("cycle_start")
-                s = parse_iso_dt(s_iso, default_tz=tz)
-                if s is not None:
-                    agent_starts[ag] = ensure_aware(s, tz)
-
-    def agent_window(ag: str) -> Optional[Tuple[Optional[datetime], Optional[datetime]]]:
-        if time_range == TimeRange.ALL:
-            return (None, None)
-        if time_range in (TimeRange.RESET, TimeRange.CYCLE):
-            if ag not in agent_starts:
-                return None
-            return (agent_starts[ag], range_end)
-        return (range_start, range_end)
-
-    def day_included(day_str: str, ag: str) -> bool:
-        w = agent_window(ag)
-        if w is None:
-            return False
-        w_start, w_end = w
-        try:
-            d_date = date.fromisoformat(str(day_str))
-        except (ValueError, TypeError):
-            return False
-        d0 = datetime(d_date.year, d_date.month, d_date.day, tzinfo=tz)
-        d1 = d0 + timedelta(days=1)
-        if w_start is not None and d1 <= w_start:
-            return False
-        if w_end is not None and d0 >= w_end:
-            return False
-        return True
-
-    def session_included(s: dict) -> bool:
-        if not isinstance(s, dict):
-            return False
-        ag = s.get("agent", "")
-        w = agent_window(ag)
-        if w is None:
-            return False
-        w_start, w_end = w
-        started = parse_iso_dt(s.get("started"), default_tz=tz)
-        ended = parse_iso_dt(s.get("ended"), default_tz=tz) or started
-        if not started and not ended:
-            return False
-        s0 = min(started or ended, ended or started)
-        s1 = max(started or ended, ended or started)
-        if w_start is not None and s1 < w_start:
-            return False
-        if w_end is not None and s0 >= w_end:
-            return False
-        return True
-
-    def session_in_range_cost_tokens(s: dict) -> Tuple[float, int]:
-        if not isinstance(s, dict):
-            return 0.0, 0
-        try:
-            total_c = float(s.get("cost") or 0.0)
-        except (ValueError, TypeError):
-            total_c = 0.0
-        toks = s.get("tokens")
-        try:
-            total_t = toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)
-        except (ValueError, TypeError):
-            total_t = 0
-        if time_range == TimeRange.ALL:
-            return total_c, total_t
-        if not session_included(s):
-            return 0.0, 0
-        ag = s.get("agent", "")
-        w = agent_window(ag)
-        if w is None:
-            return 0.0, 0
-        w_start, w_end = w
-        started = parse_iso_dt(s.get("started"), default_tz=tz)
-        ended = parse_iso_dt(s.get("ended"), default_tz=tz) or started
-        if not started and not ended:
-            return total_c, total_t
-        s0 = min(started or ended, ended or started)
-        s1 = max(started or ended, ended or started)
-        dur = (s1 - s0).total_seconds()
-        if dur <= 0:
-            return total_c, total_t
-        r0 = w_start or s0
-        r1 = w_end or s1
-        overlap0 = max(s0, r0)
-        overlap1 = min(s1, r1)
-        if overlap1 <= overlap0:
-            return 0.0, 0
-        share = min(1.0, max(0.0, (overlap1 - overlap0).total_seconds() / dur))
-        return total_c * share, int(round(total_t * share))
-
-    return tz, now, agent_window, day_included, session_included, session_in_range_cost_tokens
-
-
 def _summarize_perf(doc: dict, time_range: TimeRange, now: Optional[datetime],
                     key_field: str, agent_filter: Optional[str] = None) -> Dict[str, PerfSummary]:
     """Aggregate ``perf_by_day`` over ``time_range`` keyed by ``key_field`` using ``kanjo.perf``."""
@@ -753,186 +602,58 @@ def compute_agent_model_perf(doc: dict, agent: str, time_range: TimeRange = Time
     return _summarize_perf(doc, time_range, now, key_field="model", agent_filter=agent)
 
 
+def _filtered_project_dict(fp) -> dict:
+    p = dict(fp.project)
+    p["cost"] = fp.cost
+    p["tokens"] = {"total": fp.tokens}
+    p["sessions"] = fp.sessions
+    p["by_agent"] = fp.by_agent
+    p["by_day"] = fp.by_day
+    p["sessions_detail"] = fp.sessions_detail
+    p["first_active"] = fp.first_active
+    p["last_active"] = fp.last_active
+    return p
+
+
+def _filtered_bucket_dict(b) -> dict:
+    return {
+        "cost": b.cost,
+        "tokens": {"total": b.tokens},
+        "sessions": b.sessions,
+        "sessions_detail": b.sessions_detail,
+        "first_active": b.first_active,
+        "last_active": b.last_active,
+    }
+
+
 def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                   now: Optional[datetime] = None) -> FilteredData:
     """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
     doc = doc or {}
-    tz, now, _agent_window, day_included, session_included, session_in_range_cost_tokens = (
-        _build_range_helpers(doc, time_range, now=now)
-    )
+    fu = filtered_usage(doc, time_range, now=now)
+    tz, now_dt, _, _, _, session_in_range_cost_tokens = _build_range_helpers(doc, time_range, now=now)
 
-    filtered_projects: List[dict] = []
-    all_projects = doc.get("projects") or []
-
-    for p in all_projects:
-        if not isinstance(p, dict):
-            continue
-        fallback_ag = "unknown"
-        if p.get("by_agent"):
-            fallback_ag = p["by_agent"][0].get("agent", "unknown")
-
-        if time_range == TimeRange.ALL:
-            filtered_p = dict(p)
-            try:
-                filtered_p["cost"] = float(p.get("cost") or 0.0)
-            except (ValueError, TypeError):
-                filtered_p["cost"] = 0.0
-            filtered_projects.append(filtered_p)
-            continue
-
-        # Filter by_day
-        f_by_day = []
-        p_agent_cost: Dict[str, float] = {}
-        p_agent_tokens: Dict[str, int] = {}
-
-        for d in (p.get("by_day") or []):
-            if not isinstance(d, dict):
-                continue
-            d_str = d.get("day", "")
-            cost_split = d.get("by_agent") or {fallback_ag: d.get("cost", 0.0)}
-            tok_split = d.get("by_agent_tokens") or {fallback_ag: d.get("tokens", 0)}
-
-            dc: Dict[str, float] = {}
-            dt: Dict[str, int] = {}
-            agents_to_check = set(cost_split.keys()).union(tok_split.keys())
-            for ag in agents_to_check:
-                if day_included(d_str, ag):
-                    if ag in cost_split:
-                        try:
-                            dc[ag] = float(cost_split[ag] or 0.0)
-                        except (ValueError, TypeError):
-                            dc[ag] = 0.0
-                    if ag in tok_split:
-                        try:
-                            dt[ag] = int(tok_split[ag] or 0)
-                        except (ValueError, TypeError):
-                            dt[ag] = 0
-
-            if dc or dt:
-                for ag, c in dc.items():
-                    p_agent_cost[ag] = p_agent_cost.get(ag, 0.0) + c
-                for ag, t in dt.items():
-                    p_agent_tokens[ag] = p_agent_tokens.get(ag, 0) + t
-                f_by_day.append({
-                    "day": d_str,
-                    "cost": sum(dc.values()),
-                    "tokens": sum(dt.values()),
-                    "by_agent": dc,
-                    "by_agent_tokens": dt,
-                })
-
-        # Filter sessions_detail
-        f_sessions = [s for s in (p.get("sessions_detail") or []) if session_included(s)]
-        p_agent_sessions: Dict[str, int] = {}
-        for s in f_sessions:
-            ag = s.get("agent", fallback_ag)
-            p_agent_sessions[ag] = p_agent_sessions.get(ag, 0) + 1
-
-        all_agents = set(p_agent_cost.keys()).union(p_agent_tokens.keys()).union(p_agent_sessions.keys())
-        f_by_agent = []
-        for ag in sorted(all_agents, key=lambda a: (-p_agent_cost.get(a, 0.0), a)):
-            label = AGENT_LABELS.get(ag, ag)
-            f_by_agent.append({
-                "agent": ag,
-                "label": label,
-                "cost": p_agent_cost.get(ag, 0.0),
-                "tokens": {"total": p_agent_tokens.get(ag, 0)},
-                "sessions": p_agent_sessions.get(ag, 0),
-            })
-
-        p_cost = sum(d["cost"] for d in f_by_day)
-        p_tokens = sum(d["tokens"] for d in f_by_day)
-        p_sess = len(f_sessions)
-
-        filtered_p = dict(p)
-        filtered_p["cost"] = p_cost
-        filtered_p["tokens"] = {"total": p_tokens}
-        filtered_p["sessions"] = p_sess
-        filtered_p["by_agent"] = f_by_agent
-        filtered_p["by_day"] = f_by_day
-        filtered_p["sessions_detail"] = f_sessions
-        filtered_p["first_active"] = f_by_day[0]["day"] if f_by_day else None
-        filtered_p["last_active"] = f_by_day[-1]["day"] if f_by_day else None
-
-        filtered_projects.append(filtered_p)
-
-    # Sort projects by cost desc
+    filtered_projects = [_filtered_project_dict(fp) for fp in fu.projects]
     filtered_projects.sort(key=lambda p: (-p.get("cost", 0.0), str(p.get("name", "")).lower()))
+    filtered_unattr = _filtered_bucket_dict(fu.unattributed)
+    filtered_excl = _filtered_bucket_dict(fu.excluded)
 
-    # Filter buckets
     buckets = doc.get("buckets") or {}
-    raw_unattr = buckets.get("unattributed") or {}
-    raw_excl = buckets.get("excluded") or {}
-
-    def filter_bucket(b: dict) -> dict:
-        if not isinstance(b, dict):
-            b = {}
-        if time_range == TimeRange.ALL:
-            fb = dict(b)
-            try:
-                fb["cost"] = float(b.get("cost") or 0.0)
-            except (ValueError, TypeError):
-                fb["cost"] = 0.0
-            toks = b.get("tokens")
-            try:
-                fb["tokens"] = {"total": toks.get("total", 0) if isinstance(toks, dict) else int(toks or 0)}
-            except (ValueError, TypeError):
-                fb["tokens"] = {"total": 0}
-            fb["sessions"] = int(b.get("sessions") or 0)
-            return fb
-        ss = [s for s in (b.get("sessions_detail") or []) if session_included(s)]
-        c = 0.0
-        t = 0
-        days = []
-        for s in ss:
-            sc, st = session_in_range_cost_tokens(s)
-            c += sc
-            t += st
-            started = parse_iso_dt(s.get("started"), default_tz=tz)
-            if started:
-                days.append(started.astimezone(tz).date().isoformat())
-        fb = dict(b)
-        fb["cost"] = c
-        fb["tokens"] = {"total": t}
-        fb["sessions"] = len(ss)
-        fb["sessions_detail"] = ss
-        fb["first_active"] = min(days) if days else None
-        fb["last_active"] = max(days) if days else None
-        return fb
-
-    filtered_unattr = filter_bucket(raw_unattr)
-    filtered_excl = filter_bucket(raw_excl)
     parse_failed = buckets.get("parse_failed") or {}
     try:
         failed_count = int(parse_failed.get("sessions") or 0) if isinstance(parse_failed, dict) else 0
     except (ValueError, TypeError):
         failed_count = 0
 
-    # Calculate overall totals
-    if time_range == TimeRange.ALL:
-        raw_tot = doc.get("totals") or {}
-        try:
-            total_cost = float(raw_tot.get("cost", 0.0) or 0.0)
-        except (ValueError, TypeError):
-            total_cost = 0.0
-        toks = raw_tot.get("tokens") or {}
-        try:
-            total_tokens = int(toks.get("total", 0) or 0) if isinstance(toks, dict) else int(toks or 0)
-        except (ValueError, TypeError):
-            total_tokens = 0
-        try:
-            total_sessions = int(raw_tot.get("sessions", 0) or 0)
-        except (ValueError, TypeError):
-            total_sessions = 0
-    else:
-        total_cost = sum(p["cost"] for p in filtered_projects) + filtered_unattr["cost"] + filtered_excl["cost"]
-        total_tokens = sum(p["tokens"]["total"] for p in filtered_projects) + filtered_unattr["tokens"]["total"] + filtered_excl["tokens"]["total"]
-        total_sessions = sum(p["sessions"] for p in filtered_projects) + filtered_unattr["sessions"] + filtered_excl["sessions"]
+    total_cost = fu.cost
+    total_tokens = fu.tokens
+    total_sessions = fu.sessions
 
-    # Active projects with usage (or all if range is All)
-    active_projects = [p for p in filtered_projects if (time_range == TimeRange.ALL or p["cost"] > 0 or p["tokens"]["total"] > 0 or p["sessions"] > 0)]
+    active_projects = [
+        p for p in filtered_projects
+        if time_range == TimeRange.ALL or p["cost"] > 0 or p["tokens"]["total"] > 0 or p["sessions"] > 0
+    ]
 
-    # Agent breakdown across report
     agent_cost_total: Dict[str, float] = {}
     for p in filtered_projects:
         for a in (p.get("by_agent") or []):
@@ -958,7 +679,6 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             share_pct = (c / tot_for_share) * 100.0
             agent_shares.append((ag, AGENT_LABELS.get(ag, ag), c, share_pct))
 
-    # Aggregated Days View
     daily_agg: Dict[str, Dict[str, Any]] = {}
     for p in filtered_projects:
         for d in (p.get("by_day") or []):
@@ -982,60 +702,17 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
 
     by_day_list = sorted(daily_agg.values(), key=lambda d: d["day"], reverse=True)
 
-    # Aggregated Models View
-    model_agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    if time_range == TimeRange.ALL:
-        for p in all_projects:
-            for m in (p.get("by_model") or []):
-                if not isinstance(m, dict):
-                    continue
-                key = (m.get("model", "") or "", m.get("agent", "") or "")
-                if key not in model_agg:
-                    model_agg[key] = {
-                        "model": key[0],
-                        "agent": key[1],
-                        "provider": PROVIDER_LABELS.get(provider_for(key[0], key[1]), "Other"),
-                        "cost": 0.0,
-                        "tokens": 0,
-                    }
-                try:
-                    m_c = float(m.get("cost", 0.0) or 0.0)
-                except (ValueError, TypeError):
-                    m_c = 0.0
-                model_agg[key]["cost"] += m_c
-                tok_val = m.get("tokens") or {}
-                try:
-                    tok_count = int(tok_val.get("total", 0) or 0) if isinstance(tok_val, dict) else int(tok_val or 0)
-                except (ValueError, TypeError):
-                    tok_count = 0
-                model_agg[key]["tokens"] += tok_count
-    else:
-        # Apportion from filtered sessions in filtered projects
-        for p in filtered_projects:
-            for s in (p.get("sessions_detail") or []):
-                if not isinstance(s, dict):
-                    continue
-                models = s.get("models") or []
-                if not models or not isinstance(models, list):
-                    continue
-                sc, st = session_in_range_cost_tokens(s)
-                share_c = sc / len(models)
-                share_t = int(round(st / len(models)))
-                ag = s.get("agent", "") or ""
-                for m_name in models:
-                    key = (m_name, ag)
-                    if key not in model_agg:
-                        model_agg[key] = {
-                            "model": m_name,
-                            "agent": ag,
-                            "provider": PROVIDER_LABELS.get(provider_for(m_name, ag), "Other"),
-                            "cost": 0.0,
-                            "tokens": 0,
-                        }
-                    model_agg[key]["cost"] += share_c
-                    model_agg[key]["tokens"] += share_t
-
-    by_model_list = sorted(model_agg.values(), key=lambda m: (-m["cost"], m["model"]))
+    by_model_list = []
+    for m in aggregate_models(fu):
+        by_model_list.append({
+            "model": m["model"],
+            "agent": m["agent"],
+            "provider": PROVIDER_LABELS.get(provider_for(m["model"], m["agent"]), "Other"),
+            "cost": m["cost"],
+            "tokens": m["tokens"],
+            "estimated": m.get("estimated", False),
+        })
+    by_model_list.sort(key=lambda m: (-m["cost"], -m["tokens"], m["model"]))
 
     # Aggregated Agents View
     agent_rows: Dict[str, Dict[str, Any]] = {}
