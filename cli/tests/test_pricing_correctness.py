@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from kanjo.pricing import PriceBook
+from kanjo.pricing import AGENT_DEFAULT, GLOBAL_DEFAULT, PriceBook
 
 
 class PricingCorrectness(unittest.TestCase):
@@ -40,6 +41,32 @@ class PricingCorrectness(unittest.TestCase):
         self.assertAlmostEqual(cost, (100*p['in'] + 20*p['out'] + 30*p['cache_read'] + 30*p['cache_write'] + 10*p['write1h']) / 1e6)
         pieces = [self.book.cost('claude-opus-4.5', 'claude', 1)[0] for _ in range(1000)]
         self.assertAlmostEqual(sum(pieces), self.book.cost('claude-opus-4.5', 'claude', 1000)[0])
+
+    def test_unknown_tiers_have_nonzero_estimated_cost(self):
+        for name, agent in [('anthropic/claude-sonnet-9', 'claude'),
+                            ('openai/gpt-9-mini', 'codex'),
+                            ('xai/grok-9-nano', 'grok')]:
+            with self.subTest(name=name):
+                model, estimated = self.book.resolve(name, agent)
+                self.assertTrue(estimated)
+                if 'sonnet' in name:
+                    self.assertEqual(self.book._tiers(model), {'sonnet'})
+                if 'mini' in name:
+                    self.assertTrue(self.book._tiers(model) == {'mini'} or model == AGENT_DEFAULT[agent])
+                if 'nano' in name:
+                    self.assertEqual(model, AGENT_DEFAULT[agent])
+                cost, estimated = self.book.cost(name, agent, 1000, 1000)
+                self.assertTrue(estimated)
+                self.assertGreater(cost, 0)
+
+    def test_keyword_fallback_checks_all_representative_tiers(self):
+        fallbacks = [('sonnet', 'anthropic/claude-opus-4.8'),
+                     ('sonnet', 'anthropic/claude-sonnet-5')]
+        with patch('kanjo.pricing.FAMILY_FALLBACK', fallbacks):
+            self.assertEqual(self.book.resolve('unknown/other-sonnet-9'),
+                             ('anthropic/claude-sonnet-5', True))
+            self.assertEqual(self.book.resolve('unknown/other-sonnet-nano-9'),
+                             (GLOBAL_DEFAULT, True))
 
     def test_long_prompt_boundary(self):
         model = 'claude-haiku-5.5'

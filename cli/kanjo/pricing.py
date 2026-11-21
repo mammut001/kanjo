@@ -158,7 +158,7 @@ class PriceBook:
     def sig(self) -> str:
         if not hasattr(self, "_sig"):
             import hashlib
-            self._sig = hashlib.sha1(json.dumps(["resolver-v2", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
+            self._sig = hashlib.sha1(json.dumps(["resolver-v3", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
         return self._sig
 
     # ---- catalog helpers -------------------------------------------------
@@ -363,13 +363,13 @@ class PriceBook:
                     target = requested[1] if requested else (0, 0)
                     return (version <= target, version if version <= target else (-version[0], -version[1]))
                 return max(matches, key=rank), True
-            return None, True
         # family keyword fallback
         for keyword, representative in FAMILY_FALLBACK:
             if keyword in low:
                 if keyword == "gemini":
-                    return (GEMINI_FLASH if "flash" in low else GEMINI_PRO), True
-                return representative, True
+                    representative = GEMINI_FLASH if "flash" in low else GEMINI_PRO
+                if not tiers or self._tiers(representative) == tiers:
+                    return representative, True
         return AGENT_DEFAULT.get(agent or "", GLOBAL_DEFAULT), True
 
     @staticmethod
