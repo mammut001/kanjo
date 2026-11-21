@@ -468,9 +468,10 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
     _load_worktree_cache(wt_cache)
     ledger = ledger or Ledger()
     repo_list = repos() if repos is not None else list(roots.get("repos") or [])
-    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor, \
+            ThreadPoolExecutor(max_workers=8) as git_executor:
         grouped = _collect(roots, now, _imported_index(ledger), executor, valid_entries=valid_entries,
-                           repos=repo_list)
+                           repos=repo_list, git_executor=git_executor)
     agents = []
     total = 0
     reclaim = 0
@@ -656,7 +657,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
 def _collect(roots: dict, now: float, imported: Dict[str, set],
              executor: ThreadPoolExecutor,
              valid_entries: Optional[Dict[str, dict]] = None,
-             repos: Optional[List[str]] = None) -> Dict[str, List[dict]]:
+             repos: Optional[List[str]] = None,
+             git_executor: Optional[ThreadPoolExecutor] = None) -> Dict[str, List[dict]]:
     grouped: Dict[str, List[dict]] = {}
     used = set()
     pending = []
@@ -680,8 +682,11 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
         dirty = merge = None
         if kind == "worktrees":
-            dirty = executor.submit(_worktree_dirty, path)
-            merge = executor.submit(_merge_status, path)
+            # Git subprocesses wait on the OS and can run independently of the
+            # filesystem measurements, which use a smaller pool.
+            git_pool = git_executor or executor
+            dirty = git_pool.submit(_worktree_dirty, path)
+            merge = git_pool.submit(_merge_status, path)
             if not probe:
                 # lsof takes a moment; it runs beside the scan and is read at the end.
                 probe.append(_start_cwd_probe())
