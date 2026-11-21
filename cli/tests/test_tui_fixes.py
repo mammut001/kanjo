@@ -3,6 +3,9 @@
 import copy
 import json
 import os
+import subprocess
+import sys
+import tempfile
 import time
 import unittest
 from datetime import datetime, timezone
@@ -14,9 +17,10 @@ except ImportError:  # Windows has no _curses.
     curses = None
 
 from kanjo.tui.model import (
-    AGENT_COLORS, TimeRange, build_subscription_meters, compute_30d_sparkline,
+    AGENT_COLORS, TimeRange, ViewMode, build_subscription_meters, compute_30d_sparkline,
     compute_8w_strip, filter_report,
 )
+from kanjo.tui.static import render_static_snapshot
 from kanjo.tui.render import SELECTED_ROW_BG, Style, TUIState
 from kanjo.tui.term import ColorManager, ViewModelCache, run_curses_tui
 
@@ -288,6 +292,49 @@ class SortDirectionTest(unittest.TestCase):
         text = screen_text(scr)
         self.assertLess(text.index("alpha"), text.index("bravo"))
         self.assertLess(text.index("bravo"), text.index("charlie"))
+
+
+SAMPLE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "ui", "fixtures", "sample.json"))
+CLI_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+class AsciiSnapshotTest(unittest.TestCase):
+    def test_ascii_snapshot_is_pure_ascii(self):
+        doc = load_sample_fixture()
+        for vm in ViewMode:
+            for tr in TimeRange:
+                out = render_static_snapshot(doc, width=120, ascii_mode=True, no_color=True,
+                                             view_mode=vm, time_range=tr, lang="en")
+                out.encode("ascii")  # must not raise
+            out = render_static_snapshot(doc, width=120, ascii_mode=True, no_color=True,
+                                         view_mode=vm, detail_agent="claude", lang="en")
+            out.encode("ascii")
+
+    def test_unicode_snapshot_unchanged(self):
+        out = render_static_snapshot(load_sample_fixture(), width=120, no_color=True, lang="en")
+        self.assertIn("\u00b7", out)
+
+    def _run_once(self, data_path: str, encoding: str) -> subprocess.CompletedProcess:
+        env = dict(os.environ, PYTHONIOENCODING=encoding, COLUMNS="120")
+        return subprocess.run(
+            [sys.executable, "-m", "kanjo", "usage", "--once", "--ascii", "--no-color",
+             "--lang", "en", "--data", data_path],
+            cwd=CLI_DIR, env=env, capture_output=True, timeout=120,
+        )
+
+    def test_once_ascii_on_ascii_stdout_exits_zero(self):
+        proc = self._run_once(SAMPLE_PATH, "ascii")
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr.decode("utf-8", "replace"))
+
+    def test_once_with_non_ascii_project_name_does_not_crash(self):
+        doc = load_sample_fixture()
+        doc["projects"][0]["name"] = "\u52d8\u5b9a-app"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "report.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(doc, f)
+            proc = self._run_once(path, "latin-1")
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr.decode("utf-8", "replace"))
 
 
 if __name__ == "__main__":
