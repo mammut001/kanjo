@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 import unittest
 
 from kanjo.pricing import default_book
@@ -40,6 +42,19 @@ class WorkBuddySourceTest(unittest.TestCase):
         self.assertEqual(msg.thinking, 50)
         self.assertEqual(msg.key, "workbuddy:wb-sess-1:msg-1")
         self.assertEqual(session.tool_paths, [["/Users/alice/Projects/demo/login.py"]])
+
+    def test_malformed_message_does_not_hide_fixture_usage(self):
+        fixture = workbuddy.discover([FIXTURE_WB])[0][0]
+        with open(fixture) as handle:
+            lines = handle.readlines()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "session.jsonl")
+            with open(path, "w") as handle:
+                handle.write(json.dumps({"type": "assistant", "message": "broken"}) + "\n")
+                handle.writelines(lines)
+            session = workbuddy.parse_file(path)
+        self.assertEqual(len(session.messages), 1)
+        self.assertEqual(session.messages[0].input, 1100)
 
     def test_cost_glm52(self):
         discovered = workbuddy.discover([FIXTURE_WB])

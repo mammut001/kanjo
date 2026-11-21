@@ -2,6 +2,7 @@ import Foundation
 
 public struct ReportLoadState: Equatable {
     public var report: UsageReport?
+    public var reportRevision: Int
     public var isStaleReport: Bool
     public var staleReportGeneratedAt: String?
     public var error: String?
@@ -12,6 +13,7 @@ public struct ReportLoadState: Equatable {
 
     public init(
         report: UsageReport? = nil,
+        reportRevision: Int = 0,
         isStaleReport: Bool = false,
         staleReportGeneratedAt: String? = nil,
         error: String? = nil,
@@ -21,6 +23,7 @@ public struct ReportLoadState: Equatable {
         sourceDescription: String = ""
     ) {
         self.report = report
+        self.reportRevision = reportRevision
         self.isStaleReport = isStaleReport
         self.staleReportGeneratedAt = staleReportGeneratedAt
         self.error = error
@@ -135,6 +138,7 @@ public final class ReportLoader {
                 self.hasFinishedLiveRefresh = true
                 var updated = self.state
                 updated.report = loaded
+                updated.reportRevision += 1
                 updated.isStaleReport = false
                 updated.staleReportGeneratedAt = nil
                 updated.error = nil
@@ -178,6 +182,7 @@ public final class ReportLoader {
               !hasFinishedLiveRefresh else { return }
         var updated = state
         updated.report = cached
+        updated.reportRevision += 1
         updated.isStaleReport = true
         updated.staleReportGeneratedAt = cached.generatedAt
         state = updated

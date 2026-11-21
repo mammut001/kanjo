@@ -151,10 +151,13 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                             tool_order.append(tid)
                         tools[tid].update(found_paths)
 
-            inp = int(usage.get("inputTokens") or 0)
-            out = int(usage.get("outputTokens") or 0)
-            cache_r = int(usage.get("cacheReadTokens") or 0)
-            cache_w = int(usage.get("cacheWriteTokens") or 0)
+            try:
+                inp = int(usage.get("inputTokens") or 0)
+                out = int(usage.get("outputTokens") or 0)
+                cache_r = int(usage.get("cacheReadTokens") or 0)
+                cache_w = int(usage.get("cacheWriteTokens") or 0)
+            except (TypeError, ValueError, OverflowError):
+                continue
             non_cached_in = max(0, inp - cache_r)
 
             meta = msg_dict.get("meta") if isinstance(msg_dict.get("meta"), dict) else {}

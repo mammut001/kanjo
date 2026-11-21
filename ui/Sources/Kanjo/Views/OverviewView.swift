@@ -187,7 +187,7 @@ struct OverviewView: View {
                     .layoutPriority(0)
             }
             HeroAmount(value: Fmt.money(f.cost, currency: cur)).contentTransition(.numericText())
-            Text(L10n.tr("overview.this_week_tokens", Fmt.tokens(weeklyTokens())))
+            Text(L10n.tr("overview.this_week_tokens", Fmt.tokens(panelData?.weeklyTokens ?? weeklyTokens())))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
             // 一行放下就一行（先 11pt，再 10.5pt）；还放不下就在日期后面换行，不在词中间折。
             ViewThatFits(in: .horizontal) {
@@ -257,7 +257,7 @@ struct OverviewView: View {
             ForEach(Array(visible.enumerated()), id: \.element.id) { i, p in
                 if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
                 ProjectRow(project: p, currency: cur,
-                           weeks: p.heatWeeks(endingOn: end), agentLabels: labels,
+                           weeks: panelData?.heatWeeks[p.id] ?? p.heatWeeks(endingOn: end), agentLabels: labels,
                            pinned: pinned.contains(p.id),
                            projectIndex: i,
                            onOpen: { onSelect(.project(p.id)) },
@@ -320,7 +320,7 @@ struct OverviewView: View {
     }
 
     private func modelsSection(_ f: FilteredReport) -> some View {
-        let models = ModelAggregation.aggregate(in: f)
+        let models = panelData?.models ?? ModelAggregation.aggregate(in: f)
         let shown = showAllModels ? models : Array(models.prefix(8))
         return PanelSection(L10n.tr("overview.section.by_model"), flat: true) {
             if models.isEmpty {

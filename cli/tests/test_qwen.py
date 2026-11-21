@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import tempfile
 import unittest
@@ -41,6 +42,16 @@ class QwenSourceTest(unittest.TestCase):
         self.assertEqual(msg.cache_read, 500)
         self.assertEqual(msg.thinking, 80)
         self.assertEqual(msg.key, "qwen:qwen-sess-1:req-qwen-1")
+
+    def test_malformed_usage_entries_do_not_hide_valid_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            usage_dir = os.path.join(tmp, "usage")
+            os.makedirs(usage_dir)
+            usage = os.path.join(usage_dir, "token-usage-2026-10.jsonl")
+            with open(usage, "w") as handle:
+                for record in ([], {"sessionId": []}, {"sessionId": ""}, {"sessionId": "valid"}):
+                    handle.write(json.dumps(record) + "\n")
+            self.assertEqual(qwen.discover([tmp]), [(usage, None)])
 
     def test_dedupe_keys_stable(self):
         discovered = qwen.discover([FIXTURE_QWEN])

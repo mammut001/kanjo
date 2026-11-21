@@ -231,7 +231,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "workb
             if not isinstance(item, dict):
                 continue
 
-            ts = _parse_ts(item.get("timestamp") or (item.get("message") or {}).get("timestamp"))
+            message = item.get("message") if isinstance(item.get("message"), dict) else {}
+            ts = _parse_ts(item.get("timestamp") or message.get("timestamp"))
             if ts is not None:
                 if session.origin_ts is None:
                     session.origin_ts = ts
