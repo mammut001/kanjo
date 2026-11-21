@@ -97,6 +97,13 @@ struct MultiImageView: View {
         let mosaicW = (columns * 0.52).rounded()
         let agentsW = columns - mosaicW
         let mosaicH: CGFloat = 230
+        let shown = Array(summary.agentRows.prefix(7))
+        let overflowCost = summary.agentRows.dropFirst(7).reduce(0.0) { $0 + $1.cost }
+        let tokenW = width(shown.map { Fmt.tokens($0.tokens) })
+        let costW = width(shown.map { Fmt.money($0.cost, currency: summary.currency) }
+            + (summary.agentRows.count > 7 ? [Fmt.money(overflowCost, currency: summary.currency)] : []))
+        let multiplierW = width(shown.map { multiplierText($0) }, weight: .semibold)
+        let nameW = max(0, agentsW - 12 - tokenW - costW - multiplierW - 12)
 
         VStack(spacing: 18) {
             header
@@ -127,7 +134,6 @@ struct MultiImageView: View {
                     
                     Grid(alignment: .center, horizontalSpacing: 4, verticalSpacing: 8) {
                         let maxShown = 7
-                        let shown = Array(summary.agentRows.prefix(maxShown))
                         let overflow = max(0, summary.agentRows.count - maxShown)
                         
                         ForEach(shown, id: \.agent) { row in
@@ -137,7 +143,7 @@ struct MultiImageView: View {
                                     Text(row.label)
                                         .font(.system(size: 13))
                                         .lineLimit(1)
-                                        .frame(width: 73, alignment: .leading)
+                                        .frame(width: nameW, alignment: .leading)
                                 }
                                 .gridColumnAlignment(.leading)
                                 .layoutPriority(1)
@@ -147,14 +153,14 @@ struct MultiImageView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
-                                    .frame(width: 43, alignment: .trailing)
+                                    .frame(width: tokenW, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
 
                                 Text(Fmt.money(row.cost, currency: summary.currency))
                                     .font(.system(size: 13, design: .monospaced))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.6)
-                                    .frame(width: 95, alignment: .trailing)
+                                    .frame(width: costW, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
 
                                 Text(multiplierText(row))
@@ -162,13 +168,12 @@ struct MultiImageView: View {
                                     .foregroundStyle(multiplierColor(row))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.6)
-                                    .frame(width: 47, alignment: .trailing)
+                                    .frame(width: multiplierW, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
                             }
                         }
                         
                         if overflow > 0 {
-                            let overflowCost = summary.agentRows.dropFirst(maxShown).reduce(0.0) { $0 + $1.cost }
                             GridRow {
                                 HStack(spacing: 6) {
                                     Circle().fill(Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
@@ -176,7 +181,7 @@ struct MultiImageView: View {
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
-                                        .frame(width: 73, alignment: .leading)
+                                        .frame(width: nameW, alignment: .leading)
                                 }
                                 .gridColumnAlignment(.leading)
 
@@ -187,7 +192,7 @@ struct MultiImageView: View {
                                     .font(.system(size: 13, design: .monospaced))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.6)
-                                    .frame(width: 95, alignment: .trailing)
+                                    .frame(width: costW, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
                                 Text(verbatim: " ")
                                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
@@ -229,6 +234,11 @@ struct MultiImageView: View {
         .frame(width: 640)
         .background(Color(white: 0.11))
         .environment(\.colorScheme, .dark)
+    }
+
+    private func width(_ values: [String], weight: NSFont.Weight = .regular) -> CGFloat {
+        let font = NSFont.monospacedSystemFont(ofSize: 13, weight: weight)
+        return ceil(values.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0)
     }
 
     private func multiplierText(_ row: ShareSummary.AgentRow) -> String {

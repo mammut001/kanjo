@@ -174,7 +174,7 @@ public sealed class ShareImageView : Border
         {
             ColumnSpacing = 4,
             RowSpacing = 8,
-            ColumnDefinitions = new ColumnDefinitions("*,43,95,47"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"),
         };
         var shown = summary.AgentRows.Take(maxShown).ToList();
         for (var i = 0; i < shown.Count; i++)

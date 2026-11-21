@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Kanjo.App;
@@ -44,6 +45,39 @@ public sealed class ShareImageRenderTests : KanjoTestCase
                 window.Close();
             }
         });
+    }
+
+    private sealed class SkiaEntryPoint
+    {
+        public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<HeadlessApplication>()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+    }
+
+    [Fact]
+    public async Task SampleAgentLabelIsNotTrimmed()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(SkiaEntryPoint));
+        await session.Dispatch(() =>
+        {
+            AppSetup.ConfigureHeadless("dark");
+            var summary = ShareSummary.Build(LoadFixture(), "all", Ts("2026-01-01T00:00:00Z"));
+            var view = new ShareImageView(summary);
+            var window = TestWindows.ShowSizedToContent(view);
+            try
+            {
+                view.Measure(Size.Infinity);
+                view.Arrange(new Rect(view.DesiredSize));
+                var label = view.GetVisualDescendants().OfType<TextBlock>()
+                    .Single(t => t.Text == "Antigravity CLI");
+                var natural = new TextBlock { Text = label.Text, FontFamily = label.FontFamily,
+                    FontSize = label.FontSize, FontWeight = label.FontWeight };
+                natural.Measure(Size.Infinity);
+                Assert.True(label.Bounds.Width >= natural.DesiredSize.Width,
+                    $"Antigravity CLI: {label.Bounds.Width} < {natural.DesiredSize.Width}");
+            }
+            finally { window.Close(); }
+            return true;
+        }, CancellationToken.None);
     }
 
     [Fact]
