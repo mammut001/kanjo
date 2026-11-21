@@ -138,19 +138,16 @@ public sealed class AppSettings : ILanguageSettings
         if (_path is null) return;
         try
         {
-            var dir = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var obj = new JsonObject();
-            string[] keys;
-            lock (_lock) keys = _values.Keys.ToArray();
-            foreach (var key in keys)
+            lock (_lock)
             {
-                JsonNode? value;
-                lock (_lock) value = _values.TryGetValue(key, out var v) ? v : null;
-                obj[key] = value?.DeepClone();
+                var obj = new JsonObject();
+                foreach (var (key, value) in _values)
+                {
+                    obj[key] = value?.DeepClone();
+                }
+                if (File.Exists(_path) && !IsJsonObjectFile(_path)) Quarantine(_path);
+                AtomicFile.WriteAllText(_path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
-            if (File.Exists(_path) && !IsJsonObjectFile(_path)) Quarantine(_path);
-            File.WriteAllText(_path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception)
         {
@@ -178,7 +175,7 @@ public sealed class AppSettings : ILanguageSettings
         {
             dest = path + ".bad-" + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
         }
-        File.Move(path, dest);
+        File.Copy(path, dest);
     }
 
     // MARK: - 读取

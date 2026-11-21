@@ -210,3 +210,41 @@ public sealed class AppServicesBackgroundTests : KanjoTestCase
         Assert.Equal("publish-usage", fake.Calls[0].Kind);
     }
 }
+
+public sealed class SupersededProcessTests : KanjoTestCase
+{
+    [Fact]
+    public async Task NewRefreshCancelsPreviousCliProcess()
+    {
+        var dir = TempDir();
+        Directory.CreateDirectory(Path.Combine(dir, "kanjo"));
+        var marker = Path.Combine(dir, "started");
+        var script = $"""
+            import os, pathlib, sys, time
+            marker = pathlib.Path({System.Text.Json.JsonSerializer.Serialize(marker)})
+            try:
+                with marker.open('x') as f: f.write(str(os.getpid()))
+                time.sleep(30)
+            except FileExistsError:
+                print(pathlib.Path({System.Text.Json.JsonSerializer.Serialize(FixturePath)}).read_text(encoding='utf-8'))
+            """;
+        File.WriteAllText(Path.Combine(dir, "kanjo", "__init__.py"), "");
+        File.WriteAllText(Path.Combine(dir, "kanjo", "__main__.py"), script);
+        var settings = AppSettings.InMemory();
+        settings.Set(SettingsKeys.CliWorkingDirectory, dir);
+        var services = new AppServices(settings, [], TempDir(), new FakeBackgroundScheduler(),
+            new FakeLogWatcherFactory(), new FakePowerMonitor());
+        var first = Task.Run(services.Refresh);
+        var pid = 0;
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(marker) && int.TryParse(File.ReadAllText(marker), out pid), TimeSpan.FromSeconds(10)));
+        var second = Task.Run(services.Refresh);
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotNull(services.Report);
+        try
+        {
+            using var child = System.Diagnostics.Process.GetProcessById(pid);
+            Assert.True(child.HasExited);
+        }
+        catch (ArgumentException) { }
+    }
+}
