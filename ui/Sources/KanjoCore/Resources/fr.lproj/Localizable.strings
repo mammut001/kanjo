@@ -99,7 +99,7 @@
 "settings.refresh_minutes" = "Toutes les %d min";
 "settings.menu_bar_shows" = "Affichage barre des menus";
 "settings.menubar.cost" = "Coût";
-"settings.menubar.tokens" = "Tokens";
+"settings.menubar.tokens" = "Jetons";
 "settings.show_menu_bar_cost" = "Afficher le coût total dans la barre des menus";
 "settings.section.projects" = "Projets";
 "settings.hidden_projects_count" = "Projets masqués : %d";
@@ -270,11 +270,11 @@
 "overview.count.hidden" = " (%d masqués)";
 "overview.count.session.singular" = "%d session";
 "overview.count.session.plural" = "%d sessions";
-"overview.tokens_count" = "%@ tokens";
-"overview.this_week_tokens" = "Cette semaine : %@ tokens";
+"overview.tokens_count" = "%@ jetons";
+"overview.this_week_tokens" = "Cette semaine : %@ jetons";
 "overview.help.no_usage_range" = "Aucune utilisation sur cette période.";
-"overview.help.cache_reads" = "%@ des tokens sont des lectures de cache.";
-"overview.help.daily_summed" = "Coût et tokens cumulés à partir des données quotidiennes ; sessions comptabilisées selon l'heure de début.";
+"overview.help.cache_reads" = "%@ des jetons sont des lectures de cache.";
+"overview.help.daily_summed" = "Coût et jetons cumulés à partir des données quotidiennes ; sessions comptabilisées selon l'heure de début.";
 "overview.help.hidden_projects" = "%d projets dans le rapport ; %d masqués de la liste et de la mosaïque.";
 "overview.help.failed_log.singular" = "Plus %d fichier journal non analysé (non comptabilisé dans les sessions).";
 "overview.help.failed_log.plural" = "Plus %d fichiers journaux non analysés (non comptabilisés dans les sessions).";
@@ -325,8 +325,8 @@
 "overview.badge.path_missing_help" = "Aucun des chemins locaux de ce projet n'existe plus.";
 "overview.badge.local" = "local";
 "overview.badge.local_help" = "Aucun dépôt git distant ; identifié par son chemin absolu.";
-"overview.row.subtitle.singular" = "%d session · %@ tokens · actif %@";
-"overview.row.subtitle.plural" = "%d sessions · %@ tokens · actif %@";
+"overview.row.subtitle.singular" = "%d session · %@ jetons · actif %@";
+"overview.row.subtitle.plural" = "%d sessions · %@ jetons · actif %@";
 "overview.row.last_active" = "Dernière activité %@";
 "overview.action.pin" = "Épingler en haut";
 "overview.action.unpin" = "Détacher";
@@ -343,19 +343,19 @@
 "project.subtitle.plural" = "%d sessions · %@";
 "project.no_usage" = "aucune utilisation";
 "project.local_repo" = "dépôt local";
-"project.section.tokens" = "Tokens";
+"project.section.tokens" = "Jetons";
 "project.tokens_total" = "%@ au total";
 "project.breakdown_all_only" = "La ventilation par type (entrée, sortie, cache) n'est disponible que pour « Toutes les dates ».";
 "project.token.input" = "Entrée";
-"project.token.input_help" = "Tokens d'entrée non mis en cache";
+"project.token.input_help" = "Jetons d'entrée non mis en cache";
 "project.token.output" = "Sortie";
-"project.token.output_help" = "Tokens de sortie, réflexion comprise";
+"project.token.output_help" = "Jetons de sortie, réflexion comprise";
 "project.token.thinking" = "Réflexion";
 "project.token.thinking_help" = "Sous-ensemble des sorties ; affiché à titre indicatif, non ajouté au total. Certains agents indiquent 0.";
 "project.token.cache_read" = "Lecture de cache";
-"project.token.cache_read_help" = "Tokens lus depuis le cache de prompt";
+"project.token.cache_read_help" = "Jetons lus depuis le cache de prompt";
 "project.token.cache_write" = "Écriture de cache";
-"project.token.cache_write_help" = "Tokens écrits dans le cache de prompt";
+"project.token.cache_write_help" = "Jetons écrits dans le cache de prompt";
 "project.section.by_agent" = "Par agent";
 "project.no_usage_range" = "Aucune utilisation sur cette période.";
 "project.agent_detail" = "%d sess · %@ tok · %@";
@@ -477,7 +477,7 @@
 /* Session */
 "session.untitled" = "(sans titre)";
 "session.share" = "part %@";
-"session.share_help" = "Fraction du coût de cette session attribuée ici. Le coût et les tokens affichés en tiennent déjà compte.";
+"session.share_help" = "Fraction du coût de cette session attribuée ici. Le coût et les jetons affichés en tiennent déjà compte.";
 "session.subagent.singular" = "· %d sous-agent";
 "session.subagent.plural" = "· %d sous-agents";
 "session.subagents_help" = "Les sous-agents suivent l'attribution de la session parente (et son ratio de répartition).";
@@ -515,7 +515,7 @@
 
 /* Rapprochement */
 "reconcile.cost_line" = "Total %@ vs projets %@ + non attribué %@ + exclu %@ = %@";
-"reconcile.tokens_line" = "Tokens %@ vs somme %@";
+"reconcile.tokens_line" = "Jetons %@ vs somme %@";
 "reconcile.sessions_line" = "Sessions %@ vs somme %@";
 "reconcile.diff" = " · écart %@";
 "reconcile.contract_invariant" = "Invariant du contrat de données : totaux = somme(projets) + non attribué + exclu (tolérance de coût 0,01 $).";
@@ -575,10 +575,10 @@
 "settings.appearance.system" = "Système";
 "agents.empty" = "Aucune utilisation d'agent sur cette période.";
 "agents.proportion_other" = "Autres";
-"agents.tokens_share_help" = "Part des tokens totaux sur cette période";
+"agents.tokens_share_help" = "Part des jetons totaux sur cette période";
 "agents.row.expand_help" = "Survoler pour prévisualiser, cliquer pour épingler";
 "agents.row.collapse_help" = "Cliquer ou appuyer sur Échap pour fermer";
-"agents.detail.tokens" = "Tokens";
+"agents.detail.tokens" = "Jetons";
 "agents.detail.cache_hit" = "Taux de cache";
 "agents.detail.performance" = "Performance";
 "agents.detail.output_speed" = "Vitesse de sortie";
