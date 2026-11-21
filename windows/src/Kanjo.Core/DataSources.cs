@@ -34,10 +34,17 @@ public interface IDiskSource
     CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed);
 }
 
+public interface ICancellableDiskSource : IDiskSource
+{
+    DiskReport Load(CancellationToken cancellationToken);
+}
+
 /// <summary>跑 `kanjo disk --json` 和 `kanjo disk clean`。</summary>
-public sealed class CliDiskSource(CliRunner runner) : IDiskSource
+public sealed class CliDiskSource(CliRunner runner) : ICancellableDiskSource
 {
     public DiskReport Load() => runner.Disk();
+
+    public DiskReport Load(CancellationToken cancellationToken) => runner.Disk(cancellationToken: cancellationToken);
 
     public DiskReport Load(bool rescan) => runner.Disk(rescan);
 
@@ -104,7 +111,7 @@ public sealed class DiskReportCache
         {
             var dir = Path.GetDirectoryName(FilePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(FilePath, DiskJson.Write(report));
+            AtomicFile.WriteAllText(FilePath, DiskJson.Write(report));
         }
         catch (Exception)
         {

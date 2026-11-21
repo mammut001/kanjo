@@ -185,6 +185,7 @@ public sealed class KanjoApplication : Application
 
     private void DisposeServices()
     {
+        ProcessLifetime.Shared.Dispose();
         _services?.Background.Dispose();
         _services?.DiskPrefetch.Dispose();
         _updates?.Dispose();

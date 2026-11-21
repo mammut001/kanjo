@@ -16,6 +16,7 @@ public sealed class DiskStore
     private string _sourceDescription = "";
     private IDiskSource? _source;
     private int _generation;
+    private CancellationTokenSource? _refreshCancellation;
     private bool _running;
     private bool _pending;
     private bool _pendingRescan;
@@ -131,10 +132,13 @@ public sealed class DiskStore
     private async Task RunOnceAsync(bool rescan)
     {
         int generation;
+        CancellationTokenSource cancellation;
         lock (_lock)
         {
             if (!_state.BeginRefresh()) return;
             generation = _generation;
+            cancellation = new CancellationTokenSource();
+            _refreshCancellation = cancellation;
         }
         Changed?.Invoke();
 
@@ -148,7 +152,8 @@ public sealed class DiskStore
                 _source = source;
                 _sourceDescription = description;
             }
-            var report = await Task.Run(source.Load).ConfigureAwait(false);
+            var report = await Task.Run(() => source is ICancellableDiskSource cancellable
+                ? cancellable.Load(cancellation.Token) : source.Load()).ConfigureAwait(false);
             if (CurrentGeneration() == generation)
             {
                 loaded = report;
@@ -162,6 +167,8 @@ public sealed class DiskStore
 
         lock (_lock)
         {
+            if (ReferenceEquals(_refreshCancellation, cancellation)) _refreshCancellation = null;
+            cancellation.Dispose();
             if (CurrentGenerationLocked() == generation)
             {
                 _error = error;
@@ -197,6 +204,7 @@ public sealed class DiskStore
         lock (_lock)
         {
             _generation++;
+            _refreshCancellation?.Cancel();
             _source = null;
             _pending = false;
             _pendingRescan = false;

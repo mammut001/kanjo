@@ -133,3 +133,31 @@ public sealed class SettingsStoreTests : KanjoTestCase
         }
     }
 }
+
+public sealed class AtomicFileTests : KanjoTestCase
+{
+    [Fact]
+    public void FailedWritePreservesPreviousFileAndCleansTemporaryFile()
+    {
+        var dir = TempDir();
+        var path = Path.Combine(dir, "settings.json");
+        File.WriteAllText(path, "old contents");
+        Assert.Throws<IOException>(() => AtomicFile.WriteAllText(path, "new contents", (temporary, _) =>
+        {
+            File.WriteAllText(temporary, "partial");
+            throw new IOException("simulated write failure");
+        }));
+        Assert.Equal("old contents", File.ReadAllText(path));
+        Assert.Single(Directory.GetFiles(dir));
+    }
+
+    [Fact]
+    public void ConcurrentSettingsSavesKeepEveryKey()
+    {
+        var path = Path.Combine(TempDir(), "settings.json");
+        var settings = new AppSettings(path);
+        Parallel.For(0, 100, i => settings.Set($"key{i}", new string((char)('a' + i % 26), 1000)));
+        var reloaded = new AppSettings(path);
+        for (var i = 0; i < 100; i++) Assert.Equal(new string((char)('a' + i % 26), 1000), reloaded.GetString($"key{i}"));
+    }
+}

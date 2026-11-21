@@ -14,6 +14,7 @@ public sealed class AppServices
 {
     private readonly object _refreshLock = new();
     private int _generation;
+    private CancellationTokenSource? _refreshCancellation;
     private IReportCommandRunner? _reportRunner;
 
     public AppSettings Settings { get; }
@@ -83,7 +84,7 @@ public sealed class AppServices
         SnapshotMode = arguments.Contains("--snapshot") ||
                        arguments.Any(a => a.StartsWith("--snapshot=", StringComparison.Ordinal));
 
-        Config = new ConfigDataSource(BuildRunner)
+        Config = new ConfigDataSource(() => BuildRunner())
         {
             // 后台回调切回 UI 线程（设置页预热档位表用）。
             CompletionDispatcher = DispatchAction,
@@ -210,8 +211,12 @@ public sealed class AppServices
         Background.BeginRefresh();
         DiskPrefetch.Cancel();
         int generation;
+        CancellationTokenSource cancellation;
         lock (_refreshLock)
         {
+            _refreshCancellation?.Cancel();
+            cancellation = new CancellationTokenSource();
+            _refreshCancellation = cancellation;
             generation = ++_generation;
             IsLoading = true;
         }
@@ -221,7 +226,7 @@ public sealed class AppServices
         var superseded = false;
         try
         {
-            loaded = LoadReport();
+            loaded = LoadReport(cancellation.Token);
             lock (_refreshLock)
             {
                 if (generation != _generation)
@@ -248,6 +253,8 @@ public sealed class AppServices
         {
             lock (_refreshLock)
             {
+                if (ReferenceEquals(_refreshCancellation, cancellation)) _refreshCancellation = null;
+                cancellation.Dispose();
                 if (!superseded)
                 {
                     LastRefresh = DateTimeOffset.UtcNow;
@@ -417,7 +424,7 @@ public sealed class AppServices
         return $"Command: {command}" + (cwd is null ? "" : $" (in {cwd})");
     }
 
-    private UsageReport LoadReport()
+    private UsageReport LoadReport(CancellationToken cancellationToken = default)
     {
         SourceDescription = DescribeSource();
         if (DataOverride is { } path)
@@ -432,15 +439,16 @@ public sealed class AppServices
             return new FileDataSource(SourceResolution.FileFor(Settings.GetString(SettingsKeys.FilePath))).Load();
         }
 
-        return BuildRunner().Export();
+        return BuildRunner(cancellationToken).Export();
     }
 
-    public CliRunner BuildRunner()
+    public CliRunner BuildRunner(CancellationToken cancellationToken = default)
     {
         var configuredDir = Settings.Str(SettingsKeys.CliWorkingDirectory, SettingsDefaults.CliWorkingDirectory).Trim();
         return new CliRunner
         {
             WorkingDirectory = configuredDir.Length == 0 ? null : configuredDir,
+            CancellationToken = cancellationToken,
         };
     }
 
@@ -529,7 +537,7 @@ public sealed class AppServices
 }
 
 /// <summary>`kanjo disk --json --max-age 21600 [--rescan]` / `disk clean` 的数据源。</summary>
-public sealed class CliCliDiskSource : IDiskSource
+public sealed class CliCliDiskSource : ICancellableDiskSource
 {
     private readonly CliRunner _runner;
     private readonly bool _rescan;
@@ -543,6 +551,10 @@ public sealed class CliCliDiskSource : IDiskSource
     public DiskReport Load() => _rescan
         ? _runner.Disk(rescan: true)
         : _runner.Disk(maxAge: TimeSpan.FromHours(6));
+
+    public DiskReport Load(CancellationToken cancellationToken) => _rescan
+        ? _runner.Disk(rescan: true, cancellationToken: cancellationToken)
+        : _runner.Disk(maxAge: TimeSpan.FromHours(6), cancellationToken: cancellationToken);
 
     public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed) =>
         _runner.DiskClean(ids, olderThan, confirmed);
