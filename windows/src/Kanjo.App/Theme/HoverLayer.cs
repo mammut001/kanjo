@@ -23,6 +23,7 @@ public sealed class HoverLayer : Panel
     private Point _origin;
     private string? _shownId;
     private DispatcherTimer? _timer;
+    private string? _pendingId;
 
     /// <summary>当前面板的悬停层（快照 / 常规运行各有一个）。</summary>
     public static HoverLayer? Current { get; set; }
@@ -53,17 +54,19 @@ public sealed class HoverLayer : Panel
         anchor.PointerExited += (_, _) => Dismiss(id);
         anchor.DetachedFromVisualTree += (_, _) =>
         {
-            if (_shownId == id) Hide();
+            Dismiss(id);
         };
     }
 
     private void Schedule(string id)
     {
         _timer?.Stop();
+        _pendingId = id;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DelayMilliseconds) };
         _timer.Tick += (_, _) =>
         {
             _timer?.Stop();
+            _pendingId = null;
             ShowRegistered(id);
         };
         _timer.Start();
@@ -71,9 +74,12 @@ public sealed class HoverLayer : Panel
 
     private void Dismiss(string id)
     {
-        if (_shownId != id) return;
-        _timer?.Stop();
-        Hide();
+        if (_pendingId == id)
+        {
+            _timer?.Stop();
+            _pendingId = null;
+        }
+        if (_shownId == id) Hide();
     }
 
     /// <summary>按 id 显示已注册的卡片（截图里的固定悬停卡走这里）。</summary>
