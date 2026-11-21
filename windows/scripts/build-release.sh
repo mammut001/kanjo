@@ -63,6 +63,7 @@ DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
 [[ -x "$DOTNET" ]] || DOTNET="dotnet"
 command -v "$DOTNET" >/dev/null 2>&1 || { echo "dotnet not found" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "curl not found" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 not found" >&2; exit 1; }
 command -v unzip >/dev/null 2>&1 || { echo "unzip not found" >&2; exit 1; }
 
 sha256_of() {
@@ -108,10 +109,22 @@ unzip -q -o "$TMP_ZIP" -d "$PY_DIR"
 rm -f "$TMP_ZIP"
 trap - EXIT
 
+echo "==> bundle tzdata 2025.2"
+TZ_TMP="$(mktemp -d -t kanjo-tzdata.XXXXXX)"
+trap 'rm -rf "$TZ_TMP"' EXIT
+python3 -m pip download --disable-pip-version-check --only-binary=:all: --no-deps --dest "$TZ_TMP" 'tzdata==2025.2'
+mkdir -p "$PY_DIR/Lib/site-packages"
+unzip -q "$TZ_TMP"/tzdata-*.whl -d "$PY_DIR/Lib/site-packages"
+rm -rf "$TZ_TMP"
+trap - EXIT
+
 # `._pth` is read relative to python.exe: `../cli` puts <appdir>\cli on sys.path so
 # `python.exe -m kanjo --version` works. `import site` stays commented out (not needed).
 PTH="$(find "$PY_DIR" -maxdepth 1 -name 'python*._pth' | head -n 1)"
 [[ -n "$PTH" ]] || { echo "no python*._pth in $PY_DIR" >&2; exit 1; }
+if ! grep -qx 'Lib/site-packages' "$PTH"; then
+  printf 'Lib/site-packages\n' >> "$PTH"
+fi
 if ! grep -qx '\.\./cli' "$PTH"; then
   printf '../cli\n' >> "$PTH"
 fi
@@ -131,6 +144,7 @@ echo "==> verify bundle layout"
 for required in \
   "$OUT/Kanjo.exe" \
   "$PY_DIR/python.exe" \
+  "$PY_DIR/Lib/site-packages/tzdata/zoneinfo/America/New_York" \
   "$CLI_DIR/kanjo/__init__.py" \
   "$CLI_DIR/pricing.json" \
   "$CLI_DIR/pricing_overrides.json" \

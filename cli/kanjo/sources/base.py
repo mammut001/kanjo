@@ -9,6 +9,7 @@ import posixpath
 import re
 import shutil
 import sqlite3
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -157,8 +158,8 @@ def local_day(ts: float) -> str:
 def local_timezone_name() -> str:
     """IANA name of the zone ``local_day`` uses: $TZ, else the /etc/localtime
     symlink target (macOS and most Linux), else /etc/timezone, else the UTC
-    offset. Windows has no tz database path, so it always ends at the offset
-    (``Etc/GMT+N`` or ``UTC``), which needs no ``tzdata`` package."""
+    offset. Windows typically ends at the fixed offset unless $TZ identifies
+    an IANA zone, even when the tzdata package is installed."""
     tz = os.environ.get("TZ", "").lstrip(":")
     if tz and "/" in tz and not tz.startswith("/"):
         return tz
@@ -179,7 +180,18 @@ def local_timezone_name() -> str:
                 return name
     except OSError:
         pass
+    _warn_fixed_offset()
     return offset_timezone_name()
+
+
+_fixed_offset_warned = False
+
+
+def _warn_fixed_offset():
+    global _fixed_offset_warned
+    if not _fixed_offset_warned:
+        _fixed_offset_warned = True
+        print("kanjo: warning: using a fixed timezone offset; daylight saving time may be incorrect", file=sys.stderr)
 
 
 def offset_timezone_name() -> str:
@@ -209,14 +221,14 @@ def local_zone(name: Optional[str] = None):
     """tzinfo for ``name`` (default: the local zone).
 
     Falls back to a fixed UTC offset when the IANA database is unavailable, which
-    is the normal case on Windows without the ``tzdata`` package. Never raises, so
-    no caller needs the tz database to exist.
+    can happen without the ``tzdata`` package or for an unknown zone.
     """
     zone_name = name or local_timezone_name()
     try:
         from zoneinfo import ZoneInfo
         return ZoneInfo(zone_name)
     except Exception:
+        _warn_fixed_offset()
         return fixed_offset_tz(zone_name)
 
 

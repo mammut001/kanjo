@@ -253,7 +253,7 @@ class WindowsSourceRootsTest(unittest.TestCase):
 
 
 class WindowsTimezoneTest(unittest.TestCase):
-    """zoneinfo needs the tzdata package on Windows; every fallback must be silent."""
+    """zoneinfo needs the tzdata package on Windows; fixed-offset fallback remains usable."""
 
     def test_local_zone_without_tzdata_uses_the_offset(self):
         with mock.patch("zoneinfo.ZoneInfo", side_effect=Exception("no tzdata")):
