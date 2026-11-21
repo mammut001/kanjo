@@ -1507,12 +1507,20 @@ _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE = re.compile(
 )
 
 
+_MODEL_FILE_RE = re.compile(r"^(?:[/~\\]|[A-Za-z]:[/\\])|\\|\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+_MODEL_FILE_EXT_RE = re.compile(r"\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+
+
 def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) -> Optional[str]:
     if not raw_model or raw_model == "<synthetic>":
         return None
     model_id, estimated = prices.resolve(raw_model, agent)
     if model_id and not estimated:
         return strip_vendor_prefix(model_id)
+    if _MODEL_FILE_RE.search(raw_model.strip()):
+        # A local server reports the model file path: keep only the file name.
+        name = _MODEL_FILE_EXT_RE.sub("", re.split(r"[/\\]", raw_model.strip())[-1])
+        return name or None
     name = strip_vendor_prefix(raw_model)
     while True:
         m = _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE.search(name)

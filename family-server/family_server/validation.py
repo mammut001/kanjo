@@ -7,6 +7,8 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/")
+# Home folders without the leading slash, with backslashes, or as Windows drive paths.
+FORBIDDEN_PATH_REGEX = re.compile(r'(?:^|["/\\])(?:Users|home)[/\\]|\b[A-Za-z]:\\')
 FORBIDDEN_KEYS = frozenset({"sessions_detail", "account", "paths", "title", "sessions"})
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 DEVICE_ID_REGEX = re.compile(r"[0-9a-f]{16}")
@@ -25,6 +27,8 @@ def _check_privacy_violations(obj: Any) -> Optional[str]:
             for pattern in FORBIDDEN_SUBSTRINGS:
                 if pattern in k_str:
                     return f"Privacy violation: key contains forbidden pattern '{pattern}'"
+            if FORBIDDEN_PATH_REGEX.search(k_str):
+                return "Privacy violation: key contains a local path"
             found = _check_privacy_violations(v)
             if found:
                 return found
@@ -39,6 +43,8 @@ def _check_privacy_violations(obj: Any) -> Optional[str]:
         for pattern in FORBIDDEN_SUBSTRINGS:
             if pattern in obj:
                 return f"Privacy violation: value contains forbidden pattern '{pattern}'"
+        if FORBIDDEN_PATH_REGEX.search(obj):
+            return "Privacy violation: value contains a local path"
     return None
 
 
