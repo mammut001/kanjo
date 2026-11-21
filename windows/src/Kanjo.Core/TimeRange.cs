@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+
 namespace Kanjo.Core;
 
 /// <summary>时间范围（CONTRACT.md 6.1）：纯函数，不依赖 UI。</summary>
@@ -83,6 +86,9 @@ public sealed record RangeSpec(
     DateTimeOffset? End,
     IReadOnlyDictionary<string, DateTimeOffset> AgentStarts)
 {
+    // A report repeats the same local dates across projects and sessions. Keep the
+    // timezone conversion scoped to this range, without retaining old reports.
+    private static readonly ConditionalWeakTable<RangeSpec, ConcurrentDictionary<string, (DateTimeOffset Start, DateTimeOffset End)?>> DayRanges = new();
     public bool IsAll => Range == TimeRange.All;
 
     /// <summary>某 agent 的有效区间；null = 该 agent 在此范围下不计入。</summary>
@@ -182,6 +188,11 @@ public sealed record RangeSpec(
 
     /// <summary>"YYYY-MM-DD" → 该时区的 [零点, 次日零点)。</summary>
     public (DateTimeOffset Start, DateTimeOffset End)? DayRange(string day)
+    {
+        return DayRanges.GetValue(this, _ => new(StringComparer.Ordinal)).GetOrAdd(day, CalculateDayRange);
+    }
+
+    private (DateTimeOffset Start, DateTimeOffset End)? CalculateDayRange(string day)
     {
         var d = ReportDates.ParseDay(day);
         if (d is null) return null;

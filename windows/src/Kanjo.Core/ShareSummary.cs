@@ -86,6 +86,12 @@ public sealed record ShareSummary(
 
         var exact = ExactBreakdowns(report);
         var sessionsByAgent = InRangeSessions(filtered);
+        var projectSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var project in filtered.Projects)
+        {
+            foreach (var session in project.SessionsDetail)
+                projectSessionCounts[session.Agent] = projectSessionCounts.GetValueOrDefault(session.Agent) + 1;
+        }
         var cycle = SubscriptionValue.CycleUsageOf(report, moment);
 
         var rows = new List<AgentRow>(active.Count);
@@ -130,9 +136,7 @@ public sealed record ShareSummary(
                 }
             }
 
-            var sessionCount = filtered.Projects
-                .SelectMany(project => project.SessionsDetail)
-                .Count(session => session.Agent == agent);
+            var sessionCount = projectSessionCounts.GetValueOrDefault(agent);
 
             rows.Add(new AgentRow(
                 agent,
