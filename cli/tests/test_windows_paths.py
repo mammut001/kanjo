@@ -357,6 +357,22 @@ class Shell32StructTest(unittest.TestCase):
         raw = ctypes.cast(captured["pFrom"], ctypes.c_void_p)
         self.assertIsNotNone(raw.value)
 
+    def test_items_that_cannot_be_recycled_are_not_silently_destroyed(self):
+        # FOF_NOCONFIRMATION alone answers "permanently delete?" with Yes for items that
+        # do not fit in (or have no) Recycle Bin. FOF_WANTNUKEWARNING makes the shell ask.
+        captured = {}
+
+        def fake_operation(p_op):
+            captured["flags"] = ctypes.cast(p_op, ctypes.POINTER(winsupport.SHFILEOPSTRUCTW)).contents.fFlags
+            return 0
+
+        shell = mock.MagicMock()
+        shell.SHFileOperationW.side_effect = fake_operation
+        with mock.patch("kanjo.winsupport.is_windows", return_value=True), \
+             mock.patch("kanjo.winsupport._get_shell32", return_value=shell):
+            winsupport.recycle(["C:\\a\\b"])
+        self.assertTrue(captured["flags"] & winsupport.FOF_WANTNUKEWARNING)
+
     def test_aborted_operation_reports_an_error(self):
         def fake_operation(p_op):
             ctypes.cast(p_op, ctypes.POINTER(winsupport.SHFILEOPSTRUCTW)).contents.fAnyOperationsAborted = True

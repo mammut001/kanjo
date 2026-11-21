@@ -511,14 +511,20 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
 def _load_worktree_cache(saved: Optional[dict]) -> None:
     """Fill the dirty and merge caches from the disk report cache.
 
-    Dirty keys are ``path\0head_mtime\0index_mtime``; merge keys are
+    Dirty keys are ``path\0head_mtime\0index_mtime`` with ``[dirty, checked_at]``
+    (an older plain bool counts as checked at 0); merge keys are
     ``merge\0path\0head_sha\0default_sha`` with ``[merged, merged_into]``.
     """
     for k, v in (saved or {}).items():
         parts = k.split("\0")
         if len(parts) == 3:
+            if isinstance(v, bool):
+                v = [v, 0.0]
+            if not (isinstance(v, list) and len(v) == 2 and isinstance(v[0], bool)
+                    and isinstance(v[1], (int, float))):
+                continue
             try:
-                _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = v
+                _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = (v[0], float(v[1]))
             except ValueError:
                 pass
         elif len(parts) == 4 and parts[0] == "merge":
@@ -527,7 +533,7 @@ def _load_worktree_cache(saved: Optional[dict]) -> None:
 
 
 def _dump_worktree_cache() -> dict:
-    saved = {("%s\0%d\0%d" % (k[0], k[1], k[2])): v for k, v in _WORKTREE_DIRTY_CACHE.items()}
+    saved = {("%s\0%d\0%d" % (k[0], k[1], k[2])): [v[0], v[1]] for k, v in _WORKTREE_DIRTY_CACHE.items()}
     for (path, head, target), (merged, ref) in _WORKTREE_MERGE_CACHE.items():
         saved["merge\0%s\0%s\0%s" % (path, head, target)] = [merged, ref]
     return saved
@@ -636,6 +642,10 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
             else:
                 root = _norm(entry["path"])
                 nested = [p for p in all_paths if _inside(p, root)]
+                if entry["kind"] == "sessions":
+                    nested += _kept_in_sessions(agent, root)
+                    if do_it:
+                        _reimport_changed_logs(agent, entry["path"], ledger)
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
                     recycle_bin=recycle_bin, nested=nested, allowed=allowed)
@@ -734,7 +744,8 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
         if _isdir(path):
-            add("claude", _session_id("claude", path, used), "sessions", path)
+            add("claude", _session_id("claude", path, used), "sessions", path,
+                exclude=_kept_in_sessions("claude", path) or None)
     for parent in _parents(projects):
         for name, eid in (("shell-snapshots", "claude:shell-snapshots"), ("debug", "claude:debug")):
             path = os.path.join(parent, name)
@@ -862,23 +873,29 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     wb_root = roots.get("workbuddy")
     if wb_root and _isdir(wb_root):
-        cand = os.path.join(wb_root, "projects") if os.path.basename(wb_root) != "projects" and _isdir(os.path.join(wb_root, "projects")) else wb_root
-        add("workbuddy", take_id("workbuddy:sessions"), "sessions", cand, note="WorkBuddy sessions.")
+        # Here and below: only the sessions folder itself. Without it the tool's home
+        # folder (settings, auth) would become a "sessions" entry and be cleaned.
+        cand = wb_root if os.path.basename(wb_root) == "projects" else os.path.join(wb_root, "projects")
+        if _isdir(cand):
+            add("workbuddy", take_id("workbuddy:sessions"), "sessions", cand, note="WorkBuddy sessions.")
 
     wb_ai_root = roots.get("workbuddy_ai")
     if wb_ai_root and _isdir(wb_ai_root):
-        cand = os.path.join(wb_ai_root, "projects") if os.path.basename(wb_ai_root) != "projects" and _isdir(os.path.join(wb_ai_root, "projects")) else wb_ai_root
-        add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
+        cand = wb_ai_root if os.path.basename(wb_ai_root) == "projects" else os.path.join(wb_ai_root, "projects")
+        if _isdir(cand):
+            add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
 
     qwork_root = roots.get("qwenwork")
     if qwork_root and _isdir(qwork_root):
-        cand = os.path.join(qwork_root, "logs", "sessions") if os.path.basename(qwork_root) != "sessions" and _isdir(os.path.join(qwork_root, "logs", "sessions")) else qwork_root
-        add("qwenwork", take_id("qwenwork:sessions"), "sessions", cand, note="QwenWork sessions.")
+        cand = qwork_root if os.path.basename(qwork_root) == "sessions" else os.path.join(qwork_root, "logs", "sessions")
+        if _isdir(cand):
+            add("qwenwork", take_id("qwenwork:sessions"), "sessions", cand, note="QwenWork sessions.")
 
     gb_root = roots.get("grok_bot")
     if gb_root and _isdir(gb_root):
-        cand = os.path.join(gb_root, "sand-client-persistence") if os.path.basename(gb_root) != "sand-client-persistence" and _isdir(os.path.join(gb_root, "sand-client-persistence")) else gb_root
-        add("grok_bot", take_id("grok_bot:sessions"), "sessions", cand, note="Grok Bot sessions.")
+        cand = gb_root if os.path.basename(gb_root) == "sand-client-persistence" else os.path.join(gb_root, "sand-client-persistence")
+        if _isdir(cand):
+            add("grok_bot", take_id("grok_bot:sessions"), "sessions", cand, note="Grok Bot sessions.")
 
     qw_root = roots.get("qoderwork")
     if qw_root and (_isdir(qw_root) or os.path.isfile(qw_root)):
@@ -896,13 +913,15 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     qc_root = roots.get("qodercli")
     if qc_root and _isdir(qc_root):
-        cand = os.path.join(qc_root, "projects") if os.path.basename(qc_root) != "projects" and _isdir(os.path.join(qc_root, "projects")) else qc_root
-        add("qodercli", take_id("qodercli:sessions"), "sessions", cand, note="Qoder CLI sessions.")
+        cand = qc_root if os.path.basename(qc_root) == "projects" else os.path.join(qc_root, "projects")
+        if _isdir(cand):
+            add("qodercli", take_id("qodercli:sessions"), "sessions", cand, note="Qoder CLI sessions.")
 
     qc_cn_root = roots.get("qodercli_cn")
     if qc_cn_root and _isdir(qc_cn_root):
-        cand = os.path.join(qc_cn_root, "projects") if os.path.basename(qc_cn_root) != "projects" and _isdir(os.path.join(qc_cn_root, "projects")) else qc_cn_root
-        add("qodercli_cn", take_id("qodercli_cn:sessions"), "sessions", cand, note="Qoder CN sessions.")
+        cand = qc_cn_root if os.path.basename(qc_cn_root) == "projects" else os.path.join(qc_cn_root, "projects")
+        if _isdir(cand):
+            add("qodercli_cn", take_id("qodercli_cn:sessions"), "sessions", cand, note="Qoder CN sessions.")
 
     zc_root = roots.get("zcode")
     if zc_root and (_isdir(zc_root) or os.path.isfile(zc_root)):
@@ -914,18 +933,21 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     kc_root = roots.get("kimicode")
     if kc_root and _isdir(kc_root):
-        cand = os.path.join(kc_root, "sessions") if os.path.basename(kc_root) != "sessions" and _isdir(os.path.join(kc_root, "sessions")) else kc_root
-        add("kimicode", take_id("kimicode:sessions"), "sessions", cand, note="Kimi Code sessions.")
+        cand = kc_root if os.path.basename(kc_root) == "sessions" else os.path.join(kc_root, "sessions")
+        if _isdir(cand):
+            add("kimicode", take_id("kimicode:sessions"), "sessions", cand, note="Kimi Code sessions.")
 
     mc_root = roots.get("musecode")
     if mc_root and _isdir(mc_root):
-        cand = os.path.join(mc_root, "sessions") if os.path.basename(mc_root) != "sessions" and _isdir(os.path.join(mc_root, "sessions")) else mc_root
-        add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
+        cand = mc_root if os.path.basename(mc_root) == "sessions" else os.path.join(mc_root, "sessions")
+        if _isdir(cand):
+            add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
 
     cb_root = roots.get("codebuddy")
     if cb_root and _isdir(cb_root):
-        cand = os.path.join(cb_root, "projects") if os.path.basename(cb_root) != "projects" and _isdir(os.path.join(cb_root, "projects")) else cb_root
-        add("codebuddy", take_id("codebuddy:sessions"), "sessions", cand, note="CodeBuddy sessions.")
+        cand = cb_root if os.path.basename(cb_root) == "projects" else os.path.join(cb_root, "projects")
+        if _isdir(cand):
+            add("codebuddy", take_id("codebuddy:sessions"), "sessions", cand, note="CodeBuddy sessions.")
 
     qi_root = roots.get("qoder_ide")
     if qi_root and (_isdir(qi_root) or os.path.isfile(qi_root)):
@@ -941,8 +963,9 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     oc_root = roots.get("openclaw")
     if oc_root and _isdir(oc_root):
-        cand = os.path.join(oc_root, "agents") if _isdir(os.path.join(oc_root, "agents")) else oc_root
-        add("openclaw", take_id("openclaw:sessions"), "sessions", cand, note="OpenClaw sessions.")
+        cand = oc_root if os.path.basename(oc_root) == "agents" else os.path.join(oc_root, "agents")
+        if _isdir(cand):
+            add("openclaw", take_id("openclaw:sessions"), "sessions", cand, note="OpenClaw sessions.")
 
     dv_root = roots.get("devin")
     if dv_root and (_isdir(dv_root) or os.path.isfile(dv_root)):
@@ -958,13 +981,15 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     prime_root = roots.get("prime_agent")
     if prime_root and _isdir(prime_root):
-        cand = os.path.join(prime_root, "sessions") if os.path.basename(prime_root) != "sessions" and _isdir(os.path.join(prime_root, "sessions")) else prime_root
-        add("prime_agent", take_id("prime_agent:sessions"), "sessions", cand, note="Prime Agent sessions.")
+        cand = prime_root if os.path.basename(prime_root) == "sessions" else os.path.join(prime_root, "sessions")
+        if _isdir(cand):
+            add("prime_agent", take_id("prime_agent:sessions"), "sessions", cand, note="Prime Agent sessions.")
 
     omp_root = roots.get("omp")
     if omp_root and _isdir(omp_root):
-        cand = os.path.join(omp_root, "sessions") if os.path.basename(omp_root) != "sessions" and _isdir(os.path.join(omp_root, "sessions")) else omp_root
-        add("omp", take_id("omp:sessions"), "sessions", cand, note="OMP sessions.")
+        cand = omp_root if os.path.basename(omp_root) == "sessions" else os.path.join(omp_root, "sessions")
+        if _isdir(cand):
+            add("omp", take_id("omp:sessions"), "sessions", cand, note="OMP sessions.")
 
     dsh_root = roots.get("deepseek_harness")
     if dsh_root and _isdir(dsh_root):
@@ -982,7 +1007,8 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         merged = merged_into = None
         if merge is not None:
             merged, merged_into = merge.result()
-        if dirty is not None and dirty.result():
+        if dirty is not None and (dirty.result() or (
+                measured["newest"] is not None and _worktree_dirty(path, edited_after=measured["newest"]))):
             blocked.append("uncommitted_changes")
         if kind == "worktrees" and merged:
             # A merged branch only needs an idle hour and no process working in it.
@@ -1131,6 +1157,54 @@ def _log_paths(agent: str, root: str) -> Optional[List[str]]:
     return [path for path, _parent in module.discover([root])]
 
 
+def _reimport_changed_logs(agent: str, root: str, ledger: Ledger) -> None:
+    """Import again the logs under ``root`` that changed since their ledger row.
+
+    The report ignores signatures (a live log would otherwise stay ``not_imported``
+    forever), so right before the move is the last chance: replies appended after
+    the last export, or a session first recorded as an empty marker, would otherwise
+    only exist in the Trash copy. Logs with no row at all are left alone; they stay
+    ``not_imported`` and are skipped as before.
+    """
+    from .cache import _signature
+    logs = _log_paths(agent, root)
+    if not logs:
+        return
+    by_path = ledger.signatures_by_path()
+    changed = False
+    for path in logs:
+        sigs = by_path.get(path)
+        if sigs is None:
+            sigs = by_path.get(winsupport.normpath(path))
+        if sigs is not None and _signature(path) not in sigs:
+            changed = True
+            break
+    if changed:
+        from .export import scan
+        scan({agent: [root]}, cache=None, ledger=ledger)
+
+
+def _kept_in_sessions(agent: str, root: str) -> List[str]:
+    """Folders inside a sessions entry that are not session logs and never move.
+
+    Claude Code keeps its per-project auto-memory in ``<projects>/<project>/memory``,
+    next to the logs. Cleaning the logs must leave it where Claude Code reads it.
+    """
+    if agent != "claude":
+        return []
+    found = []
+    try:
+        with os.scandir(root) as it:
+            projects = sorted(ent.path for ent in it if ent.is_dir(follow_symlinks=False))
+    except OSError:
+        return []
+    for project in projects:
+        memory = os.path.join(project, "memory")
+        if os.path.lexists(memory):
+            found.append(_norm(memory))
+    return found
+
+
 def _partial_session_clean(entry: dict, agent: str, days: Optional[int]) -> bool:
     """Per-file clean when ``--older-than`` is set and ``not_imported`` is the only block.
 
@@ -1185,7 +1259,10 @@ def _brain_scratches(brain_root: str) -> List[Tuple[str, str]]:
     return found
 
 
-_WORKTREE_DIRTY_CACHE: Dict[Tuple[str, int, int], bool] = {}
+# (path, head mtime, index mtime) -> (dirty, wall-clock time git status started).
+# Edits to tracked or untracked files touch neither mtime, so a clean result is only
+# reused while nothing in the tree is newer than that check (see _collect).
+_WORKTREE_DIRTY_CACHE: Dict[Tuple[str, int, int], Tuple[bool, float]] = {}
 
 
 def _git_head_index_mtimes(path: str) -> Optional[Tuple[int, int]]:
@@ -1217,13 +1294,18 @@ def _git_head_index_mtimes(path: str) -> Optional[Tuple[int, int]]:
     return (head_mtime, index_mtime)
 
 
-def _worktree_dirty(path: str) -> bool:
-    """True when ``git status --porcelain`` is non-empty, or git cannot say."""
+def _worktree_dirty(path: str, edited_after: Optional[float] = None) -> bool:
+    """True when ``git status --porcelain`` is non-empty, or git cannot say.
+
+    A saved clean result is ignored when ``edited_after`` (the tree's newest mtime)
+    is not older than the time that result was checked.
+    """
     mtimes = _git_head_index_mtimes(path)
     if mtimes is not None:
-        key = (path, mtimes[0], mtimes[1])
-        if key in _WORKTREE_DIRTY_CACHE:
-            return _WORKTREE_DIRTY_CACHE[key]
+        hit = _WORKTREE_DIRTY_CACHE.get((path, mtimes[0], mtimes[1]))
+        if hit is not None and (hit[0] or edited_after is None or edited_after < hit[1]):
+            return hit[0]
+    checked_at = time.time()
     try:
         proc = subprocess.run(
             ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path, "status", "--porcelain"],
@@ -1235,7 +1317,9 @@ def _worktree_dirty(path: str) -> bool:
         return True
     is_dirty = bool(proc.stdout.strip())
     if mtimes is not None:
-        _WORKTREE_DIRTY_CACHE[(path, mtimes[0], mtimes[1])] = is_dirty
+        for old in [k for k in _WORKTREE_DIRTY_CACHE if k[0] == path]:
+            _WORKTREE_DIRTY_CACHE.pop(old, None)
+        _WORKTREE_DIRTY_CACHE[(path, mtimes[0], mtimes[1])] = (is_dirty, checked_at)
     return is_dirty
 
 
@@ -1575,10 +1659,16 @@ def _start_cwd_probe() -> Optional[subprocess.Popen]:
     if not lsof:
         return None
     try:
+        # In the C locale (the apps start the CLI without LANG) lsof prints non-ASCII
+        # bytes as \xNN; a UTF-8 locale gets raw bytes, and _finish_cwd_probe unescapes.
         return subprocess.Popen([lsof, "-n", "-w", "-FpRn"],
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                env=dict(os.environ, LC_ALL="en_US.UTF-8"))
     except OSError:
         return None
+
+
+_LSOF_HEX = re.compile(rb"\\x([0-9a-fA-F]{2})")
 
 
 def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
@@ -1605,7 +1695,7 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
         elif line.startswith(b"R"):
             ours = ours or line[1:] == me
         elif line.startswith(b"n") and not ours:
-            p = line[1:].decode("utf-8", "surrogateescape")
+            p = _LSOF_HEX.sub(lambda m: bytes([int(m.group(1), 16)]), line[1:]).decode("utf-8", "surrogateescape")
             if p not in seen:
                 seen.add(p)
                 found.append(p)

@@ -135,6 +135,26 @@ class MergedWorktreeTest(unittest.TestCase):
             self.idle(path)
         return cases
 
+    # ---- saved dirty status ---------------------------------------------------------------
+    def test_saved_clean_status_is_rechecked_after_later_edits(self):
+        path = self.worktree("p/s1/scratchpad/wt-later", "later-edit")
+        self.commit(path, {"ff.txt": "ff\n"})
+        git(self.repo, "merge", "-q", "--ff-only", "later-edit")
+        self.idle(path)
+        later = time.time() + 3 * DAY
+        wid = self.wt_id("p/s1/scratchpad/wt-later")
+        self.assertEqual(self.entries(self.report(now=later))[wid]["blocked"], [])
+
+        # Edits that touch neither .git/HEAD nor the index, made after that scan.
+        edited = time.time() + 60
+        for name, text in (("README", "edited after the scan\n"), ("notes.txt", "new\n")):
+            target = self.write(os.path.join(path, name), text)
+            os.utime(target, (edited, edited))
+        # A new process: only the saved caches remain.
+        disk._WORKTREE_DIRTY_CACHE.clear()
+        disk._WORKTREE_MERGE_CACHE.clear()
+        self.assertIn("uncommitted_changes", self.entries(self.report(now=later))[wid]["blocked"])
+
     # ---- merge status -------------------------------------------------------------------
     def test_merge_status_and_reclaimable_per_case(self):
         cases = self.build_cases()

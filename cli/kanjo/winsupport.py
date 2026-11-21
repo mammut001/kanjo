@@ -480,6 +480,9 @@ def cred_delete(target: str) -> bool:
 # ---- Recycle Bin (shell32!SHFileOperationW) ------------------------------------------
 # disk clean moves files there instead of ~/.Trash on Windows. Same flags Explorer
 # uses: undoable (FOF_ALLOWUNDO), no confirmation UI, silent, errors not shown.
+# FOF_WANTNUKEWARNING: an item that cannot be recycled (too big for the bin, no bin on
+# that drive) would otherwise be deleted for good under FOF_NOCONFIRMATION; with it the
+# shell asks first, and a "No" comes back as an aborted operation.
 FO_DELETE = 3
 FOF_SILENT = 0x0004
 FOF_NOCONFIRMATION = 0x0010
@@ -540,7 +543,7 @@ def recycle(paths) -> Optional[int]:
     op.wFunc = FO_DELETE
     op.pFrom = ctypes.cast(buf, wintypes.LPCWSTR)
     op.pTo = None
-    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING
     op.fAnyOperationsAborted = False
     op.hNameMappings = None
     op.lpszProgressTitle = None
