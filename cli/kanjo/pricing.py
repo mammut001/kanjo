@@ -158,12 +158,13 @@ class PriceBook:
     def sig(self) -> str:
         if not hasattr(self, "_sig"):
             import hashlib
-            self._sig = hashlib.sha1(json.dumps(sorted(self.prices.items())).encode("utf-8")).hexdigest()
+            self._sig = hashlib.sha1(json.dumps(["resolver-v2", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
         return self._sig
 
     # ---- catalog helpers -------------------------------------------------
     def known(self, model_id):
-        return bool(model_id) and model_id in self.prices
+        price = self.prices.get(model_id)
+        return bool(price) and all((price.get(k) or 0) >= 0 for k in ("in", "out", "cache_read", "cache_write"))
 
     @staticmethod
     def _model_line(name):
@@ -292,6 +293,25 @@ class PriceBook:
         if not raw or raw.lower() == "unknown":
             return AGENT_DEFAULT.get(agent or "", GLOBAL_DEFAULT), True
 
+        # Preserve catalog entries with meaningful dated/variant names first.
+        direct = self.aliases.get(raw.lower()) or self.normalize(raw)
+        if self.known(direct):
+            return direct, False
+
+        # Cloud provider wrappers identify the same underlying model.
+        clean = raw.lower()
+        clean = re.sub(r"^(?:bedrock|vertex|models)/", "", clean)
+        clean = re.sub(r"^(?:(?:us|eu|ap|global)\.)?anthropic\.", "", clean)
+        clean = re.sub(r"-v\d+:\d+$", "", clean)
+        clean = re.sub(r"@\d{8}$", "", clean)
+        clean = re.sub(r"(?:-(?:latest|thinking|high|medium|low|\d{8}))+$", "", clean)
+        # Only interpret a dashed version as a decimal for these model families.
+        clean = re.sub(r"((?:claude-(?:opus|sonnet|haiku)|gpt)-\d+)-(\d+)(?=-|$)", r"\1.\2", clean)
+        normalized = self.aliases.get(clean) or self.normalize(clean)
+        if self.known(normalized):
+            return normalized, False
+        raw = clean
+
         is_free = bool(re.search(r"[:\-]free$", raw, re.IGNORECASE))
         free_base = re.sub(r"[:\-]free$", "", raw, flags=re.IGNORECASE) if is_free else raw
 
@@ -318,7 +338,7 @@ class PriceBook:
             variants.append("-".join(parts[:cut]))
         for candidate in variants:
             alias = self.aliases.get(candidate)
-            if self.known(alias):
+            if self.known(alias) and self._same_family(alias, norm):
                 return alias, True
             cand_norm = self.normalize(candidate)
             if self.known(cand_norm) and self._same_family(cand_norm, norm):
@@ -327,6 +347,23 @@ class PriceBook:
             pred = self._predecessor(candidate)
             if pred and self._same_family(pred, norm):
                 return pred, True
+        # A named tier must never be silently dropped by a family fallback.
+        tiers = self._tiers(norm)
+        if tiers:
+            vendor, _, name = (norm or "").rpartition("/")
+            family = name.split("-")[0]
+            matches = [model_id for model_id in self.prices
+                       if model_id.startswith(vendor + "/" + family)
+                       and self._tiers(model_id) == tiers and ":" not in model_id]
+            if matches:
+                requested = self._model_line(name)
+                def rank(model_id):
+                    line = self._model_line(model_id.rpartition("/")[2])
+                    version = line[1] if line else (0, 0)
+                    target = requested[1] if requested else (0, 0)
+                    return (version <= target, version if version <= target else (-version[0], -version[1]))
+                return max(matches, key=rank), True
+            return None, True
         # family keyword fallback
         for keyword, representative in FAMILY_FALLBACK:
             if keyword in low:
@@ -336,6 +373,10 @@ class PriceBook:
         return AGENT_DEFAULT.get(agent or "", GLOBAL_DEFAULT), True
 
     @staticmethod
+    def _tiers(name):
+        return frozenset(re.findall(r"(?:^|[-/])(mini|nano|flash|pro|haiku|sonnet|opus)(?=$|[-:.])", name or ""))
+
+    @staticmethod
     def _same_family(candidate, norm):
         """A stripped name must keep the vendor and enough of the name to be meaningful
         (``gemini-3`` is not a usable stand-in for ``gemini-3-flash-a``)."""
@@ -343,7 +384,7 @@ class PriceBook:
             return False
         c_vendor, _, c_name = candidate.rpartition("/")
         n_vendor, _, _ = norm.rpartition("/")
-        if c_vendor != n_vendor:
+        if c_vendor != n_vendor or PriceBook._tiers(candidate) != PriceBook._tiers(norm):
             return False
         return bool(re.search(r"[a-z]", c_name.split("-")[-1])) or "." in c_name
 
