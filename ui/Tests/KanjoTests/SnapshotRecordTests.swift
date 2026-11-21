@@ -98,6 +98,12 @@ final class SnapshotRecordTests: XCTestCase {
         XCTAssertEqual(SnapshotRecord.newest(in: [b, a]), b)
     }
 
+    #if os(macOS)
+    func testUploadedDeviceNameIsGeneric() {
+        XCTAssertEqual(SnapshotDevice.deviceName, "Mac")
+    }
+    #endif
+
     func testDeviceIDIsStableAndPersisted() {
         let suite = "kanjo-snapshot-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
