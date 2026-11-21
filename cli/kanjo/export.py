@@ -452,9 +452,13 @@ def _build_antigravity_accounts(sessions: List[Session],
 
     saved_accounts: Set[str] = set()
     try:
-        from .agy_login import get_backend
-        backend = get_backend()
-        if backend is not None:
+        from . import agy_login
+        backend = agy_login.get_backend()
+        if backend is not None and not (
+            isinstance(backend, agy_login.SecurityKeychainBackend)
+            and os.environ.get("KANJO_DATA_DIR")
+            and not os.environ.get("KANJO_AGY_LOGIN_SYNC")
+        ):
             saved_accounts = set(backend.list_saved())
     except Exception:
         saved_accounts = set()
