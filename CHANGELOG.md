@@ -6,6 +6,51 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Windows: set an Antigravity plan for each account in Settings.
+- Windows: the Overview now shows tokens used this week under the total.
+
+### Changed
+
+- Mac and Windows: range changes and summaries are faster on large reports.
+- Mac: the app uses less CPU while idle or while the panel is closed.
+- `kanjo export` and disk scans run faster, especially with large histories or many worktrees.
+- Live quota checks run concurrently and retain the last available results when a provider cannot be reached.
+- Mobile snapshots no longer include project paths or repository addresses, and mobile and family reports send only documented quota fields.
+- Family server: the dashboard loads faster on large histories, and report validation and token handling are more secure; redeploy the server to apply these changes.
+- French wording is more consistent, and `kanjo usage` translates view names and overflow labels.
+
+### Fixed
+
+- Disk cleanup moves only the paths shown in the confirmation preview and rechecks worktrees before removing them.
+- Disk cleanup skips scratch directories in use and refuses to follow a symlinked entry root.
+- Disk cleanup shows what was moved when a cleanup partly fails and keeps skipped entries selected for retry.
+- Windows: age-filtered disk cleanup works in every language, and the Disk page stays responsive during cleanup.
+- Windows: opening a session's attribution card works, and clickable rows can be used with the keyboard.
+- Windows: hover cards no longer appear after the pointer has left.
+- Windows: large token, session and file counts no longer cause reports to fail or display incorrectly.
+- Windows: local time zones and daylight saving time are handled correctly, and redirected `kanjo usage` output supports UTF-8.
+- Windows: quota reset changes wait for Apply, and Low Power Mode is respected at startup.
+- Windows: reports with a UTF-8 byte order mark load, and corrupt settings are preserved for recovery.
+- Windows: superseded refreshes stop their background processes, and settings and disk cache saves are more reliable.
+- Mac: background refreshes resume after sleep or Low Power Mode, and the Disk page opens for empty directories.
+- Mac and Windows: session counts exclude sessions with no usage in the selected range and sessions ending exactly at its start.
+- Mac and Windows: detected subscription renewal days from 29 to 31 are preserved when applying settings.
+- Mac: subscription edits appear promptly, and Antigravity account plans work with mixed-case email addresses.
+- iOS: a failed refresh keeps the current report visible, and project activity follows the report's time zone.
+- Mac and iOS: empty or unusual data no longer produces invalid bars or amounts.
+- Share images handle many agents, long labels, large numbers and empty ranges without clipping or overlapping.
+- Claude Pro is recognised when Claude reports its default subscription tier.
+- Model prices recognise more provider and dated names without crossing model tiers or producing negative costs.
+- Malformed usage records no longer hide valid messages in the same session, and database paths with special characters are read correctly.
+- Attribution exclusions take precedence over equally specific overrides.
+- `kanjo usage`: range totals, token breakdowns and subscription values match the apps more closely, including across daylight saving changes.
+- `kanjo usage`: project details open the correct row after filtering or sorting and update when the range changes.
+- `kanjo usage`: wide characters, terminal resizing while filtering and selection without colour display correctly.
+- This week's token count follows the report time when viewing an older report.
+- Live quota parsing handles malformed responses and reset times more reliably, and expired windows no longer show stale percentages.
+
 ## [0.6.10] - 2026-11-19
 
 ### Added
