@@ -115,6 +115,8 @@ public sealed class LoadingPage : Grid
 /// </summary>
 public static class ProjectActions
 {
+    /// <summary>Optional launch override for isolated hosts.</summary>
+    public static Action<string, IReadOnlyList<string>>? LaunchOverride { get; set; }
     /// <summary>第一个仍然存在的路径（主路径优先）。</summary>
     public static string? ExistingPath(Project project) =>
         PathKinds.SplitPaths(project.Paths.ToList()).Primary
@@ -155,6 +157,7 @@ public static class ProjectActions
     /// <summary>打开网址（billing 页面 / 部署指南）。</summary>
     public static void OpenUrl(string url)
     {
+        if (LaunchOverride is { } launch) { launch(url, []); return; }
         try
         {
             var psi = new ProcessStartInfo(url) { UseShellExecute = true };
@@ -183,6 +186,7 @@ public static class ProjectActions
 
     private static void Launch(string file, IReadOnlyList<string> args)
     {
+        if (LaunchOverride is { } launch) { launch(file, args); return; }
         try
         {
             var psi = new ProcessStartInfo(file)
