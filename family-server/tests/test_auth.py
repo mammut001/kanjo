@@ -489,6 +489,23 @@ class TestFirebaseAuth(unittest.TestCase):
         self.assertIn(status2, (302, 303))
         self.assertEqual(headers2.get("Location"), "/login")
 
+    def test_session_of_email_removed_from_allowlist_is_revoked(self):
+        with db.get_connection(self.db_path) as conn:
+            sess_id = db.create_session(conn, "former@example.com")
+        cookie = {"Cookie": f"__Host-family_session={sess_id}"}
+
+        status, _, headers = self._dash_request("GET", "/", headers=cookie)
+        self.assertIn(status, (302, 303))
+        self.assertEqual(headers.get("Location"), "/login")
+        with db.get_connection(self.db_path) as conn:
+            self.assertIsNone(db.get_session(conn, sess_id))
+
+        with db.get_connection(self.db_path) as conn:
+            sess_id = db.create_session(conn, "former@example.com")
+        status, body, _ = self._dash_request(
+            "GET", "/login", headers={"Cookie": f"__Host-family_session={sess_id}"})
+        self.assertEqual(status, 200, "/login must not redirect a non-allowlisted session into the dashboard")
+
     # -----------------------------------------------------------------------
     # CSRF Protection Tests
     # -----------------------------------------------------------------------

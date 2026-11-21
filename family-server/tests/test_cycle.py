@@ -243,22 +243,22 @@ class TestSettingsAuthCsrfValidation(unittest.TestCase):
         self.assertIn(status, (401, 403, 302))
 
     def test_settings_forbidden_for_non_admin(self):
-        # GET /settings as regular member -> 403
-        status, body, _ = self._request("GET", "/settings", session_id=self.member_session)
-        self.assertEqual(status, 403)
-        self.assertIn("Admin access required", body)
+        # A session whose email is not in FAMILY_ADMIN_EMAILS is revoked -> sent to /login
+        status, body, headers = self._request("GET", "/settings", session_id=self.member_session)
+        self.assertEqual(status, 302)
+        self.assertEqual(headers.get("Location"), "/login")
 
-        # POST /settings as regular member -> 403
+        # POST /settings with that session is refused the same way
         headers = {"Origin": "https://usage.example.com"}
-        status, body, _ = self._request(
+        status, body, headers = self._request(
             "POST",
             "/settings",
             data={"cycle_anchor_day": "9"},
             session_id=self.member_session,
             headers=headers,
         )
-        self.assertEqual(status, 403)
-        self.assertIn("Admin access required", body)
+        self.assertEqual(status, 302)
+        self.assertEqual(headers.get("Location"), "/login")
 
     def test_settings_csrf_protection(self):
         # POST with wrong origin -> 403 Forbidden

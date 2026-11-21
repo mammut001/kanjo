@@ -1561,7 +1561,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not session_id:
             return None
         with db.get_connection(self.db_path) as conn:
-            return db.get_session(conn, session_id)
+            session = db.get_session(conn, session_id)
+            if session and self.admin_emails:
+                email = (session.get("email") or "").lower().strip()
+                if email not in self.admin_emails:
+                    # Email was removed from FAMILY_ADMIN_EMAILS: revoke the session.
+                    db.delete_session(conn, session_id)
+                    return None
+            return session
 
     def _check_csrf(self) -> bool:
         """Verify CSRF protections on POST requests.
