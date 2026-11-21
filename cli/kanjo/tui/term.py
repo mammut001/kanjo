@@ -417,7 +417,10 @@ def run_export_subprocess(
 def _project_sort_key(row: Any, col: str) -> Any:
     if isinstance(row, ProjectRowViewModel):
         if col == "tokens":
-            tokens = (row.project or {}).get("tokens") or {}
+            if row.project is None:
+                from .model import parse_tokens_str
+                return parse_tokens_str(row.tokens_str)
+            tokens = row.project.get("tokens") or {}
             return tokens.get("total", 0) if isinstance(tokens, dict) else tokens
         if col == "sessions":
             try:
@@ -530,10 +533,13 @@ class ViewModelCache:
         day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
 
         if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
-            proj_rows.sort(
+            sorted_projects = iter(sorted(
+                (r for r in proj_rows if r.project is not None),
                 key=lambda r: _project_sort_key(r, state.sort_column),
                 reverse=state.sort_descending,
-            )
+            ))
+            proj_rows = [next(sorted_projects) if r.project is not None else r
+                         for r in proj_rows]
 
         detail_vm = None
         if state.detail_open:
@@ -1245,7 +1251,8 @@ def run_curses_tui(
             # Enter on Project / Agent -> Detail pane; Enter on account -> switch login
             if ch in (10, 13, curses.KEY_ENTER):
                 if state.view_mode == ViewMode.PROJECTS and proj_rows:
-                    if 0 <= state.selected_index < len(proj_rows):
+                    if (0 <= state.selected_index < len(proj_rows)
+                            and proj_rows[state.selected_index].project is not None):
                         state.detail_project = proj_rows[state.selected_index].project
                         state.detail_agent = None
                         state.detail_open = True

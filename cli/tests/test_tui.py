@@ -3209,6 +3209,41 @@ if __name__ == "__main__":
 
 class TUIRegressionTest(unittest.TestCase):
     @unittest.skipIf(curses is None, "requires curses")
+    def test_enter_on_summary_row_does_not_open_detail(self):
+        doc = load_sample_fixture()
+        derived = ViewModelCache().get_or_build(doc, TUIState(version="test"))
+        for summary in derived.project_footers:
+            with self.subTest(row=summary.id):
+                states = []
+
+                def capture_render(*args, **kwargs):
+                    states.append((kwargs["state"].detail_open, kwargs["state"].detail_project))
+                    return render_ui(*args, **kwargs)
+
+                scr = FakeStdscr(width=110, height=34, keys=[10, ord("q")])
+                with mock.patch("kanjo.tui.term.build_project_rows", return_value=[summary]), \
+                        mock.patch("kanjo.tui.term.render_ui", side_effect=capture_render):
+                    run_curses_tui(scr, initial_doc=doc, data_path="fake.json", no_color=True)
+                self.assertGreaterEqual(len(states), 2)
+                self.assertTrue(all(not opened and project is None for opened, project in states))
+
+    def test_token_sort_keeps_summary_rows_in_place(self):
+        doc = load_sample_fixture()
+        doc["projects"] = [dict(doc["projects"][0], name="small", id="small", tokens={"total": 10}),
+                           dict(doc["projects"][0], name="large", id="large", tokens={"total": 100})]
+        derived = ViewModelCache().get_or_build(doc, TUIState(version="test"))
+        small, large = sorted(derived.project_rows, key=lambda row: row.project["tokens"]["total"])
+        bucket, total = derived.project_footers[0], derived.project_footers[-1]
+        for descending, expected in ((True, ["large", bucket.id, "small", total.id]),
+                                     (False, ["small", bucket.id, "large", total.id])):
+            with self.subTest(descending=descending):
+                rows = [small, bucket, large, total]
+                state = TUIState(version="test", sort_column="tokens", sort_descending=descending)
+                with mock.patch("kanjo.tui.term.build_project_rows", return_value=rows):
+                    result = ViewModelCache().get_or_build(doc, state)
+                self.assertEqual([row.id for row in result.project_rows], expected)
+
+    @unittest.skipIf(curses is None, "requires curses")
     def test_filtered_project_detail_uses_visible_row(self):
         doc = load_sample_fixture()
         filtered = filter_report(doc)
