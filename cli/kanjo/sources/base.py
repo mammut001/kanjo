@@ -156,13 +156,17 @@ def local_day(ts: float) -> str:
 
 
 def local_timezone_name() -> str:
-    """IANA name of the zone ``local_day`` uses: $TZ, else the /etc/localtime
-    symlink target (macOS and most Linux), else /etc/timezone, else the UTC
-    offset. Windows typically ends at the fixed offset unless $TZ identifies
-    an IANA zone, even when the tzdata package is installed."""
+    """Resolve the local IANA zone, falling back to the current UTC offset."""
     tz = os.environ.get("TZ", "").lstrip(":")
     if tz and "/" in tz and not tz.startswith("/"):
         return tz
+    if winsupport.is_windows():
+        if not os.environ.get("TZ"):
+            name = _windows_timezone_name()
+            if name:
+                return name
+        _warn_fixed_offset()
+        return offset_timezone_name()
     candidates = [tz] if tz.startswith("/") else []
     candidates.append("/etc/localtime")
     for link in candidates:
@@ -182,6 +186,20 @@ def local_timezone_name() -> str:
         pass
     _warn_fixed_offset()
     return offset_timezone_name()
+
+
+def _windows_timezone_name() -> Optional[str]:
+    """Look up the Windows system zone without relying on the current offset."""
+    try:
+        import winreg
+        from ..windows_timezones import WINDOWS_TO_IANA
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r"SYSTEM\CurrentControlSet\Control\TimeZoneInformation") as key:
+            name, _ = winreg.QueryValueEx(key, "TimeZoneKeyName")
+        return WINDOWS_TO_IANA.get(name) if isinstance(name, str) else None
+    except (ImportError, OSError):
+        return None
 
 
 _fixed_offset_warned = False

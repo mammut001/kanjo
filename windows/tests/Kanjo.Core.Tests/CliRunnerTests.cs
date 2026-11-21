@@ -75,6 +75,29 @@ public sealed class CliRunnerTests : KanjoTestCase
         return dir;
     }
 
+    [Theory]
+    [InlineData("Eastern Standard Time", "America/New_York")]
+    [InlineData("Europe/Paris", "Europe/Paris")]
+    [InlineData("Fictional Standard Time", null)]
+    public void LocalTimeZoneIsConvertedWhenMissing(string id, string? expected)
+    {
+        var zone = TimeZoneInfo.CreateCustomTimeZone(id, TimeSpan.Zero, id, id);
+        var environment = new Dictionary<string, string?>();
+        ProcessRunner.SetLocalTimeZone(environment, zone);
+        Assert.Equal(expected, environment.GetValueOrDefault("TZ"));
+    }
+
+    [Theory]
+    [InlineData("Asia/Tokyo")]
+    [InlineData("")]
+    public void ExistingTimeZoneIsPreserved(string existing)
+    {
+        var zone = TimeZoneInfo.CreateCustomTimeZone("Eastern Standard Time", TimeSpan.Zero, "test", "test");
+        var environment = new Dictionary<string, string?> { ["TZ"] = existing };
+        ProcessRunner.SetLocalTimeZone(environment, zone);
+        Assert.Equal(existing, environment["TZ"]);
+    }
+
     [Fact]
     public void TestCliDataSourceReadsStdout()
     {

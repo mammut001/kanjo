@@ -50,6 +50,8 @@ public static class ProcessRunner
             foreach (var (k, v) in extraEnvironment) psi.Environment[k] = v;
         }
 
+        if (OperatingSystem.IsWindows()) SetLocalTimeZone(psi.Environment, TimeZoneInfo.Local);
+
         cancellationToken.ThrowIfCancellationRequested();
         Process process;
         try
@@ -86,6 +88,16 @@ public static class ProcessRunner
             cancellationToken.ThrowIfCancellationRequested();
             return new CliResult(deadline.IsCancellationRequested ? -1 : process.ExitCode,
                 SafeResult(stdoutTask), SafeResult(stderrTask), deadline.IsCancellationRequested, fileName);
+        }
+    }
+
+    internal static void SetLocalTimeZone(IDictionary<string, string?> environment, TimeZoneInfo localZone)
+    {
+        if (environment.ContainsKey("TZ")) return;
+        var id = localZone.Id;
+        if (id.Contains('/') || TimeZoneInfo.TryConvertWindowsIdToIanaId(id, out id))
+        {
+            environment["TZ"] = id;
         }
     }
 
