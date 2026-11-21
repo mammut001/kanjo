@@ -64,4 +64,36 @@ public sealed class SettingsDataOverrideTests : KanjoTestCase
             Assert.Contains(dataPath, text);
         });
     }
+
+    [Fact]
+    public void TestSnapshotCurrentSourceShowsOnlyFileName()
+    {
+        var directory = TempDir();
+        var dataPath = Path.Combine(directory, "sample.json");
+        File.WriteAllText(dataPath, "{}");
+        var services = NewServices(dataPath);
+
+        var description = services.DescribeSource();
+
+        Assert.Equal("File (--data): sample.json", description);
+        Assert.DoesNotContain(directory, description);
+    }
+
+    [Fact]
+    public void TestNormalCurrentSourceKeepsFullPath()
+    {
+        var directory = TempDir();
+        var dataPath = Path.Combine(directory, "sample.json");
+        File.WriteAllText(dataPath, "{}");
+        var settings = AppSettings.InMemory();
+        settings.Set(SettingsKeys.AppLanguage, "en");
+        L10n.Store = settings;
+        L10n.ResetCache();
+        // 无 --snapshot：DescribeSource 仍应给出完整路径。
+        var services = new AppServices(settings, ["--data", dataPath], TempDir());
+
+        var description = services.DescribeSource();
+
+        Assert.Equal($"File (--data): {dataPath}", description);
+    }
 }

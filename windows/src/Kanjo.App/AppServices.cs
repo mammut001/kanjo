@@ -475,7 +475,12 @@ public sealed class AppServices
     /// <summary>当前数据源的可读描述（和 Mac 的 <c>makeSource</c> 文案一致，出错时也能显示）。</summary>
     public string DescribeSource()
     {
-        if (DataOverride is { } path) return $"File (--data): {path}";
+        if (DataOverride is { } path)
+        {
+            // 截图模式只露文件名：完整路径会随生成目录变化，还会把开发机的目录写进公开截图。
+            var shown = SnapshotMode ? Path.GetFileName(path) : path;
+            return $"File (--data): {shown}";
+        }
         var kind = SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind));
         if (kind == SourceKind.File)
         {

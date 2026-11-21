@@ -77,19 +77,31 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private void Build(Subscription? sub)
     {
         Children.Clear();
-        var header = Ui.H(8);
-        header.Children.Add(Ui.Dot(_agent, 8));
-        header.Children.Add(Ui.Text(_label, Type.BodySize, FontWeight.SemiBold, maxLines: 1));
+        // 标题一行只放色点 + 名称；套餐/月费单独一行（过长时在「 · 」处断，或省略），
+        // 避免和名称挤在同一行时被卡片右缘从字中间裁掉。
+        var header = Ui.V(2);
+        var title = Ui.H(8);
+        title.Children.Add(Ui.Dot(_agent, 8));
+        var name = Ui.Text(_label, Type.BodySize, FontWeight.SemiBold, maxLines: 1);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        title.Children.Add(name);
+        header.Children.Add(title);
         if (sub is not null)
         {
             var (summaryLabel, summaryPrice, accountCount) = SummaryHeader(sub);
-            header.Children.Add(Ui.Text(
-                $"{summaryLabel} · {Fmt.PerMonth(summaryPrice, _currency)}",
-                Type.CaptionSize, null, Palette.Secondary, maxLines: 2));
+            var price = Fmt.PerMonth(summaryPrice, _currency);
+            // 8px 色点 + 8px 间距，和总览订阅行说明左缘对齐。
+            const double captionIndent = 16;
+            var caption = Ui.V(0);
+            caption.Margin = new Thickness(captionIndent, 0, 0, 0);
+            AddSummaryCaption(caption, summaryLabel, price, Metrics.RowContentWidth - captionIndent);
+            header.Children.Add(caption);
             if (accountCount is > 1)
             {
-                header.Children.Add(Ui.Text(L10n.TrL(null, "overview.accounts_count", accountCount.Value),
-                    Type.CaptionSize, null, Palette.Secondary, maxLines: 1));
+                var count = Ui.Text(L10n.TrL(null, "overview.accounts_count", accountCount.Value),
+                    Type.CaptionSize, null, Palette.Secondary, maxLines: 1);
+                count.Margin = new Thickness(captionIndent, 0, 0, 0);
+                header.Children.Add(count);
             }
         }
         Children.Add(new Border
@@ -433,10 +445,37 @@ public sealed class SubscriptionSettingsRow : StackPanel
         return AntigravityAggregation.ApplyPending(list, pending, known);
     }
 
+    /// <summary>
+    /// 套餐说明：一行放得下就一行；放不下时在「 · 」处把月费换到下一行，
+    /// 套餐名仍超出则省略号（和总览订阅行同一套节奏）。
+    /// </summary>
+    private static void AddSummaryCaption(StackPanel box, string label, string price, double width)
+    {
+        var full = $"{label} · {price}";
+        if (Type.MeasureWidth(full, Type.CaptionSize) <= width)
+        {
+            box.Children.Add(CaptionLine(full));
+            return;
+        }
+        box.Children.Add(CaptionLine(label));
+        box.Children.Add(CaptionLine(price));
+    }
+
+    private static TextBlock CaptionLine(string text)
+    {
+        var line = Ui.Text(text, Type.CaptionSize, null, Palette.Secondary, maxLines: 1);
+        line.TextTrimming = TextTrimming.CharacterEllipsis;
+        line.TextWrapping = TextWrapping.NoWrap;
+        line.HorizontalAlignment = HorizontalAlignment.Stretch;
+        line.MinWidth = 0;
+        return line;
+    }
     private Control AntigravityAccountPickers(IReadOnlyList<AntigravityAccount> accounts)
     {
         var plans = KnownPlans;
-        var box = Ui.V(6);
+        // 先算各账号选项，再按最长文案定一列固定宽度，避免右对齐时左缘参差不齐。
+        var rows = new List<(AntigravityAccount Acc, string Current, List<(string Key, string Label)> Options, int Index)>();
+        var pickerWidth = 0d;
         foreach (var acc in accounts)
         {
             var current = _services.PendingAntigravityAccountPlans.GetValueOrDefault(acc.Email)
@@ -465,19 +504,49 @@ public sealed class SubscriptionSettingsRow : StackPanel
                 options.Add((current, current));
             }
             var index = Math.Max(0, options.FindIndex(o => o.Key == current));
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            foreach (var (_, label) in options)
+            {
+                // 文案宽 + Fluent ComboBox 内边距 / 箭头。
+                pickerWidth = Math.Max(pickerWidth, Type.MeasureWidth(label, Type.CaptionSize) + 44);
+            }
+            rows.Add((acc, current, options, index));
+        }
+        pickerWidth = Math.Max(150, Math.Ceiling(pickerWidth));
+
+        var box = Ui.V(6);
+        foreach (var (acc, current, options, index) in rows)
+        {
+            // 右列定宽（不是 Auto）：ComboBox 本身会按选中文案收缩，靠列宽才能左右对齐。
+            var row = new Grid
+            {
+                MinWidth = 0,
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(new GridLength(1, GridUnitType.Star)) { MinWidth = 0 },
+                    new ColumnDefinition(new GridLength(pickerWidth)),
+                },
+            };
             var name = Ui.Text(AntigravityAccountLogic.DisplayName(acc, accounts), Type.CaptionSize, maxLines: 1);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            name.TextWrapping = TextWrapping.NoWrap;
+            name.HorizontalAlignment = HorizontalAlignment.Stretch;
+            name.MinWidth = 0;
+            name.Margin = new Thickness(0, 0, 8, 0);
             ToolTip.SetTip(name, acc.Email);
             name.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(name, 0);
             row.Children.Add(name);
-            var picker = Picker.Make(options.Select(o => o.Label).ToList(), index, i =>
+            var captured = options;
+            var picker = Picker.Make(captured.Select(o => o.Label).ToList(), index, i =>
             {
-                var newKey = options[i].Key;
+                var newKey = captured[i].Key;
                 var normalized = AntigravityAggregation.NormalizedPlanKey(newKey);
                 if (normalized == current) return;
                 _services.SetAntigravityAccountPlan(acc.Email, normalized.Length == 0 ? null : normalized);
-            }, enabled: _services.CanEditSubscriptions, minWidth: 150);
+            }, enabled: _services.CanEditSubscriptions, minWidth: 0);
+            picker.MinWidth = 0;
+            picker.MaxWidth = pickerWidth;
+            picker.HorizontalAlignment = HorizontalAlignment.Stretch;
             Grid.SetColumn(picker, 1);
             row.Children.Add(picker);
             box.Children.Add(row);

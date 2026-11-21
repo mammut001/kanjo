@@ -64,6 +64,14 @@ struct SettingsView: View {
         return agentsStr
     }
 
+    /// 底部「Current source」：截图模式只露 `--data` 文件名，正常运行仍用完整描述。
+    private var currentSourceDescription: String {
+        if let path = store.dataOverride?.path {
+            return DataOverrideDisplay.fileDataSourceDescription(path: path, snapshot: isSnapshotMode)
+        }
+        return store.sourceDescription
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
         OptionalScrollView {
@@ -487,7 +495,7 @@ struct SettingsView: View {
                     Button(L10n.tr("settings.apply_refresh")) { store.applySettings() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
-                    Text(L10n.tr("settings.current_source", store.sourceDescription))
+                    Text(L10n.tr("settings.current_source", currentSourceDescription))
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
