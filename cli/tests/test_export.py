@@ -17,7 +17,8 @@ from kanjo.sources import base, antigravity, codex
 from kanjo.cache import REPO_CACHE_VERSION, RepoCache, SessionCache, _dump_session, _load_session, _negative_ttl
 from kanjo.sources.base import Message, Session, open_sqlite_ro, extract_paths
 from kanjo.config import Config
-from kanjo.export import _apportion_by_weight, build_export, check_invariants, dedupe
+from kanjo.export import _apportion_by_weight, build_export, check_invariants, dedupe, scan
+from kanjo.ledger import Ledger
 
 from tests.support import ALICE, FIXTURE_DIRS, FIXTURES, GITHUB, standard_fs, validate_contract
 
@@ -629,6 +630,110 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         ]
         for text, expected in cases:
             self.assertEqual(extract_paths(text), expected)
+
+
+class PartialScanCacheTest(unittest.TestCase):
+    """``kanjo usage`` and ``kanjo accounts`` scan only Antigravity.
+
+    That scan must not delete parse-cache rows for agents it did not open.
+    A file that disappeared from an agent that *was* scanned still leaves the cache.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-partial-cache-")
+        self.cache_dir = os.path.join(self.tmp, "cache")
+        self.ledger_dir = os.path.join(self.tmp, "ledger")
+        os.makedirs(self.cache_dir)
+        os.makedirs(self.ledger_dir)
+        self.claude_dir = os.path.join(self.tmp, "claude")
+        proj = os.path.join(self.claude_dir, "-Users-alice-Documents-GitHub-FocusApp")
+        os.makedirs(proj)
+        self.claude_file = os.path.join(proj, "6c9c2803-1023-4ebe-9f71-a5170c3b9197.jsonl")
+        shutil.copy(
+            os.path.join(FIXTURES, "claude", "-Users-alice-Documents-GitHub-FocusApp",
+                         "6c9c2803-1023-4ebe-9f71-a5170c3b9197.jsonl"),
+            self.claude_file,
+        )
+        self.agy_dir = os.path.join(self.tmp, "antigravity")
+        os.makedirs(self.agy_dir)
+        src = os.path.join(FIXTURES, "antigravity")
+        self.agy_keep = os.path.join(self.agy_dir, "856b6e70-8027-4c17-91f0-c7575939aa34.db")
+        self.agy_drop = os.path.join(self.agy_dir, "7050d1fb-fd5f-4581-ba46-a84f8323f5fc.db")
+        shutil.copy(os.path.join(src, os.path.basename(self.agy_keep)), self.agy_keep)
+        shutil.copy(os.path.join(src, os.path.basename(self.agy_drop)), self.agy_drop)
+        reset_account_index()
+
+    def tearDown(self):
+        reset_account_index()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _scan(self, dirs, cache):
+        return scan(dirs, cache=cache, ledger=Ledger(self.ledger_dir))
+
+    def _populate(self):
+        cache = SessionCache(self.cache_dir)
+        self._scan({"claude": [self.claude_dir], "antigravity": [self.agy_dir]}, cache)
+        return SessionCache(self.cache_dir)
+
+    def _keys(self, cache, agent):
+        prefix = agent + "\0"
+        return {k for k in cache.entries if k.startswith(prefix)}
+
+    def test_partial_antigravity_scan_keeps_other_agents(self):
+        fresh = self._populate()
+        claude_before = self._keys(fresh, "claude")
+        agy_before = self._keys(fresh, "antigravity")
+        self.assertTrue(claude_before)
+        self.assertGreaterEqual(len(agy_before), 2)
+
+        # Same shape as cmd_usage / cmd_accounts, then the second save build_export does.
+        self._scan({"antigravity": [self.agy_dir]}, fresh)
+        fresh.save()
+
+        reloaded = SessionCache(self.cache_dir)
+        self.assertEqual(self._keys(reloaded, "claude"), claude_before)
+        self.assertEqual(self._keys(reloaded, "antigravity"), agy_before)
+
+    def test_partial_scan_drops_a_deleted_file_of_the_scanned_agent(self):
+        self._populate()
+        os.remove(self.agy_drop)
+        fresh = SessionCache(self.cache_dir)
+        self._scan({"antigravity": [self.agy_dir]}, fresh)
+        fresh.save()
+
+        reloaded = SessionCache(self.cache_dir)
+        agy = self._keys(reloaded, "antigravity")
+        self.assertTrue(any(self.agy_keep in key for key in agy))
+        self.assertFalse(any(self.agy_drop in key for key in agy))
+        self.assertTrue(self._keys(reloaded, "claude"))
+
+    def test_full_scan_still_drops_a_deleted_file(self):
+        self._populate()
+        os.remove(self.claude_file)
+        env = os.environ.copy()
+        for key in list(env):
+            if key.startswith("KANJO_") and key.endswith("_DIR"):
+                del env[key]
+        env["KANJO_DATA_DIR"] = self.ledger_dir
+        env["KANJO_CACHE_DIR"] = self.cache_dir
+        env["KANJO_CLAUDE_DIR"] = self.claude_dir
+        env["KANJO_ANTIGRAVITY_DIR"] = self.agy_dir
+        env["KANJO_NO_NETWORK"] = "1"
+        fresh = SessionCache(self.cache_dir)
+        with mock.patch.dict(os.environ, env, clear=True):
+            self._scan(None, fresh)
+
+        reloaded = SessionCache(self.cache_dir)
+        self.assertFalse(any(self.claude_file in key for key in self._keys(reloaded, "claude")))
+        self.assertGreaterEqual(len(self._keys(reloaded, "antigravity")), 2)
+
+    def test_empty_dir_map_does_not_evict(self):
+        fresh = self._populate()
+        before = set(fresh.entries)
+        self.assertTrue(before)
+        self._scan({}, fresh)
+        reloaded = SessionCache(self.cache_dir)
+        self.assertEqual(set(reloaded.entries), before)
 
 
 if __name__ == "__main__":
