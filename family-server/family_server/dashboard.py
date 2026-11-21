@@ -227,6 +227,8 @@ def pool_tokens_for_day(day: dict, fallback_total: int) -> int:
         gp = [p for p in by_provider if isinstance(p, dict) and p.get("provider") == "google"]
         if gp:
             return int(sum(_as_float((p.get("tokens") or {}).get("total")) or 0 for p in gp))
+    if (isinstance(by_agent, list) and by_agent) or (isinstance(by_provider, list) and by_provider):
+        return 0  # the day has a breakdown, and none of it is pool usage
     return int(fallback_total or 0)
 
 
