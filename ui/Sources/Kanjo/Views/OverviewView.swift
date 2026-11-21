@@ -38,7 +38,7 @@ struct OverviewView: View {
         let now = Date()
         let generated = ReportDates.parseTimestamp(report.generatedAt)
         let reference = WeeklyTokens.reference(now: now, generatedAt: generated)
-        return WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: .current)
+        return WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: report.heatCalendar)
     }
 
     /// 当前范围内有花费或 token 的所有 agent（按花费降序），用于图例。
@@ -257,7 +257,7 @@ struct OverviewView: View {
             ForEach(Array(visible.enumerated()), id: \.element.id) { i, p in
                 if i > 0 { RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset) }
                 ProjectRow(project: p, currency: cur,
-                           weeks: panelData?.heatWeeks[p.id] ?? p.heatWeeks(endingOn: end), agentLabels: labels,
+                           weeks: panelData?.heatWeeks[p.id] ?? p.heatWeeks(endingOn: end, calendar: report.heatCalendar), agentLabels: labels,
                            pinned: pinned.contains(p.id),
                            projectIndex: i,
                            onOpen: { onSelect(.project(p.id)) },

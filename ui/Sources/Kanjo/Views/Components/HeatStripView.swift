@@ -101,12 +101,16 @@ extension UsageReport {
             ?? totals.lastActive.flatMap(ReportDates.parseDay)
             ?? Date()
     }
+
+    /// 报告时区的公历日历：by_day 的 YYYY-MM-DD 按它解析与划周。
+    var heatCalendar: Calendar { RangeEngine.calendar(timezone: RangeEngine.timezone(of: self)) }
 }
 
 extension Project {
     /// 缺 by_day.by_agent 的旧数据回退到项目的主力 agent；项目没有正花费时记到 "unknown"（中性灰）。
-    func heatWeeks(endingOn end: Date) -> [WeekCost] {
+    func heatWeeks(endingOn end: Date, calendar: Calendar) -> [WeekCost] {
         HeatStrip.weekly(byDay, endingOn: end,
-                         fallbackAgent: dominantAgent(byAgent)?.agent ?? byAgent.first?.agent ?? "unknown")
+                         fallbackAgent: dominantAgent(byAgent)?.agent ?? byAgent.first?.agent ?? "unknown",
+                         calendar: calendar)
     }
 }
