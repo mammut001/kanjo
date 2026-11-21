@@ -279,6 +279,14 @@ final class DiskTests: KanjoTestCase {
         XCTAssertNil(DefaultPaths.diskDataOverride(arguments: ["Kanjo", "--data", "/tmp/a.json"]))
     }
 
+    func testConfirmCommandIncludesPreviewPaths() {
+        let command = DiskCommand.clean(from: "kanjo export", ids: [], olderThan: nil, confirmed: true,
+                                        mergedWorktrees: true, onlyPaths: ["/tmp/a b", "/tmp/other"])
+        XCTAssertTrue(command.contains("--only-paths '[\"/tmp/a b\",\"/tmp/other\"]' --yes"))
+        XCTAssertTrue(DiskCommand.clean(from: "kanjo export", ids: ["claude:scratch"], olderThan: nil,
+                                        confirmed: true, onlyPaths: []).contains("--only-paths '[]' --yes"))
+    }
+
     func testFileDiskSourceLoadsFixture() async throws {
         let r = try await FileDiskSource(url: try fixtureURL()).load()
         XCTAssertEqual(r.agents.count, 10)

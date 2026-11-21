@@ -19,13 +19,19 @@ public enum DiskCommand {
     /// `disk clean <id>... [--merged-worktrees] [--older-than Nd] --dry-run|--yes`
     /// olderThan 为空时不带 `--older-than`。confirmed 为 false 时用 `--dry-run`。
     public static func clean(from cliCommand: String, ids: [String], olderThan: String?, confirmed: Bool,
-                             mergedWorktrees: Bool = false) -> String {
+                             mergedWorktrees: Bool = false, onlyPaths: [String]? = nil) -> String {
         var parts = [replacingExport(in: cliCommand, with: "disk clean").trimmingCharacters(in: .whitespaces)]
         parts.append(contentsOf: ids.map(shellWord))
         if mergedWorktrees { parts.append("--merged-worktrees") }
         if let olderThan, !olderThan.isEmpty {
             parts.append("--older-than")
             parts.append(shellWord(olderThan))
+        }
+        if let onlyPaths {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .withoutEscapingSlashes
+            let json = String(decoding: try! encoder.encode(onlyPaths), as: UTF8.self)
+            parts.append(contentsOf: ["--only-paths", shellWord(json)])
         }
         parts.append(confirmed ? "--yes" : "--dry-run")
         return parts.joined(separator: " ")
@@ -65,9 +71,9 @@ public enum DiskCommand {
 
 public protocol DiskSource {
     func load() async throws -> DiskReport
-    func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult
+    func clean(ids: [String], olderThan: String?, confirmed: Bool, onlyPaths: [String]?) async throws -> CleanResult
     /// `disk clean --merged-worktrees`：所有已合并且空闲、没有改动的 worktree。
-    func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult
+    func cleanMergedWorktrees(confirmed: Bool, onlyPaths: [String]?) async throws -> CleanResult
 }
 
 #if os(macOS)
@@ -97,14 +103,14 @@ public struct DiskDataSource: DiskSource {
         try DiskDecoder.decode(try await run(reportCommand, qualityOfService: qualityOfService))
     }
 
-    public func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
-        let command = DiskCommand.clean(from: cliCommand, ids: ids, olderThan: olderThan, confirmed: confirmed)
+    public func clean(ids: [String], olderThan: String?, confirmed: Bool, onlyPaths: [String]? = nil) async throws -> CleanResult {
+        let command = DiskCommand.clean(from: cliCommand, ids: ids, olderThan: olderThan, confirmed: confirmed, onlyPaths: onlyPaths)
         return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .userInitiated))
     }
 
-    public func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
+    public func cleanMergedWorktrees(confirmed: Bool, onlyPaths: [String]?) async throws -> CleanResult {
         let command = DiskCommand.clean(from: cliCommand, ids: [], olderThan: nil, confirmed: confirmed,
-                                        mergedWorktrees: true)
+                                        mergedWorktrees: true, onlyPaths: onlyPaths)
         return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .utility))
     }
 
@@ -146,14 +152,14 @@ public struct FileDiskSource: DiskSource {
         return try DiskDecoder.decode(data)
     }
 
-    public func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
-        _ = (ids, olderThan, confirmed)
+    public func clean(ids: [String], olderThan: String?, confirmed: Bool, onlyPaths: [String]? = nil) async throws -> CleanResult {
+        _ = (ids, olderThan, confirmed, onlyPaths)
         throw DataSourceError.launchFailed(
             "Disk cleanup only runs through the kanjo CLI (disk clean). This report was loaded from a JSON file, so nothing was moved.")
     }
 
-    public func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
-        try await clean(ids: [], olderThan: nil, confirmed: confirmed)
+    public func cleanMergedWorktrees(confirmed: Bool, onlyPaths: [String]?) async throws -> CleanResult {
+        try await clean(ids: [], olderThan: nil, confirmed: confirmed, onlyPaths: onlyPaths)
     }
 }
 

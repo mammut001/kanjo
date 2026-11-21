@@ -427,6 +427,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 - `kanjo disk clean <id>... [--older-than 30d] [--dry-run] [--yes]`：只对 `blocked` 为空的条目生效；文件移入 `~/.Trash/kanjo-<时间戳>/`，不直接删除；git worktree 通过主仓库 `git worktree remove` 拆除；没有 `--yes` 时等同 `--dry-run`。输出 JSON：`{ "moved": [...路径], "freed_bytes": N, "skipped": [{ "id", "reason" }] }`。
   - Windows 上没有 `~/.Trash`：文件和目录交给回收站（`SHFileOperationW`，`FOF_ALLOWUNDO`），结果里额外带 `"trash_dir": "Recycle Bin"`（字面字符串，不是路径）。`moved` / `freed_bytes` / `skipped` 的含义不变；被别的程序占用而移不动的文件是单条 `{ "id": <条目 id>, "reason": "move_failed" }`，不影响同一条目里的其他文件。显式给了 `trash_dir`（或 `KANJO_TRASH_DIR`）时仍按普通目录移动。
 - `kanjo disk clean --merged-worktrees [--dry-run] [--yes]`：在给定的 id 之外，选中所有 `merged == true` 的 worktree 条目，照常经过 `blocked` 检查后用 `git worktree remove`（从不加 `--force`，从不删除分支和提交）拆除；`moved` 列出拆除的路径，`freed_bytes` 是释放的字节数。未合并（或无法判断）的 worktree 出现在 `skipped` 里，`reason` 为 `"not_merged"`；被阻止的为 `blocked` 里的原因（`uncommitted_changes` / `active`）；git 拒绝时 `reason` 为 `"worktree_remove_failed"`，并可能附带 `"detail"`（git 的第一行错误信息）。不带 id 也不带 `--merged-worktrees` 时退出码 2。
+- `--only-paths JSON` 接受 dry-run 的 `moved` 路径数组；只移动数组中仍通过检查的路径，其他候选路径及不再可移动的预览路径以 `changed` 跳过。空数组不移动任何路径。
 - `skipped[].reason` 还可能是 `"nothing_to_move"`：目录里除了其他条目之外没有可移动的内容。
 - UI 永远不自己删文件，只调用 `kanjo disk clean`，并且先用 `--dry-run` 展示将要移动的内容，用户确认后再带 `--yes` 执行。
 

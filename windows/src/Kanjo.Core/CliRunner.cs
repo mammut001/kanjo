@@ -246,14 +246,21 @@ public sealed class CliRunner : IReportCommandRunner
         return DiskDecoder.Decode(result.StdoutBytes);
     }
 
-    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed)
+    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
+    {
+        var args = DiskCleanArguments(ids, olderThan, confirmed, onlyPaths);
+        var result = RunChecked(args);
+        return DiskDecoder.DecodeClean(result.StdoutBytes);
+    }
+
+    public static List<string> DiskCleanArguments(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
     {
         var args = new List<string> { "disk", "clean" };
         args.AddRange(ids);
         if (!string.IsNullOrEmpty(olderThan)) args.AddRange(["--older-than", olderThan]);
+        if (onlyPaths is not null) args.AddRange(["--only-paths", System.Text.Json.JsonSerializer.Serialize(onlyPaths)]);
         args.Add(confirmed ? "--yes" : "--dry-run");
-        var result = RunChecked(args);
-        return DiskDecoder.DecodeClean(result.StdoutBytes);
+        return args;
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Paths()

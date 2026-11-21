@@ -534,7 +534,8 @@ def _dump_worktree_cache() -> dict:
 
 def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool = False, yes: bool = False,
           now: Optional[float] = None, roots: Optional[dict] = None, trash_dir: Optional[str] = None,
-          ledger: Optional[Ledger] = None, merged_worktrees: bool = False) -> dict:
+          ledger: Optional[Ledger] = None, merged_worktrees: bool = False,
+          only_paths: Optional[List[str]] = None) -> dict:
     """Move ``ids`` into the Trash. Without ``yes``, or with ``dry_run``, nothing is moved.
 
     ``older_than_days`` keeps files newer than that many days. Worktrees are removed
@@ -574,6 +575,7 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
     moved: List[str] = []
     skipped = []
     freed = 0
+    allowed = set(only_paths) if only_paths is not None else None
     targets: List[str] = []
     for eid in ids:
         if eid == "claude:scratch":
@@ -612,6 +614,9 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         detail = None
         try:
             if entry["kind"] == "worktrees":
+                if allowed is not None and entry["path"] not in allowed:
+                    skipped.append({"id": entry["id"], "reason": "changed"})
+                    continue
                 part_moved, part_freed, reason, detail = _clean_worktree(entry, older_than_days, now, do_it)
                 file_skips: List[dict] = []
             else:
@@ -619,7 +624,7 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 nested = [p for p in all_paths if _inside(p, root)]
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
-                    recycle_bin=recycle_bin, nested=nested)
+                    recycle_bin=recycle_bin, nested=nested, allowed=allowed)
         except OSError:
             # A partial per-file clean may already have moved files before failing.
             if do_it:
@@ -636,6 +641,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         moved.extend(part_moved)
         freed += part_freed
         skipped.extend(file_skips)
+    if allowed is not None:
+        skipped.extend({"id": path, "reason": "changed"} for path in sorted(allowed - set(moved)))
     if do_it and moved:
         disk_cache.invalidate()
     result = {"moved": moved, "freed_bytes": freed, "skipped": skipped}
@@ -1580,7 +1587,8 @@ def _cwd_inside(path: str, cwds: Optional[List[str]]) -> bool:
 # ---- clean ----------------------------------------------------------------------------
 def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash_root: str,
                 agent: str = "", imported: Optional[Dict[str, set]] = None,
-                recycle_bin: bool = False, nested: Optional[List[str]] = None):
+                recycle_bin: bool = False, nested: Optional[List[str]] = None,
+                allowed: Optional[set] = None):
     root = entry["path"]
     if nested:
         root = _norm(root)
@@ -1609,14 +1617,20 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
             return [], 0, "nothing_to_move", []
         moved = []
         freed = 0
+        changed = []
         for path in items:
+            if allowed is not None and path not in allowed:
+                changed.append({"id": path, "reason": "changed"})
+                continue
             nbytes = measure(path, now)["bytes"]
             if do_it:
                 _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
             moved.append(path)
             freed += nbytes
-        return moved, freed, None, []
+        return moved, freed, None, changed
     if days is None:
+        if allowed is not None and root not in allowed:
+            return [], 0, "changed", []
         if do_it:
             _relocate(root, _dest(entry["id"], os.path.basename(os.path.normpath(root))))
         return [root], entry["bytes"], None, []
@@ -1641,6 +1655,9 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     freed = 0
     locked = []
     for path, nbytes, rel in movable:
+        if allowed is not None and path not in allowed:
+            file_skips.append({"id": path, "reason": "changed"})
+            continue
         if do_it:
             try:
                 _relocate(path, _dest(entry["id"], rel))

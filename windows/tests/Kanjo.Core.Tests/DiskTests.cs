@@ -328,6 +328,15 @@ public sealed class DiskTests : KanjoTestCase
         Assert.Equal(1, report.SchemaVersion);
     }
 
+    [Fact]
+    public void ConfirmArgumentsContainPreviewPaths()
+    {
+        var paths = new[] { @"C:\scratch\a b", @"C:\scratch\quote's" };
+        var args = CliRunner.DiskCleanArguments(["claude:scratch"], null, true, paths);
+        Assert.Equal(new[] { "disk", "clean", "claude:scratch", "--only-paths", System.Text.Json.JsonSerializer.Serialize(paths), "--yes" }, args);
+        Assert.Contains("[]", CliRunner.DiskCleanArguments(["claude:scratch"], null, true, []));
+    }
+
     private static string DiskFixturePath()
     {
         var root = DefaultPaths.RepoRoot ?? throw new InvalidOperationException("repo root unavailable");
@@ -350,7 +359,7 @@ public sealed class DiskCancellationTests
             token.ThrowIfCancellationRequested();
             throw new InvalidOperationException();
         }
-        public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed) => throw new NotSupportedException();
+        public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null) => throw new NotSupportedException();
     }
 
     [Fact]
