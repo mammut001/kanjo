@@ -142,11 +142,11 @@ class MergedWorktreeTest(unittest.TestCase):
         found = self.entries(doc)
         expect = {
             "ff": (True, []),
-            "squash": (True, []),
+            "squash": (False, []),
             "unmerged": (False, []),
             "dirty": (True, ["uncommitted_changes"]),
             "untracked": (True, ["uncommitted_changes"]),
-            "nocommit": (True, []),
+            "nocommit": (True, ["uncommitted_changes"]),
         }
         for case, (merged, blocked) in expect.items():
             rel = os.path.relpath(cases[case], self.scratch).replace(os.sep, "/")
@@ -230,7 +230,7 @@ class MergedWorktreeTest(unittest.TestCase):
     def test_merge_result_is_cached_by_head_and_default_sha(self):
         path = self.worktree("p/s/scratchpad/wt", "feature")
         self.commit(path, {"f.txt": "f\n"})
-        self.commit(self.repo, {"f.txt": "f\n"}, "squash")
+        git(self.repo, "merge", "-q", "--ff-only", "feature")
         self.idle(path)
         self.assertIs(self.entries(self.report())[self.wt_id("p/s/scratchpad/wt")]["merged"], True)
         with open(disk_cache.cache_path(), encoding="utf-8") as handle:
@@ -242,7 +242,7 @@ class MergedWorktreeTest(unittest.TestCase):
         # Moving main changes the key, so the answer is computed again.
         self.commit(self.repo, {"f.txt": "changed\n"}, "edit")
         self.idle(path)
-        self.assertIs(self.entries(self.report())[self.wt_id("p/s/scratchpad/wt")]["merged"], False)
+        self.assertIs(self.entries(self.report())[self.wt_id("p/s/scratchpad/wt")]["merged"], True)
 
     # ---- discovery ----------------------------------------------------------------------
     def test_discovery_in_scratch_tree(self):
@@ -309,6 +309,23 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertEqual(found["claude:scratch:p/old"]["blocked"], [])
         self.assertEqual(found["claude:scratch:p/new"]["blocked"], ["active"])
 
+    def test_matching_independent_commit_is_not_proof_of_merge(self):
+        path = self.worktree("p/s/scratchpad/wt", "feature")
+        self.commit(path, {"same.txt": "same\n"}, "private commit")
+        self.commit(self.repo, {"same.txt": "same\n"}, "independent commit")
+        self.idle(path)
+        result = disk.clean([], merged_worktrees=True, yes=True, roots=self.roots, trash_dir=self.trash)
+        self.assertEqual(result["moved"], [])
+        self.assertTrue(os.path.exists(path))
+
+    def test_ignored_worktree_files_are_not_removed(self):
+        path = self.worktree("p/s/scratchpad/wt", "feature")
+        self.write(os.path.join(path, "build", "valuable.txt"), "data")
+        self.idle(path)
+        result = disk.clean([], merged_worktrees=True, yes=True, roots=self.roots, trash_dir=self.trash)
+        self.assertEqual(result["moved"], [])
+        self.assertTrue(os.path.exists(os.path.join(path, "build", "valuable.txt")))
+
     # ---- clean --------------------------------------------------------------------------
     def test_clean_merged_worktrees_dry_run_then_yes(self):
         cases = self.build_cases()
@@ -318,11 +335,13 @@ class MergedWorktreeTest(unittest.TestCase):
                for case, p in cases.items()}
         plan = disk.clean([], merged_worktrees=True, dry_run=True, yes=True, roots=self.roots,
                           trash_dir=self.trash)
-        self.assertEqual(sorted(plan["moved"]), sorted([cases["ff"], cases["squash"], cases["nocommit"]]))
-        self.assertEqual(plan["freed_bytes"], sum(found[ids[c]]["bytes"] for c in ("ff", "squash", "nocommit")))
+        self.assertEqual(sorted(plan["moved"]), [cases["ff"]])
+        self.assertEqual(plan["freed_bytes"], found[ids["ff"]]["bytes"])
         skipped = {s["id"]: s["reason"] for s in plan["skipped"]}
         self.assertEqual(skipped, {
             ids["unmerged"]: "not_merged",
+            ids["squash"]: "not_merged",
+            ids["nocommit"]: "uncommitted_changes",
             ids["dirty"]: "uncommitted_changes",
             ids["untracked"]: "uncommitted_changes",
         })
@@ -332,12 +351,12 @@ class MergedWorktreeTest(unittest.TestCase):
         done = disk.clean([], merged_worktrees=True, yes=True, roots=self.roots, trash_dir=self.trash)
         self.assertEqual(sorted(done["moved"]), sorted(plan["moved"]))
         listed = self.listed_worktrees()
-        for case in ("ff", "squash", "nocommit"):
+        for case in ("ff",):
             self.assertFalse(os.path.exists(cases[case]), case)
             self.assertNotIn(_key(cases[case]), listed)
-        for case in ("unmerged", "dirty", "untracked"):
+        for case in ("unmerged", "dirty", "untracked", "squash", "nocommit"):
             self.assertIn(_key(cases[case]), listed)
-        for case in ("unmerged", "dirty", "untracked"):
+        for case in ("unmerged", "dirty", "untracked", "squash", "nocommit"):
             self.assertTrue(os.path.isdir(cases[case]), case)
         branches = subprocess.check_output(["git", "-C", self.repo, "branch", "--format=%(refname:short)"],
                                            text=True).split()
