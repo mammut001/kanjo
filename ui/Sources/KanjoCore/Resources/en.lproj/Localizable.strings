@@ -472,7 +472,7 @@
 "disk.block.explanation.nothing_to_move" = "Nothing is here besides the entries listed on their own.";
 "disk.block.explanation.move_failed" = "The file or folder could not be moved (for example it is in use). Anything already moved stays in Trash; the rest was left as it is.";
 "disk.block.explanation.changed" = "This path no longer matches the dry-run preview, so the confirm step skipped it.";
-"disk.block.explanation.refused" = "Kanjo refuses to clean this path (for example a scratch directory that is currently in use as a working tree).";
+"disk.block.explanation.refused" = "Kanjo will not clean this path because it is a symbolic link or junction that points somewhere else.";
 
 /* Session */
 "session.untitled" = "(untitled)";
