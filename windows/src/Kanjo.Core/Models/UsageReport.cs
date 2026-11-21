@@ -94,14 +94,14 @@ public sealed record Subscription(
         J.Optional(e, "account") is { } a ? SubscriptionAccount.Decode(a, J.Child(path, "account")) : null);
 }
 
-public sealed record AgentCost(string Agent, string Label, double Cost, Tokens Tokens, int Sessions)
+public sealed record AgentCost(string Agent, string Label, double Cost, Tokens Tokens, long Sessions)
 {
     public static AgentCost Decode(JsonElement e, string path) => new(
         J.String(e, "agent", path),
         J.String(e, "label", path),
         J.Number(e, "cost", path),
         Tokens.Decode(J.RequiredObject(e, "tokens", path), J.Child(path, "tokens")),
-        J.Int(e, "sessions", path));
+        J.Long(e, "sessions", path));
 }
 
 public sealed record ModelCost(string Model, string Agent, double Cost, Tokens Tokens, bool Estimated)
@@ -149,14 +149,14 @@ public sealed record DayCost(
     }
 }
 
-public sealed record BranchCost(string Branch, double Cost, int Sessions)
+public sealed record BranchCost(string Branch, double Cost, long Sessions)
 {
     public string Id => Branch;
 
     public static BranchCost Decode(JsonElement e, string path) => new(
         J.String(e, "branch", path),
         J.Number(e, "cost", path),
-        J.Int(e, "sessions", path));
+        J.Long(e, "sessions", path));
 }
 
 public sealed record Session(
@@ -172,7 +172,7 @@ public sealed record Session(
     Tokens Tokens,
     double Share,
     string Attribution,
-    int Subagents,
+    long Subagents,
     string? Title,
     RoList<DayCost>? ByDay)
 {
@@ -199,7 +199,7 @@ public sealed record Session(
             Tokens.Decode(J.RequiredObject(e, "tokens", path), J.Child(path, "tokens")),
             J.NumberOrNull(e, "share", path) ?? 1,
             J.StringOrNull(e, "attribution", path) ?? "none",
-            J.IntOrNull(e, "subagents", path) ?? 0,
+            J.LongOrNull(e, "subagents", path) ?? 0,
             J.StringOrNull(e, "title", path),
             J.ArrayOrNull(e, "by_day", path) is { } d
                 ? new RoList<DayCost>(J.List(d, J.Child(path, "by_day"), DayCost.Decode))
@@ -215,7 +215,7 @@ public sealed record Project(
     bool PathMissing,
     double Cost,
     Tokens Tokens,
-    int Sessions,
+    long Sessions,
     string? FirstActive,
     string? LastActive,
     RoList<AgentCost> ByAgent,
@@ -234,7 +234,7 @@ public sealed record Project(
         J.BoolOrNull(e, "path_missing", path) ?? false,
         J.Number(e, "cost", path),
         Tokens.Decode(J.RequiredObject(e, "tokens", path), J.Child(path, "tokens")),
-        J.Int(e, "sessions", path),
+        J.Long(e, "sessions", path),
         J.StringOrNull(e, "first_active", path),
         J.StringOrNull(e, "last_active", path),
         J.List(J.Array(e, "by_agent", path), J.Child(path, "by_agent"), AgentCost.Decode),
