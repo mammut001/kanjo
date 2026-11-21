@@ -318,6 +318,52 @@ public sealed class DecodingTests : KanjoTestCase
     }
 
     [Fact]
+    public void WideCountsDecodeAndReconcileWithoutIntOverflow()
+    {
+        const long big = 3_000_000_000L;
+        const long trillion = 1_000_000_000_000L;
+        var data = MutatedFixture(o =>
+        {
+            var project = o["projects"]!.AsArray()[0]!.AsObject();
+            project["sessions"] = big;
+            project["by_agent"]!.AsArray()[0]!["sessions"] = big;
+            project["by_branch"] = new JsonArray(new JsonObject { ["branch"] = "synthetic", ["cost"] = 0, ["sessions"] = big });
+            project["sessions_detail"]!.AsArray()[0]!["tokens"]!["total"] = big;
+            project["sessions_detail"]!.AsArray()[0]!["subagents"] = big;
+            o["totals"]!["sessions"] = trillion;
+            o["totals"]!["unique_sessions"] = big;
+            o["totals"]!["tokens"]!["total"] = trillion;
+            foreach (var name in new[] { "unattributed", "excluded", "parse_failed" })
+                o["buckets"]![name]!["sessions"] = big;
+        });
+        var report = ReportDecoder.Decode(data);
+        var project = report.Projects[0];
+        Assert.Equal(big, project.Sessions);
+        Assert.Equal(big, project.ByAgent[0].Sessions);
+        Assert.Equal(big, project.ByBranch[0].Sessions);
+        Assert.Equal(big, project.SessionsDetail[0].Tokens.Total);
+        Assert.Equal(big, project.SessionsDetail[0].Subagents);
+        Assert.Equal(trillion, report.Totals.Sessions);
+        Assert.Equal(big, report.Totals.UniqueSessions);
+        Assert.Equal(trillion, report.Totals.Tokens.Total);
+        Assert.Equal(big, report.Buckets.ParseFailed.Sessions);
+        Assert.Equal(big, report.Buckets.Unattributed.Sessions);
+        Assert.Equal(big, report.Buckets.Excluded.Sessions);
+        Assert.True(new Reconciliation(report).Sessions.Summed >= 9_000_000_000L);
+    }
+
+    [Fact]
+    public void WideDiskCountsDecodeAndSum()
+    {
+        const string json = """{"schema_version":1,"generated_at":"synthetic","total_bytes":5000000000000,"reclaimable_bytes":5000000000000,"agents":[{"agent":"test","label":"Test","bytes":5000000000000,"entries":[{"id":"a","kind":"cache","path":"/synthetic","bytes":5000000000000,"files":3000000000,"deletable":"always"}]}]}""";
+        using var doc = JsonDocument.Parse(json);
+        var report = DiskReport.Decode(doc.RootElement);
+        Assert.Equal(5_000_000_000_000L, report.SummedReclaimableBytes);
+        Assert.Equal(3_000_000_000L, report.AllEntries[0].Files);
+        Assert.Equal("5 TB", Fmt.Bytes(report.TotalBytes));
+    }
+
+    [Fact]
     public void TestNewerSchemaStillDecodes()
     {
         var data = MutatedFixture(o => o["schema_version"] = 2);

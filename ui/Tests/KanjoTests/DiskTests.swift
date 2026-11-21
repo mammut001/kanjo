@@ -11,6 +11,14 @@ final class DiskTests: KanjoTestCase {
         try DiskDecoder.decode(Data(contentsOf: try fixtureURL()))
     }
 
+    func testWideDiskCountsDecodeAndSum() throws {
+        let json = #"{"schema_version":1,"generated_at":"synthetic","total_bytes":5000000000000,"reclaimable_bytes":5000000000000,"agents":[{"agent":"test","label":"Test","bytes":5000000000000,"entries":[{"id":"a","kind":"cache","path":"/synthetic","bytes":5000000000000,"files":3000000000,"deletable":"always","blocked":[]}]}]}"#
+        let report = try DiskDecoder.decode(Data(json.utf8))
+        XCTAssertEqual(report.summedReclaimableBytes, 5_000_000_000_000)
+        XCTAssertEqual(report.allEntries[0].files, 3_000_000_000)
+        XCTAssertEqual(Fmt.bytes(report.totalBytes), "5 TB")
+    }
+
     func testFixtureDecodes() throws {
         let r = try loadFixture()
         XCTAssertEqual(r.schemaVersion, 1)

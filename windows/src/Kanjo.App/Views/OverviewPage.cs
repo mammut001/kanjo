@@ -214,7 +214,7 @@ public sealed class OverviewPage : ScrollPage
     /// 大数字下面的摘要。一行放得下就一行；放不下时日期独占第一行，计数按「 · 」整段换行，
     /// 避免「tokens」单独掉到下一行。
     /// </summary>
-    private static Control HeroMeta(TimeRange range, string rangeText, int projects, int sessions, long tokens,
+    private static Control HeroMeta(TimeRange range, string rangeText, int projects, long sessions, long tokens,
         int hiddenCount)
     {
         var counts = OverviewSummaryText.Counts(projects, sessions, tokens, hiddenCount);
@@ -945,7 +945,7 @@ public sealed class OverviewPage : ScrollPage
     }
 
     /// <summary>桶行：名称 …… sessions + 金额（右对齐）。</summary>
-    private static Control BucketRow(string name, string desc, int sessions, string value, Action? action)
+    private static Control BucketRow(string name, string desc, long sessions, string value, Action? action)
     {
         var box = Ui.V(2);
         box.Margin = new Thickness(ContentInset, 7, ContentInset, 7);
