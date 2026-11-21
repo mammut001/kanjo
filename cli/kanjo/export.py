@@ -21,7 +21,7 @@ from . import quota
 from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
 from .device import build_device_info
-from .ledger import Ledger, entry_key, marker_key
+from .ledger import Ledger, ScanScope, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
@@ -120,6 +120,7 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     seen = set()
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}
+    scope = ScanScope()
     for agent, module in SOURCES.items():
         if dirs is not None:
             roots = dirs.get(agent, [])
@@ -129,7 +130,9 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             roots = module.roots()
         st = SourceStats(agent=agent, dirs=[r for r in roots])
         stats[agent] = st
+        scope.note_roots(agent, roots)
         for path, parent in module.discover(roots):
+            scope.note_path(agent, path)
             st.files += 1
             try:
                 session = cache.get(agent, path, parent, module.parse_file) if cache else module.parse_file(path, parent)
@@ -160,6 +163,12 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             sessions.append(session)
             grouped.setdefault(key, []).append(session)
             grouped_paths.setdefault(key, []).append(path)
+        skipped = getattr(module, "skipped_paths", None)
+        if callable(skipped):
+            for path in skipped():
+                scope.note_path(agent, path)
+    if hasattr(ledger, "set_scan_scope"):
+        ledger.set_scan_scope(scope)
     modified_keys = getattr(cache, "modified_keys", None) if cache else None
     changed = [key for key, paths in grouped_paths.items()
                if modified_keys is None or any(path in modified_keys for path in paths)]

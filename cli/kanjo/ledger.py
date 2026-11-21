@@ -116,11 +116,58 @@ def _migrate_entry(entry: dict) -> None:
         entry["source_paths"] = paths_of(entry)
 
 
-def _all_missing(entry: dict) -> bool:
+class ScanScope:
+    """What one scan discovered, per agent.
+
+    Database-backed sources record ``<db>::<session id>`` paths. Such a path is
+    gone when its database is gone, and also when this scan read that database
+    (it lies under the agent's roots, or another of its sessions was found) and
+    did not list the session: the user deleted it inside the app. Sessions the
+    source leaves out on purpose are passed as ``skipped`` and are not gone.
+    """
+
+    def __init__(self) -> None:
+        self._found: Dict[str, Set[str]] = {}
+        self._dbs: Dict[str, Set[str]] = {}
+        self._roots: Dict[str, List[str]] = {}
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        return os.path.normcase(os.path.abspath(path))
+
+    def note_roots(self, agent: str, roots: Iterable[str]) -> None:
+        self._roots.setdefault(agent, []).extend(self._norm(r) for r in roots if r)
+
+    def note_path(self, agent: str, path: str) -> None:
+        self._found.setdefault(agent, set()).add(path)
+        if "::" in path:
+            self._dbs.setdefault(agent, set()).add(self._norm(path.split("::", 1)[0]))
+
+    def session_gone(self, agent: Optional[str], path: str) -> bool:
+        if agent is None or path in self._found.get(agent, ()):
+            return False
+        db = self._norm(path.split("::", 1)[0])
+        if db in self._dbs.get(agent, ()):
+            return True
+        for root in self._roots.get(agent, ()):
+            if db == root or db.startswith(root.rstrip(os.sep) + os.sep):
+                return True
+        return False
+
+
+def _path_gone(path: str, agent: Optional[str] = None, scope: Optional[ScanScope] = None) -> bool:
+    if "::" not in path:
+        return not os.path.exists(path)
+    if not os.path.exists(path.split("::", 1)[0]):
+        return True
+    return scope is not None and scope.session_gone(agent, path)
+
+
+def _all_missing(entry: dict, agent: Optional[str] = None, scope: Optional[ScanScope] = None) -> bool:
     paths = paths_of(entry)
     if not paths:
         return True
-    return all(not os.path.exists(path.split("::", 1)[0] if "::" in path else path) for path in paths)
+    return all(_path_gone(path, agent, scope) for path in paths)
 
 
 class Ledger:
@@ -136,6 +183,7 @@ class Ledger:
         self.dirty = False
         self.dirty_keys: Set[str] = set()
         self._loaded = False
+        self._scope: Optional[ScanScope] = None
         self._load()
 
     @property
@@ -448,6 +496,10 @@ class Ledger:
             self.dirty = True
             self.dirty_keys.add(key)
 
+    def set_scan_scope(self, scope: Optional[ScanScope]) -> None:
+        """Judge database-backed session paths against what this scan discovered."""
+        self._scope = scope
+
     def orphan_sessions(self, exclude_keys=None) -> List[Tuple[str, Session]]:
         """Session entries whose log files are all gone, as ``(key, session)``.
 
@@ -463,7 +515,7 @@ class Ledger:
             for k in unseen:
                 paths = meta_paths.get(k)
                 if paths is not None:
-                    if all(not os.path.exists(p.split("::", 1)[0] if "::" in p else p) for p in paths):
+                    if all(_path_gone(p, k.split("\0", 1)[0], self._scope) for p in paths):
                         new_orphan_possible = True
                         break
                 else:
@@ -474,7 +526,7 @@ class Ledger:
                     entry = self._entries.get(k) or found_entries.get(k)
                     if entry is not None:
                         meta_paths[k] = paths_of(entry)
-                        if _all_missing(entry):
+                        if _all_missing(entry, agent_of(k, entry), self._scope):
                             new_orphan_possible = True
                             break
             if not new_orphan_possible:
@@ -501,7 +553,7 @@ class Ledger:
         for key, entry in self._entries.items():
             if exclude_keys and key in exclude_keys:
                 continue
-            if not _is_session_entry(entry) or not _all_missing(entry):
+            if not _is_session_entry(entry) or not _all_missing(entry, agent_of(key, entry), self._scope):
                 continue
             try:
                 found.append((key, _load_session(dict(entry["session"]))))
@@ -546,7 +598,7 @@ class Ledger:
                 errors += 1
                 continue
             sessions += 1
-            if _all_missing(entry):
+            if _all_missing(entry, agent_of(None, entry), self._scope):
                 orphaned += 1
         return {
             "path": self.path,
@@ -564,10 +616,13 @@ class Ledger:
             return 0
 
     def forget_orphans(self) -> int:
+        # The last scan's orphans include sessions deleted inside a database
+        # that still exists; only a scan can tell those apart.
+        recorded = set(getattr(self, "_meta_orphans", {})) if not self._loaded else set()
         self._ensure_loaded()
         gone = []
         for key, entry in self.entries.items():
-            if _is_session_entry(entry) and _all_missing(entry):
+            if _is_session_entry(entry) and (key in recorded or _all_missing(entry, agent_of(key, entry), self._scope)):
                 gone.append(key)
         for key in gone:
             del self.entries[key]
@@ -646,7 +701,7 @@ class Ledger:
                 for k, entry in self.entries.items():
                     if _is_session_entry(entry):
                         source_paths[k] = paths_of(entry)
-                        if _all_missing(entry):
+                        if _all_missing(entry, agent_of(k, entry), self._scope):
                             orphans[k] = entry["session"]
                 known_keys = list(self.entries.keys())
                 summary = self._compute_summary()
