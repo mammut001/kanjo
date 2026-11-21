@@ -336,6 +336,25 @@ class QuotaFetchTest(unittest.TestCase):
         qw_manual = quota.quota_windows(manual=manual, directory="/nonexistent/tokei", now=now, no_network=True)
         self.assertEqual(qw_manual["claude"]["source"], "manual")
 
+    def test_claude_cache_skips_large_non_json_before_valid_entry(self):
+        now = 1730000000.0
+        cache_dir = os.path.join(self.tmp, "claude_cache")
+        os.makedirs(cache_dir)
+        valid = os.path.join(cache_dir, "valid")
+        noise = os.path.join(cache_dir, "noise")
+        with open(valid, "wb") as fh:
+            fh.write(json.dumps({"seven_day": {"utilization": 2, "resets_at": "2024-10-31T10:00:00Z"}}).encode())
+        js = (b"function f(e){return e.x?{a:e.b,c:[1,2]}:null};" * 420
+              + b"e.five_hour;" + b"function f(e){return {a:e.b}};" * 700)
+        with open(noise, "wb") as fh:
+            fh.write(gzip.compress(js))
+        os.utime(valid, (now, now))
+        os.utime(noise, (now + 1, now + 1))
+        start = time.monotonic()
+        result = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertLess(time.monotonic() - start, 1.0)
+        self.assertEqual(result["weekly_used_percent"], 2.0)
+
     def test_claude_desktop_cache_fresh_payloads(self):
         now = 1730000000.0  # 2024-10-27T03:33:20Z
         cache_dir = os.path.join(self.tmp, "claude_cache")

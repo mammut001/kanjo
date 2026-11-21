@@ -156,29 +156,26 @@ def _extract_usage_json(raw: bytes) -> Optional[dict]:
         except Exception:
             pass
 
-    # Slower fallback: search around keyword pos
-    pos = raw.find(b"five_hour")
-    if pos == -1:
-        pos = raw.find(b"seven_day")
-
-    idx = 0
-    starts = []
-    while idx < pos:
-        idx = raw.find(b"{", idx, pos + 1)
-        if idx == -1:
-            break
-        starts.append(idx)
-        idx += 1
-
-    for s in starts:
-        for e in range(len(raw) - 1, pos, -1):
-            if raw[e : e + 1] == b"}":
-                try:
-                    cand = json.loads(raw[s : e + 1].decode("utf-8"))
-                    if isinstance(cand, dict) and ("five_hour" in cand or "seven_day" in cand):
-                        return cand
-                except Exception:
-                    pass
+    # Try a bounded number of object starts close to each usage key.
+    decoder = json.JSONDecoder()
+    for keyword in (b"five_hour", b"seven_day"):
+        pos = raw.find(keyword)
+        if pos == -1:
+            continue
+        start = max(0, pos - 65536)
+        text = raw[start : min(len(raw), pos + 65536)].decode("utf-8", errors="replace")
+        key_pos = text.find(keyword.decode("ascii"))
+        idx = key_pos
+        for _ in range(64):
+            idx = text.rfind("{", 0, idx)
+            if idx == -1:
+                break
+            try:
+                cand, _ = decoder.raw_decode(text, idx)
+                if isinstance(cand, dict) and ("five_hour" in cand or "seven_day" in cand):
+                    return cand
+            except (ValueError, RecursionError):
+                pass
 
     return None
 
