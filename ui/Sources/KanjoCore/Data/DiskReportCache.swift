@@ -24,4 +24,10 @@ public struct DiskReportCache {
             // 缓存不可写不影响内存中的报告。
         }
     }
+
+    /// 清理成功后丢掉本地缓存，避免随后的扫描还读到清理前的报告。
+    public func invalidate() {
+        guard let fileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
+    }
 }

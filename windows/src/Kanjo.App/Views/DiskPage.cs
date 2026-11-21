@@ -50,7 +50,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
     private DiskAge _age = DiskAge.Any;
     private bool _checking;
     private bool _applying;
-    private CleanResult? _pending;
+    private DiskCleanPreview? _pending;
     private CleanResult? _finished;
     private string? _actionError;
 
@@ -258,18 +258,18 @@ public sealed class DiskPage : Grid, ISnapshotPage
         var box = Ui.V(4);
         box.Children.Add(Ui.Text(L10n.Tr("disk.older_than"), 12, null, Palette.Secondary));
         var options = DiskAges.All.Select(a => a.Label()).ToList();
+        var locked = _checking || _applying || _pending is not null;
         var segmented = new SegmentedControl(options, DiskAges.All.ToList().IndexOf(_age), index =>
         {
+            if (_checking || _applying || _pending is not null) return;
             _age = DiskAges.All[index];
             Rebuild();
         })
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            IsEnabled = !locked,
+            Opacity = locked ? 0.55 : 1,
         };
-        if (_checking || _applying || _pending is not null)
-        {
-            segmented.Opacity = 0.55;
-        }
         ToolTip.SetTip(segmented, L10n.Tr("disk.age_help"));
         box.Children.Add(segmented);
         return box;
@@ -464,12 +464,63 @@ public sealed class DiskPage : Grid, ISnapshotPage
         _overlay.Children.Add(card);
     }
 
-    private Control PlanCard(CleanResult result)
+    private Control PlanCard(DiskCleanPreview preview)
     {
+        var result = preview.Result;
         var box = Ui.V(10);
         box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.confirm_title"), 15, FontWeight.SemiBold));
-        box.Children.Add(Ui.Text(_age.Caption(), 12, null, Palette.Secondary));
+        box.Children.Add(Ui.Text(CaptionForOlderThan(preview.OlderThan), 12, null, Palette.Secondary));
+        box.Children.Add(PlanBody(result));
+        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.warning"), 12, null, Palette.Secondary, wrap: true));
+        if (_actionError is { } error)
+        {
+            box.Children.Add(Ui.Text(error, 12, null, Palette.Bad, wrap: true, mono: true));
+        }
 
+        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        var cancel = Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
+        {
+            _pending = null;
+            _actionError = null;
+            Rebuild();
+        }, enabled: !_applying);
+        Grid.SetColumn(cancel, 0);
+        actions.Children.Add(cancel);
+        var canMove = DiskCleanFlow.CanBeginMove(_applying, result.Moved.Count);
+        // 移到回收站是破坏性动作：用危险色而不是强调色。禁用时不能再开第二次清理。
+        var move = Ui.ProminentButton(WindowsL10n.Tr("disk.card.move_button"), Move, canMove, Palette.Bad);
+        Grid.SetColumn(move, 2);
+        actions.Children.Add(move);
+        if (_applying)
+        {
+            actions.Children.Add(new Spinner(10) { HorizontalAlignment = HorizontalAlignment.Right });
+        }
+        box.Children.Add(actions);
+        return box;
+    }
+
+    private Control ResultCard(CleanResult result)
+    {
+        var box = Ui.V(10);
+        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.moved_title"), 15, FontWeight.SemiBold));
+        box.Children.Add(Widgets.HeroAmount(
+            L10n.TrL(null, "disk.card.freed", Fmt.Bytes(result.FreedBytes)), 20, Palette.Accent));
+        // 部分成功也列出 moved + 本地化后的 skipped，不当总失败。
+        box.Children.Add(PlanBody(result));
+        var done = Ui.ProminentButton(L10n.Tr("common.done"), () =>
+        {
+            _finished = null;
+            _actionError = null;
+            Rebuild();
+        });
+        done.HorizontalAlignment = HorizontalAlignment.Right;
+        box.Children.Add(done);
+        return box;
+    }
+
+    private Control PlanBody(CleanResult result)
+    {
+        var wrap = Ui.V(8);
         var body = Ui.V(8);
         var groups = CleanPlan.Groups(_services.Disk.Report ?? DiskReport.Empty, result.Moved);
         if (result.Moved.Count == 0)
@@ -494,62 +545,13 @@ public sealed class DiskPage : Grid, ISnapshotPage
         body.Children.Add(Ui.Text(L10n.TrL(null, "disk.card.total",
                 CleanPlan.CountAndSize(result.Moved.Count, result.FreedBytes)), 11, FontWeight.Medium));
         body.Children.Add(SkippedList(result));
-
-        var scroll = new ScrollViewer
+        wrap.Children.Add(new ScrollViewer
         {
             Content = body,
             MaxHeight = 320,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-        };
-        box.Children.Add(scroll);
-        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.warning"), 12, null, Palette.Secondary, wrap: true));
-        if (_actionError is { } error)
-        {
-            box.Children.Add(Ui.Text(error, 12, null, Palette.Bad, wrap: true, mono: true));
-        }
-
-        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var cancel = Ui.BorderedButton(L10n.Tr("common.cancel"), () =>
-        {
-            _pending = null;
-            _actionError = null;
-            Rebuild();
-        }, enabled: !_applying);
-        Grid.SetColumn(cancel, 0);
-        actions.Children.Add(cancel);
-        // 移到回收站是破坏性动作：用危险色而不是强调色。
-        var move = Ui.ProminentButton(WindowsL10n.Tr("disk.card.move_button"), Move, true, Palette.Bad);
-        Grid.SetColumn(move, 2);
-        actions.Children.Add(move);
-        if (_applying)
-        {
-            move.Opacity = 0.6;
-            actions.Children.Add(new Spinner(10) { HorizontalAlignment = HorizontalAlignment.Right });
-        }
-        else if (result.Moved.Count == 0)
-        {
-            move.Opacity = 0.5;
-        }
-        box.Children.Add(actions);
-        return box;
-    }
-
-    private Control ResultCard(CleanResult result)
-    {
-        var box = Ui.V(10);
-        box.Children.Add(Ui.Text(WindowsL10n.Tr("disk.card.moved_title"), 15, FontWeight.SemiBold));
-        box.Children.Add(Widgets.HeroAmount(
-            L10n.TrL(null, "disk.card.freed", Fmt.Bytes(result.FreedBytes)), 20, Palette.Accent));
-        box.Children.Add(SkippedList(result));
-        var done = Ui.ProminentButton(L10n.Tr("common.done"), () =>
-        {
-            _finished = null;
-            _actionError = null;
-            Rebuild();
         });
-        done.HorizontalAlignment = HorizontalAlignment.Right;
-        box.Children.Add(done);
-        return box;
+        return wrap;
     }
 
     private static Control SkippedList(CleanResult result)
@@ -564,9 +566,23 @@ public sealed class DiskPage : Grid, ISnapshotPage
                 Palette.WarnInk, wrap: true));
             item.Children.Add(Ui.Text(DiskBlock.Explanation(skip.Reason), 12, null, Palette.Secondary,
                 wrap: true));
+            if (!string.IsNullOrEmpty(skip.Detail))
+            {
+                item.Children.Add(Ui.Text(skip.Detail, 12, null, Palette.Secondary, wrap: true, mono: true));
+            }
             box.Children.Add(item);
         }
         return box;
+    }
+
+    private static string CaptionForOlderThan(string? olderThan)
+    {
+        if (string.IsNullOrEmpty(olderThan)) return DiskAge.Any.Caption();
+        foreach (var age in DiskAges.All)
+        {
+            if (age.Argument() == olderThan) return age.Caption();
+        }
+        return L10n.TrL(null, "disk.age.caption.older", olderThan);
     }
 
     /// <summary>先 dry-run 出计划；用户看过之后再带 --yes。</summary>
@@ -583,7 +599,9 @@ public sealed class DiskPage : Grid, ISnapshotPage
         {
             try
             {
-                _pending = _services.Disk.Clean(ids, older, confirmed: false);
+                var result = _services.Disk.Clean(ids, older, confirmed: false);
+                // 冻结 ids / olderThan / moved，确认步不再读可变的勾选与年龄档。
+                _pending = new DiskCleanPreview(ids, older, result);
             }
             catch (Exception e)
             {
@@ -597,22 +615,31 @@ public sealed class DiskPage : Grid, ISnapshotPage
     /// <summary>用户已经看过 dry-run 计划，这一步才带 --yes。</summary>
     private void Move()
     {
-        if (_applying || _pending is null) return;
-        var paths = _pending.Moved.ToList();
+        if (_pending is null || !DiskCleanFlow.CanBeginMove(_applying, _pending.Result.Moved.Count)) return;
+        var preview = _pending;
         _applying = true;
         _actionError = null;
         Rebuild();
-        var ids = _selected.OrderBy(i => i, StringComparer.Ordinal).ToList();
-        var older = _age.Argument();
         Task.Run(() =>
         {
             try
             {
-                var result = _services.Disk.Clean(ids, older, confirmed: true, onlyPaths: paths);
+                var result = _services.Disk.Clean(preview.Ids, preview.OlderThan, confirmed: true,
+                    onlyPaths: preview.Result.Moved);
+                _ = DiskCleanFlow.PresentsAsResultCard(result);
                 _pending = null;
                 _finished = result;
-                _selected.Clear();
-                _services.Disk.Refresh(rescan: true);
+                if (_services.Disk.Report is { } report)
+                {
+                    var keep = DiskCleanFlow.SelectionAfter(_selected, report, result);
+                    _selected.Clear();
+                    foreach (var id in keep) _selected.Add(id);
+                }
+                else
+                {
+                    _selected.Clear();
+                }
+                _services.Disk.RefreshAfterClean();
             }
             catch (Exception e)
             {

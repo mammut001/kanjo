@@ -464,9 +464,15 @@
 "disk.block.not_merged" = "non fusionné";
 "disk.block.worktree_remove_failed" = "refusé par git";
 "disk.block.nothing_to_move" = "rien à déplacer";
+"disk.block.move_failed" = "déplacement impossible";
+"disk.block.changed" = "modifié depuis l'aperçu";
+"disk.block.refused" = "refusé";
 "disk.block.explanation.not_merged" = "La branche n'est pas encore fusionnée dans la branche par défaut ; le nettoyage des worktrees fusionnés n'y touche pas.";
 "disk.block.explanation.worktree_remove_failed" = "git worktree remove a refusé ce worktree (par exemple verrouillé ou modifié). Le dossier est resté tel quel.";
 "disk.block.explanation.nothing_to_move" = "Il n'y a rien ici en dehors des entrées listées séparément.";
+"disk.block.explanation.move_failed" = "Le fichier ou le dossier n'a pas pu être déplacé (par exemple s'il est utilisé). Ce qui a déjà été déplacé reste dans la corbeille ; le reste est inchangé.";
+"disk.block.explanation.changed" = "Ce chemin ne correspond plus à l'aperçu dry-run ; l'étape de confirmation l'a donc ignoré.";
+"disk.block.explanation.refused" = "Kanjo refuse de nettoyer ce chemin (par exemple un dossier brouillon actuellement utilisé comme worktree).";
 
 /* Session */
 "session.untitled" = "(sans titre)";

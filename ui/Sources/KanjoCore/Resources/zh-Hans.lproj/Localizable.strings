@@ -464,9 +464,15 @@
 "disk.block.not_merged" = "未合并";
 "disk.block.worktree_remove_failed" = "git 拒绝移除";
 "disk.block.nothing_to_move" = "没有可移动的内容";
+"disk.block.move_failed" = "无法移动";
+"disk.block.changed" = "预览后已变化";
+"disk.block.refused" = "已拒绝";
 "disk.block.explanation.not_merged" = "分支还没有合并进默认分支，清理已合并工作树时不会动它。";
 "disk.block.explanation.worktree_remove_failed" = "git worktree remove 拒绝移除这个工作树（例如已锁定或有改动），文件夹原样保留。";
 "disk.block.explanation.nothing_to_move" = "这里除了单独列出的条目之外没有别的内容。";
+"disk.block.explanation.move_failed" = "无法移动该文件或文件夹（例如正在被占用）。已经移走的仍在废纸篓里，其余保持原样。";
+"disk.block.explanation.changed" = "该路径已与 dry-run 预览不一致，确认步骤因此跳过了它。";
+"disk.block.explanation.refused" = "Kanjo 拒绝清理此路径（例如当前正被用作工作树的草稿目录）。";
 
 /* 会话 */
 "session.untitled" = "(无标题)";

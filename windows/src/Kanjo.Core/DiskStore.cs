@@ -198,6 +198,13 @@ public sealed class DiskStore
         return source.Clean(ids, olderThan, confirmed, onlyPaths);
     }
 
+    /// <summary>清理成功后：丢掉应用侧磁盘报告缓存，再强制重扫。</summary>
+    public void RefreshAfterClean()
+    {
+        _cache?.Invalidate();
+        Refresh(rescan: true);
+    }
+
     /// <summary>设置改动后调用：丢弃正在跑的旧结果，清掉排队请求。</summary>
     public void ApplySettings()
     {

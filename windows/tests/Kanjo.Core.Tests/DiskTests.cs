@@ -339,6 +339,100 @@ public sealed class DiskTests : KanjoTestCase
         Assert.Null(CliRunner.DiskCleanInput(null));
     }
 
+    [Fact]
+    public void PartialCleanSkipReasonsAreLocalized()
+    {
+        string[] reasons =
+        [
+            "move_failed", "changed", "active", "not_merged", "uncommitted_changes", "refused", "nothing_to_move",
+        ];
+        foreach (var reason in reasons)
+        {
+            var shortText = DiskBlock.Short(reason);
+            // Must come from Localizable.strings, never the underscore form of the CLI code.
+            Assert.DoesNotContain("_", shortText);
+            Assert.Equal(L10n.Tr("disk.block." + reason), shortText);
+            var explanation = DiskBlock.Explanation(reason);
+            Assert.Equal(L10n.Tr("disk.block.explanation." + reason), explanation);
+            Assert.NotEqual(L10n.Tr("disk.block.explanation.default"), explanation);
+        }
+        Assert.Equal("could not move", DiskBlock.Short("move_failed"));
+        Assert.Equal("changed since preview", DiskBlock.Short("changed"));
+        Assert.True(DiskCleanFlow.PresentsAsResultCard(new CleanResult(
+            ["/a"], 1, [new CleanSkip("x", "move_failed")])));
+    }
+
+    [Fact]
+    public void SelectionAfterPartialCleanKeepsSkippedEntries()
+    {
+        var report = Load();
+        var reclaimable = report.AllEntries.Where(e => e.IsReclaimable).Take(2).ToList();
+        Assert.True(reclaimable.Count >= 2);
+        var kept = reclaimable[0];
+        var gone = reclaimable[1];
+        var selected = new HashSet<string>(StringComparer.Ordinal) { kept.Id, gone.Id };
+        var result = new CleanResult(
+            [gone.Path, kept.Path + "/old.jsonl"],
+            gone.Bytes + 10,
+            [new CleanSkip(kept.Id, "move_failed")]);
+        var next = DiskCleanFlow.SelectionAfter(selected, report, result);
+        Assert.Equal(new HashSet<string>(StringComparer.Ordinal) { kept.Id }, next);
+        Assert.True(DiskCleanFlow.ResultShowsMovedPaths(result));
+        Assert.False(DiskCleanFlow.CanBeginMove(true, 2));
+        Assert.False(DiskCleanFlow.CanBeginMove(false, 0));
+        Assert.True(DiskCleanFlow.CanBeginMove(false, 2));
+    }
+
+    [Fact]
+    public void CleanPreviewFreezesOlderThanAndPaths()
+    {
+        var preview = new DiskCleanPreview(
+            ["codex:cache"], "30d",
+            new CleanResult(["/tmp/a"], 1, []));
+        Assert.Equal("30d", preview.OlderThan);
+        Assert.Equal(["/tmp/a"], preview.Result.Moved);
+        Assert.Equal(
+            new[] { "disk", "clean", "codex:cache", "--older-than", "30d", "--only-paths", "-", "--yes" },
+            CliRunner.DiskCleanArguments(preview.Ids, preview.OlderThan, true, preview.Result.Moved));
+    }
+
+    [Fact]
+    public void AgeArgumentIsCliTokenNotLocalizedLabel()
+    {
+        Assert.Null(DiskAge.Any.Argument());
+        Assert.Equal("7d", DiskAge.Days7.Argument());
+        Assert.Equal("30d", DiskAge.Days30.Argument());
+        Assert.Equal("90d", DiskAge.Days90.Argument());
+        // Labels may be localized; Argument must stay the CLI token.
+        Assert.Equal("7d", DiskAge.Days7.Argument());
+        Assert.NotEqual("7天", DiskAge.Days7.Argument());
+    }
+
+    [Fact]
+    public void DiskReportCacheInvalidate()
+    {
+        var directory = TempDir();
+        var cache = new DiskReportCache(directory);
+        cache.Save(Load());
+        Assert.NotNull(cache.Load());
+        cache.Invalidate();
+        Assert.Null(cache.Load());
+    }
+
+    [Fact]
+    public void CleanSkipDetailDecodes()
+    {
+        const string json = """
+        {"moved":["/tmp/wt"],"freed_bytes":10,"skipped":[
+          {"id":"claude:worktree:a","reason":"worktree_remove_failed","detail":"fatal: cannot remove a locked working tree"},
+          {"id":"claude:worktree:b","reason":"not_merged"}]}
+        """;
+        var result = DiskDecoder.DecodeClean(json);
+        Assert.Equal("fatal: cannot remove a locked working tree", result.Skipped[0].Detail);
+        Assert.Null(result.Skipped[1].Detail);
+        Assert.Equal(L10n.Tr("disk.block.not_merged"), DiskBlock.Short("not_merged"));
+    }
+
     private static string DiskFixturePath()
     {
         var root = DefaultPaths.RepoRoot ?? throw new InvalidOperationException("repo root unavailable");

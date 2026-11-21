@@ -425,6 +425,75 @@ final class DiskTests: KanjoTestCase {
         XCTAssertEqual(DiskBlock.short("worktree_remove_failed"), "git refused")
     }
 
+    func testPartialCleanSkipReasonsAreLocalized() {
+        let reasons = ["move_failed", "changed", "active", "not_merged", "uncommitted_changes",
+                       "refused", "nothing_to_move"]
+        for reason in reasons {
+            let short = DiskBlock.short(reason)
+            // Must come from Localizable.strings, never the underscore form of the CLI code.
+            XCTAssertFalse(short.contains("_"), "raw code leaked for \(reason): \(short)")
+            XCTAssertEqual(short, L10n.tr("disk.block.\(reason)"))
+            let explanation = DiskBlock.explanation(reason)
+            XCTAssertEqual(explanation, L10n.tr("disk.block.explanation.\(reason)"))
+            XCTAssertNotEqual(explanation, L10n.tr("disk.block.explanation.default"))
+        }
+        XCTAssertEqual(DiskBlock.short("move_failed"), "could not move")
+        XCTAssertEqual(DiskBlock.short("changed"), "changed since preview")
+        XCTAssertTrue(DiskCleanFlow.presentsAsResultCard(
+            CleanResult(moved: ["/a"], freedBytes: 1,
+                        skipped: [CleanSkip(id: "x", reason: "move_failed")])))
+    }
+
+    func testSelectionAfterPartialCleanKeepsSkippedEntries() throws {
+        let report = try loadFixture()
+        let kept = report.allEntries.first { $0.isReclaimable }!
+        let gone = report.allEntries.first { $0.isReclaimable && $0.id != kept.id }!
+        let selected: Set<String> = [kept.id, gone.id]
+        let result = CleanResult(
+            moved: [gone.path, kept.path + "/old.jsonl"],
+            freedBytes: gone.bytes + 10,
+            skipped: [CleanSkip(id: kept.id, reason: "move_failed")])
+        let next = DiskCleanFlow.selectionAfter(selected: selected, report: report, result: result)
+        XCTAssertEqual(next, [kept.id])
+        XCTAssertTrue(DiskCleanFlow.resultShowsMovedPaths(result))
+        XCTAssertFalse(DiskCleanFlow.canBeginMove(applying: true, movedCount: 2))
+        XCTAssertFalse(DiskCleanFlow.canBeginMove(applying: false, movedCount: 0))
+        XCTAssertTrue(DiskCleanFlow.canBeginMove(applying: false, movedCount: 2))
+    }
+
+    func testCleanPreviewFreezesOlderThanAndPaths() {
+        let preview = DiskCleanPreview(
+            ids: ["codex:cache"],
+            olderThan: "30d",
+            result: CleanResult(moved: ["/tmp/a"], freedBytes: 1, skipped: []),
+            merged: false)
+        XCTAssertEqual(preview.olderThan, "30d")
+        XCTAssertEqual(preview.result.moved, ["/tmp/a"])
+        XCTAssertEqual(
+            DiskCommand.clean(from: "kanjo export", ids: preview.ids, olderThan: preview.olderThan,
+                              confirmed: true, onlyPaths: preview.result.moved),
+            "kanjo disk clean codex:cache --older-than 30d --only-paths - --yes")
+    }
+
+    func testDiskReportCacheInvalidate() throws {
+        let root = try XCTUnwrap(DefaultPaths.packageRoot)
+        let directory = root.appendingPathComponent(".build/disk-cache-invalidate-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = DiskReportCache(directory: directory)
+        cache.save(try loadFixture())
+        XCTAssertNotNil(cache.load())
+        cache.invalidate()
+        XCTAssertNil(cache.load())
+    }
+
+    func testAutoCleanRequiresOptIn() throws {
+        let report = try worktreeReport()
+        XCTAssertNil(MergedWorktreeAutoClean.candidates(enabled: false, report: report, lastAttempt: []))
+        XCTAssertNotNil(MergedWorktreeAutoClean.candidates(enabled: true, report: report, lastAttempt: []))
+        AppDefaults.store.removeObject(forKey: SettingsKeys.diskAutoCleanMergedWorktrees)
+        XCTAssertFalse(AppDefaults.store.bool(forKey: SettingsKeys.diskAutoCleanMergedWorktrees))
+    }
+
     func testDiskDataSourceReadsFixture() async throws {
         let path = try fixtureURL().path
         let src = DiskDataSource(cliCommand: "cat '\(path)' # export")
