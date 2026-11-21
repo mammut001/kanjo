@@ -421,3 +421,115 @@ def check_perf_by_day(tc, rows):
         keys.append((row["day"], row["agent"], row["model"]))
     tc.assertEqual(keys, sorted(keys), "perf_by_day must be sorted by (day, agent, model)")
     tc.assertEqual(len(keys), len(set(keys)), "perf_by_day must not have duplicate keys")
+
+
+# ---- mobile / disk schema (CONTRACT.md §10–§11) --------------------------------
+
+MOBILE_TOP_KEYS = {
+    "schema_version", "generated_at", "generated_by", "timezone", "currency",
+    "cost_note", "quota_windows", "subscriptions", "totals", "projects", "buckets",
+    "mobile",
+}
+MOBILE_PROJECT_KEYS = {
+    "id", "name", "cost", "tokens", "sessions", "first_active", "last_active",
+    "by_agent", "by_model", "by_day", "sessions_detail",
+}
+MOBILE_SESSION_KEYS = {"agent", "started", "ended", "cost", "tokens", "models"}
+MOBILE_BUCKET_AGG_KEYS = {
+    "cost", "tokens", "sessions", "first_active", "last_active", "sessions_detail",
+}
+DISK_TOP_KEYS = {"schema_version", "generated_at", "total_bytes", "reclaimable_bytes", "agents"}
+DISK_AGENT_KEYS = {"agent", "label", "bytes", "entries"}
+DISK_ENTRY_KEYS = {
+    "id", "kind", "path", "bytes", "files", "oldest", "newest", "deletable", "blocked", "note",
+}
+DISK_KINDS = {"sessions", "scratch", "worktrees", "cache", "memory", "other"}
+DISK_DELETABLE = {"always", "after_import", "when_clean", "never"}
+
+
+def validate_mobile_schema(tc, doc):
+    """Assert ``doc`` is a CONTRACT.md §11 phone snapshot (required fields only)."""
+    tc.assertEqual(set(doc), MOBILE_TOP_KEYS, "mobile top-level keys")
+    tc.assertEqual(doc["schema_version"], 1)
+    tc.assertRegex(doc["generated_at"], ISO_UTC)
+    tc.assertTrue(doc["generated_by"].startswith("kanjo "))
+    tc.assertEqual(doc["currency"], "USD")
+    tc.assertEqual(doc["cost_note"], COST_NOTE)
+    tc.assertEqual(set(doc["mobile"]), {"trimmed", "hidden_project_names"})
+    tc.assertIs(doc["mobile"]["trimmed"], True)
+    tc.assertIsInstance(doc["mobile"]["hidden_project_names"], bool)
+    for key in ("config", "ledger", "perf_by_day", "antigravity_accounts"):
+        tc.assertNotIn(key, doc)
+    check_quota_windows(tc, doc["quota_windows"])
+    check_subscriptions(tc, doc["subscriptions"])
+    for agent, sub in doc["subscriptions"].items():
+        tc.assertNotIn("account", sub, "subscriptions.%s must omit account" % agent)
+    _check_agg(tc, doc["totals"], "totals")
+    tc.assertIn("unique_sessions", doc["totals"])
+
+    for i, p in enumerate(doc["projects"]):
+        where = "mobile.projects[%d]" % i
+        tc.assertEqual(set(p), MOBILE_PROJECT_KEYS, where)
+        tc.assertEqual(p["id"], "project-%d" % (i + 1), where)
+        _check_agg(tc, p, where)
+        for s in p["sessions_detail"]:
+            tc.assertEqual(set(s), MOBILE_SESSION_KEYS, where + " session")
+            tc.assertEqual(set(s["tokens"]), {"total"}, where + " session.tokens")
+            tc.assertRegex(s["started"], ISO_UTC)
+            tc.assertRegex(s["ended"], ISO_UTC)
+            _check_cost(tc, s["cost"], where + " session.cost")
+            tc.assertIsInstance(s["tokens"]["total"], int)
+            tc.assertIsInstance(s["models"], list)
+
+    buckets = doc["buckets"]
+    for name in ("unattributed", "excluded"):
+        b = buckets[name]
+        tc.assertEqual(set(b), MOBILE_BUCKET_AGG_KEYS, name)
+        _check_agg(tc, b, name)
+        for s in b["sessions_detail"]:
+            tc.assertEqual(set(s), MOBILE_SESSION_KEYS, name + " session")
+            tc.assertEqual(set(s["tokens"]), {"total"})
+    tc.assertEqual(set(buckets["parse_failed"]), {"sessions"})
+    tc.assertIsInstance(buckets["parse_failed"]["sessions"], int)
+    tc.assertNotIn("files", buckets["parse_failed"])
+
+
+def validate_disk_schema(tc, doc):
+    """Assert ``doc`` is a CONTRACT.md §10 disk report (required fields)."""
+    tc.assertTrue(DISK_TOP_KEYS <= set(doc), "disk missing %s" % (DISK_TOP_KEYS - set(doc)))
+    tc.assertEqual(doc["schema_version"], 1)
+    tc.assertRegex(doc["generated_at"], ISO_UTC)
+    for key in ("total_bytes", "reclaimable_bytes"):
+        tc.assertIsInstance(doc[key], int, key)
+        tc.assertNotIsInstance(doc[key], bool, key)
+        tc.assertGreaterEqual(doc[key], 0, key)
+    tc.assertLessEqual(doc["reclaimable_bytes"], doc["total_bytes"])
+    tc.assertIsInstance(doc["agents"], list)
+    for i, agent in enumerate(doc["agents"]):
+        where = "disk.agents[%d]" % i
+        tc.assertTrue(DISK_AGENT_KEYS <= set(agent), "%s missing %s" % (where, DISK_AGENT_KEYS - set(agent)))
+        tc.assertIsInstance(agent["agent"], str)
+        tc.assertTrue(agent["agent"])
+        tc.assertIsInstance(agent["label"], str)
+        tc.assertIsInstance(agent["bytes"], int)
+        tc.assertGreaterEqual(agent["bytes"], 0)
+        for j, entry in enumerate(agent["entries"]):
+            ewhere = "%s.entries[%d]" % (where, j)
+            tc.assertTrue(DISK_ENTRY_KEYS <= set(entry),
+                          "%s missing %s" % (ewhere, DISK_ENTRY_KEYS - set(entry)))
+            tc.assertIsInstance(entry["id"], str)
+            tc.assertTrue(entry["id"])
+            tc.assertIn(entry["kind"], DISK_KINDS, ewhere)
+            tc.assertIsInstance(entry["path"], str)
+            tc.assertIsInstance(entry["bytes"], int)
+            tc.assertIsInstance(entry["files"], int)
+            tc.assertTrue(entry["oldest"] is None or DAY.match(entry["oldest"]), ewhere)
+            tc.assertTrue(entry["newest"] is None or DAY.match(entry["newest"]), ewhere)
+            tc.assertIn(entry["deletable"], DISK_DELETABLE, ewhere)
+            tc.assertIsInstance(entry["blocked"], list, ewhere)
+            tc.assertIsInstance(entry["note"], str, ewhere)
+            if entry["kind"] == "worktrees":
+                if "merged" in entry:
+                    tc.assertTrue(entry["merged"] is None or isinstance(entry["merged"], bool), ewhere)
+                if "merged_into" in entry:
+                    tc.assertTrue(entry["merged_into"] is None or isinstance(entry["merged_into"], str), ewhere)
