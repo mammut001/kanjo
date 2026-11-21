@@ -319,7 +319,7 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(f.byAgent.first?.cost ?? 0, 20, accuracy: 1e-9)
     }
 
-    func testSessionCountingRangeOverlap() {
+    func testSessionCountingRangeOverlap() throws {
         let todaySpec = spec(.today)
 
         // 1. 会话昨天开始、今天仍在用 -> 计入 Today
@@ -359,6 +359,42 @@ final class TimeRangeTests: KanjoTestCase {
             ]
         )
         XCTAssertTrue(todaySpec.includes(sessionWithTodayUsage))
+
+        // 范围内的按日行金额和 token 都是 0：没有用量，不计入。
+        let sessionZeroToday = Session(
+            id: "s5", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [DayCost(day: "2026-10-24", cost: 0, tokens: 0)]
+        )
+        XCTAssertFalse(todaySpec.includes(sessionZeroToday))
+        // 只有 token、金额为 0 仍然算用量。
+        let sessionTokensOnly = Session(
+            id: "s6", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T10:00:00Z", ended: "2026-10-24T02:00:00Z",
+            cost: 0, tokens: Tokens(total: 20), share: 1, attribution: "dominant", subagents: 0,
+            byDay: [DayCost(day: "2026-10-24", cost: 0, tokens: 20)]
+        )
+        XCTAssertTrue(todaySpec.includes(sessionTokensOnly))
+
+        // 正时长会话恰好在窗口起点结束：与半开区间 [start, end) 没有重叠，不计入。
+        // 零时长会话落在起点上仍然计入。
+        let windowStart = try XCTUnwrap(todaySpec.start)
+        let endedAtStart = Session(
+            id: "s7", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T15:00:00Z", ended: "2026-10-23T16:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertEqual(endedAtStart.endedDate, windowStart)
+        XCTAssertFalse(todaySpec.includes(endedAtStart))
+        XCTAssertEqual(todaySpec.inRangeCostAndTokens(for: endedAtStart).cost, 0, accuracy: 1e-9)
+        XCTAssertEqual(todaySpec.inRangeCostAndTokens(for: endedAtStart).tokens, 0)
+        let pointAtStart = Session(
+            id: "s8", agent: "claude", label: "Claude Code",
+            started: "2026-10-23T16:00:00Z", ended: "2026-10-23T16:00:00Z",
+            cost: 5, tokens: Tokens(total: 50), share: 1, attribution: "dominant", subagents: 0
+        )
+        XCTAssertTrue(todaySpec.includes(pointAtStart))
 
         // 4. 项目过滤验证（project row / overview summary）
         let dayToday = DayCost(day: "2026-10-24", cost: 2, tokens: 20, byAgent: ["claude": 2], byAgentTokens: ["claude": 20])
