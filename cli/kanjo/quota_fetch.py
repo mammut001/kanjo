@@ -1090,29 +1090,58 @@ FETCHERS = {
 }
 
 
+def _provider_fetched_at(cache: dict, agent: str) -> Optional[float]:
+    pfa = cache.get("provider_fetched_at")
+    if isinstance(pfa, dict) and isinstance(pfa.get(agent), (int, float)):
+        return float(pfa[agent])
+    fetched_at = cache.get("fetched_at")
+    if isinstance(fetched_at, (int, float)):
+        return float(fetched_at)
+    return None
+
+
+def _all_providers_fresh(cache: dict, now: float) -> Optional[Dict[str, dict]]:
+    providers = cache.get("providers")
+    if not isinstance(providers, dict) or not providers:
+        return None
+    out: Dict[str, dict] = {}
+    for agent, data in providers.items():
+        if not isinstance(data, dict):
+            return None
+        ts = _provider_fetched_at(cache, agent)
+        if ts is None or not (0 <= now - ts < CACHE_TTL):
+            return None
+        out[agent] = data
+    return out if out else None
+
+
 def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> Dict[str, dict]:
     """Fetch live quotas for all supported providers, respecting cache TTL and security rules."""
     now = time.time() if now is None else now
     cached = load_quota_cache()
     if cached:
-        fetched_at = cached.get("fetched_at")
-        if isinstance(fetched_at, (int, float)) and 0 <= now - float(fetched_at) < CACHE_TTL:
+        fresh = _all_providers_fresh(cached, now)
+        if fresh is not None:
+            return fresh
+
+    if no_network or is_network_disabled():
+        if cached:
             providers = cached.get("providers")
             if isinstance(providers, dict):
                 return {k: v for k, v in providers.items() if isinstance(v, dict)}
+        return {}
 
-    if no_network or is_network_disabled():
-        providers = cached.get("providers") if cached else None
-        return {k: v for k, v in providers.items() if isinstance(v, dict)} if isinstance(providers, dict) else {}
-
-    results = {}
+    results: Dict[str, dict] = {}
     lock = threading.Lock()
+
     def run(agent, fetcher):
         try:
             res = fetcher(now=now)
             if res:
                 with lock:
                     results[agent] = res
+                if agent == "antigravity" and fetcher is not fetch_antigravity_quota:
+                    record_antigravity_account_quota(res, now=now)
         except Exception:
             pass
 
@@ -1125,6 +1154,32 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
         thread.join(max(0, deadline - time.monotonic()))
     with lock:
         completed = dict(results)
+
     if completed:
-        save_quota_cache({"version": CACHE_VERSION, "fetched_at": now, "providers": completed})
-    return completed
+        old_providers = (cached.get("providers") if cached else {}) or {}
+        if not isinstance(old_providers, dict):
+            old_providers = {}
+        merged = dict(old_providers)
+        merged.update(completed)
+        old_pfa = cached.get("provider_fetched_at") if cached else None
+        provider_fetched_at: Dict[str, float] = dict(old_pfa) if isinstance(old_pfa, dict) else {}
+        old_fetched_at = cached.get("fetched_at") if cached else None
+        for agent in completed:
+            provider_fetched_at[agent] = now
+        for agent in merged:
+            if agent not in provider_fetched_at:
+                if isinstance(old_fetched_at, (int, float)):
+                    provider_fetched_at[agent] = float(old_fetched_at)
+        save_quota_cache({
+            "version": CACHE_VERSION,
+            "fetched_at": now,
+            "providers": merged,
+            "provider_fetched_at": provider_fetched_at,
+        })
+        return completed
+
+    if cached:
+        providers = cached.get("providers")
+        if isinstance(providers, dict):
+            return {k: v for k, v in providers.items() if isinstance(v, dict)}
+    return {}

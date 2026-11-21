@@ -25,11 +25,84 @@ class QuotaRobustnessTest(unittest.TestCase):
         self.assertEqual(result['extra_windows'][0]['resets_at'], '1970-01-08T00:01:00Z')
 
     def test_stale_cache_is_not_returned_or_refreshed_by_other_provider(self):
-        cache = {'fetched_at': 0, 'providers': {'codex': {'weekly_resets_at': 'old'}}}
+        cache = {
+            'fetched_at': 0,
+            'provider_fetched_at': {'codex': 0},
+            'providers': {'codex': {'weekly_resets_at': 'old'}},
+        }
         with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), mock.patch.object(quota_fetch, 'load_quota_cache', return_value=cache), mock.patch.object(quota_fetch, 'save_quota_cache') as save, mock.patch.dict(quota_fetch.FETCHERS, {'grok': lambda now: {'weekly_resets_at': 'new'}}, clear=True):
             result = quota_fetch.fetch_all_quotas(now=1000)
         self.assertEqual(set(result), {'grok'})
-        self.assertEqual(set(save.call_args.args[0]['providers']), {'grok'})
+        saved = save.call_args.args[0]
+        self.assertEqual(set(saved['providers']), {'grok', 'codex'})
+        self.assertEqual(saved['provider_fetched_at']['codex'], 0)
+        self.assertEqual(saved['provider_fetched_at']['grok'], 1000)
+
+    def test_antigravity_success_records_account_quota_via_orchestrator(self):
+        ag_result = {'weekly_resets_at': 'new', 'weekly_used_percent': 1.0}
+        custom_ag = lambda now: ag_result
+        with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), \
+                mock.patch.object(quota_fetch, 'load_quota_cache', return_value=None), \
+                mock.patch.object(quota_fetch, 'save_quota_cache'), \
+                mock.patch.object(quota_fetch, 'record_antigravity_account_quota') as record, \
+                mock.patch.dict(quota_fetch.FETCHERS, {'antigravity': custom_ag}, clear=True):
+            result = quota_fetch.fetch_all_quotas(now=2000)
+        self.assertEqual(result, {'antigravity': ag_result})
+        record.assert_called_once_with(ag_result, now=2000)
+
+    def test_all_fetchers_fail_returns_cached_providers(self):
+        cache = {
+            'fetched_at': 500,
+            'providers': {'codex': {'weekly_resets_at': 'cached'}},
+        }
+        with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), \
+                mock.patch.object(quota_fetch, 'load_quota_cache', return_value=cache), \
+                mock.patch.object(quota_fetch, 'save_quota_cache') as save, \
+                mock.patch.dict(quota_fetch.FETCHERS, {'codex': lambda now: None}, clear=True):
+            result = quota_fetch.fetch_all_quotas(now=2000)
+        self.assertEqual(result, {'codex': {'weekly_resets_at': 'cached'}})
+        save.assert_not_called()
+
+    def test_partial_failure_keeps_stale_provider_timestamp_on_disk(self):
+        now_fetch = 1100.0
+        codex_ts = now_fetch - 400.0
+        cache = {
+            'fetched_at': codex_ts,
+            'provider_fetched_at': {'codex': codex_ts},
+            'providers': {'codex': {'weekly_resets_at': 'old-codex', 'marker': 'codex-old'}},
+        }
+        claude_live = {'weekly_resets_at': 'new-claude', 'marker': 'claude-new'}
+
+        def fail_codex(now):
+            return None
+
+        def ok_claude(now):
+            return claude_live
+
+        with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), \
+                mock.patch.object(quota_fetch, 'load_quota_cache', return_value=cache), \
+                mock.patch.object(quota_fetch, 'save_quota_cache') as save, \
+                mock.patch.dict(quota_fetch.FETCHERS, {'codex': fail_codex, 'claude': ok_claude}, clear=True):
+            result = quota_fetch.fetch_all_quotas(now=now_fetch)
+        self.assertEqual(set(result), {'claude'})
+        saved = save.call_args.args[0]
+        self.assertEqual(saved['providers']['codex']['marker'], 'codex-old')
+        self.assertEqual(saved['providers']['claude'], claude_live)
+        self.assertEqual(saved['provider_fetched_at']['codex'], codex_ts)
+        self.assertEqual(saved['provider_fetched_at']['claude'], now_fetch)
+
+        fresh_cache = {
+            'fetched_at': now_fetch,
+            'provider_fetched_at': saved['provider_fetched_at'],
+            'providers': saved['providers'],
+        }
+        with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), \
+                mock.patch.object(quota_fetch, 'load_quota_cache', return_value=fresh_cache), \
+                mock.patch.object(quota_fetch, 'save_quota_cache'), \
+                mock.patch.dict(quota_fetch.FETCHERS, {'codex': fail_codex, 'claude': ok_claude}, clear=True):
+            early = quota_fetch.fetch_all_quotas(now=now_fetch + 30)
+        self.assertEqual(set(early), {'claude'})
+        self.assertNotIn('codex', early)
 
     def test_fetches_run_concurrently_with_bounded_wait(self):
         def slow(now):
