@@ -100,6 +100,12 @@ public enum AppDefaults {
         arguments.contains { $0 == snapshotArgument || $0.hasPrefix("\(snapshotArgument)=") }
     }
 
+    public static func isRenderingMode(arguments: [String] = CommandLine.arguments) -> Bool {
+        isSnapshotMode(arguments: arguments) || arguments.contains {
+            $0 == shareImageArgument || $0.hasPrefix("\(shareImageArgument)=")
+        }
+    }
+
     /// 便捷重载（测试时可直接调用 AppDefaults.store(arguments:environment:)）。
     public static func store(
         arguments: [String],
