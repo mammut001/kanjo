@@ -51,7 +51,7 @@ class QwenSourceTest(unittest.TestCase):
             with open(usage, "w") as handle:
                 for record in ([], {"sessionId": []}, {"sessionId": ""}, {"sessionId": "valid"}):
                     handle.write(json.dumps(record) + "\n")
-            self.assertEqual(qwen.discover([tmp]), [(usage, None)])
+            self.assertEqual(qwen.discover([tmp]), [(usage, None), (usage + "::valid", None)])
 
     def test_dedupe_keys_stable(self):
         discovered = qwen.discover([FIXTURE_QWEN])
