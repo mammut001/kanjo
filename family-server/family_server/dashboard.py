@@ -2,6 +2,7 @@
 
 import calendar
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 import html
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -353,6 +354,16 @@ def format_os(os_name: str) -> str:
     return _OS_LABELS.get(os_name, os_name)
 
 
+@lru_cache(maxsize=24)
+def _cached_dashboard_merge(report_rows: tuple, member_names: tuple) -> Optional[dict]:
+    """Cache private, read-only dashboard aggregates by their complete inputs.
+
+    Including row contents and names makes updates, deletes, and database replacement
+    invalidate naturally, without relying on process-local write notifications.
+    """
+    return merge_member_reports([dict(row) for row in report_rows], dict(member_names))
+
+
 def generate_dashboard_html(
     db_path: str,
     now: Optional[datetime] = None,
@@ -436,7 +447,10 @@ def generate_dashboard_html(
             "legacy_excluded_count": 0,
         }
 
-        merged = merge_member_reports(reports, member_names=member_names)
+        merged = _cached_dashboard_merge(
+            tuple(tuple(report.items()) for report in reports),
+            tuple(sorted(member_names.items())),
+        )
         if merged is not None:
             meta = merged["_meta"]
             member_info["has_report"] = True

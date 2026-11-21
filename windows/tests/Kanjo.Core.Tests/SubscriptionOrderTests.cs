@@ -87,4 +87,12 @@ public sealed class SubscriptionOrderTests : KanjoTestCase
         Assert.Empty(SubscriptionOrder.Visible(new List<SubscriptionRow>(), false, 3));
         Assert.Empty(SubscriptionOrder.Visible(new List<SubscriptionRow>(), true, 3));
     }
+
+    [Fact]
+    public void TestShowsAllRowsWhenAutoExpandedEvenIfUserCollapsed()
+    {
+        Assert.True(SubscriptionOrder.ShowsAllRows(userExpanded: false, autoExpanded: true));
+        Assert.False(SubscriptionOrder.ShowsAllRows(userExpanded: false, autoExpanded: false));
+        Assert.True(SubscriptionOrder.ShowsAllRows(userExpanded: true, autoExpanded: false));
+    }
 }

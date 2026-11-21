@@ -135,6 +135,26 @@ public static class ConfigCommand
 
     public static IReadOnlyList<string> PlansArguments() => ["config", "plans", "--json"];
 
+    private const string AllowedEmailChars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-@";
+
+    public static IReadOnlyList<string> AntigravityAccountPlanArguments(string email, string? plan)
+    {
+        // CLI 规范：邮箱 key 一律小写（与 config.py `_validate_agy_email` 一致）。
+        var trimmedEmail = email.Trim().ToLowerInvariant();
+        if (trimmedEmail.Length == 0 || !trimmedEmail.Contains('@') || trimmedEmail.Contains("..", StringComparison.Ordinal) ||
+            trimmedEmail.StartsWith('.') || trimmedEmail.EndsWith('.') ||
+            !trimmedEmail.All(c => AllowedEmailChars.Contains(c, StringComparison.Ordinal)))
+        {
+            throw DataSourceError.LaunchFailed($"Invalid Antigravity account email: {email}");
+        }
+        var key = $"antigravity_accounts.{trimmedEmail}.plan";
+        var trimmedPlan = plan?.Trim();
+        return string.IsNullOrEmpty(trimmedPlan)
+            ? ["config", "unset", key]
+            : ["config", "set", key, trimmedPlan];
+    }
+
     /// <summary>和 DiskCommand 一样只替换最后一个 export，保留前面的前缀。</summary>
     public static string Command(string cliCommand, IReadOnlyList<string> arguments)
     {

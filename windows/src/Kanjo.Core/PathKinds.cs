@@ -248,4 +248,8 @@ public static class SubscriptionOrder
     /// <summary>折叠/展开辅助函数：未展开时最多返回 limit 行（默认 3 行）；展开时返回全部。</summary>
     public static List<T> Visible<T>(IReadOnlyList<T> items, bool expanded, int limit = 3) =>
         expanded || items.Count <= limit ? items.ToList() : items.Take(Math.Max(0, limit)).ToList();
+
+    /// <summary>用户点开或因额度钉选自动展开时都算「显示全部」。</summary>
+    public static bool ShowsAllRows(bool userExpanded, bool autoExpanded) =>
+        userExpanded || autoExpanded;
 }

@@ -301,8 +301,12 @@ public sealed class OverviewPage : ScrollPage
         var ordered = SubscriptionOrder.Apply(order, rows);
 
         var pinnedAgent = RouteAnchors.QuotaAgent(_anchor);
-        var autoExpand = pinnedAgent is not null && ordered.Any(r => r.Agent == pinnedAgent);
-        var expanded = _services.SubscriptionCardExpanded || autoExpand;
+        var effectivePinned = pinnedAgent is not null &&
+                              _services.DismissedQuotaRouteAgent != pinnedAgent
+            ? pinnedAgent
+            : null;
+        var autoExpand = effectivePinned is not null && ordered.Any(r => r.Agent == effectivePinned);
+        var expanded = SubscriptionOrder.ShowsAllRows(_services.SubscriptionCardExpanded, autoExpand);
         var visible = SubscriptionOrder.Visible(ordered, expanded, limit: 3);
 
         var amountWidth = 1d;
@@ -337,7 +341,17 @@ public sealed class OverviewPage : ScrollPage
                 : L10n.TrL(null, "overview.subscription_value.show_more", ordered.Count - 3);
             var toggle = Ui.LinkButton(label, () =>
             {
-                _services.SubscriptionCardExpanded = !_services.SubscriptionCardExpanded;
+                if (autoExpand && !_services.SubscriptionCardExpanded)
+                {
+                    // 钉选自动展开时点「收起」：记住当前钉选 agent，否则 Rebuild 后又会撑开。
+                    _services.DismissedQuotaRouteAgent = pinnedAgent;
+                    _services.SubscriptionCardExpanded = false;
+                }
+                else
+                {
+                    _services.SubscriptionCardExpanded = !_services.SubscriptionCardExpanded;
+                    if (_services.SubscriptionCardExpanded) _services.DismissedQuotaRouteAgent = null;
+                }
                 _services.NotifyChanged();
             });
             body.Children.Add(toggle.WithMargin(Metrics.RowInset, 8, Metrics.RowInset, 8));
