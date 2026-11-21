@@ -870,6 +870,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    if winsupport.is_windows() and "PYTHONIOENCODING" not in os.environ:
+        for stream, errors in ((sys.stdout, "strict"), (sys.stderr, "replace")):
+            encoding = getattr(stream, "encoding", None)
+            if encoding and encoding.lower().replace("_", "-") not in ("utf-8", "utf8"):
+                reconfigure = getattr(stream, "reconfigure", None)
+                if reconfigure:
+                    reconfigure(encoding="utf-8", errors=errors)
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
