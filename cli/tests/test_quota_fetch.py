@@ -157,6 +157,17 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertEqual(res["five_hour_window_hours"], 5)
         self.assertEqual(res["weekly_window_hours"], 168)
 
+    def test_claude_small_utilization_is_percent(self):
+        data = {
+            "five_hour": {"utilization": 1.0, "resets_at": "2024-10-27T10:00:00Z"},
+            "seven_day": {"utilization": 0.5, "resets_at": "2024-10-31T10:00:00Z"},
+        }
+        for parser in (quota_fetch.parse_claude_usage, quota_claude_cache._parse_usage_payload):
+            with self.subTest(parser=parser.__module__):
+                result = parser(data, now=1730000000.0)
+                self.assertEqual(result["five_hour_used_percent"], 1.0)
+                self.assertEqual(result["weekly_used_percent"], 0.5)
+
     def test_parse_grok_usage_unified_billing_omitted_zero(self):
         now = 1730000000.0
         # Protobuf JSON omits creditUsagePercent when 0.0

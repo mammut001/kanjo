@@ -47,8 +47,6 @@ def _percentage(value) -> Optional[float]:
     val = float(value)
     if not math.isfinite(val) or val < 0:
         return None
-    if 0 < val <= 1.0:
-        val = val * 100.0
     return _pct(val)
 
 
