@@ -13,9 +13,9 @@ try:
 except ImportError:  # Windows has no _curses.
     curses = None
 
-from kanjo.tui.model import TimeRange, compute_30d_sparkline, compute_8w_strip, filter_report
-from kanjo.tui.render import TUIState
-from kanjo.tui.term import ViewModelCache, run_curses_tui
+from kanjo.tui.model import AGENT_COLORS, TimeRange, compute_30d_sparkline, compute_8w_strip, filter_report
+from kanjo.tui.render import SELECTED_ROW_BG, Style, TUIState
+from kanjo.tui.term import ColorManager, ViewModelCache, run_curses_tui
 
 from tests.test_tui import FakeStdscr, screen_frames
 
@@ -174,6 +174,45 @@ class HeatLowestLevelTest(unittest.TestCase):
         self.assertEqual(peak, 100.0)
         self.assertNotEqual(spark[-2], " ")
         self.assertEqual(spark[-3], " ")
+
+
+def low_colour_manager(colors: int) -> "ColorManager":
+    cm = ColorManager(no_color=True)
+    cm.no_color = False
+    cm.can_color = True
+    cm.colors_256 = colors >= 256
+    cm.colors_16 = colors >= 16
+    return cm
+
+
+@unittest.skipIf(curses is None, "requires curses")
+class LowColourTerminalTest(unittest.TestCase):
+    def test_gray_is_not_black_on_8_colours(self):
+        cm = low_colour_manager(8)
+        self.assertNotEqual(cm.color_to_curses("gray"), cm.color_to_curses("black"))
+
+    def test_gray_is_bright_black_on_16_colours(self):
+        self.assertEqual(low_colour_manager(16).color_to_curses("gray"), 8)
+
+    def test_agent_colours_never_black_on_8_colours(self):
+        cm = low_colour_manager(8)
+        for agent, rgb in AGENT_COLORS.items():
+            self.assertNotEqual(cm.color_to_curses(rgb), curses.COLOR_BLACK, msg=agent)
+
+    def test_selected_row_visible_on_8_colours(self):
+        cm = low_colour_manager(8)
+        with mock.patch("kanjo.tui.term.curses.init_pair"):
+            pair, extra = cm.pair_and_attrs(Style(bold=True, fg="white", bg=SELECTED_ROW_BG))
+        self.assertTrue(extra & curses.A_REVERSE)
+        fg, bg = next(k for k, v in cm.pair_cache.items() if v == pair)
+        self.assertEqual(bg, -1)
+
+    def test_selected_row_uses_gray_bg_on_256_colours(self):
+        cm = low_colour_manager(256)
+        with mock.patch("kanjo.tui.term.curses.init_pair"):
+            pair, extra = cm.pair_and_attrs(Style(bold=True, fg="white", bg=SELECTED_ROW_BG))
+        self.assertEqual(extra, 0)
+        self.assertIn((curses.COLOR_WHITE, 8), cm.pair_cache)
 
 
 if __name__ == "__main__":

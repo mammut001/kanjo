@@ -192,6 +192,7 @@ class ColorManager:
         self.no_color = no_color
         self.can_color = False
         self.colors_256 = False
+        self.colors_16 = False
         self.pair_cache: Dict[Tuple[int, int], int] = {}
         self.next_pair = 1
 
@@ -202,6 +203,7 @@ class ColorManager:
                     curses.use_default_colors()
                     self.can_color = True
                     self.colors_256 = (getattr(curses, "COLORS", 0) >= 256)
+                    self.colors_16 = (getattr(curses, "COLORS", 0) >= 16)
             except Exception:
                 self.can_color = False
 
@@ -218,6 +220,11 @@ class ColorManager:
             gg = 1 if g > 128 else 0
             bg_b = 1 if b > 128 else 0
             code = (rg << 0) | (gg << 1) | (bg_b << 2)
+            if code == 0 and max(r, g, b) > 0:
+                # Dark colour: keep its dominant channels instead of black,
+                # which is invisible on a dark terminal.
+                top = max(r, g, b) * 0.75
+                code = (int(r >= top) << 0) | (int(g >= top) << 1) | (int(b >= top) << 2)
             # Map RGB bitmask to curses colors:
             # 0: black, 1: red, 2: green, 3: yellow, 4: blue, 5: magenta, 6: cyan, 7: white
             mapping = [
@@ -236,10 +243,24 @@ class ColorManager:
             if c_low in ("magenta",): return curses.COLOR_MAGENTA
             if c_low in ("cyan",): return curses.COLOR_CYAN
             if c_low in ("white",): return curses.COLOR_WHITE
-            if c_low in ("gray", "grey"): return 8 if self.colors_256 else curses.COLOR_BLACK
+            if c_low in ("gray", "grey"):
+                # Colour 8 (bright black) exists from 16 colours up; on an
+                # 8-colour terminal black would vanish, so use white.
+                return 8 if (self.colors_256 or self.colors_16) else curses.COLOR_WHITE
         if isinstance(c, int):
             return c
         return -1
+
+    def pair_and_attrs(self, style: Style) -> Tuple[int, int]:
+        """Colour pair plus extra attributes for ``style``.
+
+        Without a usable grey (fewer than 16 colours) a grey background, the
+        selected-row highlight, is drawn in reverse video instead.
+        """
+        if (self.can_color and not self.no_color and not (self.colors_256 or self.colors_16)
+                and isinstance(style.bg, str) and style.bg.lower() in ("gray", "grey")):
+            return self.get_pair(Style(fg=style.fg)), curses.A_REVERSE
+        return self.get_pair(style), 0
 
     def get_pair(self, style: Style) -> int:
         if not self.can_color or self.no_color:
@@ -1008,7 +1029,8 @@ def run_curses_tui(
                             attrs |= curses.A_REVERSE
                         if style.underline:
                             attrs |= curses.A_UNDERLINE
-                        pair = color_mgr.get_pair(style)
+                        pair, extra_attrs = color_mgr.pair_and_attrs(style)
+                        attrs |= extra_attrs
                         if pair > 0:
                             attrs |= curses.color_pair(pair)
 
