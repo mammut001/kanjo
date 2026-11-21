@@ -50,7 +50,9 @@ public static class ProcessRunner
             foreach (var (k, v) in extraEnvironment) psi.Environment[k] = v;
         }
 
-        if (OperatingSystem.IsWindows()) SetLocalTimeZone(psi.Environment, TimeZoneInfo.Local);
+        // TZ is deliberately left alone: the Windows C runtime reads TZ only in POSIX form and
+        // misreads an IANA name as UTC with US DST rules, shifting the CLI's local days. The CLI
+        // finds the IANA zone itself from the registry.
 
         cancellationToken.ThrowIfCancellationRequested();
         Process process;
@@ -88,16 +90,6 @@ public static class ProcessRunner
             cancellationToken.ThrowIfCancellationRequested();
             return new CliResult(deadline.IsCancellationRequested ? -1 : process.ExitCode,
                 SafeResult(stdoutTask), SafeResult(stderrTask), deadline.IsCancellationRequested, fileName);
-        }
-    }
-
-    internal static void SetLocalTimeZone(IDictionary<string, string?> environment, TimeZoneInfo localZone)
-    {
-        if (environment.ContainsKey("TZ")) return;
-        var id = localZone.Id;
-        if (id.Contains('/') || TimeZoneInfo.TryConvertWindowsIdToIanaId(id, out id))
-        {
-            environment["TZ"] = id;
         }
     }
 

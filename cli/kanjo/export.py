@@ -1244,8 +1244,8 @@ def private_quota_windows(windows: dict, family: bool = False) -> dict:
     extra_keys = {"id", "title", "label", "used_percent", "resets_at", "window_hours"}
     result = {}
     for agent, entry in windows.items():
-        if not isinstance(entry, dict):
-            continue
+        if not quota.has_weekly_reset(entry):
+            continue  # CONTRACT.md §2: never ship an entry without weekly_resets_at
         clean = {k: v for k, v in entry.items() if k in keys}
         if isinstance(entry.get("extra_windows"), list):
             clean["extra_windows"] = [
@@ -1439,6 +1439,14 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     return h.hexdigest()
 
 
+def _drop_unreset_quota_windows(doc: dict) -> None:
+    """A cached doc written by an older build may hold an entry without weekly_resets_at."""
+    windows = doc.get("quota_windows")
+    if isinstance(windows, dict):
+        doc["quota_windows"] = {agent: entry for agent, entry in windows.items()
+                                if quota.has_weekly_reset(entry)}
+
+
 def load_fast_export(fingerprint: Optional[str], directory: Optional[str] = None,
                      now: Optional[float] = None, max_age: float = 1800.0,
                      ignore_fingerprint: bool = False) -> Optional[dict]:
@@ -1459,6 +1467,7 @@ def load_fast_export(fingerprint: Optional[str], directory: Optional[str] = None
             return None
         doc = payload.get("doc")
         if isinstance(doc, dict):
+            _drop_unreset_quota_windows(doc)
             return doc
     except (OSError, ValueError):
         pass
@@ -2008,6 +2017,7 @@ def load_fast_public_summary(fingerprint: str, directory: Optional[str] = None,
             return None
         doc = payload.get("doc")
         if isinstance(doc, dict):
+            _drop_unreset_quota_windows(doc)
             return doc
     except (OSError, ValueError):
         pass
@@ -2171,6 +2181,7 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
             if device is not None and doc.get("device") != device:
                 return None
             doc["member_label"] = member_label if member_label else None
+            _drop_unreset_quota_windows(doc)
             return doc
     except (OSError, ValueError):
         pass

@@ -75,27 +75,30 @@ public sealed class CliRunnerTests : KanjoTestCase
         return dir;
     }
 
-    [Theory]
-    [InlineData("Eastern Standard Time", "America/New_York")]
-    [InlineData("Europe/Paris", "Europe/Paris")]
-    [InlineData("Fictional Standard Time", null)]
-    public void LocalTimeZoneIsConvertedWhenMissing(string id, string? expected)
+    [Fact]
+    public void TestChildTimeZoneIsNotSetByTheApp()
     {
-        var zone = TimeZoneInfo.CreateCustomTimeZone(id, TimeSpan.Zero, id, id);
-        var environment = new Dictionary<string, string?>();
-        ProcessRunner.SetLocalTimeZone(environment, zone);
-        Assert.Equal(expected, environment.GetValueOrDefault("TZ"));
-    }
-
-    [Theory]
-    [InlineData("Asia/Tokyo")]
-    [InlineData("")]
-    public void ExistingTimeZoneIsPreserved(string existing)
-    {
-        var zone = TimeZoneInfo.CreateCustomTimeZone("Eastern Standard Time", TimeSpan.Zero, "test", "test");
-        var environment = new Dictionary<string, string?> { ["TZ"] = existing };
-        ProcessRunner.SetLocalTimeZone(environment, zone);
-        Assert.Equal(existing, environment["TZ"]);
+        // The Windows C runtime misreads an IANA TZ (e.g. "Asia/Shanghai") as UTC with US DST
+        // rules, so the app must pass the parent's TZ through unchanged (usually: unset).
+        var dir = TempDir();
+        var cli = FakeCliDir();
+        string python;
+        if (OperatingSystem.IsWindows())
+        {
+            python = Path.Combine(dir, "python.cmd");
+            File.WriteAllText(python, "@echo off\r\nif defined TZ (echo [%TZ%]) else (echo [])\r\n");
+        }
+        else
+        {
+            python = Path.Combine(dir, "python");
+            File.WriteAllText(python, "#!/bin/sh\necho \"[${TZ-}]\"\n");
+            File.SetUnixFileMode(python,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        var runner = new CliRunner { PythonExecutable = python, WorkingDirectory = cli };
+        var result = runner.Run(["export"]);
+        var inherited = Environment.GetEnvironmentVariable("TZ") ?? "";
+        Assert.Equal($"[{inherited}]", result.Stdout.Trim());
     }
 
     [Fact]
