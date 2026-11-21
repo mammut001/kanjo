@@ -116,6 +116,21 @@ def _migrate_entry(entry: dict) -> None:
         entry["source_paths"] = paths_of(entry)
 
 
+def _owner_only(path: str, mode: int) -> None:
+    """Drop group and other access (the ledger holds prompt titles and paths)."""
+    try:
+        current = os.stat(path).st_mode & 0o777
+        if current & 0o077:
+            os.chmod(path, mode)
+    except OSError:
+        pass
+
+
+def _private(path: str, flags: int) -> int:
+    """``open`` opener: new files get mode 0600."""
+    return os.open(path, flags, 0o600)
+
+
 class ScanScope:
     """What one scan discovered, per agent.
 
@@ -636,7 +651,10 @@ class Ledger:
         """Atomic replace, or append to journal when change is proportional."""
         if not self.dirty:
             return
-        os.makedirs(self.dir, exist_ok=True)
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        _owner_only(self.dir, 0o700)
+        for path in (self.path, self.journal_path, self.meta_path):
+            _owner_only(path, 0o600)
         stamp = iso_utc(time.time())
 
         # Proportional save: append to journal if under threshold and ledger.json exists
@@ -649,7 +667,7 @@ class Ledger:
                         with open(self.journal_path, "rb") as handle:
                             handle.seek(-1, os.SEEK_END)
                             needs_newline = handle.read(1) != b"\n"
-                    with open(self.journal_path, "a", encoding="utf-8") as handle:
+                    with open(self.journal_path, "a", encoding="utf-8", opener=_private) as handle:
                         if needs_newline:
                             handle.write("\n")
                         for key in sorted(self.dirty_keys):
@@ -669,7 +687,7 @@ class Ledger:
         tmp = "%s.%d.%s.tmp" % (self.path, os.getpid(), uuid.uuid4().hex[:8])
         try:
             data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-            with open(tmp, "w", encoding="utf-8") as handle:
+            with open(tmp, "w", encoding="utf-8", opener=_private) as handle:
                 handle.write(data)
                 handle.write("\n")
             del data
@@ -723,7 +741,7 @@ class Ledger:
                 "orphans": orphans,
             }
             tmp = "%s.%d.part" % (self.meta_path, os.getpid())
-            with open(tmp, "w", encoding="utf-8") as handle:
+            with open(tmp, "w", encoding="utf-8", opener=_private) as handle:
                 handle.write(json.dumps(meta, ensure_ascii=False, separators=(",", ":")))
             os.replace(tmp, self.meta_path)
         except OSError:
