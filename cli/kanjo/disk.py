@@ -1189,7 +1189,7 @@ def _worktree_dirty(path: str) -> bool:
             return _WORKTREE_DIRTY_CACHE[key]
     try:
         proc = subprocess.run(
-            ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path, "status", "--porcelain", "--ignored"],
+            ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path, "status", "--porcelain"],
             capture_output=True, text=True, encoding="utf-8", timeout=60, env=_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -1419,6 +1419,7 @@ _DEFAULT_REFS = (
     "refs/heads/main",
     "refs/heads/master",
 )
+_PATHSPEC_CHUNK = 200
 
 
 def _git(path: str, *args: str, timeout: int = 60) -> Optional[subprocess.CompletedProcess]:
@@ -1476,9 +1477,10 @@ def _default_ref(path: str) -> Tuple[Optional[str], Optional[str]]:
 def _merge_status(path: str) -> Tuple[Optional[bool], Optional[str]]:
     """``(merged, merged_into)`` for the worktree at ``path``, offline.
 
-    Merged means HEAD is an ancestor of the default branch. Matching file content
-    alone cannot establish that a squash merge incorporated the commits.
-    ``merged`` is ``None`` when git cannot tell, for example without a default branch.
+    Merged means HEAD is an ancestor of the default branch, or the branch was
+    squash-merged: every file it changed since the merge base has the same content
+    (or is absent on both sides) at the default branch tip. ``merged`` is ``None``
+    when git cannot tell, for example without a default branch.
     """
     head = _git_text(path, "rev-parse", "--verify", "-q", "HEAD")
     head = head.strip() if head else ""
@@ -1503,8 +1505,25 @@ def _is_merged(path: str, head: str, target: str) -> Optional[bool]:
         return None
     if proc.returncode == 0:
         return True
-    # Identical trees do not prove that the commits were incorporated.
-    return False
+    base = _git_text(path, "merge-base", head, target)
+    if base is None or not base.strip():
+        return False  # no common history
+    names = _git_text(path, "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+                      "--name-only", "-z", base.strip(), head)
+    if names is None:
+        return None
+    files = [name for name in names.split("\0") if name]
+    if not files:
+        return False  # commits that cancel out: nothing landed, so nothing to call merged
+    for start in range(0, len(files), _PATHSPEC_CHUNK):
+        chunk = files[start:start + _PATHSPEC_CHUNK]
+        proc = _git(path, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--quiet",
+                    head, target, "--", *chunk)
+        if proc is None or proc.returncode not in (0, 1):
+            return None
+        if proc.returncode == 1:
+            return False
+    return True
 
 
 def _start_cwd_probe() -> Optional[subprocess.Popen]:
@@ -1655,7 +1674,7 @@ def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
     if days is not None and _has_newer_file(path, now, days):
         return [], 0, "newer_than_cutoff", None
     # Recheck immediately before removal; the report's cached status can be stale.
-    status = _git(path, "status", "--porcelain", "--ignored")
+    status = _git(path, "status", "--porcelain")
     if status is None or status.returncode != 0 or status.stdout.strip():
         return [], 0, "uncommitted_changes", None
     head = _git_text(path, "rev-parse", "--verify", "-q", "HEAD")
