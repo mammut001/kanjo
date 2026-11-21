@@ -92,12 +92,13 @@ class ViewMode(str, Enum):
     ACCOUNTS = "accounts"
 
 
+# Second element is an i18n key (``view.*``); translate with ``t(key, lang)`` at display time.
 VIEW_MODES: List[Tuple[ViewMode, str]] = [
-    (ViewMode.PROJECTS, "Projects"),
-    (ViewMode.MODELS, "Models"),
-    (ViewMode.AGENTS, "Agents"),
-    (ViewMode.DAYS, "Days"),
-    (ViewMode.ACCOUNTS, "Accounts"),
+    (ViewMode.PROJECTS, "view.projects"),
+    (ViewMode.MODELS, "view.models"),
+    (ViewMode.AGENTS, "view.agents"),
+    (ViewMode.DAYS, "view.days"),
+    (ViewMode.ACCOUNTS, "view.accounts"),
 ]
 
 
