@@ -28,6 +28,49 @@ class QuotaFetchTest(unittest.TestCase):
         self.env.stop()
         shutil.rmtree(self.tmp)
 
+    def test_antigravity_cli_fallback_reads_both_gemini_windows(self):
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp()
+        output = (
+            "Gemini Models\tWeekly Limit Remaining\t75%\t2026-01-07T00:00:00Z\n"
+            "Gemini Models\tFive Hour Limit Remaining\t40%\t2026-01-01T04:00:00Z\n"
+            "Claude and GPT models\tWeekly Limit Remaining\t99%\t2026-01-07T02:00:00Z\n"
+        )
+        with mock.patch.dict(os.environ, {"KANJO_NO_NETWORK": "0", "KANJO_FAMILY_TOKEN": "test-token"}), \
+                mock.patch.object(quota_fetch, "_fetch_antigravity_language_server_quota", return_value=None), \
+                mock.patch.object(quota_fetch, "_find_agy_executable", return_value="/usr/local/bin/agy"), \
+                mock.patch.object(quota_fetch.subprocess, "run", return_value=mock.Mock(stdout=output)) as run:
+            result = quota_fetch.fetch_antigravity_quota(now)
+
+        self.assertEqual(run.call_args.args[0], ["/usr/local/bin/agy", "-p", "/usage", "--output-format", "text"])
+        self.assertNotIn("KANJO_FAMILY_TOKEN", run.call_args.kwargs["env"])
+        self.assertEqual(result["weekly_used_percent"], 25.0)
+        self.assertEqual(result["weekly_resets_at"], "2026-01-07T00:00:00Z")
+        self.assertEqual(result["five_hour_used_percent"], 60.0)
+        self.assertEqual(result["five_hour_resets_at"], "2026-01-01T04:00:00Z")
+        self.assertNotIn("extra_windows", result)
+
+    def test_antigravity_cli_respects_offline_and_language_server_priority(self):
+        now = 1730000000.0
+        result = {"weekly_used_percent": 20.0}
+        with mock.patch.object(quota_fetch, "_fetch_antigravity_language_server_quota", return_value=result) as local, \
+                mock.patch.object(quota_fetch, "_fetch_antigravity_cli_quota") as cli:
+            self.assertIsNone(quota_fetch.fetch_antigravity_quota(now))
+            local.assert_not_called()
+            with mock.patch.dict(os.environ, {"KANJO_NO_NETWORK": "0"}):
+                self.assertIs(quota_fetch.fetch_antigravity_quota(now), result)
+            cli.assert_not_called()
+
+    def test_antigravity_cli_usage_requires_weekly_and_ignores_expired_five_hour(self):
+        now = datetime(2026, 1, 1, 5, tzinfo=timezone.utc).timestamp()
+        five_hour = "Gemini Models\tFive Hour Limit Remaining\t40%\t2026-01-01T04:00:00Z\n"
+        weekly = "Gemini Models\tWeekly Limit Remaining\t75%\t2026-01-07T00:00:00Z\n"
+        self.assertIsNone(quota_fetch._parse_antigravity_cli_usage(five_hour, now))
+        self.assertIsNone(quota_fetch._parse_antigravity_cli_usage(weekly.replace("75%", "101%"), now))
+        result = quota_fetch._parse_antigravity_cli_usage(weekly + five_hour, now)
+        self.assertEqual(result["weekly_used_percent"], 25.0)
+        self.assertIsNone(result["five_hour_used_percent"])
+        self.assertIsNone(result["five_hour_resets_at"])
+
     def test_parse_antigravity_summary(self):
         now = 1730000000.0
         data = {

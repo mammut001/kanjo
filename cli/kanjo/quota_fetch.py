@@ -4,7 +4,8 @@ Fetches quota directly from providers using user's local credentials.
 Security rules:
 1. NEVER log, print, or write tokens/secrets to disk.
 2. Credentials kept in memory only; sent only to provider's HTTPS API
-   (or 127.0.0.1 for Antigravity's local language server).
+   (or 127.0.0.1 for Antigravity's local language server). The Antigravity CLI
+   fallback uses its own sign-in and does not receive Kanjo's report token.
 3. 10s timeout, never raise (return None on any error).
 4. Results cached in ~/.local/share/kanjo/quota_cache.json with 5-minute TTL,
    storing only public window/percent/reset information (mode 0600).
@@ -381,9 +382,16 @@ def _antigravity_ports(pid: int, known_port: Optional[int]) -> List[int]:
 
 
 def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dict]:
-    """Contact local Antigravity Language Server on 127.0.0.1 for quota summary and user status."""
+    """Try the local language server first, then the signed-in Antigravity CLI."""
     if is_network_disabled():
         return None
+    result = _fetch_antigravity_language_server_quota(now, timeout)
+    if result is not None:
+        return result
+    return _fetch_antigravity_cli_quota(now, timeout)
+
+
+def _fetch_antigravity_language_server_quota(now: float, timeout: int) -> Optional[dict]:
     processes = _find_antigravity_processes()
     if not processes:
         _debug_log("antigravity", "no_credentials")
@@ -458,12 +466,88 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                 except Exception:
                     pass
 
-                result = parse_antigravity_summary(data, now=now, plan_name=plan_name, email=user_email)
+                try:
+                    result = parse_antigravity_summary(data, now=now, plan_name=plan_name, email=user_email)
+                except (TypeError, ValueError):
+                    last_error_cat = "parse_error"
+                    continue
                 if result:
                     record_antigravity_account_quota(result, now=now)
                     return result
     _debug_log("antigravity", last_error_cat)
     return None
+
+
+def _find_agy_executable() -> Optional[str]:
+    if winsupport.is_windows():
+        install_dir = os.path.join(winsupport.local_app_data() or "", "agy", "bin")
+        name = "agy.exe"
+    else:
+        install_dir = os.path.expanduser("~/.local/bin")
+        name = "agy"
+    # Desktop launches may omit the user's CLI installation directory from PATH.
+    for directory in [install_dir] + os.environ.get("PATH", "").split(os.pathsep):
+        if not os.path.isabs(directory):
+            continue
+        executable = os.path.join(directory, name)
+        if os.path.isfile(executable) and os.access(executable, os.X_OK):
+            return executable
+    return None
+
+
+def _fetch_antigravity_cli_quota(now: float, timeout: int) -> Optional[dict]:
+    executable = _find_agy_executable()
+    if executable is None:
+        return None
+    env = os.environ.copy()
+    env.pop("KANJO_FAMILY_TOKEN", None)
+    try:
+        result = subprocess.run(
+            [executable, "-p", "/usage", "--output-format", "text"],
+            cwd=os.path.expanduser("~"), stdin=subprocess.DEVNULL,
+            capture_output=True, encoding="utf-8", errors="replace", env=env,
+            timeout=timeout, check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError):
+        _debug_log("antigravity", "cli_error")
+        return None
+    return _parse_antigravity_cli_usage(result.stdout, now)
+
+
+def _parse_antigravity_cli_usage(output: str, now: float) -> Optional[dict]:
+    """Read Gemini quota rows from the headless agy /usage TSV report."""
+    weekly_label = "Weekly Limit Remaining"
+    minutes = {weekly_label: 10080, "Five Hour Limit Remaining": 300}
+    buckets = {}
+    for line in output.splitlines():
+        fields = line.split("\t")
+        if len(fields) != 4:
+            continue
+        group, label, remaining, reset = (field.strip() for field in fields)
+        if group.lower() != "gemini models" or label not in minutes or not remaining.endswith("%"):
+            continue
+        try:
+            percent = float(remaining[:-1])
+            reset_time = datetime.fromisoformat(reset.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if not 0 <= percent <= 100 or reset_time.tzinfo is None:
+            continue
+        if label in buckets:
+            return None
+        buckets[label] = {
+            "displayName": label,
+            "remainingFraction": percent / 100.0,
+            "resetTime": reset_time.timestamp(),
+            "windowMinutes": minutes[label],
+        }
+
+    if weekly_label not in buckets or buckets[weekly_label]["resetTime"] <= now:
+        return None
+    return parse_antigravity_summary({
+        "groups": [{"displayName": "Gemini Models", "buckets": list(buckets.values())}],
+    }, now=now)
 
 
 def _three_p_title(is_3p: bool, cadence: str, raw_title: str) -> str:
