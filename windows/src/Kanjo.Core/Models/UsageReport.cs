@@ -143,7 +143,7 @@ public sealed record DayCost(
         var result = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var (key, value) in J.Properties(e, path))
         {
-            result[key] = (long)J.ToInt(value, J.Child(path, key));
+            result[key] = J.ToLong(value, J.Child(path, key));
         }
         return result;
     }
@@ -239,9 +239,20 @@ public sealed record Project(
         J.StringOrNull(e, "last_active", path),
         J.List(J.Array(e, "by_agent", path), J.Child(path, "by_agent"), AgentCost.Decode),
         J.List(J.Array(e, "by_model", path), J.Child(path, "by_model"), ModelCost.Decode),
-        J.List(J.Array(e, "by_day", path), J.Child(path, "by_day"), DayCost.Decode),
+        DecodeByDay(J.Array(e, "by_day", path), J.Child(path, "by_day")),
         J.List(J.ArrayOrNull(e, "by_branch", path), J.Child(path, "by_branch"), BranchCost.Decode),
         J.List(J.ArrayOrNull(e, "sessions_detail", path), J.Child(path, "sessions_detail"), Session.Decode));
+
+    private static RoList<DayCost> DecodeByDay(JsonElement array, string path)
+    {
+        var n = array.GetArrayLength();
+        var list = new List<DayCost>(n);
+        for (var i = 0; i < n; i++)
+        {
+            list.Add(DayCost.Decode(array[i], J.Index(path, i)));
+        }
+        return new RoList<DayCost>(list);
+    }
 }
 
 public sealed record UsageReport(

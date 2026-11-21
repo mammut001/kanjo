@@ -592,6 +592,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 targets.append(entry["id"])
             else:
                 skipped.append({"id": entry["id"], "reason": "not_merged"})
+    open_paths: Optional[List[str]] = None
+    open_paths_ready = False
     seen_targets = set()
     for eid in targets:
         if eid in seen_targets:
@@ -612,14 +614,25 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         if entry["blocked"] and not partial:
             skipped.append({"id": eid, "reason": ",".join(entry["blocked"])})
             continue
+        if entry.get("kind") == "scratch":
+            if not open_paths_ready:
+                open_paths = _run_path_probe()
+                open_paths_ready = True
+            in_use = _path_in_use(entry["path"], open_paths)
+            if in_use is None or in_use:
+                skipped.append({"id": eid, "reason": "active"})
+                continue
         detail = None
+        part_moved: List[str] = []
+        part_freed = 0
+        file_skips: List[dict] = []
+        reason = None
         try:
             if entry["kind"] == "worktrees":
                 if allowed is not None and entry["path"] not in allowed:
                     skipped.append({"id": entry["id"], "reason": "changed"})
                     continue
                 part_moved, part_freed, reason, detail = _clean_worktree(entry, older_than_days, now, do_it)
-                file_skips: List[dict] = []
             else:
                 root = _norm(entry["path"])
                 nested = [p for p in all_paths if _inside(p, root)]
@@ -627,10 +640,12 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
                     recycle_bin=recycle_bin, nested=nested, allowed=allowed)
         except OSError:
-            # A partial per-file clean may already have moved files before failing.
             if do_it:
                 disk_cache.invalidate()
             skipped.append({"id": eid, "reason": "move_failed"})
+            moved.extend(part_moved)
+            freed += part_freed
+            skipped.extend(file_skips)
             continue
         if reason:
             skip = {"id": eid, "reason": reason}
@@ -638,6 +653,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 skip["detail"] = detail
             skipped.append(skip)
             skipped.extend(file_skips)
+            moved.extend(part_moved)
+            freed += part_freed
             continue
         moved.extend(part_moved)
         freed += part_freed
@@ -681,15 +698,16 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             return
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
         dirty = merge = None
+        if kind in ("scratch", "worktrees"):
+            if not probe:
+                # lsof takes a moment; it runs beside the scan and is read at the end.
+                probe.append(_start_cwd_probe())
         if kind == "worktrees":
             # Git subprocesses wait on the OS and can run independently of the
             # filesystem measurements, which use a smaller pool.
             git_pool = git_executor or executor
             dirty = git_pool.submit(_worktree_dirty, path)
             merge = git_pool.submit(_merge_status, path)
-            if not probe:
-                # lsof takes a moment; it runs beside the scan and is read at the end.
-                probe.append(_start_cwd_probe())
         parts = []
         shallow = None
         if eid == "claude:scratch":
@@ -972,11 +990,18 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             if not busy and not blocked:
                 if not cwds:
                     cwds.append(_finish_cwd_probe(probe[0] if probe else None))
-                busy = _cwd_inside(path, cwds[0])
+                probe_busy = _path_in_use(path, cwds[0] if cwds else None)
+                busy = probe_busy is None or probe_busy
             if busy:
                 blocked.append("active")
         elif kind in ("scratch", "worktrees") and measured["active"]:
             blocked.append("active")
+        elif kind == "scratch" and not measured["active"]:
+            if not cwds:
+                cwds.append(_finish_cwd_probe(probe[0] if probe else None))
+            probe_busy = _path_in_use(path, cwds[0] if cwds else None)
+            if probe_busy is None or probe_busy:
+                blocked.append("active")
         log_files = imported_files = None
         if counts is not None:
             log_files, imported_files = counts.result()
@@ -1539,9 +1564,10 @@ def _is_merged(path: str, head: str, target: str) -> Optional[bool]:
 
 
 def _start_cwd_probe() -> Optional[subprocess.Popen]:
-    """Start ``lsof`` listing every process's working directory, in the background.
+    """Start ``lsof`` listing cwd and open file paths for every process, in the background.
 
-    POSIX only and best effort: no ``lsof`` (or Windows) means no probe.
+    POSIX only and best effort: no ``lsof`` (or Windows) means no probe. One call
+    per report or per ``clean()`` replaces per-directory ``lsof +D`` scans.
     """
     if winsupport.is_windows():
         return None
@@ -1549,14 +1575,14 @@ def _start_cwd_probe() -> Optional[subprocess.Popen]:
     if not lsof:
         return None
     try:
-        return subprocess.Popen([lsof, "-n", "-w", "-d", "cwd", "-FpRn"],
+        return subprocess.Popen([lsof, "-n", "-w", "-FpRn"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except OSError:
         return None
 
 
 def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
-    """Working directories from ``_start_cwd_probe``; ``None`` when unknown."""
+    """Cwd and open-file paths from ``_start_cwd_probe``; ``None`` when unknown."""
     if proc is None:
         return None
     try:
@@ -1570,7 +1596,8 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
     # lsof exits 1 when some processes could not be inspected; the rest is still valid.
     # This scan's own git commands run inside the worktrees, so they do not count.
     me = str(os.getpid()).encode()
-    found = []
+    found: List[str] = []
+    seen = set()
     ours = False
     for line in out.splitlines():
         if line.startswith(b"p"):
@@ -1578,15 +1605,46 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
         elif line.startswith(b"R"):
             ours = ours or line[1:] == me
         elif line.startswith(b"n") and not ours:
-            found.append(line[1:].decode("utf-8", "surrogateescape"))
+            p = line[1:].decode("utf-8", "surrogateescape")
+            if p not in seen:
+                seen.add(p)
+                found.append(p)
     return found
 
 
-def _cwd_inside(path: str, cwds: Optional[List[str]]) -> bool:
-    if not cwds:
+def _lsof_bin() -> Optional[str]:
+    if winsupport.is_windows():
+        return None
+    return shutil.which("lsof") or ("/usr/sbin/lsof" if os.path.exists("/usr/sbin/lsof") else None)
+
+
+def _path_in_use(path: str, paths: Optional[List[str]]) -> Optional[bool]:
+    """True when a process cwd or open file is under ``path``; ``None`` if unknown (POSIX lsof)."""
+    if winsupport.is_windows():
         return False
-    real = os.path.realpath(path)
-    return any(cwd == real or _inside(cwd, real) for cwd in cwds)
+    if not _lsof_bin():
+        return None
+    if paths is None:
+        return None
+    if not paths:
+        return False
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        real = _norm(path)
+    for p in paths:
+        try:
+            rp = os.path.realpath(p)
+        except OSError:
+            rp = p
+        if rp == real or _inside(rp, real):
+            return True
+    return False
+
+
+def _run_path_probe() -> Optional[List[str]]:
+    """One ``lsof`` listing cwd and open files; reused for every scratch entry in ``clean()``."""
+    return _finish_cwd_probe(_start_cwd_probe())
 
 
 # ---- clean ----------------------------------------------------------------------------
@@ -1629,7 +1687,11 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
                 continue
             nbytes = measure(path, now)["bytes"]
             if do_it:
-                _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
+                try:
+                    _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
+                except OSError:
+                    changed.append({"id": entry["id"], "reason": "move_failed"})
+                    return moved, freed, "move_failed", changed
             moved.append(path)
             freed += nbytes
         return moved, freed, None, changed
@@ -1659,7 +1721,7 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     moved = []
     freed = 0
     locked = []
-    for path, nbytes, rel in movable:
+    for i, (path, nbytes, rel) in enumerate(movable):
         if allowed is not None and path not in allowed:
             file_skips.append({"id": path, "reason": "changed"})
             continue
@@ -1667,19 +1729,16 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
             try:
                 _relocate(path, _dest(entry["id"], rel))
             except OSError:
-                if not winsupport.is_windows():
-                    raise
-                # A file held open by a running agent: keep going and move the rest
-                # of the entry. POSIX gives up on the whole entry instead (the raise
-                # above reaches clean()).
                 locked.append(path)
-                continue
+                if winsupport.is_windows():
+                    continue
+                file_skips.append({"id": path, "reason": "move_failed"})
+                for rest_path, _, _ in movable[i + 1:]:
+                    file_skips.append({"id": rest_path, "reason": "move_failed"})
+                break
         moved.append(path)
         freed += nbytes
     if locked:
-        # ``skipped[].id`` is an entry id (CONTRACT.md section 10), and the POSIX
-        # branch reports this same row when a move fails, so the shape does not
-        # depend on the platform. The files themselves are not part of the JSON.
         file_skips.append({"id": entry["id"], "reason": "move_failed"})
     return moved, freed, None, file_skips
 
