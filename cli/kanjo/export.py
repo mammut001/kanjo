@@ -271,9 +271,10 @@ def dedupe(sessions: List[Session]) -> List[Session]:
         kept = []
         for m in sorted(s.messages, key=lambda m: m.ts):
             if m.key:
-                if m.key in seen:
+                key = (s.agent, s.id if s.subagent_of else None, m.key)
+                if key in seen:
                     continue
-                seen.add(m.key)
+                seen.add(key)
             kept.append(m)
         s.messages = kept
     return sessions
