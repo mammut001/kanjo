@@ -43,25 +43,15 @@ class QwenSourceTest(unittest.TestCase):
         self.assertEqual(msg.thinking, 80)
         self.assertEqual(msg.key, "qwen:qwen-sess-1:req-qwen-1")
 
-    def test_usage_only_sessions_and_runtime_metadata(self):
+    def test_malformed_usage_entries_do_not_hide_valid_session(self):
         with tempfile.TemporaryDirectory() as tmp:
-            shutil.copytree(FIXTURE_QWEN, tmp, dirs_exist_ok=True)
-            chats = os.path.join(tmp, "projects", "-Users-alice-Documents-GitHub-FocusApp", "chats")
-            os.remove(os.path.join(chats, "qwen-sess-1.jsonl"))
-            with open(os.path.join(chats, "qwen-sess-1.runtime.json"), "w") as handle:
-                json.dump({"work_dir": "/fixture/project"}, handle)
-            usage = os.path.join(tmp, "usage", "token-usage-2026-10.jsonl")
-            with open(usage) as handle:
-                record = json.loads(handle.readline())
-            record.update(id="req-2", sessionId="qwen-sess-2")
-            with open(usage, "a") as handle:
-                handle.write(json.dumps(record) + "\n")
-                handle.write("[]\n")
-            sessions = [qwen.parse_file(path, parent) for path, parent in qwen.discover([tmp])]
-            by_id = {s.id: s for s in sessions}
-            self.assertEqual(set(by_id), {"qwen-sess-1", "qwen-sess-2"})
-            self.assertEqual(by_id["qwen-sess-1"].cwd, "/fixture/project")
-            self.assertEqual([len(s.messages) for s in by_id.values()], [1, 1])
+            usage_dir = os.path.join(tmp, "usage")
+            os.makedirs(usage_dir)
+            usage = os.path.join(usage_dir, "token-usage-2026-10.jsonl")
+            with open(usage, "w") as handle:
+                for record in ([], {"sessionId": []}, {"sessionId": ""}, {"sessionId": "valid"}):
+                    handle.write(json.dumps(record) + "\n")
+            self.assertEqual(qwen.discover([tmp]), [(usage, None)])
 
     def test_dedupe_keys_stable(self):
         discovered = qwen.discover([FIXTURE_QWEN])
