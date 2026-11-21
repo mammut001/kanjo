@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 import unittest
 
 from kanjo.pricing import default_book
@@ -18,6 +20,21 @@ class OpenClawSourceTest(unittest.TestCase):
         path, parent = discovered[0]
         self.assertIn("oc-sess-1.jsonl", path)
         self.assertIsNone(parent)
+
+    def test_malformed_usage_does_not_hide_valid_fixture(self):
+        fixture = openclaw.discover([FIXTURE_OC])[0][0]
+        with open(fixture) as handle:
+            lines = handle.readlines()
+        bad = json.loads(lines[-1])
+        bad["message"]["usage"]["input"] = "invalid"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "session.jsonl")
+            with open(path, "w") as handle:
+                handle.write(json.dumps(bad) + "\n")
+                handle.writelines(lines)
+            session = openclaw.parse_file(path)
+        self.assertEqual(len(session.messages), 1)
+        self.assertEqual(session.messages[0].input, 1500)
 
     def test_parse_session(self):
         discovered = openclaw.discover([FIXTURE_OC])

@@ -199,11 +199,14 @@ def _handle_event(
     if not isinstance(usage, dict):
         return
 
-    inp = max(int(usage.get("input") or 0), 0)
-    out = max(int(usage.get("output") or 0), 0)
-    cr = max(int(usage.get("cacheRead") or usage.get("cache_read") or 0), 0)
-    cw = max(int(usage.get("cacheWrite") or usage.get("cache_write") or 0), 0)
-    reason = max(int(usage.get("reasoningTokens") or usage.get("reasoning") or 0), 0)
+    try:
+        inp = max(int(usage.get("input") or 0), 0)
+        out = max(int(usage.get("output") or 0), 0)
+        cr = max(int(usage.get("cacheRead") or usage.get("cache_read") or 0), 0)
+        cw = max(int(usage.get("cacheWrite") or usage.get("cache_write") or 0), 0)
+        reason = max(int(usage.get("reasoningTokens") or usage.get("reasoning") or 0), 0)
+    except (TypeError, ValueError, OverflowError):
+        return
     thinking = min(reason, out) if out else reason
 
     if inp + out + cr + cw <= 0:
