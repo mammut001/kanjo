@@ -161,6 +161,7 @@ class RepoCache:
         self.dirty = False
         self._stat_sig_cache: Dict[str, Optional[list]] = {}
         self._stat_isdir_cache: Dict[str, bool] = {}
+        self._lexists_cache: Dict[str, bool] = {}
         try:
             with open(self.path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -176,6 +177,10 @@ class RepoCache:
         entry = self.entries.get(path)
         cur = path
         if entry is None:
+            # Directories passed over on the way to a cached ancestor. Any of them
+            # may hold its own repository (submodule, inner clone, a repo at ~
+            # cached above a project), which is nearer than the ancestor's.
+            skipped = [] if _FILE_LIKE.search(os.path.basename(path)) else [path]
             while True:
                 parent = os.path.dirname(cur)
                 if not parent or parent == cur:
@@ -184,6 +189,8 @@ class RepoCache:
                 cand = self.entries.get(cur)
                 if cand is not None:
                     if cand.get("repo") is not None:
+                        if any(self._has_dotgit(d, fs_root) for d in skipped):
+                            return False, None
                         entry = cand
                         break
                     else:
@@ -200,6 +207,7 @@ class RepoCache:
                                         self.entries[path] = cand
                                         return True, None
                         break
+                skipped.append(cur)
 
         if entry is None:
             return False, None
@@ -244,6 +252,14 @@ class RepoCache:
 
         # Invalidate: .git was moved, deleted, or changed
         return False, None
+
+    def _has_dotgit(self, directory: str, fs_root: str) -> bool:
+        stat_path = os.path.join((fs_root + directory) if fs_root else directory, ".git")
+        found = self._lexists_cache.get(stat_path)
+        if found is None:
+            found = os.path.lexists(stat_path)
+            self._lexists_cache[stat_path] = found
+        return found
 
     def put(self, path: str, repo: Optional[dict], dotgit: Optional[str] = None,
             sig: Optional[list] = None, now: Optional[float] = None) -> None:
