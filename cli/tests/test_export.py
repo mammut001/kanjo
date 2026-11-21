@@ -1,6 +1,7 @@
 """End-to-end: fixture logs -> CONTRACT.md JSON."""
 
 import contextlib
+from datetime import datetime, timezone
 import io
 import json
 import os
@@ -11,6 +12,7 @@ from unittest import mock
 
 from kanjo import cli
 import sqlite3
+from kanjo.antigravity_accounts import reset_account_index
 from kanjo.sources import base, antigravity, codex
 from kanjo.cache import REPO_CACHE_VERSION, RepoCache, SessionCache, _dump_session, _load_session, _negative_ttl
 from kanjo.sources.base import Message, Session, open_sqlite_ro, extract_paths
@@ -266,12 +268,14 @@ class CacheExportComparisonTest(unittest.TestCase):
         shutil.rmtree(self.cache_dir, ignore_errors=True)
 
     def test_build_export_byte_identical_with_and_without_caches(self):
+        fixed_now = datetime(2026, 11, 20, 12, 0, 0, tzinfo=timezone.utc)
+
         # 1. build_export without any caches
-        doc_no_cache = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI)
+        doc_no_cache = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, now=fixed_now)
 
         # 2. build_export with cold cache (populates parse cache and repo cache)
         cache_cold = SessionCache(self.cache_dir)
-        doc_cold = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold)
+        doc_cold = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold, now=fixed_now)
 
         # Verify repo cache file was saved
         repo_cache_path = os.path.join(self.cache_dir, "repo-cache-v%d.json" % REPO_CACHE_VERSION)
@@ -283,7 +287,7 @@ class CacheExportComparisonTest(unittest.TestCase):
 
         # 3. build_export with warm cache (fresh SessionCache loading from disk)
         cache_warm = SessionCache(self.cache_dir)
-        doc_warm = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm)
+        doc_warm = build_export(dirs=FIXTURE_DIRS, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm, now=fixed_now)
 
         # Exclude generated_at from comparison
         time_no_cache = doc_no_cache.pop("generated_at")
@@ -417,19 +421,23 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         self.fs = standard_fs()
         self.cache_dir = tempfile.mkdtemp(prefix="kanjo-test-cold-cache-")
         self.data_dir = tempfile.mkdtemp(prefix="kanjo-test-cold-data-")
-        self.orig_data_dir = os.environ.get("KANJO_DATA_DIR")
-        os.environ["KANJO_DATA_DIR"] = self.data_dir
+        self.env = mock.patch.dict(os.environ, {
+            "KANJO_DATA_DIR": self.data_dir,
+            "KANJO_CACHE_DIR": self.cache_dir,
+            "KANJO_ANTIGRAVITY_DIR": os.path.join(FIXTURES, "antigravity"),
+        })
+        self.env.start()
+        reset_account_index()
 
     def tearDown(self):
+        reset_account_index()
+        self.env.stop()
         self.fs.cleanup()
         shutil.rmtree(self.cache_dir, ignore_errors=True)
         shutil.rmtree(self.data_dir, ignore_errors=True)
-        if self.orig_data_dir is not None:
-            os.environ["KANJO_DATA_DIR"] = self.orig_data_dir
-        else:
-            os.environ.pop("KANJO_DATA_DIR", None)
 
     def test_cold_export_byte_identical_with_all_nine_agents(self):
+        fixed_now = datetime(2026, 11, 20, 12, 0, 0, tzinfo=timezone.utc)
         nine_dirs = {
             "claude": [os.path.join(FIXTURES, "claude")],
             "antigravity": [os.path.join(FIXTURES, "antigravity")],
@@ -443,17 +451,17 @@ class ColdExportOptimizationsTest(unittest.TestCase):
         }
 
         # 1. Without cache
-        doc_no_cache = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI)
+        doc_no_cache = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, now=fixed_now)
         self.assertEqual(check_invariants(doc_no_cache), [])
 
         # 2. Cold cache
         cache_cold = SessionCache(self.cache_dir)
-        doc_cold = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold)
+        doc_cold = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_cold, now=fixed_now)
         self.assertEqual(check_invariants(doc_cold), [])
 
         # 3. Warm cache
         cache_warm = SessionCache(self.cache_dir)
-        doc_warm = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm)
+        doc_warm = build_export(dirs=nine_dirs, fs_root=self.fs.root, home=ALICE, tokei_dir=NO_TOKEI, cache=cache_warm, now=fixed_now)
         self.assertEqual(check_invariants(doc_warm), [])
 
         doc_no_cache.pop("generated_at", None)
