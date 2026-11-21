@@ -67,6 +67,24 @@ class LedgerFastPathTest(unittest.TestCase):
         self.assertEqual(first.ledger, second.ledger)
         self.assertIn(broken, second.failed_files)
 
+    def test_new_orphan_is_recorded_in_meta(self):
+        self.scan()
+        self.scan()
+        os.remove(self.paths[0])
+        result, loads = self.scan()
+        self.assertEqual(loads, 1)
+        self.assertIn("sess-0", [s.id for s in result.sessions])
+        for _ in range(2):
+            result, loads = self.scan()
+            self.assertEqual(loads, 0)
+            self.assertIn("sess-0", [s.id for s in result.sessions])
+            self.assertEqual(result.ledger["orphaned"], 1)
+        _write_claude(self.paths[0], "sess-0", "msg-0")
+        for _ in range(2):
+            result, _ = self.scan()
+            self.assertEqual(result.ledger["orphaned"], 0)
+            self.assertEqual([s.id for s in result.sessions].count("sess-0"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

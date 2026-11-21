@@ -454,7 +454,8 @@ class Ledger:
         Empty and error rows are not sessions. A row that still has one file on
         disk is skipped; the scan reads that file.
         """
-        if not self._loaded and hasattr(self, "_known_keys"):
+        lazy = not self._loaded and hasattr(self, "_known_keys")
+        if lazy:
             unseen = [k for k in (self._known_keys - set(exclude_keys or ())) - set(getattr(self, "_meta_orphans", {})) if k.count("\0") == 2]
             new_orphan_possible = False
             missing_paths_keys = []
@@ -477,7 +478,12 @@ class Ledger:
                             new_orphan_possible = True
                             break
             if not new_orphan_possible:
-                if missing_paths_keys:
+                # A recorded orphan whose session was read again is no longer one.
+                meta_orphans = getattr(self, "_meta_orphans", {})
+                revived = [k for k in meta_orphans if exclude_keys and k in exclude_keys]
+                for k in revived:
+                    meta_orphans.pop(k, None)
+                if missing_paths_keys or revived:
                     self._save_meta()
                 found = []
                 for k, s in getattr(self, "_meta_orphans", {}).items():
@@ -501,6 +507,9 @@ class Ledger:
                 found.append((key, _load_session(dict(entry["session"]))))
             except (TypeError, KeyError, ValueError):
                 continue
+        if lazy:
+            # Record the new orphans so later runs stay on the meta fast path.
+            self._save_meta()
         return found
 
     def signatures_by_path(self) -> Dict[str, list]:
@@ -517,10 +526,10 @@ class Ledger:
     def summary(self) -> dict:
         if not self._loaded and hasattr(self, "_summary") and self._summary:
             s = dict(self._summary)
+            if hasattr(self, "_meta_orphans"):
+                s["orphaned"] = len(self._meta_orphans)
             if self.dirty:
                 s["updated_at"] = self.updated_at or _EMPTY_UPDATED_AT
-                if hasattr(self, "_meta_orphans"):
-                    s["orphaned"] = len(self._meta_orphans)
                 if hasattr(self, "_known_keys"):
                     s["sessions"] = len([k for k in self._known_keys if k.count("\0") == 2])
             return s
@@ -646,6 +655,8 @@ class Ledger:
                 orphans = dict(getattr(self, "_meta_orphans", {}))
                 known_keys = list(getattr(self, "_known_keys", []))
                 summary = dict(getattr(self, "_summary", {}))
+                if summary:
+                    summary["orphaned"] = len(orphans)
             meta = {
                 "version": LEDGER_VERSION,
                 "mtime_ns": st.st_mtime_ns,
