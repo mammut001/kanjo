@@ -23,7 +23,7 @@ Self-hosted report receiver and public dashboard behind Firebase Authentication 
   - Comprehensive hardening: strict CSP, HSTS, X-Content-Type-Options, Referrer-Policy, COOP, CSRF checks on all POSTs, client IP rate limiting (10/min), and 64 KB payload limit.
 - **Storage**:
   - SQLite database stored at `/opt/family-usage/data/family.db` (inside container: `/data/family.db`).
-  - Members, SHA-256 hashed bearer tokens, 7-day server sessions, report history, and server settings (`settings(key, value)` table).
+  - Members, SHA-256 hashed bearer tokens, 7-day server sessions, daily historical reports (90-day retention), and server settings (`settings(key, value)` table).
 
 ---
 
@@ -142,7 +142,7 @@ Successfully revoked token for member 'Bob'.
 
 ### 4. Manual Prune
 
-Report history is retained on intake. To opt into the existing retention policy, run the command below. It deletes reports older than 90 days and intermediate reports on the same day, while retaining the latest report for each device. Older snapshots may contain data absent from the latest snapshot, so make a backup first if you need the full history.
+Reports older than 90 days and intermediate reports on the same day are automatically pruned hourly upon report intake. You can also run it manually:
 
 ```bash
 docker exec family-app python -m family_server prune

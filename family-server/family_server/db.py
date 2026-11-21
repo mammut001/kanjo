@@ -534,24 +534,6 @@ def prune_reports(conn: sqlite3.Connection, now: Optional[datetime] = None) -> i
     return total_deleted
 
 
-def maybe_prune_sessions_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None) -> None:
-    """Clean up expired sessions without deleting report history during intake."""
-    if now is None:
-        now = datetime.now(timezone.utc)
-    row = conn.execute("SELECT value FROM meta WHERE key = 'last_session_prune_time'").fetchone()
-    if row and row["value"]:
-        try:
-            last = datetime.fromisoformat(row["value"].replace("Z", "+00:00"))
-            if (now - last).total_seconds() < 3600:
-                return
-        except (TypeError, ValueError):
-            pass
-    prune_sessions(conn, now)
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_session_prune_time', ?)",
-                 (now.isoformat(),))
-    conn.commit()
-
-
 def maybe_prune_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None) -> Optional[int]:
     """Run prune if at least 1 hour has elapsed since last prune."""
     if now is None:
