@@ -45,6 +45,16 @@ class PricingCorrectness(unittest.TestCase):
                 self.assertIn(tier, model)
                 self.assertTrue(self.book.known(model))
 
+    def test_named_tier_fallback_avoids_unrequested_modalities(self):
+        for reverse in (False, True):
+            book = PriceBook()
+            if reverse:
+                book.prices = dict(reversed(list(book.prices.items())))
+            with self.subTest(reverse=reverse):
+                model, estimated = book.resolve('gpt-5-codex-mini', 'codex')
+                self.assertEqual((model, estimated), ('openai/gpt-5-mini', True))
+                self.assertEqual(book.price(model)['in'], 0.25)
+
     def test_cache_and_precision(self):
         p = self.book.price('anthropic/claude-opus-4.5')
         cost, est = self.book.cost('claude-opus-4.5', 'claude', 100, 20, 30, 40, 10)
