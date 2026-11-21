@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0978145B5A388F9DD6BA518E /* HeatStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */; };
 		101BE5C17F2CE1C09B39B552 /* SnapshotSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC30710793234C731B0DE10 /* SnapshotSource.swift */; };
+		1A33068AA6BB530A7CE8E4E2 /* MobileExportDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0641B166439367B45388B34 /* MobileExportDecodeTests.swift */; };
 		2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E829F6655E532133018832 /* IOSPalette.swift */; };
 		2869CF7F6B710CA75B877D33 /* MosaicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3465A7114B6763F70C034E43 /* MosaicView.swift */; };
 		3A5E091849903F5B059F1926 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 39D4773DEC1DD1A811985E85 /* PrivacyInfo.xcprivacy */; };
@@ -53,6 +54,7 @@
 		8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatStripView.swift; sourceTree = "<group>"; };
 		90EE56787B5D8F5630C8F324 /* CommonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViews.swift; sourceTree = "<group>"; };
 		ABD73AC37EBB88DAD3B2B692 /* ui */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ui; path = ../ui; sourceTree = SOURCE_ROOT; };
+		B0641B166439367B45388B34 /* MobileExportDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileExportDecodeTests.swift; sourceTree = "<group>"; };
 		B0908A345408422DD68F8556 /* sample-snapshot.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "sample-snapshot.json"; sourceTree = "<group>"; };
 		D70329043E5CE090994ECBC9 /* KanjoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanjoApp.swift; sourceTree = "<group>"; };
 		E19E89018E4E065FC1F44B46 /* Kanjo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kanjo.entitlements; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 		6D5CA03E6C4ADBBF0AFC40F1 /* KanjoTests */ = {
 			isa = PBXGroup;
 			children = (
+				B0641B166439367B45388B34 /* MobileExportDecodeTests.swift */,
 				6234BE9DD1F6402C9969216B /* SnapshotStoreTests.swift */,
 			);
 			path = KanjoTests;
@@ -274,6 +277,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A33068AA6BB530A7CE8E4E2 /* MobileExportDecodeTests.swift in Sources */,
 				BE8F206916111521EDF4530A /* SnapshotStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
