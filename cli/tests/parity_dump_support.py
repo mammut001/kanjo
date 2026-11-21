@@ -8,12 +8,12 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..providers import provider_for, PROVIDER_LABELS
-from ..sources.base import AGENT_LABELS
-from . import calendar_time as cal
-from .i18n import t
-from .model import TimeRange
-from .range_engine import (
+from kanjo.providers import provider_for, PROVIDER_LABELS
+from kanjo.sources.base import AGENT_LABELS
+from kanjo.tui import calendar_time as cal
+from kanjo.tui.i18n import t
+from kanjo.tui.model import TimeRange
+from kanjo.tui.range_engine import (
     PARITY_RANGE_ORDER,
     ParityTimeRange,
     TUI_RANGE_TO_PARITY,
@@ -27,7 +27,7 @@ from .range_engine import (
     build_range_helpers,
     filtered_usage as _filtered_usage,
 )
-from .range_engine import get_tz, ensure_aware, spec_for_tui_range, FilteredUsage
+from kanjo.tui.range_engine import get_tz, ensure_aware, spec_for_tui_range, FilteredUsage
 
 
 PARITY_TUI_RANGES: Dict[str, TimeRange] = {

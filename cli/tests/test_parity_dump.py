@@ -6,7 +6,7 @@ import json
 import os
 import unittest
 
-from kanjo.tui.parity_dump import build_parity_dump
+from tests.parity_dump_support import build_parity_dump
 
 
 def load_sample_fixture() -> dict:
@@ -22,7 +22,7 @@ class ParityDumpTests(unittest.TestCase):
         result = build_parity_dump(doc)
         dump_path = os.environ.get("KANJO_PARITY_DUMP")
         if dump_path:
-            from kanjo.tui.parity_dump import formatted_json
+            from tests.parity_dump_support import formatted_json
             with open(dump_path, "w", encoding="utf-8") as f:
                 f.write(formatted_json(result) + "\n")
             return

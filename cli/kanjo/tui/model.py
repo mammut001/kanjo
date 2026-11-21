@@ -634,6 +634,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     tz, now_dt, _, _, _, session_in_range_cost_tokens = _build_range_helpers(doc, time_range, now=now)
 
     filtered_projects = [_filtered_project_dict(fp) for fp in fu.projects]
+    filtered_projects.sort(key=lambda p: (-p.get("cost", 0.0), str(p.get("name", "")).lower()))
     filtered_unattr = _filtered_bucket_dict(fu.unattributed)
     filtered_excl = _filtered_bucket_dict(fu.excluded)
 
@@ -711,7 +712,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
             "tokens": m["tokens"],
             "estimated": m.get("estimated", False),
         })
-    by_model_list.sort(key=lambda m: (-m["tokens"], -m["cost"], m["model"]))
+    by_model_list.sort(key=lambda m: (-m["cost"], -m["tokens"], m["model"]))
 
     # Aggregated Agents View
     agent_rows: Dict[str, Dict[str, Any]] = {}
