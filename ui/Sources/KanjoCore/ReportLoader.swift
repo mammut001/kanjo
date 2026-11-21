@@ -154,7 +154,7 @@ public final class ReportLoader {
                     await self.onCLIFailure()
                 }
                 guard gen == self.generation else { return }
-                self.hasFinishedLiveRefresh = true
+                // 失败不算「已拿到实时报告」：启动缓存晚到时仍要显示（标为过期，错误横幅保留）。
                 var updated = self.state
                 updated.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 if !quiet {
