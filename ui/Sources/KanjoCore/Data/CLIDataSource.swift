@@ -26,9 +26,17 @@ public struct CLIDataSource: UsageDataSource {
         let command = self.command
         let cwd = self.workingDirectory
         let timeout = self.timeout
-        let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try Self.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
-        }.value
+        // 被更新的刷新取代（任务取消）时终止子进程，不让它白跑到结束。
+        let canceller = ProcessCanceller()
+        let (status, out, err, timedOut) = try await withTaskCancellationHandler {
+            try await Task.detached(priority: .utility) {
+                try Self.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService,
+                             canceller: canceller)
+            }.value
+        } onCancel: {
+            canceller.cancel()
+        }
+        try Task.checkCancellation()
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {
             throw DataSourceError.commandFailed(command: command, status: status,
@@ -89,7 +97,8 @@ public struct CLIDataSource: UsageDataSource {
         timeout: TimeInterval,
         qualityOfService: QualityOfService = .background,
         extraEnvironment: [String: String] = [:],
-        stdin: Data? = nil
+        stdin: Data? = nil,
+        canceller: ProcessCanceller? = nil
     ) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
         p.qualityOfService = qualityOfService
@@ -133,6 +142,7 @@ public struct CLIDataSource: UsageDataSource {
             try? errPipe.fileHandleForWriting.close()
             throw DataSourceError.launchFailed(error.localizedDescription)
         }
+        canceller?.attach(p)
 
         if let inputPipe, let stdin {
             group.enter()
@@ -151,6 +161,55 @@ public struct CLIDataSource: UsageDataSource {
         }
         p.waitUntilExit()
         return (p.terminationStatus, outData, errData, timedOut)
+    }
+}
+
+/// 运行中命令的取消句柄：取消时向 zsh 及其所有子孙进程发 SIGTERM（`zsh -c` 不一定 exec 到 python）。
+public final class ProcessCanceller: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    public init() {}
+
+    public var isCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
+
+    /// 进程启动后登记；若此前已取消，立即终止。
+    func attach(_ p: Process) {
+        lock.lock()
+        process = p
+        let terminateNow = cancelled
+        lock.unlock()
+        if terminateNow { Self.terminateTree(p) }
+    }
+
+    public func cancel() {
+        lock.lock()
+        cancelled = true
+        let p = process
+        lock.unlock()
+        if let p { Self.terminateTree(p) }
+    }
+
+    private static func terminateTree(_ p: Process) {
+        guard p.isRunning else { return }
+        let root = p.processIdentifier
+        var all: [pid_t] = []
+        var queue: [pid_t] = [root]
+        while let pid = queue.popLast() {
+            var buf = [pid_t](repeating: 0, count: 256)
+            let n = proc_listchildpids(pid, &buf, Int32(buf.count * MemoryLayout<pid_t>.size))
+            if n > 0 {
+                let children = buf.prefix(min(Int(n), buf.count)).filter { $0 > 0 }
+                all.append(contentsOf: children)
+                queue.append(contentsOf: children)
+            }
+        }
+        for pid in all.reversed() { kill(pid, SIGTERM) }
+        p.terminate()
     }
 }
 

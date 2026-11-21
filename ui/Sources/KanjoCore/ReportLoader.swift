@@ -121,6 +121,8 @@ public final class ReportLoader {
         }
         state = starting
         
+        // 被取代的旧刷新结果反正会被丢弃：取消它，让 CLI 数据源终止仍在跑的 `kanjo export`。
+        refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             guard let self else { return }
             do {
