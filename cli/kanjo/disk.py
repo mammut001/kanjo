@@ -1586,6 +1586,8 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
         root = _norm(root)
     if not os.path.exists(root):
         return [], 0, "not_found", []
+    if os.path.islink(root) or getattr(os.path, "isjunction", lambda _p: False)(root):
+        return [], 0, "refused", []
     if agent in ("minimax", "opencode", "qoderwork", "zcode", "qoder_ide", "hermes", "devin", "mimocode"):
         return [], 0, "never", []
 
@@ -1671,6 +1673,14 @@ def _clean_worktree(entry: dict, days: Optional[int], now: float, do_it: bool):
         return [], 0, "not_found", None
     if days is not None and _has_newer_file(path, now, days):
         return [], 0, "newer_than_cutoff", None
+    # Recheck immediately before removal; the report's cached status can be stale.
+    status = _git(path, "status", "--porcelain")
+    if status is None or status.returncode != 0 or status.stdout.strip():
+        return [], 0, "uncommitted_changes", None
+    head = _git_text(path, "rev-parse", "--verify", "-q", "HEAD")
+    _ref, target = _default_ref(path)
+    if not head or not target or _is_merged(path, head.strip(), target) is not True:
+        return [], 0, "not_merged", None
     if not do_it:
         return [path], entry["bytes"], None, None
     main = _main_repo(path)

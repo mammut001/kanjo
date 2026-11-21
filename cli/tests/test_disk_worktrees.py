@@ -346,6 +346,21 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.trash), [])
         self.assertFalse(os.path.exists(disk_cache.cache_path()))
 
+    def test_changes_after_report_block_removal(self):
+        for name, contents in (("README", "modified\n"), ("new.txt", "untracked\n")):
+            with self.subTest(name=name):
+                path = self.worktree("p/s/scratchpad/" + name.replace(".", "-"),
+                                     "feature-" + name.replace(".", "-"))
+                self.idle(path)
+                entry = self.entries(self.report())[self.wt_id(
+                    os.path.relpath(path, self.scratch).replace(os.sep, "/"))]
+                self.assertEqual(entry["blocked"], [])
+                self.write(os.path.join(path, name), contents)
+                moved, _, reason, _ = disk._clean_worktree(entry, None, time.time(), True)
+                self.assertEqual(moved, [])
+                self.assertEqual(reason, "uncommitted_changes")
+                self.assertTrue(os.path.isdir(path))
+
     def test_remove_refused_by_git_is_reported(self):
         path = self.worktree("p/s/scratchpad/wt", "feature")
         self.idle(path)
