@@ -87,7 +87,8 @@ public struct CLIDataSource: UsageDataSource {
         cwd: URL?,
         timeout: TimeInterval,
         qualityOfService: QualityOfService = .background,
-        extraEnvironment: [String: String] = [:]
+        extraEnvironment: [String: String] = [:],
+        stdin: Data? = nil
     ) throws -> (Int32, Data, Data, Bool) {
         let p = Process()
         p.qualityOfService = qualityOfService
@@ -110,7 +111,8 @@ public struct CLIDataSource: UsageDataSource {
         let outPipe = Pipe(), errPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = errPipe
-        p.standardInput = FileHandle.nullDevice
+        let inputPipe = stdin == nil ? nil : Pipe()
+        p.standardInput = inputPipe ?? FileHandle.nullDevice
 
         // 两路管道并发读，避免输出过大时子进程写满管道而死锁。
         let group = DispatchGroup()
@@ -126,6 +128,15 @@ public struct CLIDataSource: UsageDataSource {
             try? outPipe.fileHandleForWriting.close()
             try? errPipe.fileHandleForWriting.close()
             throw DataSourceError.launchFailed(error.localizedDescription)
+        }
+
+        if let inputPipe, let stdin {
+            group.enter()
+            DispatchQueue.global().async {
+                try? inputPipe.fileHandleForWriting.write(contentsOf: stdin)
+                try? inputPipe.fileHandleForWriting.close()
+                group.leave()
+            }
         }
 
         var timedOut = false

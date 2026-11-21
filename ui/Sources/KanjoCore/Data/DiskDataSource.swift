@@ -27,14 +27,16 @@ public enum DiskCommand {
             parts.append("--older-than")
             parts.append(shellWord(olderThan))
         }
-        if let onlyPaths {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .withoutEscapingSlashes
-            let json = String(decoding: try! encoder.encode(onlyPaths), as: UTF8.self)
-            parts.append(contentsOf: ["--only-paths", shellWord(json)])
-        }
+        if onlyPaths != nil { parts.append(contentsOf: ["--only-paths", "-"]) }
         parts.append(confirmed ? "--yes" : "--dry-run")
         return parts.joined(separator: " ")
+    }
+
+    public static func cleanInput(_ onlyPaths: [String]?) -> Data? {
+        guard let onlyPaths else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
+        return try! encoder.encode(onlyPaths)
     }
 
     static func replacingExport(in command: String, with replacement: String) -> String {
@@ -105,20 +107,20 @@ public struct DiskDataSource: DiskSource {
 
     public func clean(ids: [String], olderThan: String?, confirmed: Bool, onlyPaths: [String]? = nil) async throws -> CleanResult {
         let command = DiskCommand.clean(from: cliCommand, ids: ids, olderThan: olderThan, confirmed: confirmed, onlyPaths: onlyPaths)
-        return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .userInitiated))
+        return try DiskDecoder.decodeClean(try await run(command, input: DiskCommand.cleanInput(onlyPaths), qualityOfService: .userInitiated))
     }
 
     public func cleanMergedWorktrees(confirmed: Bool, onlyPaths: [String]?) async throws -> CleanResult {
         let command = DiskCommand.clean(from: cliCommand, ids: [], olderThan: nil, confirmed: confirmed,
                                         mergedWorktrees: true, onlyPaths: onlyPaths)
-        return try DiskDecoder.decodeClean(try await run(command, qualityOfService: .utility))
+        return try DiskDecoder.decodeClean(try await run(command, input: DiskCommand.cleanInput(onlyPaths), qualityOfService: .utility))
     }
 
-    private func run(_ command: String, qualityOfService: QualityOfService = .background) async throws -> Data {
+    private func run(_ command: String, input: Data? = nil, qualityOfService: QualityOfService = .background) async throws -> Data {
         let cwd = workingDirectory
         let timeout = self.timeout
         let (status, out, err, timedOut) = try await Task.detached(priority: .utility) {
-            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService)
+            try CLIDataSource.run(command: command, cwd: cwd, timeout: timeout, qualityOfService: qualityOfService, stdin: input)
         }.value
         if timedOut { throw DataSourceError.commandTimedOut(command: command, seconds: Int(timeout)) }
         guard status == 0 else {

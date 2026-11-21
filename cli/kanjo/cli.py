@@ -494,7 +494,7 @@ def cmd_disk(args) -> int:
             print("kanjo: disk clean needs entry ids or --merged-worktrees", file=sys.stderr)
             return 2
         try:
-            only_paths = json.loads(args.only_paths) if args.only_paths is not None else None
+            only_paths = json.loads(sys.stdin.read() if args.only_paths == "-" else args.only_paths) if args.only_paths is not None else None
             if args.only_paths is not None and (not isinstance(only_paths, list) or not all(isinstance(p, str) for p in only_paths)):
                 raise ValueError()
         except ValueError:
@@ -787,7 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--merged-worktrees", action="store_true",
                    help="also every git worktree whose branch is merged into the default branch")
     c.add_argument("--older-than", metavar="ND", help="only files older than N days, for example 30d")
-    c.add_argument("--only-paths", metavar="JSON", help="restrict moves to paths in a JSON array from a preview")
+    c.add_argument("--only-paths", metavar="JSON|-", help="restrict moves to preview paths in a JSON array, or read it from stdin with -")
     c.add_argument("--dry-run", action="store_true", help="print the plan and do not move anything")
     c.add_argument("--yes", action="store_true", help="actually move files; without this, nothing moves")
     c.set_defaults(func=cmd_disk)

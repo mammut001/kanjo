@@ -402,6 +402,14 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(later))
         self.assertTrue(any(s["reason"] == "changed" for s in result["skipped"]))
 
+    def test_cli_reads_large_preview_from_stdin(self):
+        paths = [f"/tmp/preview path {i}" for i in range(5000)]
+        with mock.patch("sys.stdin", io.StringIO(json.dumps(paths))), \
+             mock.patch.object(cli, "disk_clean", return_value={}) as clean, \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["disk", "clean", "claude:scratch", "--yes", "--only-paths", "-"]), 0)
+        self.assertEqual(clean.call_args.kwargs["only_paths"], paths)
+
     def test_cli_empty_and_invalid_preview_lists(self):
         path = self.worktree("p/s/scratchpad/wt", "feature")
         self.idle(path)

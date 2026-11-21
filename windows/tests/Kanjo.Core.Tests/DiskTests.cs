@@ -333,8 +333,10 @@ public sealed class DiskTests : KanjoTestCase
     {
         var paths = new[] { @"C:\scratch\a b", @"C:\scratch\quote's" };
         var args = CliRunner.DiskCleanArguments(["claude:scratch"], null, true, paths);
-        Assert.Equal(new[] { "disk", "clean", "claude:scratch", "--only-paths", System.Text.Json.JsonSerializer.Serialize(paths), "--yes" }, args);
-        Assert.Contains("[]", CliRunner.DiskCleanArguments(["claude:scratch"], null, true, []));
+        Assert.Equal(new[] { "disk", "clean", "claude:scratch", "--only-paths", "-", "--yes" }, args);
+        Assert.Equal(paths, System.Text.Json.JsonSerializer.Deserialize<string[]>(CliRunner.DiskCleanInput(paths)!));
+        Assert.Equal("[]", CliRunner.DiskCleanInput([]));
+        Assert.Null(CliRunner.DiskCleanInput(null));
     }
 
     private static string DiskFixturePath()
