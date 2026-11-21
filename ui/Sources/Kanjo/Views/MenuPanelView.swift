@@ -117,6 +117,7 @@ struct MenuPanelView: View {
     @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @AppStorage(SettingsKeys.appAppearance, store: AppDefaults.store) private var appAppearance = AppAppearance.defaultValue.rawValue
     @AppStorage(SettingsKeys.panelViewMode, store: AppDefaults.store) private var panelViewMode = PanelViewMode.projects.rawValue
+    @State private var panelVisible = false
     @State private var route: Route = .overview
     @State private var pendingDevRoute = DevRoute.requested
     @State private var overviewAnchor: String?
@@ -152,6 +153,7 @@ struct MenuPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if panelVisible {
             banners
             updateReminder
             content
@@ -166,6 +168,7 @@ struct MenuPanelView: View {
                             .onChange(of: geo.size.height) { footerHeight = $0 }
                     }
                 )
+            }
         }
         .frame(width: Self.size.width)
         .frame(minHeight: isTall ? Self.size.height : nil)
@@ -193,10 +196,12 @@ struct MenuPanelView: View {
             }
         }
         .onAppear {
+            panelVisible = true
             store.onPanelOpened()
             applyDevRoute(report: store.report)
         }
         .onDisappear {
+            panelVisible = false
             store.onPanelClosed()
             if !isSnapshotMode {
                 SideCardController.shared.closeAndDismiss(reason: "panel onDisappear")
