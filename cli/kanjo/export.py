@@ -159,6 +159,10 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             grouped.setdefault(key, []).append(session)
             grouped_paths.setdefault(key, []).append(path)
     modified_keys = getattr(cache, "modified_keys", None) if cache else None
+    changed = [key for key, paths in grouped_paths.items()
+               if modified_keys is None or any(path in modified_keys for path in paths)]
+    if hasattr(ledger, "prepare_updates"):
+        ledger.prepare_updates(changed)
     for key, group in grouped.items():
         # Copy before merging: ``_merge_same_id`` mutates its input, and the
         # originals still go through export dedupe one file at a time.
