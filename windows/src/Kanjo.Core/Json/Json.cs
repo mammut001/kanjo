@@ -223,6 +223,47 @@ public static class J
         return result;
     }
 
+    /// <summary>同 <see cref="Dict{T}"/>，但某个值解码失败（<see cref="DecodeError"/>）时只跳过这一条。</summary>
+    public static Dictionary<string, T> LossyDict<T>(JsonElement? obj, string path, Func<JsonElement, string, T> decode)
+    {
+        var result = new Dictionary<string, T>(StringComparer.Ordinal);
+        if (obj is null) return result;
+        foreach (var (key, value) in Properties(obj.Value, path))
+        {
+            try
+            {
+                result[key] = decode(value, Child(path, key));
+            }
+            catch (DecodeError error)
+            {
+                System.Diagnostics.Debug.WriteLine($"Kanjo.Core: skipped {Child(path, key)}: {error.Message}");
+            }
+        }
+        return result;
+    }
+
+    /// <summary>同 <see cref="List{T}"/>，但某个元素解码失败（<see cref="DecodeError"/>）时只跳过这一个。</summary>
+    public static List<T> LossyList<T>(JsonElement? array, string path, Func<JsonElement, string, T> decode)
+    {
+        if (array is null) return [];
+        var element = ToArray(array.Value, path);
+        var result = new List<T>(element.GetArrayLength());
+        var i = 0;
+        foreach (var item in element.EnumerateArray())
+        {
+            try
+            {
+                result.Add(decode(item, Index(path, i)));
+            }
+            catch (DecodeError error)
+            {
+                System.Diagnostics.Debug.WriteLine($"Kanjo.Core: skipped {Index(path, i)}: {error.Message}");
+            }
+            i++;
+        }
+        return result;
+    }
+
     public static Dictionary<string, double> DoubleDict(JsonElement? obj, string path)
     {
         var result = new Dictionary<string, double>(StringComparer.Ordinal);

@@ -271,6 +271,11 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                             ts = None
                     contract_entry[key] = iso_utc(ts) if ts is not None else None
                     contract_entry[pct_key] = _pct(contract_entry[pct_key]) if contract_entry[key] else None
+                if not contract_entry["weekly_resets_at"]:
+                    # CONTRACT.md §2: weekly_resets_at is a required ISO string. A provider that
+                    # reports no weekly reset (idle week, primary-only account) yields no entry;
+                    # a Tokei entry for the same agent, if any, stays.
+                    continue
                 if "extra_windows" in contract_entry:
                     cleaned = []
                     for extra in contract_entry["extra_windows"]:
@@ -305,4 +310,10 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
         out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now,
                              five_hours=5 if spec.get("five_hour_resets_at") is not None else None)
-    return {agent: out[agent] for agent in sorted(out)}
+    return {agent: out[agent] for agent in sorted(out) if has_weekly_reset(out[agent])}
+
+
+def has_weekly_reset(entry) -> bool:
+    """True when ``entry`` carries the required ISO ``weekly_resets_at`` (CONTRACT.md §2)."""
+    return isinstance(entry, dict) and isinstance(entry.get("weekly_resets_at"), str) \
+        and bool(entry["weekly_resets_at"])

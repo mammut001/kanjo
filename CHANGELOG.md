@@ -6,6 +6,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.12] - 2026-11-21
+
+### Fixed
+
+- The app could show a data-contract error and stop syncing to iPhone when a provider reported no weekly quota reset.
+- Windows: usage days were bucketed with the wrong clock.
+
 ## [0.6.11] - 2026-11-21
 
 ### Added

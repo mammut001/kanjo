@@ -223,6 +223,25 @@ public sealed class DecodingTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestQuotaWindowWithNullWeeklyResetIsSkipped()
+    {
+        var data = MutatedFixture(o => o["quota_windows"] = JsonNode.Parse("""
+            {
+              "claude": {"weekly_resets_at": null, "weekly_window_hours": 168, "weekly_used_percent": 0, "source": "live"},
+              "codex": {"weekly_resets_at": "2026-11-25T00:00:00Z", "weekly_window_hours": 168, "source": "live",
+                        "extra_windows": [{"id": "bad", "used_percent": 5},
+                                          {"id": "ok", "title": "OK", "resets_at": null, "used_percent": 5}]}
+            }
+            """));
+        var r = ReportDecoder.Decode(data);
+        Assert.False(r.QuotaWindows!.ContainsKey("claude"));
+        var codex = r.QuotaWindows["codex"];
+        Assert.Equal("2026-11-25T00:00:00Z", codex.WeeklyResetsAt);
+        Assert.Equal(["ok"], codex.ExtraWindows!.Select(x => x.Id).ToArray());
+        Assert.NotEmpty(r.Projects);
+    }
+
+    [Fact]
     public void TestMissingSubscriptionsDecodesAsNil()
     {
         var data = MutatedFixture(o => o.Remove("subscriptions"));

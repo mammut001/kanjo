@@ -40,6 +40,27 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertNil(w.fiveHourWindowHours)
     }
 
+    func testQuotaWindowWithNullWeeklyResetIsSkipped() throws {
+        let data = try mutatedFixture { obj in
+            obj["quota_windows"] = [
+                "claude": ["weekly_resets_at": NSNull(), "weekly_window_hours": 168,
+                           "weekly_used_percent": 0, "source": "live"],
+                "codex": ["weekly_resets_at": "2026-11-25T00:00:00Z", "weekly_window_hours": 168,
+                          "source": "live",
+                          "extra_windows": [
+                              ["id": "bad", "used_percent": 5],
+                              ["id": "ok", "title": "OK", "resets_at": NSNull(), "used_percent": 5],
+                          ]],
+            ]
+        }
+        let r = try ReportDecoder.decode(data)
+        XCTAssertNil(r.quotaWindows?["claude"])
+        let codex = try XCTUnwrap(r.quotaWindows?["codex"])
+        XCTAssertEqual(codex.weeklyResetsAt, "2026-11-25T00:00:00Z")
+        XCTAssertEqual(codex.extraWindows?.map(\.id), ["ok"])
+        XCTAssertFalse(r.projects.isEmpty)
+    }
+
     func testCostNoteDisplayText() throws {
         var r = try loadFixture()
         r.costNote = "API-equivalent cost estimated from public API prices. Not actual subscription spend."

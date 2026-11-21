@@ -51,7 +51,9 @@ public struct UsageReport: Codable, Equatable {
         costNote = try c.decode(String.self, forKey: .costNote)
         config = try c.decodeIfPresent(ReportConfig.self, forKey: .config)
             ?? ReportConfig(dominantThreshold: 0.8)
-        quotaWindows = try c.decodeIfPresent([String: QuotaWindow].self, forKey: .quotaWindows)
+        // 逐条宽松解码：某个 agent 的条目坏了（如 weekly_resets_at 为 null）只丢这一条，不拒整份报告。
+        quotaWindows = try c.decodeIfPresent([String: LossyDecoded<QuotaWindow>].self, forKey: .quotaWindows)?
+            .compactMapValues(\.value)
         subscriptions = try c.decodeIfPresent([String: Subscription].self, forKey: .subscriptions)
         antigravityAccounts = try c.decodeIfPresent(AntigravityAccounts.self, forKey: .antigravityAccounts)
         totals = try c.decode(Aggregate.self, forKey: .totals)
@@ -156,6 +158,20 @@ public struct QuotaWindow: Codable, Equatable {
         case extraWindows = "extra_windows"
     }
 
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        weeklyResetsAt = try c.decode(String.self, forKey: .weeklyResetsAt)
+        weeklyWindowHours = try c.decode(Int.self, forKey: .weeklyWindowHours)
+        weeklyUsedPercent = try c.decodeIfPresent(Double.self, forKey: .weeklyUsedPercent)
+        fiveHourResetsAt = try c.decodeIfPresent(String.self, forKey: .fiveHourResetsAt)
+        fiveHourWindowHours = try c.decodeIfPresent(Int.self, forKey: .fiveHourWindowHours)
+        fiveHourUsedPercent = try c.decodeIfPresent(Double.self, forKey: .fiveHourUsedPercent)
+        source = try c.decode(String.self, forKey: .source)
+        // 附加窗口同样逐条宽松：坏的一条跳过，主窗口照常可用。
+        extraWindows = try c.decodeIfPresent([LossyDecoded<ExtraQuotaWindow>].self, forKey: .extraWindows)?
+            .compactMap(\.value)
+    }
+
     public init(weeklyResetsAt: String, weeklyWindowHours: Int = 168, weeklyUsedPercent: Double? = nil,
                 fiveHourResetsAt: String? = nil, fiveHourWindowHours: Int? = nil, fiveHourUsedPercent: Double? = nil,
                 source: String = "tokei", extraWindows: [ExtraQuotaWindow]? = nil) {
@@ -167,6 +183,22 @@ public struct QuotaWindow: Codable, Equatable {
         self.fiveHourUsedPercent = fiveHourUsedPercent
         self.source = source
         self.extraWindows = extraWindows
+    }
+}
+
+/// 解码失败时得到 nil 而不是抛错，用于集合里逐条容错。
+struct LossyDecoded<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        do {
+            value = try Value(from: decoder)
+        } catch {
+            #if DEBUG
+            print("KanjoCore: skipped undecodable \(Value.self) at \(decoder.codingPath.map(\.stringValue).joined(separator: ".")): \(error)")
+            #endif
+            value = nil
+        }
     }
 }
 

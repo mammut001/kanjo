@@ -56,7 +56,7 @@ public sealed record QuotaWindow(
         J.NumberOrNull(e, "five_hour_used_percent", path),
         J.StringOrNull(e, "source", path) ?? "tokei",
         J.ArrayOrNull(e, "extra_windows", path) is { } x
-            ? new RoList<ExtraQuotaWindow>(J.List(x, J.Child(path, "extra_windows"), ExtraQuotaWindow.Decode))
+            ? new RoList<ExtraQuotaWindow>(J.LossyList(x, J.Child(path, "extra_windows"), ExtraQuotaWindow.Decode))
             : null);
 }
 
@@ -327,7 +327,8 @@ public sealed record UsageReport(
     private static RoDict<QuotaWindow>? DecodeWindows(JsonElement e, string path)
     {
         if (J.Optional(e, "quota_windows") is not { } q) return null;
-        return new RoDict<QuotaWindow>(J.Dict(q, J.Child(path, "quota_windows"), QuotaWindow.Decode));
+        // 逐条宽松：某个 agent 的条目坏了（如 weekly_resets_at 为 null）只丢这一条，不拒整份报告。
+        return new RoDict<QuotaWindow>(J.LossyDict(q, J.Child(path, "quota_windows"), QuotaWindow.Decode));
     }
 
     private static RoDict<Subscription>? DecodeSubscriptions(JsonElement e, string path)
