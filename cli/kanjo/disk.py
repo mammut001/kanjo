@@ -644,6 +644,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 nested = [p for p in all_paths if _inside(p, root)]
                 if entry["kind"] == "sessions":
                     nested += _kept_in_sessions(agent, root)
+                    if do_it:
+                        _reimport_changed_logs(agent, entry["path"], ledger)
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
                     recycle_bin=recycle_bin, nested=nested, allowed=allowed)
@@ -1153,6 +1155,33 @@ def _log_paths(agent: str, root: str) -> Optional[List[str]]:
     if module is None:
         return None
     return [path for path, _parent in module.discover([root])]
+
+
+def _reimport_changed_logs(agent: str, root: str, ledger: Ledger) -> None:
+    """Import again the logs under ``root`` that changed since their ledger row.
+
+    The report ignores signatures (a live log would otherwise stay ``not_imported``
+    forever), so right before the move is the last chance: replies appended after
+    the last export, or a session first recorded as an empty marker, would otherwise
+    only exist in the Trash copy. Logs with no row at all are left alone; they stay
+    ``not_imported`` and are skipped as before.
+    """
+    from .cache import _signature
+    logs = _log_paths(agent, root)
+    if not logs:
+        return
+    by_path = ledger.signatures_by_path()
+    changed = False
+    for path in logs:
+        sigs = by_path.get(path)
+        if sigs is None:
+            sigs = by_path.get(winsupport.normpath(path))
+        if sigs is not None and _signature(path) not in sigs:
+            changed = True
+            break
+    if changed:
+        from .export import scan
+        scan({agent: [root]}, cache=None, ledger=ledger)
 
 
 def _kept_in_sessions(agent: str, root: str) -> List[str]:

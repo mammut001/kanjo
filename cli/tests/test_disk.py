@@ -454,6 +454,49 @@ class DiskTest(unittest.TestCase):
         self.assertGreaterEqual(exported["ledger"]["orphaned"], 1)
         self.assertGreaterEqual(exported["ledger"]["sessions"], 1)
 
+    def _assistant_line(self, msg_id, output_tokens):
+        return json.dumps({
+            "type": "assistant",
+            "timestamp": "2026-10-02T19:50:00.000Z",
+            "cwd": self.tmp,
+            "sessionId": SID,
+            "uuid": "u-" + msg_id,
+            "message": {
+                "model": "claude-opus-5-5",
+                "id": msg_id,
+                "content": [],
+                "usage": {"input_tokens": 10, "output_tokens": output_tokens},
+            },
+        }) + "\n"
+
+    def _ledger_output_tokens(self):
+        ledger = Ledger(directory=self.data)
+        return sum(m.output for _key, session in ledger.orphan_sessions() for m in session.messages)
+
+    def test_usage_written_after_the_last_import_is_kept_by_clean(self):
+        path = self.write_claude()
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(self._assistant_line("msg_disk_later", 50000))
+        self.assertEqual(self.entry(self.report(), "claude:sessions")["blocked"], [])
+        self.clean(["claude:sessions"], yes=True)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self._ledger_output_tokens(), 50004)
+
+    def test_session_imported_while_empty_is_reimported_before_clean(self):
+        path = self.write(os.path.join(self.projects, "slug", SID + ".jsonl"), json.dumps({
+            "type": "user", "timestamp": "2026-10-02T19:48:00.000Z", "cwd": self.tmp,
+            "sessionId": SID, "uuid": "u0", "message": {"role": "user", "content": "hi"},
+        }) + "\n")
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(self._assistant_line("msg_disk_reply", 7))
+        self.clean(["claude:sessions"], yes=True)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self._ledger_output_tokens(), 7)
+
     def test_claude_memory_is_never_moved_with_the_sessions(self):
         log = self.write_claude()
         memory = self.write(os.path.join(self.projects, "slug", "memory", "MEMORY.md"), "- remember\n")
