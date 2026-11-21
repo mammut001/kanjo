@@ -3,12 +3,21 @@
 import copy
 import json
 import os
+import time
 import unittest
 from datetime import datetime, timezone
+from unittest import mock
+
+try:
+    import curses
+except ImportError:  # Windows has no _curses.
+    curses = None
 
 from kanjo.tui.model import TimeRange, filter_report
 from kanjo.tui.render import TUIState
-from kanjo.tui.term import ViewModelCache
+from kanjo.tui.term import ViewModelCache, run_curses_tui
+
+from tests.test_tui import FakeStdscr, screen_frames
 
 NOW = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -120,6 +129,34 @@ class ProjectDetailByModelRangeTest(unittest.TestCase):
         state = TUIState(version="test", time_range=TimeRange.ALL, detail_open=True, detail_project=doc["projects"][0])
         vm = ViewModelCache().get_or_build(doc, state, now=NOW).detail_vm
         self.assertEqual([m[2] for m in vm.by_model], ["$101.00"])
+
+
+class SlowFakeStdscr(FakeStdscr):
+    """Returns no key for ``seconds`` (pacing like a real getch timeout), then quits."""
+
+    def __init__(self, seconds: float, **kw):
+        super().__init__(**kw)
+        self.deadline = time.monotonic() + seconds
+
+    def getch(self):
+        if time.monotonic() < self.deadline:
+            time.sleep(0.01)
+            return -1
+        return ord("q")
+
+
+@unittest.skipIf(curses is None, "requires curses")
+class FailedFirstRefreshTest(unittest.TestCase):
+    def test_loading_screen_shows_refresh_error(self):
+        scr = SlowFakeStdscr(0.8, width=80, height=24)
+        with mock.patch("kanjo.tui.term.run_export_subprocess", side_effect=RuntimeError("boom")):
+            rc = run_curses_tui(scr, initial_doc=None, no_color=True, mouse=False)
+        self.assertEqual(rc, 0)
+        frames = screen_frames(scr)
+        self.assertTrue(any("Refresh failed: boom" in fr for fr in frames))
+        last = frames[-1]
+        self.assertIn("Refresh failed: boom", last)
+        self.assertNotIn("Loading", last)
 
 
 if __name__ == "__main__":

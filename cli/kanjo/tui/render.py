@@ -359,6 +359,8 @@ class TUIState:
     status_until: float = 0.0
     is_stale: bool = False
     last_generated_at_str: str = ""
+    # Error of the last failed refresh while no report has loaded yet.
+    load_error: str = ""
 
 
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -678,16 +680,26 @@ def render_ui(
             if idx < len(RANGE_TABS) - 1:
                 cur_x = canvas.draw_text(cur_x, 0, " ", Style())
 
-        spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
-        right_str = f"{spin} {t('loading', state.lang)}"
-        rw = str_width(right_str)
-        if width - rw > cur_x + 1:
-            canvas.draw_text(width - rw, 0, right_str, Style(fg="yellow"))
+        load_failed = bool(state.load_error) and not state.is_scanning
+        if not load_failed:
+            spin = ASCII_SPINNER[state.spinner_frame % len(ASCII_SPINNER)] if state.ascii_mode else SPINNER_CHARS[state.spinner_frame % len(SPINNER_CHARS)]
+            right_str = f"{spin} {t('loading', state.lang)}"
+            rw = str_width(right_str)
+            if width - rw > cur_x + 1:
+                canvas.draw_text(width - rw, 0, right_str, Style(fg="yellow"))
 
-        load_msg = t("loading", state.lang)
         ly = height // 2
-        lx = max(0, (width - str_width(load_msg)) // 2)
-        canvas.draw_text(lx, ly, load_msg, Style(bold=True, fg="cyan"))
+        if load_failed:
+            err_msg = truncate_str(t("refresh.error", state.lang, error=state.load_error), width)
+            lx = max(0, (width - str_width(err_msg)) // 2)
+            canvas.draw_text(lx, ly, err_msg, Style(bold=True, fg="red"))
+            hint = truncate_str(t("loading.retry_hint", state.lang), width)
+            hx = max(0, (width - str_width(hint)) // 2)
+            canvas.draw_text(hx, ly + 1, hint, Style(dim=True))
+        else:
+            load_msg = t("loading", state.lang)
+            lx = max(0, (width - str_width(load_msg)) // 2)
+            canvas.draw_text(lx, ly, load_msg, Style(bold=True, fg="cyan"))
 
         bar_y = height - 1
         canvas.fill_rect(0, bar_y, width, 1, " ", Style())
