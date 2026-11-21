@@ -1691,12 +1691,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         # 1. CSRF validation on all dashboard POSTs
         if not self._check_csrf():
-            logger.warning(
-                "CSRF check failed on %s (Origin: %s, Sec-Fetch-Site: %s)",
-                "dashboard POST",
-                self.headers.get("Origin"),
-                self.headers.get("Sec-Fetch-Site"),
-            )
+            logger.warning("CSRF check failed on dashboard POST")
             self._send_response_with_headers(
                 HTTPStatus.FORBIDDEN,
                 "application/json; charset=utf-8",

@@ -110,8 +110,12 @@ def _validate_period(period_data: Any, context: str) -> Optional[str]:
     if not isinstance(period_data["tokens"], dict):
         return f"{context}.tokens must be an object"
 
-    if not isinstance(period_data["cost_usd"], (int, float)):
+    if isinstance(period_data["cost_usd"], bool) or not isinstance(period_data["cost_usd"], (int, float)):
         return f"{context}.cost_usd must be a number"
+
+    for key in ("start", "first_day", "last_day"):
+        if key in period_data and period_data[key] is not None and not isinstance(period_data[key], str):
+            return f"{context}.{key} must be a string or null"
 
     def valid_numbers(obj):
         if not isinstance(obj, dict):
@@ -138,6 +142,18 @@ def _validate_period(period_data: Any, context: str) -> Optional[str]:
     for key in ("by_agent", "top_models"):
         if any(not valid_numbers(item) for item in period_data.get(key, [])):
             return f"{context}.{key} contains invalid entries"
+    if any(not isinstance(model, str) for model in period_data.get("models_used", [])):
+        return f"{context}.models_used must contain strings"
+    for key, fields in (("by_provider", ("provider", "label")),
+                        ("by_agent", ("agent", "label")),
+                        ("top_models", ("model", "provider"))):
+        for item in period_data.get(key, []):
+            if any(field in item and not isinstance(item[field], str) for field in fields):
+                return f"{context}.{key} contains invalid strings"
+            if key == "by_provider":
+                for model in item.get("models", []):
+                    if "model" in model and not isinstance(model["model"], str):
+                        return f"{context}.by_provider contains an invalid model name"
     return None
 
 
@@ -213,6 +229,34 @@ def validate_report_payload(data: Any) -> Optional[str]:
     if "plans" in data and not isinstance(data["plans"], dict):
         return "plans must be an object"
 
+    if "cost_note" in data and not isinstance(data["cost_note"], str):
+        return "cost_note must be a string"
+    if any(not isinstance(k, str) or not isinstance(v, str) for k, v in data.get("plans", {}).items()):
+        return "plans must map strings to strings"
+    for agent, quota in data.get("quota_windows", {}).items():
+        if not isinstance(agent, str) or not isinstance(quota, dict):
+            return "quota_windows must map strings to objects"
+        for key in ("weekly_resets_at", "five_hour_resets_at", "source"):
+            if key in quota and quota[key] is not None and not isinstance(quota[key], str):
+                return f"quota_windows.{agent}.{key} must be a string or null"
+        for key in ("weekly_used_percent", "five_hour_used_percent", "weekly_window_hours", "five_hour_window_hours"):
+            value = quota.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                return f"quota_windows.{agent}.{key} must be a number or null"
+        if "extra_windows" in quota:
+            windows = quota["extra_windows"]
+            if not isinstance(windows, list):
+                return f"quota_windows.{agent}.extra_windows must be an array"
+            for window in windows:
+                if not isinstance(window, dict):
+                    return f"quota_windows.{agent}.extra_windows must contain objects"
+                for key in ("id", "label", "resets_at"):
+                    if key in window and window[key] is not None and not isinstance(window[key], str):
+                        return f"quota_windows.{agent}.extra_windows.{key} must be a string or null"
+                value = window.get("used_percent")
+                if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                    return f"quota_windows.{agent}.extra_windows.used_percent must be a number or null"
+
     # member_label validation
     if "member_label" in data and data["member_label"] is not None and not isinstance(data["member_label"], str):
         return "member_label must be a string or null"
@@ -249,7 +293,7 @@ def validate_report_payload(data: Any) -> Optional[str]:
             or not dev_name.isprintable()
         ):
             return "device.name must be 1 to 40 printable characters"
-        if dev.get("os") not in VALID_DEVICE_OS:
+        if not isinstance(dev.get("os"), str) or dev.get("os") not in VALID_DEVICE_OS:
             return "device.os must be one of 'macos', 'linux', 'windows'"
 
     return None
