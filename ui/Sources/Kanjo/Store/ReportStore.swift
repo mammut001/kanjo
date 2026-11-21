@@ -78,9 +78,11 @@ final class ReportStore: ObservableObject {
         let backgroundSeconds = defaults.integer(forKey: SettingsKeys.backgroundRefreshSeconds)
         let backgroundInterval = TimeInterval(BackgroundRefreshInterval.resolve(backgroundSeconds).rawValue)
         
+        // 只有切换时才有通知：启动时已开着的 Low Power Mode 要在这里先带进调度器。
         let scheduler = RefreshScheduler(
             fallbackMinutes: storedMinutes,
-            backgroundInterval: backgroundInterval
+            backgroundInterval: backgroundInterval,
+            isLowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
 
         let initialKind = SourceKind(rawValue: defaults.string(forKey: SettingsKeys.sourceKind) ?? "") ?? .file
