@@ -167,6 +167,16 @@ def local_timezone_name() -> str:
                 return name
         _warn_fixed_offset()
         return offset_timezone_name()
+    if "TZ" in os.environ and not tz.startswith("/"):
+        if not tz:
+            return "UTC"
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(tz)
+            return tz
+        except (ValueError, KeyError):
+            _warn_fixed_offset()
+            return offset_timezone_name()
     candidates = [tz] if tz.startswith("/") else []
     candidates.append("/etc/localtime")
     for link in candidates:
