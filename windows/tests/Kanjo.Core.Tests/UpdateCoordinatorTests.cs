@@ -303,6 +303,37 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         Assert.True(coordinator.HasReadyUpdate);
     }
 
+    /// <summary>已下载好（Ready）时后台检查失败：不能把「Restart to update」换成 Failed。</summary>
+    [Fact]
+    public async Task TestCheckFailureKeepsReadyUpdate()
+    {
+        var manager = new FakeUpdateManager { Pending = "0.6.12", ThrowOnCheck = new HttpRequestException("offline") };
+        using var coordinator = Make(manager);
+        var states = new List<UpdateState>();
+        coordinator.Changed += () => states.Add(coordinator.Status.State);
+
+        await coordinator.CheckNowAsync();
+
+        Assert.True(coordinator.HasReadyUpdate);
+        Assert.Equal("0.6.12", coordinator.Status.Version);
+        Assert.DoesNotContain(UpdateState.Checking, states);
+        Assert.DoesNotContain(UpdateState.Failed, states);
+    }
+
+    /// <summary>Ready 时检查到同一个版本（或没有更新）：保持 Ready，不重复下载。</summary>
+    [Fact]
+    public async Task TestCheckSameVersionKeepsReadyUpdate()
+    {
+        var manager = new FakeUpdateManager { Pending = "0.6.12", Available = "0.6.12" };
+        using var coordinator = Make(manager);
+
+        await coordinator.CheckNowAsync();
+
+        Assert.True(coordinator.HasReadyUpdate);
+        Assert.Equal("0.6.12", coordinator.Status.Version);
+        Assert.Equal(0, manager.DownloadCalls);
+    }
+
     /// <summary>不是 Velopack 装的（开发运行 / 便携版 / --snapshot）：不检查、不下载，按钮禁用。</summary>
     [Fact]
     public void TestNotInstalledNeverChecks()
