@@ -42,6 +42,7 @@ final class ReportStore: ObservableObject {
     private var busyCheckTimer: Timer?
     private let loader: ReportLoader
     private var logWatcher: LogWatcher?
+    private var watcherPaths = WatcherPathsState()
     private var scheduledTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private let backgroundWork: ReportBackgroundWork
@@ -102,12 +103,14 @@ final class ReportStore: ObservableObject {
         loader.onStateChange = { [weak self] state in
             self?.apply(state)
         }
-        loader.onLiveReport = { [backgroundWork] r in
+        loader.onLiveReport = { [weak self, backgroundWork] r in
             backgroundWork.perform {
                 CloudSyncStore.shared.reportDidRefresh(r)
                 PublishStore.shared.reportDidRefresh(r)
                 FamilyReportStore.shared.reportDidRefresh(r)
             }
+            // 启动时 `paths` 失败，或之后才出现的 agent 目录：成功刷新后补取监听目录。
+            self?.setupWatcher(force: false)
         }
         loader.onCLIFailure = { [weak self] in
             guard let self, self.backgroundWork.isEnabled else { return }
@@ -320,6 +323,10 @@ final class ReportStore: ObservableObject {
     }
 
     func setupWatcher() {
+        setupWatcher(force: true)
+    }
+
+    private func setupWatcher(force: Bool) {
         guard backgroundWork.isEnabled else { return }
         guard dataOverride == nil else {
             logWatcher?.stop()
@@ -332,6 +339,7 @@ final class ReportStore: ObservableObject {
             logWatcher = nil
             return
         }
+        guard watcherPaths.begin(force: force) else { return }
         let cli = CLILaunch.command(defaults: defaults)
         let cwd = CLILaunch.workingDirectory(defaults: defaults)
         let cliSource = CLIDataSource(command: cli, workingDirectory: cwd)
@@ -341,10 +349,16 @@ final class ReportStore: ObservableObject {
                 let paths = Array(Set(pathsMap.values.flatMap { $0 }))
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    self?.startLogWatcher(paths: paths)
+                    guard let self else { return }
+                    if self.watcherPaths.finish(paths: paths) || force {
+                        self.startLogWatcher(paths: paths)
+                    }
                 }
             } catch {
-                // CLI paths unavailable; safety fallback timer will handle refreshes
+                // CLI paths unavailable; retried after the next successful refresh (fallback timer covers until then)
+                await MainActor.run {
+                    _ = self?.watcherPaths.finish(paths: nil)
+                }
             }
         }
     }
