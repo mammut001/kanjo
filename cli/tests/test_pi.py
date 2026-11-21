@@ -55,7 +55,7 @@ class PiSourceTest(unittest.TestCase):
         self.assertEqual(msg.cache_read, 200)
         self.assertEqual(msg.cache_write, 100)
         self.assertEqual(msg.thinking, 0)
-        self.assertEqual(msg.key, "pi:pi-sess-1:resp-1")
+        self.assertEqual(msg.key, "pi:resp:resp-1")
         self.assertEqual(session.tool_paths, [["/Users/alice/Documents/GitHub/FocusApp/timer.py"]])
 
     def test_cost_step_5_preview(self):
@@ -78,6 +78,41 @@ class PiSourceTest(unittest.TestCase):
              msg.cache_write * price.get("cache_write", 0.0)) / 1_000_000.0
         )
         self.assertGreater(cost, 0)
+
+    def test_fork_copies_are_billed_once(self):
+        from kanjo.export import dedupe
+
+        def entry(eid, role, ts, response_id=None):
+            msg = {"role": role, "content": [{"type": "text", "text": "hi"}]}
+            if role == "assistant":
+                msg.update({"model": "step-5-preview", "usage": {"input": 10, "output": 5}})
+                if response_id:
+                    msg["responseId"] = response_id
+            return {"type": "message", "id": eid, "timestamp": ts, "message": msg}
+
+        copied = [
+            entry("e1", "user", "2026-11-08T10:00:01.000Z"),
+            entry("e2", "assistant", "2026-11-08T10:00:02.000Z", "msg_01A"),
+            entry("e3", "user", "2026-11-08T10:00:03.000Z"),
+            entry("e4", "assistant", "2026-11-08T10:00:04.000Z"),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = os.path.join(tmp, "--proj--")
+            os.makedirs(proj)
+            header = {"type": "session", "version": 3, "id": "orig", "timestamp": "2026-11-08T10:00:00.000Z", "cwd": "/tmp/p"}
+            with open(os.path.join(proj, "2026-11-08T10-00-00_orig.jsonl"), "w") as handle:
+                for row in [header] + copied:
+                    handle.write(json.dumps(row) + "\n")
+            fork_header = dict(header, id="fork", timestamp="2026-11-08T11:00:00.000Z",
+                               parentSession=os.path.join(proj, "2026-11-08T10-00-00_orig.jsonl"))
+            extra = [entry("e5", "user", "2026-11-08T11:00:01.000Z"),
+                     entry("e6", "assistant", "2026-11-08T11:00:02.000Z", "msg_01B")]
+            with open(os.path.join(proj, "2026-11-08T11-00-00_fork.jsonl"), "w") as handle:
+                for row in [fork_header] + copied + extra:
+                    handle.write(json.dumps(row) + "\n")
+            sessions = [pi.parse_file(p, parent) for p, parent in pi.discover([tmp])]
+            self.assertEqual(len(sessions), 2)
+            self.assertEqual(sum(len(s.messages) for s in dedupe(sessions)), 3)
 
     def test_dedupe_keys_stable(self):
         discovered = pi.discover([FIXTURE_PI])
