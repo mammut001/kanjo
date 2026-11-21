@@ -52,6 +52,37 @@ class GrokBotSourceTest(unittest.TestCase):
         )
         self.assertEqual(cost, 0.0)
 
+    def test_blobs_load_once_per_change(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        n = 30
+        with tempfile.TemporaryDirectory() as tmp:
+            for i in range(n):
+                blob = {"value": {"entries": [
+                    {"id": "e%d" % i, "kind": "send-message", "requestId": "r%d" % i,
+                     "timestampMs": 1790000000000 + i},
+                ]}}
+                with open(os.path.join(tmp, "t%02d.blob" % i), "w") as handle:
+                    json.dump(blob, handle)
+            roster = {"value": {"rows": [{"id": "s%d" % i, "lastMessageId": "e%d" % i,
+                                          "title": "T%d" % i} for i in range(n)]}}
+            with open(os.path.join(tmp, "roster.blob"), "w") as handle:
+                json.dump(roster, handle)
+
+            real_load = grok_bot._load_blob
+            calls = []
+
+            def counting(path):
+                calls.append(path)
+                return real_load(path)
+
+            with mock.patch.object(grok_bot, "_load_blob", counting):
+                sessions = [grok_bot.parse_file(p, parent) for p, parent in grok_bot.discover([tmp])]
+            self.assertEqual(sorted(s.id for s in sessions), sorted("s%d" % i for i in range(n)))
+            self.assertLessEqual(len(calls), 2 * (n + 1))
+
 
 if __name__ == "__main__":
     unittest.main()
