@@ -239,9 +239,58 @@ public sealed record Project(
         J.StringOrNull(e, "last_active", path),
         J.List(J.Array(e, "by_agent", path), J.Child(path, "by_agent"), AgentCost.Decode),
         J.List(J.Array(e, "by_model", path), J.Child(path, "by_model"), ModelCost.Decode),
-        J.List(J.Array(e, "by_day", path), J.Child(path, "by_day"), DayCost.Decode),
+        DecodeByDay(J.Array(e, "by_day", path), J.Child(path, "by_day")),
         J.List(J.ArrayOrNull(e, "by_branch", path), J.Child(path, "by_branch"), BranchCost.Decode),
         J.List(J.ArrayOrNull(e, "sessions_detail", path), J.Child(path, "sessions_detail"), Session.Decode));
+
+    private static RoList<DayCost> DecodeByDay(JsonElement array, string path)
+    {
+        var n = array.GetArrayLength();
+        var list = new List<DayCost>(n);
+        for (var i = 0; i < n; i++)
+        {
+            list.Add(DecodeDayCost(array[i], J.Index(path, i)));
+        }
+        return new RoList<DayCost>(list);
+    }
+
+    private static DayCost DecodeDayCost(JsonElement e, string path)
+    {
+        if (!e.TryGetProperty("day", out var dayEl) || dayEl.ValueKind != JsonValueKind.String)
+        {
+            throw new DecodeError($"missing field {J.Child(path, "day")}");
+        }
+        if (!e.TryGetProperty("cost", out var costEl) || costEl.ValueKind != JsonValueKind.Number)
+        {
+            throw new DecodeError($"missing field {J.Child(path, "cost")}");
+        }
+        long tokens = 0;
+        if (e.TryGetProperty("tokens", out var tokEl) && tokEl.ValueKind == JsonValueKind.Number)
+        {
+            tokens = tokEl.TryGetInt64(out var t) ? t : (long)tokEl.GetDouble();
+        }
+        RoDict<double>? byAgent = null;
+        if (e.TryGetProperty("by_agent", out var baEl) && baEl.ValueKind == JsonValueKind.Object)
+        {
+            byAgent = new RoDict<double>(J.DoubleDict(baEl, J.Child(path, "by_agent")));
+        }
+        RoDict<long>? byAgentTokens = null;
+        if (e.TryGetProperty("by_agent_tokens", out var btEl) && btEl.ValueKind == JsonValueKind.Object)
+        {
+            byAgentTokens = new RoDict<long>(LongIntDict(btEl, J.Child(path, "by_agent_tokens")));
+        }
+        return new DayCost(dayEl.GetString()!, costEl.GetDouble(), tokens, byAgent, byAgentTokens);
+
+        static Dictionary<string, long> LongIntDict(JsonElement el, string dictPath)
+        {
+            var result = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var p in el.EnumerateObject())
+            {
+                result[p.Name] = (long)J.ToInt(p.Value, J.Child(dictPath, p.Name));
+            }
+            return result;
+        }
+    }
 }
 
 public sealed record UsageReport(
