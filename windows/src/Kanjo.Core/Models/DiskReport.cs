@@ -125,11 +125,12 @@ public sealed record DiskReport(
         J.NumberOrNull(e, "scan_seconds", path));
 }
 
-public sealed record CleanSkip(string Id, string Reason)
+public sealed record CleanSkip(string Id, string Reason, string? Detail = null)
 {
     public static CleanSkip Decode(JsonElement e, string path) => new(
         J.String(e, "id", path),
-        J.String(e, "reason", path));
+        J.String(e, "reason", path),
+        J.StringOrNull(e, "detail", path));
 }
 
 public sealed record CleanResult(RoList<string> Moved, long FreedBytes, RoList<CleanSkip> Skipped)
@@ -148,6 +149,12 @@ public static class DiskBlock
         "not_imported" => L10n.Tr("disk.block.not_imported"),
         "uncommitted_changes" => L10n.Tr("disk.block.uncommitted_changes"),
         "active" => L10n.Tr("disk.block.active"),
+        "not_merged" => L10n.Tr("disk.block.not_merged"),
+        "worktree_remove_failed" => L10n.Tr("disk.block.worktree_remove_failed"),
+        "nothing_to_move" => L10n.Tr("disk.block.nothing_to_move"),
+        "move_failed" => L10n.Tr("disk.block.move_failed"),
+        "changed" => L10n.Tr("disk.block.changed"),
+        "refused" => L10n.Tr("disk.block.refused"),
         _ => reason.Replace("_", " ", StringComparison.Ordinal),
     };
 
@@ -158,6 +165,12 @@ public static class DiskBlock
         "not_imported" => L10n.Tr("disk.block.explanation.not_imported"),
         "uncommitted_changes" => L10n.Tr("disk.block.explanation.uncommitted_changes"),
         "active" => L10n.Tr("disk.block.explanation.active"),
+        "not_merged" => L10n.Tr("disk.block.explanation.not_merged"),
+        "worktree_remove_failed" => L10n.Tr("disk.block.explanation.worktree_remove_failed"),
+        "nothing_to_move" => L10n.Tr("disk.block.explanation.nothing_to_move"),
+        "move_failed" => L10n.Tr("disk.block.explanation.move_failed"),
+        "changed" => L10n.Tr("disk.block.explanation.changed"),
+        "refused" => L10n.Tr("disk.block.explanation.refused"),
         _ => L10n.Tr("disk.block.explanation.default"),
     };
 }

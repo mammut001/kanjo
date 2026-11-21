@@ -118,6 +118,14 @@ public sealed class DiskReportCache
             // 缓存不可写不影响内存中的报告。
         }
     }
+
+    /// <summary>清理成功后丢掉本地缓存，避免随后的扫描还读到清理前的报告。</summary>
+    public void Invalidate()
+    {
+        if (FilePath is null) return;
+        try { File.Delete(FilePath); }
+        catch (Exception) { /* ignore */ }
+    }
 }
 
 /// <summary>把 <see cref="DiskReport"/> 写成契约 JSON（缓存用；不追求字节级一致，只要能读回来）。</summary>

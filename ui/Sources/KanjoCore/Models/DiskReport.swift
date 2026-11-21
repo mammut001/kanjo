@@ -243,6 +243,9 @@ public enum DiskBlock {
         case "not_merged": return L10n.tr("disk.block.not_merged")
         case "worktree_remove_failed": return L10n.tr("disk.block.worktree_remove_failed")
         case "nothing_to_move": return L10n.tr("disk.block.nothing_to_move")
+        case "move_failed": return L10n.tr("disk.block.move_failed")
+        case "changed": return L10n.tr("disk.block.changed")
+        case "refused": return L10n.tr("disk.block.refused")
         default: return reason.replacingOccurrences(of: "_", with: " ")
         }
     }
@@ -263,6 +266,12 @@ public enum DiskBlock {
             return L10n.tr("disk.block.explanation.worktree_remove_failed")
         case "nothing_to_move":
             return L10n.tr("disk.block.explanation.nothing_to_move")
+        case "move_failed":
+            return L10n.tr("disk.block.explanation.move_failed")
+        case "changed":
+            return L10n.tr("disk.block.explanation.changed")
+        case "refused":
+            return L10n.tr("disk.block.explanation.refused")
         default:
             return L10n.tr("disk.block.explanation.default")
         }
