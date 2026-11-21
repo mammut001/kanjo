@@ -177,6 +177,13 @@ final class ReportStore: ObservableObject {
         }
     }
 
+    func prepareIfNeeded(rangeRaw: String) {
+        guard pendingReport == nil, let report = report else { return }
+        let spec = RangeEngine.resolve(raw: rangeRaw, report: report, now: Date()).spec
+        guard panelData?.matches(report: report, spec: spec) != true else { return }
+        prepare(rangeRaw: rangeRaw)
+    }
+
     func prepare(rangeRaw: String) {
         let reportToCompute = pendingReport?.report ?? report
         guard let report = reportToCompute else { return }

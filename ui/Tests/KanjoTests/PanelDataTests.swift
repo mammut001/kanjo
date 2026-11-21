@@ -184,7 +184,16 @@ final class PanelDataTests: XCTestCase {
         let specToday = RangeEngine.spec(.today, report: report, now: now)
         let panelDataToday = PanelData(rangeSpec: specToday, filteredReport: FilteredReport(spec: specToday, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, now: now)
         
+        let laterToday = now.addingTimeInterval(60)
+        XCTAssertTrue(panelDataToday.matches(report: report, spec: RangeEngine.spec(.today, report: report, now: laterToday)))
         let tomorrow = now.addingTimeInterval(86400)
         XCTAssertFalse(panelDataToday.matches(report: report, spec: RangeEngine.spec(.today, report: report, now: tomorrow)))
+
+        var changedZone = specToday
+        changedZone.calendar.timeZone = TimeZone(secondsFromGMT: 3600)!
+        XCTAssertFalse(panelDataToday.matches(report: report, spec: changedZone))
+        var changedAgentStarts = specToday
+        changedAgentStarts.agentStarts = ["example": now]
+        XCTAssertFalse(panelDataToday.matches(report: report, spec: changedAgentStarts))
     }
 }
