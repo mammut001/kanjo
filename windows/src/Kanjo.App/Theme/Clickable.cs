@@ -25,6 +25,7 @@ public sealed class Clickable : Border
     {
         _onClick = onClick;
         _hoverFill = hoverFill;
+        Focusable = true;
         Child = content;
         CornerRadius = new CornerRadius(radius);
         Background = Brushes.Transparent;
@@ -73,6 +74,12 @@ public sealed class Clickable : Border
             _pressed = false;
             UpdateBackground();
             if (!wasPressed || !IsEnabled) return;
+            e.Handled = true;
+            _onClick();
+        };
+        KeyDown += (_, e) =>
+        {
+            if (!IsEnabled || e.Source != this || e.Key is not (Key.Enter or Key.Space)) return;
             e.Handled = true;
             _onClick();
         };

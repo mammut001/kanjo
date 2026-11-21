@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Kanjo.Core;
@@ -43,6 +44,12 @@ public sealed class SessionList : StackPanel
         Spacing = 4;
         Children.Add(Header());
         Children.Add(_list);
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape || _popover is null) return;
+            TogglePopover();
+            e.Handled = true;
+        };
         Rebuild();
     }
 
@@ -118,19 +125,11 @@ public sealed class SessionList : StackPanel
             item.Children.Add(explanation);
             body.Children.Add(item);
         }
-        _popover = Chrome.HoverCardChrome(body) is var card && card is Border border
-            ? SetWidth(border)
-            : body;
+        _popover = Chrome.HoverCardChrome(body);
+        _popover.Width = 300;
         _popover.Margin = new Thickness(0, 6, 0, 4);
-        _popover.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _popover.HorizontalAlignment = HorizontalAlignment.Left;
         Children.Insert(1, _popover);
-    }
-
-    private static Control SetWidth(Border border)
-    {
-        border.Width = 300;
-        border.HorizontalAlignment = HorizontalAlignment.Left;
-        return border;
     }
 
     private List<Session> Sorted()
