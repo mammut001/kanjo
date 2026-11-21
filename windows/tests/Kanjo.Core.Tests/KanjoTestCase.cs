@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using Kanjo.App;
 using Xunit;
 
@@ -68,6 +69,11 @@ public abstract class KanjoTestCase : IDisposable
             finally
             {
                 TestWindows.CloseAll();
+                Appearance.UnwatchAll();
+                Appearance.Override = null;
+                HoverLayer.Current = null;
+                HoverLayer.PinnedId = null;
+                Dispatcher.UIThread.RunJobs();
             }
             return true;
         }, cts.Token).GetAwaiter().GetResult();

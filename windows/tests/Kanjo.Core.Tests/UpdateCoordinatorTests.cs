@@ -20,14 +20,21 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
 
         public Exception? ThrowOnDownload { get; set; }
 
+        /// <summary>自定义检查过程（如用 TaskCompletionSource 挂起，确定性地测试并发去重）。</summary>
+        public Func<Task<string?>>? Check { get; set; }
+
         /// <summary>下载时依次报的进度；null = 直接成功（不报进度）。</summary>
         public Action<Action<int>>? Download { get; set; }
 
-        public int CheckCalls { get; private set; }
+        private int _checkCalls;
+        private int _downloadCalls;
+        private int _restartCalls;
 
-        public int DownloadCalls { get; private set; }
+        public int CheckCalls => Volatile.Read(ref _checkCalls);
 
-        public int RestartCalls { get; private set; }
+        public int DownloadCalls => Volatile.Read(ref _downloadCalls);
+
+        public int RestartCalls => Volatile.Read(ref _restartCalls);
 
         public string? CurrentVersion => "0.5.2";
 
@@ -35,14 +42,15 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
 
         public Task<string?> CheckForUpdateAsync()
         {
-            CheckCalls++;
+            Interlocked.Increment(ref _checkCalls);
+            if (Check is { } custom) return custom();
             if (ThrowOnCheck is { } e) return Task.FromException<string?>(e);
             return Task.FromResult(Available);
         }
 
         public Task DownloadAsync(Action<int> progress, CancellationToken cancellationToken)
         {
-            DownloadCalls++;
+            Interlocked.Increment(ref _downloadCalls);
             if (ThrowOnDownload is { } e) return Task.FromException(e);
             Download?.Invoke(progress);
             return Task.CompletedTask;
@@ -50,7 +58,7 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
 
         public void RestartToApply()
         {
-            RestartCalls++;
+            Interlocked.Increment(ref _restartCalls);
             RestartCalled.TrySetResult(true);
         }
 
@@ -60,16 +68,36 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
     private static UpdateCoordinator Make(IUpdateManager? manager, FakeBackgroundScheduler? timers = null) =>
         new(manager, manager?.CurrentVersion ?? "0.5.2", timers ?? new FakeBackgroundScheduler());
 
-    /// <summary>等到状态变成期望值（后台 Task 跑完）——不依赖 Thread.Sleep。</summary>
+    /// <summary>等到状态变成期望值（事件驱动，不轮询睡眠）。</summary>
     private static async Task<UpdateStatus> WaitFor(UpdateCoordinator coordinator, UpdateState state)
     {
-        for (var i = 0; i < 400; i++)
+        var current = coordinator.Status;
+        if (current.State == state) return current;
+
+        var matched = new TaskCompletionSource<UpdateStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged()
         {
-            if (coordinator.Status.State == state) return coordinator.Status;
-            await Task.Delay(5);
+            var status = coordinator.Status;
+            if (status.State == state) matched.TrySetResult(status);
         }
-        Assert.Fail($"state stayed {coordinator.Status.State}, wanted {state}");
-        return coordinator.Status;
+
+        coordinator.Changed += OnChanged;
+        try
+        {
+            // 订阅后再读一次，避免状态刚好在订阅之前切过去而丢掉信号。
+            current = coordinator.Status;
+            if (current.State == state) return current;
+            return await matched.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"state stayed {coordinator.Status.State}, wanted {state}");
+            return coordinator.Status;
+        }
+        finally
+        {
+            coordinator.Changed -= OnChanged;
+        }
     }
 
     [Fact]
@@ -96,7 +124,10 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         var manager = new FakeUpdateManager { Available = "0.5.3" };
         var seen = new List<UpdateStatus>();
         using var coordinator = Make(manager);
-        coordinator.Changed += () => seen.Add(coordinator.Status);
+        coordinator.Changed += () =>
+        {
+            lock (seen) seen.Add(coordinator.Status);
+        };
 
         var status = await RunToEnd(coordinator);
 
@@ -107,9 +138,11 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         Assert.True(coordinator.HasReadyUpdate);
 
         // 状态是按顺序走过来的：Checking → Downloading → Ready（界面据此画进度、再换成按钮）。
-        Assert.Contains(seen, s => s.State == UpdateState.Checking);
-        Assert.Contains(seen, s => s.State == UpdateState.Downloading);
-        Assert.Equal(UpdateState.Ready, seen[^1].State);
+        List<UpdateStatus> snapshot;
+        lock (seen) snapshot = [.. seen];
+        Assert.Contains(snapshot, s => s.State == UpdateState.Checking);
+        Assert.Contains(snapshot, s => s.State == UpdateState.Downloading);
+        Assert.Equal(UpdateState.Ready, snapshot[^1].State);
     }
 
     [Fact]
@@ -128,14 +161,20 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         using var coordinator = Make(manager);
         coordinator.Changed += () =>
         {
-            if (coordinator.Status.State == UpdateState.Downloading) progressSeen.Add(coordinator.Status.Progress);
+            var current = coordinator.Status;
+            if (current.State == UpdateState.Downloading)
+            {
+                lock (progressSeen) progressSeen.Add(current.Progress);
+            }
         };
 
         var status = await RunToEnd(coordinator);
 
         Assert.Equal(UpdateState.Ready, status.State);
-        Assert.Contains(42, progressSeen);
-        Assert.Contains(progressSeen, p => p is > 0 and < 100);
+        List<int> snapshot;
+        lock (progressSeen) snapshot = [.. progressSeen];
+        Assert.Contains(42, snapshot);
+        Assert.Contains(snapshot, p => p is > 0 and < 100);
     }
 
     [Fact]
@@ -183,15 +222,26 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
     [Fact]
     public async Task TestConcurrentChecksDoNotOverlap()
     {
-        var manager = new FakeUpdateManager { Available = null };
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var manager = new FakeUpdateManager
+        {
+            Check = () =>
+            {
+                started.TrySetResult(true);
+                return gate.Task;
+            },
+        };
         using var coordinator = Make(manager);
 
         var a = coordinator.CheckNowAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var b = coordinator.CheckNowAsync();
-        await Task.WhenAll(a, b);
-        await WaitFor(coordinator, UpdateState.UpToDate);
 
         Assert.Same(a, b);
+        gate.SetResult(null);
+        await Task.WhenAll(a, b);
+        Assert.Equal(UpdateState.UpToDate, coordinator.Status.State);
         Assert.Equal(1, manager.CheckCalls);
     }
 
@@ -249,6 +299,16 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         var manager = new FakeUpdateManager { Available = null };
         using var coordinator = Make(manager, timers);
 
+        var completions = 0;
+        var secondDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        coordinator.Changed += () =>
+        {
+            if (coordinator.Status.State == UpdateState.UpToDate && Interlocked.Increment(ref completions) >= 2)
+            {
+                secondDone.TrySetResult(true);
+            }
+        };
+
         coordinator.Start();
         var first = Assert.Single(timers.Entries);
         Assert.False(first.IsPeriodic);
@@ -262,7 +322,32 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
         Assert.Equal(UpdatePolicy.Interval, periodic!.Interval);
 
         periodic.Fire();
-        for (var i = 0; i < 200 && manager.CheckCalls < 2; i++) await Task.Delay(5);
+        await secondDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(2, manager.CheckCalls);
+    }
+
+    /// <summary>上一次刚到终态（在 Changed 通知里立刻再触发检查）必须真正跑第二次，不被旧 Task 吃掉。</summary>
+    [Fact]
+    public async Task TestCheckTriggeredFromCompletionCallbackRunsAgain()
+    {
+        var manager = new FakeUpdateManager { Available = null };
+        using var coordinator = Make(manager);
+
+        Task? second = null;
+        var retriggered = 0;
+        coordinator.Changed += () =>
+        {
+            if (coordinator.Status.State == UpdateState.UpToDate && Interlocked.Exchange(ref retriggered, 1) == 0)
+            {
+                second = coordinator.CheckNowAsync();
+            }
+        };
+
+        var first = coordinator.CheckNowAsync();
+        await first;
+        Assert.NotNull(second);
+        Assert.NotSame(first, second);
+        await second!;
         Assert.Equal(2, manager.CheckCalls);
     }
 

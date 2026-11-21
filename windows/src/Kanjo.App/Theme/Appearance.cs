@@ -46,6 +46,9 @@ public static class Appearance
     public static void Unwatch(PanelView panel) =>
         Panels.RemoveAll(entry => !entry.Target.TryGetTarget(out var live) || ReferenceEquals(live, panel));
 
+    /// <summary>清空全部面板订阅（headless 单测在 Dispatch 收尾时调用，防止旧面板活到下一轮）。</summary>
+    public static void UnwatchAll() => Panels.Clear();
+
     private static void NotifyPanels()
     {
         foreach (var (reference, handler) in Panels.ToList())

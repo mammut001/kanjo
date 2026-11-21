@@ -28,6 +28,7 @@ public sealed class UpdateCoordinator : IDisposable
     private IBackgroundTimer? _firstCheck;
     private IBackgroundTimer? _periodic;
     private Task? _running;
+    private int _runId;
     private UpdateStatus _status;
     private string? _dismissedVersion;
     private bool _disposed;
@@ -121,79 +122,109 @@ public sealed class UpdateCoordinator : IDisposable
     public Task CheckNowAsync()
     {
         IUpdateManager? manager;
+        int runId;
         lock (_lock)
         {
             if (_disposed || _manager is null) return Task.CompletedTask;
             if (_running is { IsCompleted: false }) return _running;
             manager = _manager;
+            runId = ++_runId;
             // 放到线程池：RunAsync 的第一件事就是改状态 + 发通知，不能在锁里跑用户回调。
-            _running = Task.Run(() => RunAsync(manager));
+            _running = Task.Run(() => RunAsync(manager, runId));
             return _running;
         }
     }
 
-    private async Task RunAsync(IUpdateManager manager)
+    private async Task RunAsync(IUpdateManager manager, int runId)
     {
-        SetStatus(new UpdateStatus(UpdateState.Checking) { CurrentVersion = CurrentVersion });
-
-        string? version;
         try
         {
-            version = await manager.CheckForUpdateAsync().ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            Fail(e);
-            return;
-        }
-        if (IsDisposed) return;
+            SetStatus(new UpdateStatus(UpdateState.Checking) { CurrentVersion = CurrentVersion });
 
-        if (version is not { Length: > 0 })
-        {
-            SetStatus(new UpdateStatus(UpdateState.UpToDate, null, 0, null, DateTimeOffset.UtcNow)
+            string? version;
+            try
+            {
+                version = await manager.CheckForUpdateAsync().ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                Fail(e, runId);
+                return;
+            }
+            if (IsDisposed) return;
+
+            if (version is not { Length: > 0 })
+            {
+                FinishRun(runId, new UpdateStatus(UpdateState.UpToDate, null, 0, null, DateTimeOffset.UtcNow)
+                {
+                    CurrentVersion = CurrentVersion,
+                });
+                return;
+            }
+
+            SetStatus(new UpdateStatus(UpdateState.Downloading, version, 0, null, DateTimeOffset.UtcNow)
             {
                 CurrentVersion = CurrentVersion,
             });
-            return;
-        }
-
-        SetStatus(new UpdateStatus(UpdateState.Downloading, version, 0, null, DateTimeOffset.UtcNow)
-        {
-            CurrentVersion = CurrentVersion,
-        });
-        var lastReported = 0;
-        try
-        {
-            // Velopack 的进度回调是 0–100，可能从任何线程来；SetStatus 会切到 UI 线程。
-            // 只在跨过 5% 的档位时才通知：界面上每来一个百分点就重建一次页面太费了。
-            await manager.DownloadAsync(percent =>
+            var lastReported = 0;
+            try
             {
-                if (IsDisposed) return;
-                if (percent is > 0 and < 100 && percent - lastReported < 5) return;
-                lastReported = percent;
-                SetStatus(new UpdateStatus(UpdateState.Downloading, version, percent, null,
-                    DateTimeOffset.UtcNow) { CurrentVersion = CurrentVersion });
-            }, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            Fail(e);
-            return;
-        }
-        if (IsDisposed) return;
+                // Velopack 的进度回调是 0–100，可能从任何线程来；SetStatus 会切到 UI 线程。
+                // 只在跨过 5% 的档位时才通知：界面上每来一个百分点就重建一次页面太费了。
+                await manager.DownloadAsync(percent =>
+                {
+                    if (IsDisposed) return;
+                    if (percent is > 0 and < 100 && percent - lastReported < 5) return;
+                    lastReported = percent;
+                    SetStatus(new UpdateStatus(UpdateState.Downloading, version, percent, null,
+                        DateTimeOffset.UtcNow) { CurrentVersion = CurrentVersion });
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                Fail(e, runId);
+                return;
+            }
+            if (IsDisposed) return;
 
-        SetStatus(new UpdateStatus(UpdateState.Ready, version, 100, null, DateTimeOffset.UtcNow)
+            FinishRun(runId, new UpdateStatus(UpdateState.Ready, version, 100, null, DateTimeOffset.UtcNow)
+            {
+                CurrentVersion = CurrentVersion,
+            });
+        }
+        finally
         {
-            CurrentVersion = CurrentVersion,
-        });
+            lock (_lock)
+            {
+                if (_runId == runId) _running = null;
+            }
+        }
     }
 
     /// <summary>失败只记一句短消息（界面上是「retry」），下次定时检查会再试。</summary>
-    private void Fail(Exception e)
+    private void Fail(Exception e, int? runId = null)
     {
         System.Diagnostics.Trace.WriteLine($"kanjo: update failed: {e.Message}");
-        SetStatus(new UpdateStatus(UpdateState.Failed, null, 0, UpdateStatusText.Shorten(e.Message),
-            DateTimeOffset.UtcNow) { CurrentVersion = CurrentVersion });
+        var status = new UpdateStatus(UpdateState.Failed, null, 0, UpdateStatusText.Shorten(e.Message),
+            DateTimeOffset.UtcNow) { CurrentVersion = CurrentVersion };
+        if (runId is { } id) FinishRun(id, status);
+        else SetStatus(status);
+    }
+
+    /// <summary>
+    /// 写入终态并把 <see cref="_running"/> 清空放进同一把锁里：保证任何看到终态（或收到
+    /// <see cref="Changed"/>）的调用方再调 <see cref="CheckNowAsync"/> 时，不会因为外层 Task
+    /// 还没来得及切到 IsCompleted 而被误当成「上一次还在跑」。
+    /// </summary>
+    private void FinishRun(int runId, UpdateStatus status)
+    {
+        lock (_lock)
+        {
+            if (_runId == runId) _running = null;
+            if (_disposed) return;
+            _status = status;
+        }
+        Notify();
     }
 
     /// <summary>

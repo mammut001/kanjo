@@ -137,9 +137,13 @@ public sealed class AppearanceIsolationTests : KanjoTestCase
         OnUi(() =>
         {
             appOnUiThread = Application.Current!.GetHashCode();
+            // 先切到深色，确保下面后台线程发出的 Light 调用真的产生了一次切换。
+            Appearance.Force(AppearanceChoice.Dark);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(Palette.IsDark);
 
             // 从调度线程以外发起（这就是「测试线程上 ConfigureHeadless」的形状）。
-            var done = new ManualResetEventSlim();
+            var posted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _ = Task.Run(() =>
             {
                 try
@@ -148,10 +152,10 @@ public sealed class AppearanceIsolationTests : KanjoTestCase
                 }
                 finally
                 {
-                    done.Set();
+                    posted.TrySetResult(true);
                 }
             });
-            done.Wait(TimeSpan.FromSeconds(10));
+            Assert.True(posted.Task.Wait(TimeSpan.FromSeconds(10)));
 
             // 等被 Post 过来的那次真正执行。
             Dispatcher.UIThread.RunJobs();

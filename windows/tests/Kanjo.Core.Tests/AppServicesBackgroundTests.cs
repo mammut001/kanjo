@@ -174,7 +174,7 @@ public sealed class AppServicesBackgroundTests : KanjoTestCase
     }
 
     [Fact]
-    public void TestApplySettingsRearrangesTimer()
+    public async Task TestApplySettingsRearrangesTimer()
     {
         var timers = new FakeBackgroundScheduler();
         var services = NewServices(timers, new FakeLogWatcherFactory(), new FakePowerMonitor(),
@@ -182,14 +182,14 @@ public sealed class AppServicesBackgroundTests : KanjoTestCase
         services.Settings.Set(SettingsKeys.RefreshMinutes, 15);
 
         // 刷新放到后台线程：等它通知「加载完成」（用信号等待，不用真实时钟）。
-        using var done = new ManualResetEventSlim();
+        var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         services.Changed += () =>
         {
-            if (!services.IsLoading && services.Report is not null) done.Set();
+            if (!services.IsLoading && services.Report is not null) done.TrySetResult(true);
         };
 
         services.ApplySettings();
-        Assert.True(done.Wait(TimeSpan.FromSeconds(10)));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(TimeSpan.FromMinutes(15), timers.Periodic!.Interval);
     }
 

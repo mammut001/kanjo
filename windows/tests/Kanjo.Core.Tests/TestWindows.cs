@@ -22,6 +22,18 @@ internal static class TestWindows
     public static Window Show(Control page, double width, double height)
     {
         var window = new Window { Width = width, Height = height, Content = page };
+        return Show(window);
+    }
+
+    /// <summary>建按内容自适应尺寸的窗口、显示、登记（必须在 UI 线程上调用）。</summary>
+    public static Window ShowSizedToContent(Control page)
+    {
+        var window = new Window { Content = page, SizeToContent = SizeToContent.WidthAndHeight };
+        return Show(window);
+    }
+
+    private static Window Show(Window window)
+    {
         // 用例自己关掉时就从名单里摘掉，收尾时不用再碰（重复 Close 会再走一遍关闭流程）。
         window.Closed += (_, _) => Live.Remove(window);
         window.Show();
