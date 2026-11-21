@@ -260,6 +260,7 @@ public sealed class SettingsPage : ScrollPage
         var picker = Picker.Make(options, (int)current, index =>
         {
             Set(SettingsKeys.AppLanguage, AppLanguages.All[index].RawValue());
+            L10n.ResetCache();
             Rebuild();
         });
         return Section(L10n.Tr("settings.section.language"),
@@ -1162,7 +1163,8 @@ public sealed class SettingsPage : ScrollPage
                             ?? AgentColors.DefaultLabels.GetValueOrDefault(agent, agent);
                 var row = new SubscriptionSettingsRow(_services, agent, label,
                     report.Subscriptions?.TryGetValue(agent, out var sub) == true ? sub : null,
-                    report.Currency, _editingAgent == agent);
+                    report.Currency, _editingAgent == agent,
+                    agent == "antigravity" ? report.AntigravityAccounts : null);
                 _subscriptionRows[agent] = row;
                 rows.Add(row);
             }

@@ -267,7 +267,8 @@ public sealed record UsageReport(
     RoDict<Subscription>? Subscriptions,
     Aggregate Totals,
     RoList<Project> Projects,
-    Buckets Buckets)
+    Buckets Buckets,
+    AntigravityAccounts? AntigravityAccounts = null)
 {
     /// <summary>schema_version 高于本 UI 支持的版本：显示警告，继续渲染。</summary>
     public bool IsNewerSchema => SchemaVersion > Contract.SupportedSchemaVersion;
@@ -317,7 +318,10 @@ public sealed record UsageReport(
             DecodeSubscriptions(e, path),
             Aggregate.Decode(J.RequiredObject(e, "totals", path), J.Child(path, "totals")),
             J.List(J.Array(e, "projects", path), J.Child(path, "projects"), Project.Decode),
-            Buckets.Decode(J.RequiredObject(e, "buckets", path), J.Child(path, "buckets")));
+            Buckets.Decode(J.RequiredObject(e, "buckets", path), J.Child(path, "buckets")),
+            J.Optional(e, "antigravity_accounts") is { } agy
+                ? AntigravityAccounts.Decode(agy, J.Child(path, "antigravity_accounts"))
+                : null);
     }
 
     private static RoDict<QuotaWindow>? DecodeWindows(JsonElement e, string path)

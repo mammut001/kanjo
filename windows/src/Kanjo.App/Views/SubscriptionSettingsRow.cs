@@ -20,6 +20,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private readonly string _agent;
     private readonly string _label;
     private readonly string _currency;
+    private readonly AntigravityAccounts? _antigravityAccounts;
     private bool _editing;
     private bool _saving;
     private string? _error;
@@ -29,14 +30,15 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private string _price;
 
     public SubscriptionSettingsRow(AppServices services, string agent, string label, Subscription? sub,
-        string currency, bool initiallyEditing)
+        string currency, bool initiallyEditing, AntigravityAccounts? antigravityAccounts = null)
     {
         _services = services;
         _agent = agent;
         _label = label;
         _currency = currency;
+        _antigravityAccounts = antigravityAccounts;
         _editing = initiallyEditing;
-        _day = Math.Clamp(sub?.AnchorDay ?? 1, 1, 28);
+        _day = SubscriptionRenewalDay.StepperValue(sub?.AnchorDay);
 
         var plans = KnownPlans;
         var (key, custom) = initiallyEditing
@@ -80,9 +82,15 @@ public sealed class SubscriptionSettingsRow : StackPanel
         header.Children.Add(Ui.Text(_label, Type.BodySize, FontWeight.SemiBold, maxLines: 1));
         if (sub is not null)
         {
+            var (summaryLabel, summaryPrice, accountCount) = SummaryHeader(sub);
             header.Children.Add(Ui.Text(
-                $"{L10n.Tr("settings.subscriptions.price")}: {Fmt.PerMonth(sub.MonthlyPriceUsd, _currency)}",
-                Type.CaptionSize, null, Palette.Secondary, maxLines: 1));
+                $"{summaryLabel} · {Fmt.PerMonth(summaryPrice, _currency)}",
+                Type.CaptionSize, null, Palette.Secondary, maxLines: 2));
+            if (accountCount is > 1)
+            {
+                header.Children.Add(Ui.Text(L10n.TrL(null, "overview.accounts_count", accountCount.Value),
+                    Type.CaptionSize, null, Palette.Secondary, maxLines: 1));
+            }
         }
         Children.Add(new Border
         {
@@ -93,6 +101,17 @@ public sealed class SubscriptionSettingsRow : StackPanel
         if (_editing) Children.Add(EditingForm(sub));
         else if (sub is not null) Children.Add(DisplayForm(sub));
         else Children.Add(EmptyForm());
+
+        if (_agent == "antigravity" && _services.AccountPlanError is { } accountPlanError)
+        {
+            var accountErr = Widgets.StatusBlock(true,
+            [
+                Ui.Text(L10n.TrL(null, "settings.error.account_plan_failed", accountPlanError),
+                    Type.CaptionSize, null, Palette.Bad, wrap: true),
+            ]);
+            accountErr.Margin = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 6);
+            Children.Add(accountErr);
+        }
 
         if (_error is { } error)
         {
@@ -113,36 +132,65 @@ public sealed class SubscriptionSettingsRow : StackPanel
     {
         var box = Ui.V(8);
 
-        var stepper = Stepper(CanEdit);
-        ToolTip.SetTip(stepper, CanEdit
-            ? L10n.Tr("settings.renews_day_help")
-            : L10n.Tr("settings.renews_day_disabled_help"));
-        box.Children.Add(stepper);
-
-        // 三个按钮（Apply / Reset / Edit）右对齐。
-        // 用 Grid 的 `*,Auto` 列来右推，而不是靠 HorizontalAlignment.Right ——
-        // 后者会让 StackPanel 先按内容定宽、再溢出可用宽度。
-        // 左右 12px 内边距**只由外层 Border 提供一次**：这里再包一层 Padding 会变成 24，
-        // 按钮就会比同一行的文字窄进半格（review 里「右侧留白不均」的来源）。
-        var actions = Ui.H(8);
-        var apply = Ui.AccentButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
-        var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit, compact: true);
-        // Edit 只切换本地的「编辑表单」，不碰 CLI，所以**始终可用**（Mac 版把它和 Apply / Reset
-        // 放在同一个 `.disabled(...)` 里，结果在 --data / 文件来源下连编辑都进不去）。
-        // 真正需要 gating 的是表单里的 Apply / Remove（它们写配置）。
-        var edit = Ui.StandardButton(L10n.Tr("settings.edit"), () =>
+        if (_agent == "antigravity" && EffectiveAntigravityAccounts() is { Count: > 0 } accounts)
         {
-            SyncInputs(sub);
-            _editing = true;
-            Rebuild();
-        }, compact: true);
-        actions.Children.Add(apply);
-        actions.Children.Add(reset);
-        actions.Children.Add(edit);
-        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        Grid.SetColumn(actions, 1);
-        actionRow.Children.Add(actions);
-        box.Children.Add(actionRow);
+            box.Children.Add(AntigravityAccountPickers(accounts));
+        }
+
+        if (SubscriptionRenewalDay.AllowsManualStepper(sub))
+        {
+            var stepper = Stepper(CanEdit);
+            ToolTip.SetTip(stepper, CanEdit
+                ? L10n.Tr("settings.renews_day_help")
+                : L10n.Tr("settings.renews_day_disabled_help"));
+            box.Children.Add(stepper);
+
+            // 三个按钮（Apply / Reset / Edit）右对齐。
+            // 用 Grid 的 `*,Auto` 列来右推，而不是靠 HorizontalAlignment.Right ——
+            // 后者会让 StackPanel 先按内容定宽、再溢出可用宽度。
+            // 左右 12px 内边距**只由外层 Border 提供一次**：这里再包一层 Padding 会变成 24，
+            // 按钮就会比同一行的文字窄进半格（review 里「右侧留白不均」的来源）。
+            var actions = Ui.H(8);
+            var apply = Ui.AccentButton(L10n.Tr("common.apply"), () => SaveAnchor(_day), enabled: CanEdit);
+            var reset = Ui.StandardButton(L10n.Tr("common.reset"), ResetAll, enabled: CanEdit, compact: true);
+            // Edit 只切换本地的「编辑表单」，不碰 CLI，所以**始终可用**（Mac 版把它和 Apply / Reset
+            // 放在同一个 `.disabled(...)` 里，结果在 --data / 文件来源下连编辑都进不去）。
+            // 真正需要 gating 的是表单里的 Apply / Remove（它们写配置）。
+            var edit = Ui.StandardButton(L10n.Tr("settings.edit"), () =>
+            {
+                SyncInputs(sub);
+                _editing = true;
+                Rebuild();
+            }, compact: true);
+            actions.Children.Add(apply);
+            actions.Children.Add(reset);
+            actions.Children.Add(edit);
+            var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            Grid.SetColumn(actions, 1);
+            actionRow.Children.Add(actions);
+            box.Children.Add(actionRow);
+        }
+        else if (sub.AnchorDay is { } detected)
+        {
+            // 检测续费日 29–31：只读展示真实日与账期，避免步进器压成 28 后点 Apply 写坏 overrides。
+            box.Children.Add(Ui.Text(L10n.Tr("settings.renews_on_detected_day", detected),
+                Type.CaptionSize, mono: true));
+            var tz = _services.Report is { } report
+                ? RangeEngine.TimezoneOf(report)
+                : TimeZoneInfo.Local;
+            box.Children.Add(Ui.Text(Fmt.CycleCaption(sub, tz, _services.Now), Type.CaptionSize, null,
+                Palette.Secondary, wrap: true));
+            var setDay = Ui.StandardButton(L10n.Tr("settings.set_manual_renewal_day"), () =>
+            {
+                SyncInputs(sub);
+                _editing = true;
+                Rebuild();
+            }, enabled: CanEdit, compact: true);
+            var setRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            Grid.SetColumn(setDay, 1);
+            setRow.Children.Add(setDay);
+            box.Children.Add(setRow);
+        }
 
         var source = Ui.Text(_saving
                 ? L10n.Tr("settings.saving")
@@ -195,6 +243,11 @@ public sealed class SubscriptionSettingsRow : StackPanel
     private Control EditingForm(Subscription? sub)
     {
         var box = Ui.V(10);
+
+        if (_agent == "antigravity" && EffectiveAntigravityAccounts() is { Count: > 0 } agyAccounts)
+        {
+            box.Children.Add(AntigravityAccountPickers(agyAccounts));
+        }
 
         var plans = KnownPlans;
         if (plans.Count > 0)
@@ -358,9 +411,87 @@ public sealed class SubscriptionSettingsRow : StackPanel
         Build(Current);
     }
 
+    private (string Label, double? Price, int? AccountCount) SummaryHeader(Subscription sub)
+    {
+        if (_agent == "antigravity" && EffectiveAntigravityAccounts() is { } accounts)
+        {
+            var agg = AntigravityAggregation.Aggregate(accounts);
+            if (agg is not null)
+            {
+                return (agg.PlanLabel, agg.MonthlyPriceUsd, agg.AccountsPriced);
+            }
+        }
+        return (sub.PlanLabel, sub.MonthlyPriceUsd, null);
+    }
+
+    private IReadOnlyList<AntigravityAccount>? EffectiveAntigravityAccounts()
+    {
+        if (_antigravityAccounts?.Accounts is not { } list || list.Count == 0) return null;
+        var pending = _services.PendingAntigravityAccountPlans;
+        if (pending.Count == 0) return list;
+        var known = KnownPlans;
+        return AntigravityAggregation.ApplyPending(list, pending, known);
+    }
+
+    private Control AntigravityAccountPickers(IReadOnlyList<AntigravityAccount> accounts)
+    {
+        var plans = KnownPlans;
+        var box = Ui.V(6);
+        foreach (var acc in accounts)
+        {
+            var current = _services.PendingAntigravityAccountPlans.GetValueOrDefault(acc.Email)
+                          ?? _services.PendingAntigravityAccountPlans.GetValueOrDefault(
+                              acc.Email.ToLowerInvariant())
+                          ?? AntigravityAggregation.NormalizedPlanKey(acc.Plan?.Plan);
+            var options = new List<(string Key, string Label)>
+            {
+                ("", L10n.Tr("settings.plan_none")),
+            };
+            foreach (var plan in plans)
+            {
+                options.Add((plan.Key, SubscriptionPlanForm.MenuLabel(plan, _currency)));
+            }
+            if (acc.Plan is { } custom &&
+                AntigravityAggregation.NormalizedPlanKey(custom.Plan).Length > 0 &&
+                plans.All(p => p.Key != custom.Plan))
+            {
+                var customLabel = custom.MonthlyPriceUsd is { } p
+                    ? $"{custom.PlanLabel} · {Fmt.PerMonth(p, _currency)}"
+                    : custom.PlanLabel;
+                options.Add((custom.Plan, customLabel));
+            }
+            if (current.Length > 0 && current != acc.Plan?.Plan && plans.All(p => p.Key != current))
+            {
+                options.Add((current, current));
+            }
+            var index = Math.Max(0, options.FindIndex(o => o.Key == current));
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var name = Ui.Text(AntigravityAccountLogic.DisplayName(acc, accounts), Type.CaptionSize, maxLines: 1);
+            ToolTip.SetTip(name, acc.Email);
+            name.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(name, 0);
+            row.Children.Add(name);
+            var picker = Picker.Make(options.Select(o => o.Label).ToList(), index, i =>
+            {
+                var newKey = options[i].Key;
+                var normalized = AntigravityAggregation.NormalizedPlanKey(newKey);
+                if (normalized == current) return;
+                _services.SetAntigravityAccountPlan(acc.Email, normalized.Length == 0 ? null : normalized);
+            }, enabled: _services.CanEditSubscriptions, minWidth: 150);
+            Grid.SetColumn(picker, 1);
+            row.Children.Add(picker);
+            box.Children.Add(row);
+        }
+        return new Border
+        {
+            Child = box,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+    }
+
     private void SyncInputs(Subscription? sub)
     {
-        _day = Math.Clamp(sub?.AnchorDay ?? 1, 1, 28);
+        _day = SubscriptionRenewalDay.StepperValue(sub?.AnchorDay);
         var plans = KnownPlans;
         var (key, custom) = SubscriptionPlanForm.SyncSelection(sub, plans);
         _planKey = key;
