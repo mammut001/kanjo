@@ -298,6 +298,14 @@ final class DiskTests: KanjoTestCase {
         XCTAssertEqual(status, 0)
         XCTAssertEqual(try JSONDecoder().decode([String].self, from: output), paths)
     }
+
+    func testProcessRunnerSurvivesChildExitingBeforeReadingStdin() throws {
+        let input = Data(repeating: 0x61, count: 8 * 1024 * 1024)
+        let (status, _, _, timedOut) = try CLIDataSource.run(
+            command: "/bin/sh -c 'exit 0'", cwd: nil, timeout: 10, stdin: input)
+        XCTAssertFalse(timedOut)
+        XCTAssertEqual(status, 0)
+    }
     #endif
 
     func testFileDiskSourceLoadsFixture() async throws {

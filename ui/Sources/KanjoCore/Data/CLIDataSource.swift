@@ -1,6 +1,7 @@
 #if os(macOS)
 
 import Foundation
+import Darwin
 
 /// 执行外部命令（默认 `python3 -m kanjo export`），把 stdout 当契约 JSON 解码。
 /// 命令经 `/bin/zsh -l -c` 执行，以便拿到用户 shell 的 PATH（从 Finder 启动的应用 PATH 很短）。
@@ -112,6 +113,9 @@ public struct CLIDataSource: UsageDataSource {
         p.standardOutput = outPipe
         p.standardError = errPipe
         let inputPipe = stdin == nil ? nil : Pipe()
+        if let inputPipe {
+            _ = fcntl(inputPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+        }
         p.standardInput = inputPipe ?? FileHandle.nullDevice
 
         // 两路管道并发读，避免输出过大时子进程写满管道而死锁。
