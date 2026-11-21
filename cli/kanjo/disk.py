@@ -511,14 +511,20 @@ def report(roots: Optional[dict] = None, now: Optional[float] = None, ledger: Op
 def _load_worktree_cache(saved: Optional[dict]) -> None:
     """Fill the dirty and merge caches from the disk report cache.
 
-    Dirty keys are ``path\0head_mtime\0index_mtime``; merge keys are
+    Dirty keys are ``path\0head_mtime\0index_mtime`` with ``[dirty, checked_at]``
+    (an older plain bool counts as checked at 0); merge keys are
     ``merge\0path\0head_sha\0default_sha`` with ``[merged, merged_into]``.
     """
     for k, v in (saved or {}).items():
         parts = k.split("\0")
         if len(parts) == 3:
+            if isinstance(v, bool):
+                v = [v, 0.0]
+            if not (isinstance(v, list) and len(v) == 2 and isinstance(v[0], bool)
+                    and isinstance(v[1], (int, float))):
+                continue
             try:
-                _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = v
+                _WORKTREE_DIRTY_CACHE[(parts[0], int(parts[1]), int(parts[2]))] = (v[0], float(v[1]))
             except ValueError:
                 pass
         elif len(parts) == 4 and parts[0] == "merge":
@@ -527,7 +533,7 @@ def _load_worktree_cache(saved: Optional[dict]) -> None:
 
 
 def _dump_worktree_cache() -> dict:
-    saved = {("%s\0%d\0%d" % (k[0], k[1], k[2])): v for k, v in _WORKTREE_DIRTY_CACHE.items()}
+    saved = {("%s\0%d\0%d" % (k[0], k[1], k[2])): [v[0], v[1]] for k, v in _WORKTREE_DIRTY_CACHE.items()}
     for (path, head, target), (merged, ref) in _WORKTREE_MERGE_CACHE.items():
         saved["merge\0%s\0%s\0%s" % (path, head, target)] = [merged, ref]
     return saved
@@ -982,7 +988,8 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
         merged = merged_into = None
         if merge is not None:
             merged, merged_into = merge.result()
-        if dirty is not None and dirty.result():
+        if dirty is not None and (dirty.result() or (
+                measured["newest"] is not None and _worktree_dirty(path, edited_after=measured["newest"]))):
             blocked.append("uncommitted_changes")
         if kind == "worktrees" and merged:
             # A merged branch only needs an idle hour and no process working in it.
@@ -1185,7 +1192,10 @@ def _brain_scratches(brain_root: str) -> List[Tuple[str, str]]:
     return found
 
 
-_WORKTREE_DIRTY_CACHE: Dict[Tuple[str, int, int], bool] = {}
+# (path, head mtime, index mtime) -> (dirty, wall-clock time git status started).
+# Edits to tracked or untracked files touch neither mtime, so a clean result is only
+# reused while nothing in the tree is newer than that check (see _collect).
+_WORKTREE_DIRTY_CACHE: Dict[Tuple[str, int, int], Tuple[bool, float]] = {}
 
 
 def _git_head_index_mtimes(path: str) -> Optional[Tuple[int, int]]:
@@ -1217,13 +1227,18 @@ def _git_head_index_mtimes(path: str) -> Optional[Tuple[int, int]]:
     return (head_mtime, index_mtime)
 
 
-def _worktree_dirty(path: str) -> bool:
-    """True when ``git status --porcelain`` is non-empty, or git cannot say."""
+def _worktree_dirty(path: str, edited_after: Optional[float] = None) -> bool:
+    """True when ``git status --porcelain`` is non-empty, or git cannot say.
+
+    A saved clean result is ignored when ``edited_after`` (the tree's newest mtime)
+    is not older than the time that result was checked.
+    """
     mtimes = _git_head_index_mtimes(path)
     if mtimes is not None:
-        key = (path, mtimes[0], mtimes[1])
-        if key in _WORKTREE_DIRTY_CACHE:
-            return _WORKTREE_DIRTY_CACHE[key]
+        hit = _WORKTREE_DIRTY_CACHE.get((path, mtimes[0], mtimes[1]))
+        if hit is not None and (hit[0] or edited_after is None or edited_after < hit[1]):
+            return hit[0]
+    checked_at = time.time()
     try:
         proc = subprocess.run(
             ["git", "-c", "core.hooksPath=" + _no_hooks(), "-C", path, "status", "--porcelain"],
@@ -1235,7 +1250,9 @@ def _worktree_dirty(path: str) -> bool:
         return True
     is_dirty = bool(proc.stdout.strip())
     if mtimes is not None:
-        _WORKTREE_DIRTY_CACHE[(path, mtimes[0], mtimes[1])] = is_dirty
+        for old in [k for k in _WORKTREE_DIRTY_CACHE if k[0] == path]:
+            _WORKTREE_DIRTY_CACHE.pop(old, None)
+        _WORKTREE_DIRTY_CACHE[(path, mtimes[0], mtimes[1])] = (is_dirty, checked_at)
     return is_dirty
 
 
