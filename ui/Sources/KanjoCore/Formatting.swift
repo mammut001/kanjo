@@ -3,6 +3,7 @@ import Foundation
 public enum Fmt {
     /// 金额：0 < v < 0.01 显示 "<$0.01"，其余两位小数并带千分位。
     public static func money(_ v: Double, currency: String = "USD") -> String {
+        guard v.isFinite else { return "—" }
         let symbol = currency.uppercased() == "USD" ? "$" : currency.uppercased() + " "
         if v > 0 && v < 0.01 { return "<\(symbol)0.01" }
         if v < 0 && v > -0.01 { return "-<\(symbol)0.01" }
@@ -21,6 +22,7 @@ public enum Fmt {
 
     /// 菜单栏金额：< 100 两位小数（如 `<$0.01`、`$12.34`）；100..<10,000 不带小数并带千分位（`$3,057`）；>= 10,000 紧凑 K/M 一位小数并去尾部 `.0`（`$12.3K`、`$10K`、`$1.2M`）。
     public static func menuBarMoney(_ v: Double, currency: String = "USD") -> String {
+        guard v.isFinite else { return "—" }
         let mag = abs(v)
         let symbol = currency.uppercased() == "USD" ? "$" : currency.uppercased() + " "
         let sign = v < 0 ? "-" : ""
@@ -166,6 +168,7 @@ public enum Fmt {
     }
 
     public static func percent(_ share: Double) -> String {
+        guard share.isFinite else { return "—" }
         let p = share * 100
         if p >= 99.95 { return "100%" }
         if p < 1 { return String(format: "%.1f%%", p) }
