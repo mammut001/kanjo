@@ -1522,6 +1522,31 @@ def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) 
     return name
 
 
+def _reconcile_costs(items: List[dict], period_cost_usd: float, tokens: Callable[[dict], int]) -> None:
+    """Make the rounded ``cost_usd`` of ``items`` add up to ``period_cost_usd``.
+
+    The rounding residual goes to the costliest item. A negative residual larger
+    than that item is taken from the next ones, so no item drops below zero.
+    """
+    if not items:
+        return
+    diff = round(period_cost_usd - round(sum(x["cost_usd"] for x in items), 2), 2)
+    if diff == 0:
+        return
+    ordered = sorted(items, key=lambda x: (x["cost_usd"], tokens(x)), reverse=True)
+    if diff > 0:
+        ordered[0]["cost_usd"] = round(ordered[0]["cost_usd"] + diff, 2)
+        return
+    for item in ordered:
+        take = min(item["cost_usd"], -diff)
+        if take <= 0:
+            continue
+        item["cost_usd"] = round(item["cost_usd"] - take, 2)
+        diff = round(diff + take, 2)
+        if diff >= 0:
+            break
+
+
 class PublicPeriodAgg:
     def __init__(self, period: str, start: Optional[str] = None):
         self.period = period
@@ -1606,12 +1631,7 @@ class PublicPeriodAgg:
                 "cost_usd": round(data["cost"], 2),
                 "models": p_models[:5],
             })
-        if provider_items:
-            sum_prov_cost = round(sum(p["cost_usd"] for p in provider_items), 2)
-            diff = round(period_cost_usd - sum_prov_cost, 2)
-            if diff != 0:
-                largest = max(provider_items, key=lambda x: (x["tokens"]["total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(provider_items, period_cost_usd, lambda x: x["tokens"]["total"])
         provider_items.sort(key=lambda x: (-x["tokens"]["total"], -x["cost_usd"], x["provider"]))
 
         agent_items = []
@@ -1622,12 +1642,7 @@ class PublicPeriodAgg:
                 "tokens_total": data["tokens_total"],
                 "cost_usd": round(data["cost"], 2),
             })
-        if agent_items:
-            sum_agent_cost = round(sum(a["cost_usd"] for a in agent_items), 2)
-            diff = round(period_cost_usd - sum_agent_cost, 2)
-            if diff != 0:
-                largest = max(agent_items, key=lambda x: (x["tokens_total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(agent_items, period_cost_usd, lambda x: x["tokens_total"])
         agent_items.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["agent"]))
 
         model_items = []
@@ -1952,6 +1967,12 @@ def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens["total"]))
 
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
+
         prov_cost = sum(prov["cost_usd"] for prov in p["by_provider"])
         if abs(prov_cost - p["cost_usd"]) > tolerance + 1e-6:
             problems.append("%s: by_provider cost_usd %.2f != cost_usd %.2f"
@@ -2082,6 +2103,12 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
         if agent_tokens_sum != p_tokens.get("total", 0):
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens.get("total", 0)))
+
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
 
         prov_cost = sum(prov.get("cost_usd", 0.0) for prov in p.get("by_provider", []))
         if abs(prov_cost - p.get("cost_usd", 0.0)) > tolerance + 1e-6:
