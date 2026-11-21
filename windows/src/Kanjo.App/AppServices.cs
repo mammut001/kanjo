@@ -80,7 +80,7 @@ public sealed class AppServices
     public AppServices(AppSettings settings, string[] arguments, string? cacheDirectory = null,
         IBackgroundScheduler? timers = null, ILogWatcherFactory? watcherFactory = null,
         IPowerMonitor? powerMonitor = null, IEnumerable<string>? logPathsFallback = null,
-        IFamilyTokenStorage? familyTokens = null)
+        IFamilyTokenStorage? familyTokens = null, IDiskSource? diskSource = null)
     {
         Settings = settings;
         Arguments = arguments;
@@ -97,7 +97,7 @@ public sealed class AppServices
             // 后台回调切回 UI 线程（设置页预热档位表用）。
             CompletionDispatcher = DispatchAction,
         };
-        Disk = new DiskStore(MakeDiskSource,
+        Disk = new DiskStore(diskSource is null ? MakeDiskSource : _ => (diskSource, "test"),
             DiskDataOverride is null ? new DiskReportCache(cacheDirectory) : null);
         Family = new FamilyReportStore(settings, familyTokens ?? NewTokenStorage(), () => ReportRunnerOrNull(),
             NoNetworkReason);
