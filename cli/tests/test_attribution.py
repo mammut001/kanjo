@@ -279,6 +279,21 @@ class PricingTest(unittest.TestCase):
         p = self.book.price("google/gemini-4-argon")
         self.assertEqual((p["in"], p["out"], p["cache_read"]), (2.0, 10.0, 0.1))
 
+    def test_gemini_4_neon_prices(self):
+        model_id = "google/gemini-4-neon"
+        for model in (
+            "gemini-4-neon",
+            "gemini-4-neon-low",
+            "gemini-4-neon-medium",
+            "gemini-4-neon-high",
+            "gemini-4-neon-xhigh",
+            "google/gemini-4-neon-xhigh",
+        ):
+            with self.subTest(model=model):
+                self.assertEqual(self.book.resolve(model, "antigravity"), (model_id, False))
+        p = self.book.price(model_id)
+        self.assertEqual((p["in"], p["out"], p["cache_read"], p["cache_write"]), (3.0, 15.0, 0.15, 0.0))
+
     def test_antigravity_variant_suffixes(self):
         self.assertEqual(self.book.resolve("gemini-3.8-flash-n"), ("google/gemini-3.8-flash", False))
         self.assertEqual(self.book.resolve("claude-sonnet-5-5-low"), ("anthropic/claude-sonnet-5.5", False))
