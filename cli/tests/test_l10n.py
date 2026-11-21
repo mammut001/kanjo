@@ -19,11 +19,7 @@ class L10nCorrectnessTest(unittest.TestCase):
         import check_l10n  # type: ignore
 
         result = check_l10n.run_checks(ROOT)
-        if result.errors:
-            self.fail("\n".join(result.errors))
-        # Unused keys are reported for humans; do not fail the suite.
-        report = check_l10n.format_report(result)
-        print(report)
+        self.assertFalse(result.errors, check_l10n.format_report(result))
 
     def test_check_l10n_cli_exit_zero(self):
         proc = subprocess.run(
