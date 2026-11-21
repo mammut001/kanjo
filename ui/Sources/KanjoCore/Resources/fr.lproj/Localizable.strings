@@ -472,7 +472,7 @@
 "disk.block.explanation.nothing_to_move" = "Il n'y a rien ici en dehors des entrées listées séparément.";
 "disk.block.explanation.move_failed" = "Le fichier ou le dossier n'a pas pu être déplacé (par exemple s'il est utilisé). Ce qui a déjà été déplacé reste dans la corbeille ; le reste est inchangé.";
 "disk.block.explanation.changed" = "Ce chemin ne correspond plus à l'aperçu dry-run ; l'étape de confirmation l'a donc ignoré.";
-"disk.block.explanation.refused" = "Kanjo ne nettoie pas ce chemin, car c’est un lien symbolique ou une jonction qui pointe ailleurs.";
+"disk.block.explanation.refused" = "Kanjo ne nettoie jamais ce chemin : c’est un dossier protégé (comme votre dossier personnel ou un dossier système) ou un lien qui pointe ailleurs.";
 
 /* Session */
 "session.untitled" = "(sans titre)";

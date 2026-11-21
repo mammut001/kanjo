@@ -472,7 +472,7 @@
 "disk.block.explanation.nothing_to_move" = "这里除了单独列出的条目之外没有别的内容。";
 "disk.block.explanation.move_failed" = "无法移动该文件或文件夹（例如正在被占用）。已经移走的仍在废纸篓里，其余保持原样。";
 "disk.block.explanation.changed" = "该路径已与 dry-run 预览不一致，确认步骤因此跳过了它。";
-"disk.block.explanation.refused" = "这个路径是指向别处的符号链接或目录联接，Kanjo 不会清理它。";
+"disk.block.explanation.refused" = "Kanjo 不会清理这个路径：它是受保护的文件夹（例如个人主目录或系统文件夹），或是指向别处的链接。";
 
 /* 会话 */
 "session.untitled" = "(无标题)";
