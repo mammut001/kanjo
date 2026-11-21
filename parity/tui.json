@@ -3716,29 +3716,29 @@
         "end": "2026-10-24T07:00:00Z",
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 215,
+            "cost": 206,
             "estimated": true,
-            "tokens": 6966344
+            "tokens": 6770823
           },
           "antigravity/gemini-3-pro": {
-            "cost": 236,
+            "cost": 226,
             "estimated": true,
-            "tokens": 7302901
+            "tokens": 7095454
           },
           "antigravity/gemini-3.5-pro-exp": {
-            "cost": 93,
+            "cost": 90,
             "estimated": false,
-            "tokens": 2164720
+            "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 3071,
+            "cost": 3078,
             "estimated": true,
-            "tokens": 12423814
+            "tokens": 12511694
           },
           "claude/claude-opus-5-5": {
-            "cost": 6551,
+            "cost": 6571,
             "estimated": true,
-            "tokens": 16286986
+            "tokens": 16427964
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -3746,19 +3746,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 1291,
+            "cost": 1302,
             "estimated": true,
-            "tokens": 19458886
+            "tokens": 19974262
           },
           "codex/gpt-5.5-codex": {
-            "cost": 579,
+            "cost": 574,
             "estimated": true,
-            "tokens": 23831115
+            "tokens": 23730661
           },
           "codex/gpt-5.5-mini": {
-            "cost": 271,
+            "cost": 268,
             "estimated": true,
-            "tokens": 11602993
+            "tokens": 11547451
           },
           "copilot/copilot-sonnet-5": {
             "cost": 172,
@@ -3766,9 +3766,9 @@
             "tokens": 3442031
           },
           "grok/grok-4-beta": {
-            "cost": 430,
+            "cost": 420,
             "estimated": false,
-            "tokens": 8142262
+            "tokens": 8004025
           }
         },
         "projects": {
@@ -3994,29 +3994,29 @@
         "end": "2026-10-24T07:00:00Z",
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 210,
+            "cost": 170,
             "estimated": true,
-            "tokens": 5997845
+            "tokens": 5779065
           },
           "antigravity/gemini-3-pro": {
-            "cost": 237,
+            "cost": 190,
             "estimated": true,
-            "tokens": 6338869
+            "tokens": 6103694
           },
           "antigravity/gemini-3.5-pro-exp": {
-            "cost": 105,
+            "cost": 90,
             "estimated": false,
-            "tokens": 2182361
+            "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 3165,
+            "cost": 3233,
             "estimated": true,
-            "tokens": 12442744
+            "tokens": 12574055
           },
           "claude/claude-opus-5-5": {
-            "cost": 5994,
+            "cost": 6054,
             "estimated": true,
-            "tokens": 14759290
+            "tokens": 14828236
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -4024,19 +4024,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 1430,
+            "cost": 1529,
             "estimated": true,
-            "tokens": 19569901
+            "tokens": 20339979
           },
           "codex/gpt-5.5-codex": {
-            "cost": 431,
+            "cost": 402,
             "estimated": true,
-            "tokens": 15702556
+            "tokens": 15564421
           },
           "codex/gpt-5.5-mini": {
-            "cost": 203,
+            "cost": 188,
             "estimated": true,
-            "tokens": 8158167
+            "tokens": 8081795
           },
           "commandcode/command-r-plus": {
             "cost": 326,
@@ -4049,9 +4049,9 @@
             "tokens": 3442031
           },
           "grok/grok-4-beta": {
-            "cost": 445,
+            "cost": 386,
             "estimated": false,
-            "tokens": 7597078
+            "tokens": 7406992
           },
           "minimax/minimax-m3": {
             "cost": 27,
@@ -4064,9 +4064,9 @@
             "tokens": 1339579
           },
           "qwen/qwen-3.8-max": {
-            "cost": 95,
+            "cost": 73,
             "estimated": false,
-            "tokens": 980148
+            "tokens": 933035
           }
         },
         "projects": {
@@ -5845,29 +5845,29 @@
         "end": "2026-10-26T04:30:00Z",
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 215,
+            "cost": 206,
             "estimated": true,
-            "tokens": 6966344
+            "tokens": 6770823
           },
           "antigravity/gemini-3-pro": {
-            "cost": 236,
+            "cost": 226,
             "estimated": true,
-            "tokens": 7302901
+            "tokens": 7095454
           },
           "antigravity/gemini-3.5-pro-exp": {
-            "cost": 93,
+            "cost": 90,
             "estimated": false,
-            "tokens": 2164720
+            "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 3071,
+            "cost": 3078,
             "estimated": true,
-            "tokens": 12423814
+            "tokens": 12511694
           },
           "claude/claude-opus-5-5": {
-            "cost": 6551,
+            "cost": 6571,
             "estimated": true,
-            "tokens": 16286986
+            "tokens": 16427964
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -5875,19 +5875,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 1291,
+            "cost": 1302,
             "estimated": true,
-            "tokens": 19458886
+            "tokens": 19974262
           },
           "codex/gpt-5.5-codex": {
-            "cost": 579,
+            "cost": 574,
             "estimated": true,
-            "tokens": 23831115
+            "tokens": 23730661
           },
           "codex/gpt-5.5-mini": {
-            "cost": 271,
+            "cost": 268,
             "estimated": true,
-            "tokens": 11602993
+            "tokens": 11547451
           },
           "copilot/copilot-sonnet-5": {
             "cost": 172,
@@ -5895,9 +5895,9 @@
             "tokens": 3442031
           },
           "grok/grok-4-beta": {
-            "cost": 430,
+            "cost": 420,
             "estimated": false,
-            "tokens": 8142262
+            "tokens": 8004025
           }
         },
         "projects": {
@@ -9501,34 +9501,34 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 3044,
+            "cost": 3051,
             "estimated": true,
-            "tokens": 12217910
+            "tokens": 12373345
           },
           "claude/claude-opus-5-5": {
-            "cost": 6487,
+            "cost": 6502,
             "estimated": true,
-            "tokens": 16021307
+            "tokens": 16206023
           },
           "claude/claude-opus-5-6-preview": {
-            "cost": 473,
+            "cost": 476,
             "estimated": false,
-            "tokens": 1256590
+            "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 1260,
+            "cost": 1262,
             "estimated": true,
-            "tokens": 18917010
+            "tokens": 19162902
           },
           "codex/gpt-5.5-codex": {
-            "cost": 417,
+            "cost": 395,
             "estimated": true,
-            "tokens": 15943937
+            "tokens": 15285636
           },
           "codex/gpt-5.5-mini": {
-            "cost": 204,
+            "cost": 195,
             "estimated": true,
-            "tokens": 8619837
+            "tokens": 8360580
           },
           "commandcode/command-r-plus": {
             "cost": 326,
@@ -9536,14 +9536,14 @@
             "tokens": 8064088
           },
           "copilot/copilot-sonnet-5": {
-            "cost": 171,
+            "cost": 172,
             "estimated": false,
-            "tokens": 3306071
+            "tokens": 3442031
           },
           "grok/grok-4-beta": {
-            "cost": 385,
+            "cost": 386,
             "estimated": false,
-            "tokens": 7263114
+            "tokens": 7406992
           },
           "minimax/minimax-m3": {
             "cost": 27,
@@ -12649,29 +12649,29 @@
         "end": "2026-10-24T07:00:00Z",
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 215,
+            "cost": 206,
             "estimated": true,
-            "tokens": 6966344
+            "tokens": 6770823
           },
           "antigravity/gemini-3-pro": {
-            "cost": 236,
+            "cost": 226,
             "estimated": true,
-            "tokens": 7302901
+            "tokens": 7095454
           },
           "antigravity/gemini-3.5-pro-exp": {
-            "cost": 93,
+            "cost": 90,
             "estimated": false,
-            "tokens": 2164720
+            "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 3071,
+            "cost": 3078,
             "estimated": true,
-            "tokens": 12423814
+            "tokens": 12511694
           },
           "claude/claude-opus-5-5": {
-            "cost": 6551,
+            "cost": 6571,
             "estimated": true,
-            "tokens": 16286986
+            "tokens": 16427964
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -12679,19 +12679,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 1291,
+            "cost": 1302,
             "estimated": true,
-            "tokens": 19458886
+            "tokens": 19974262
           },
           "codex/gpt-5.5-codex": {
-            "cost": 532,
+            "cost": 527,
             "estimated": true,
-            "tokens": 22313841
+            "tokens": 22213387
           },
           "codex/gpt-5.5-mini": {
-            "cost": 249,
+            "cost": 246,
             "estimated": true,
-            "tokens": 10916226
+            "tokens": 10860684
           },
           "copilot/copilot-sonnet-5": {
             "cost": 172,
@@ -12699,9 +12699,9 @@
             "tokens": 3442031
           },
           "grok/grok-4-beta": {
-            "cost": 430,
+            "cost": 420,
             "estimated": false,
-            "tokens": 8142262
+            "tokens": 8004025
           }
         },
         "projects": {

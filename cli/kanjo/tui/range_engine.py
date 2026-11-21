@@ -738,7 +738,21 @@ def aggregate_models(filtered: FilteredUsage) -> List[dict]:
                         merge(key, model, ag, share_c, split_total, True)
 
         for fp in filtered.projects:
-            process_group(fp.sessions_detail, fp.cost, fp.tokens)
+            # Per (project, agent): each agent splits only its own in-range cost and tokens; the
+            # remainder (agents without in-range sessions, or no by_agent) is spread over all sessions.
+            rest_cost = fp.cost
+            rest_tokens = fp.tokens
+            for a in fp.by_agent:
+                ag = str(a.get("agent") or "")
+                own = [s for s in fp.sessions_detail if str(s.get("agent") or "") == ag]
+                if not own:
+                    continue
+                _, _, _, _, _, a_tok = _token_parts(a.get("tokens"))
+                a_cost = float(a.get("cost") or 0.0)
+                process_group(own, a_cost, a_tok)
+                rest_cost -= a_cost
+                rest_tokens -= a_tok
+            process_group(fp.sessions_detail, rest_cost if rest_cost > 1e-9 else 0.0, max(0, rest_tokens))
         process_group(filtered.unattributed.sessions_detail, filtered.unattributed.cost, filtered.unattributed.tokens)
         process_group(filtered.excluded.sessions_detail, filtered.excluded.cost, filtered.excluded.tokens)
 

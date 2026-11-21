@@ -381,4 +381,46 @@ final class ModelAggregationTests: KanjoTestCase {
         XCTAssertEqual(modelsWithByDay.first?.cost ?? 0, 10.0, accuracy: 1e-4)
         XCTAssertEqual(modelsWithByDay.reduce(0) { $0 + $1.tokens.total }, reportWithByDay.tokens)
     }
+
+    /// 多 agent 项目：每个 agent 的模型行只分它自己在范围内的花费，不按会话时间重叠把整个项目的花费摊到别的 agent 上。
+    func testRangeModelRowsSplitPerAgent() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let todayStart = cal.date(from: DateComponents(year: 2026, month: 10, day: 22))!
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 12))!
+        let todaySpec = RangeSpec(range: .today, calendar: cal, start: todayStart, end: now)
+
+        let claude = Session(
+            id: "c1", agent: "claude", label: "Claude Code",
+            started: "2026-10-22T09:00:00Z", ended: "2026-10-22T10:00:00Z",
+            cwd: nil, branch: nil, models: ["claude-opus"],
+            cost: 90, tokens: Tokens(total: 900_000), share: 1, attribution: "dominant", subagents: 0)
+        let codex = Session(
+            id: "x1", agent: "codex", label: "Codex CLI",
+            started: "2026-10-21T01:00:00Z", ended: "2026-10-22T01:00:00Z",
+            cwd: nil, branch: nil, models: ["gpt-5-codex"],
+            cost: 70, tokens: Tokens(total: 700_000), share: 1, attribution: "dominant", subagents: 0)
+        let fp = FilteredProject(
+            project: makeProject(id: "p", models: []),
+            cost: 100, tokens: 1_000_000, sessions: 2,
+            byAgent: [
+                AgentCost(agent: "claude", label: "Claude Code", cost: 90, tokens: Tokens(total: 900_000), sessions: 1),
+                AgentCost(agent: "codex", label: "Codex CLI", cost: 10, tokens: Tokens(total: 100_000), sessions: 1),
+            ],
+            byDay: [], sessionsDetail: [claude, codex])
+        let report = FilteredReport(
+            spec: todaySpec, projects: [fp],
+            unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []),
+            cost: 100, tokens: 1_000_000, sessions: 2,
+            firstActive: "2026-10-22", lastActive: "2026-10-22")
+
+        let models = ModelAggregation.aggregate(in: report)
+        let codexModels = models.filter { $0.agent == "codex" }
+        let claudeModels = models.filter { $0.agent == "claude" }
+        XCTAssertEqual(codexModels.reduce(0) { $0 + $1.cost }, 10, accuracy: 1e-6)
+        XCTAssertEqual(codexModels.reduce(0) { $0 + $1.tokens.total }, 100_000)
+        XCTAssertEqual(claudeModels.reduce(0) { $0 + $1.cost }, 90, accuracy: 1e-6)
+        XCTAssertEqual(claudeModels.reduce(0) { $0 + $1.tokens.total }, 900_000)
+    }
 }
