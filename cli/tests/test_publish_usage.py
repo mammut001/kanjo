@@ -242,6 +242,29 @@ class PublishUsageTest(unittest.TestCase):
         self.assertEqual(code3, 0)
         self.assertEqual(json.loads(out3.strip())["status"], "unchanged")
 
+    def _commit_local(self, name, message):
+        with open(os.path.join(self.work_repo, name), "w", encoding="utf-8") as f:
+            f.write("draft\n")
+        subprocess.run(["git", "-C", self.work_repo, "add", name], check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.work_repo, "commit", "-m", message], check=True, capture_output=True)
+
+    def test_users_own_unpushed_commit_is_never_pushed(self):
+        code1, _, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code1, 0)
+        remote_sha = self._head(self.bare_remote)
+        self._commit_local("draft.md", "WIP: draft post (not ready)")
+
+        # Same numbers: nothing of ours to push.
+        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertNotEqual(json.loads(out2.strip()).get("pending"), True)
+        self.assertEqual(self._head(self.bare_remote), remote_sha)
+
+        # A file that changes: the usage commit must not carry the draft along either.
+        code3, out3, _ = self._run_cli("publish-usage", "--repo", self.work_repo,
+                                       "--file", "src/data/other-usage.json")
+        self.assertEqual(json.loads(out3.strip())["status"], "error")
+        self.assertEqual(self._head(self.bare_remote), remote_sha)
+
     def test_push_retry_rebases_with_unrelated_uncommitted_changes(self):
         # Another clone pushes right before our first push, so that push is rejected and
         # the retry has to rebase while README.md has an unrelated unstaged edit.
