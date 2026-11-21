@@ -602,7 +602,8 @@ def _draw_compact_meters(canvas: Canvas, y: int, meters: List[SubscriptionMeter]
         canvas.draw_text(2, y, truncate_str(body, max(0, width - 2)), Style())
         y += 1
     if add_more:
-        canvas.draw_text(0, y, f"+{add_more} more", Style(dim=True), max_width=width)
+        more_txt = t("more", state.lang, count=add_more)
+        canvas.draw_text(0, y, more_txt, Style(dim=True), max_width=width)
         y += 1
     return y
 

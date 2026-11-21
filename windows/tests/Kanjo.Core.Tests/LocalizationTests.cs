@@ -199,4 +199,180 @@ public sealed class LocalizationTests : KanjoTestCase
         SetLanguage("fr");
         Assert.Equal("Terminé", L10n.Tr("common.done"));
     }
+
+    /// <summary>Format specifiers must match across en / zh-Hans / fr (count, type, order).</summary>
+    [Fact]
+    public void TestFormatSpecifiersMatchAcrossLanguages()
+    {
+        var en = L10n.AllStrings("en");
+        var zh = L10n.AllStrings("zh-Hans");
+        var fr = L10n.AllStrings("fr");
+        Assert.NotNull(en);
+        Assert.NotNull(zh);
+        Assert.NotNull(fr);
+
+        static List<string> Specs(string s)
+        {
+            var re = new System.Text.RegularExpressions.Regex(
+                @"%(?:(\d+)\$)?[-+0#]*\d*(?:\.\d+)?(lld|ld|d|i|u|f|g|s|@|%)");
+            var items = new List<(int? Pos, string Typ)>();
+            foreach (System.Text.RegularExpressions.Match m in re.Matches(s))
+            {
+                var conv = m.Groups[2].Value;
+                if (conv == "%") continue;
+                int? pos = m.Groups[1].Success ? int.Parse(m.Groups[1].Value) : null;
+                var typ = conv is "d" or "i" or "u" or "ld" or "lld" ? "int"
+                    : conv is "@" or "s" ? "str" : "float";
+                items.Add((pos, typ));
+            }
+            if (items.Any(i => i.Pos is not null))
+            {
+                return items
+                    .Select((it, idx) => (Pos: it.Pos ?? idx + 1, it.Typ))
+                    .OrderBy(x => x.Pos)
+                    .Select(x => x.Typ)
+                    .ToList();
+            }
+            return items.Select(i => i.Typ).ToList();
+        }
+
+        var mismatches = new List<string>();
+        foreach (var key in en!.Keys.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            if (!zh!.ContainsKey(key) || !fr!.ContainsKey(key)) continue;
+            var expected = Specs(en[key]);
+            var zhGot = Specs(zh[key]);
+            var frGot = Specs(fr[key]);
+            if (!expected.SequenceEqual(zhGot))
+                mismatches.Add($"{key} zh-Hans [{string.Join(",", zhGot)}] != en [{string.Join(",", expected)}]");
+            if (!expected.SequenceEqual(frGot))
+                mismatches.Add($"{key} fr [{string.Join(",", frGot)}] != en [{string.Join(",", expected)}]");
+        }
+        Assert.True(mismatches.Count == 0, string.Join("\n", mismatches));
+    }
+
+    /// <summary>Duplicate keys silently overwrite — reject them in the Mac strings files.</summary>
+    [Fact]
+    public void TestNoDuplicateKeysInStringsFiles()
+    {
+        var repo = DefaultPaths.RepoRoot;
+        Assert.NotNull(repo);
+        foreach (var lang in L10n.SupportedLanguages)
+        {
+            var path = Path.Combine(repo!, "ui", "Sources", "KanjoCore", "Resources",
+                $"{lang}.lproj", "Localizable.strings");
+            Assert.True(File.Exists(path), path);
+            var content = File.ReadAllText(path);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var dups = new List<string>();
+            var noBlock = System.Text.RegularExpressions.Regex.Replace(content, @"/\*.*?\*/", "",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            var noLine = System.Text.RegularExpressions.Regex.Replace(noBlock, @"//.*?$", "",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(noLine, "\"((?:\\\\.|[^\"\\\\])*)\"\\s*="))
+            {
+                var key = m.Groups[1].Value;
+                if (!seen.Add(key)) dups.Add(key);
+            }
+            Assert.True(dups.Count == 0, $"{lang} has duplicate keys: {string.Join(", ", dups)}");
+        }
+    }
+
+    /// <summary>Windows + Mac + iOS L10n.Tr/tr keys must exist in all three languages (or WindowsL10n).</summary>
+    [Fact]
+    public void TestAllAppSourceKeysPresentInAllLanguages()
+    {
+        var repo = DefaultPaths.RepoRoot;
+        Assert.NotNull(repo);
+        var en = L10n.AllStrings("en");
+        var zh = L10n.AllStrings("zh-Hans");
+        var fr = L10n.AllStrings("fr");
+        Assert.NotNull(en);
+        Assert.NotNull(zh);
+        Assert.NotNull(fr);
+
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        var patterns = new[]
+        {
+            new System.Text.RegularExpressions.Regex(@"L10n\.tr\(\s*""([^""]+)"""),
+            new System.Text.RegularExpressions.Regex(@"(?:L10n|WindowsL10n)\.Tr\(\s*""([^""]+)"""),
+            new System.Text.RegularExpressions.Regex(@"(?:L10n|WindowsL10n)\.TrL\(\s*[^,]+,\s*""([^""]+)"""),
+        };
+        foreach (var root in new[]
+                 {
+                     Path.Combine(repo!, "ui", "Sources"),
+                     Path.Combine(repo!, "ios", "Kanjo"),
+                     Path.Combine(repo!, "windows", "src"),
+                 })
+        {
+            if (!Directory.Exists(root)) continue;
+            foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+            {
+                if (!file.EndsWith(".swift", StringComparison.OrdinalIgnoreCase)
+                    && !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var content = File.ReadAllText(file);
+                foreach (var re in patterns)
+                {
+                    foreach (System.Text.RegularExpressions.Match m in re.Matches(content))
+                        used.Add(m.Groups[1].Value);
+                }
+            }
+        }
+        Assert.NotEmpty(used);
+        var missing = used
+            .Where(k => k.Contains('.', StringComparison.Ordinal)
+                        && !en!.ContainsKey(k)
+                        && !WindowsL10n.HasOverride(k))
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+        Assert.True(missing.Count == 0,
+            $"Keys used in sources missing from Localizable.strings / WindowsL10n: {string.Join(", ", missing)}");
+
+        var missingLang = used
+            .Where(k => en!.ContainsKey(k) && (!zh!.ContainsKey(k) || !fr!.ContainsKey(k)))
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+        Assert.True(missingLang.Count == 0,
+            $"Keys not in all languages: {string.Join(", ", missingLang)}");
+    }
+
+    /// <summary>List unused keys (informational).</summary>
+    [Fact]
+    public void TestReportUnusedLocalizationKeys()
+    {
+        var repo = DefaultPaths.RepoRoot;
+        Assert.NotNull(repo);
+        var en = L10n.AllStrings("en");
+        Assert.NotNull(en);
+        var lit = new System.Text.RegularExpressions.Regex(
+            @"""([a-z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9][a-zA-Z0-9_]*)+)""");
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var root in new[]
+                 {
+                     Path.Combine(repo!, "ui", "Sources"),
+                     Path.Combine(repo!, "ios", "Kanjo"),
+                     Path.Combine(repo!, "windows", "src"),
+                 })
+        {
+            if (!Directory.Exists(root)) continue;
+            foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+            {
+                if (!file.EndsWith(".swift", StringComparison.OrdinalIgnoreCase)
+                    && !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var content = File.ReadAllText(file);
+                foreach (System.Text.RegularExpressions.Match m in lit.Matches(content))
+                {
+                    var key = m.Groups[1].Value;
+                    if (en!.ContainsKey(key)) used.Add(key);
+                }
+            }
+        }
+        var unused = en!.Keys.Where(k => !used.Contains(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        System.Console.WriteLine($"Unused Localizable.strings keys ({unused.Count}):");
+        foreach (var key in unused) System.Console.WriteLine("  " + key);
+        Assert.NotNull(unused);
+    }
 }
