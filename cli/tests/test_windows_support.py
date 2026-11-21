@@ -173,7 +173,7 @@ class ReportFamilyWindowsFallbackTest(unittest.TestCase):
                     return b'{"status":"ok","received_at":12345}'
 
             def mock_urlopen(req, timeout=30, **kwargs):
-                captured_headers.update(req.headers)
+                captured_headers.update(dict(req.header_items()))
                 return MockResponse()
 
             with mock.patch("urllib.request.urlopen", side_effect=mock_urlopen), \

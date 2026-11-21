@@ -413,6 +413,42 @@ class TestAPIEndpoint(unittest.TestCase):
             ).fetchall()
         self.assertEqual([r[0] for r in rows], [f"legacy:{self.m_bob}", ""])
 
+    def test_query_string_is_not_logged(self):
+        self._api_request('GET', '/unknown?token=secret-query-value')
+        self.assertNotIn('secret-query-value', self.log_stream.getvalue())
+
+    def test_rejects_negative_content_length(self):
+        import http.client
+        conn = http.client.HTTPConnection('127.0.0.1', self.api_port, timeout=2)
+        try:
+            conn.request('POST', '/api/report', headers={
+                'Authorization': 'Bearer ' + self.token_alice, 'Content-Length': '-1'})
+            self.assertEqual(conn.getresponse().status, 400)
+        finally:
+            conn.close()
+
+    def test_rejected_payload_does_not_log_supplied_values(self):
+        payload = copy.deepcopy(self.fixture_data)
+        payload['kind'] = 'sensitive-value-123'
+        self._api_request('POST', '/api/report', data=json.dumps(payload).encode(),
+                          headers={'Authorization': 'Bearer ' + self.token_alice})
+        self.assertNotIn('sensitive-value-123', self.log_stream.getvalue())
+
+    def test_revocation_during_report_is_enforced(self):
+        path = self.db_path
+        class RevokingLimiter:
+            def check_and_record(self, key, now=None):
+                with db.get_connection(path) as conn:
+                    db.revoke_member(conn, "Alice")
+                return True, 0
+        self.api_server.RequestHandlerClass.rate_limiter = RevokingLimiter()
+        status, _, _ = self._api_request(
+            "POST", "/api/report", data=json.dumps(self.fixture_data).encode(),
+            headers={"Authorization": "Bearer " + self.token_alice})
+        self.assertEqual(status, 401)
+        with db.get_connection(path) as conn:
+            self.assertIsNone(db.get_member_latest_report(conn, self.m_alice))
+
 
 if __name__ == "__main__":
     unittest.main()
