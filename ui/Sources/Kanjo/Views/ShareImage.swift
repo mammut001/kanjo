@@ -67,19 +67,17 @@ struct ShareProportionBar: View {
     var body: some View {
         GeometryReader { geo in
             let gap: CGFloat = 1.5
-            let count = rows.count
-            let avail = max(geo.size.width - CGFloat(max(count - 1, 0)) * gap, 0)
-            let base = count > 0 ? min(2, avail / CGFloat(count)) : 0
-            let remainder = max(0, avail - CGFloat(count) * base)
-            let sum = rows.reduce(0.0) { $0 + Double(max(0, $1.tokens)) }
-            
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: rows.map { Double(max(0, $0.tokens)) },
+                gap: gap,
+                minWidth: 2
+            )
             HStack(spacing: gap) {
-                ForEach(rows, id: \.agent) { row in
-                    let share = sum > 0 ? Double(max(0, row.tokens)) / sum : 0
-                    let w = base + remainder * CGFloat(share)
+                ForEach(Array(rows.enumerated()), id: \.element.agent) { i, row in
                     Rectangle()
                         .fill(AgentPalette.color(for: row.agent))
-                        .frame(width: w)
+                        .frame(width: widths[i])
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))

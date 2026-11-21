@@ -238,16 +238,20 @@ struct HBarRow: View {
         let content = VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Circle().fill(color).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-                Text(label).font(.system(size: 12))
+                Text(label).font(.system(size: 12)).lineLimit(1)
                 Spacer(minLength: 6)
                 if let detail {
                     Text(detail).font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 Text(value).font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit()
+                    .lineLimit(1)
+                    .layoutPriority(2)
             }
             GeometryReader { geo in
                 Capsule().fill(color)
-                    .frame(width: max(geo.size.width * CGFloat(min(max(fraction, 0), 1)), 3))
+                    .frame(width: LayoutMath.barWidth(available: geo.size.width, fraction: fraction, minWidth: 3))
             }
             .frame(height: 3)
         }

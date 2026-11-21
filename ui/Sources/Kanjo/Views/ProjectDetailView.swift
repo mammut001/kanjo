@@ -357,21 +357,27 @@ struct ProjectDetailView: View {
             (t.cacheRead, AgentPalette.tokenCacheRead, L10n.tr("project.token.cache_read"), "cache_read"),
             (t.cacheWrite, AgentPalette.tokenCacheWrite, L10n.tr("project.token.cache_write"), "cache_write")
         ]
-        let total = max(parts.reduce(0) { $0 + $1.tokens }, 1)
+        let tokenTotal = parts.reduce(0) { $0 + $1.tokens }
+        let denom = max(tokenTotal, 1)
         let barHelp = parts.filter { $0.tokens > 0 }.map { tok in
-            "● \(tok.label)  \(Fmt.tokens(tok.tokens)) (\(Fmt.percent(Double(tok.tokens) / Double(total))))"
+            "● \(tok.label)  \(Fmt.tokens(tok.tokens)) (\(Fmt.percent(Double(tok.tokens) / Double(denom))))"
         }.joined(separator: "\n")
         return GeometryReader { geo in
             let visible = parts.filter { $0.tokens > 0 }
-            let avail = max(geo.size.width - CGFloat(max(visible.count - 1, 0)), 0)
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: visible.map { Double($0.tokens) },
+                gap: 1,
+                minWidth: 2
+            )
             HStack(spacing: 1) {
-                ForEach(Array(visible.enumerated()), id: \.offset) { _, p in
+                ForEach(Array(visible.enumerated()), id: \.offset) { i, p in
                     Rectangle().fill(p.color)
-                        .frame(width: max(avail * CGFloat(p.tokens) / CGFloat(total), 2))
+                        .frame(width: widths[i])
                         .hoverCard {
                             TokensBreakdownHoverCard(tokens: t, highlightedType: p.id)
                         }
-                        .accessibilityLabel("● \(p.label)  \(Fmt.tokens(p.tokens)) (\(Fmt.percent(Double(p.tokens) / Double(total))))")
+                        .accessibilityLabel("● \(p.label)  \(Fmt.tokens(p.tokens)) (\(Fmt.percent(Double(p.tokens) / Double(denom))))")
                 }
             }
             .clipShape(Capsule())
