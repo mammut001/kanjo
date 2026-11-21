@@ -54,6 +54,29 @@ class CommandCodeSourceTest(unittest.TestCase):
         self.assertEqual(msg.cache_read, 300)
         self.assertEqual(msg.key, "commandcode:msg-asst-1")
 
+    def test_fallback_keys_do_not_collide_across_sessions(self):
+        from kanjo.export import dedupe
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for sid in ("sess-a", "sess-b"):
+                proj = os.path.join(tmp, "projects", "p-" + sid)
+                os.makedirs(proj)
+                rows = [
+                    {"type": "session", "id": sid, "timestamp": "2026-10-15T16:00:00Z", "cwd": "/tmp/p"},
+                    {"type": "message", "timestamp": "2026-10-15T16:00:10Z",
+                     "message": {"role": "user", "content": [{"type": "text", "text": "hi"}]}},
+                    {"type": "message", "timestamp": "2026-10-15T16:00:20Z", "model": "m",
+                     "message": {"role": "assistant", "content": []},
+                     "usage": {"inputTokens": 10, "outputTokens": 5}},
+                ]
+                with open(os.path.join(proj, sid + ".jsonl"), "w") as handle:
+                    for row in rows:
+                        handle.write(json.dumps(row) + "\n")
+            sessions = [commandcode.parse_file(p, parent)
+                        for p, parent in commandcode.discover([os.path.join(tmp, "projects")])]
+            self.assertEqual(len(sessions), 2)
+            self.assertEqual(sum(len(s.messages) for s in dedupe(sessions)), 2)
+
     def test_dedupe_keys_stable(self):
         discovered = commandcode.discover([FIXTURE_CMD])
         path = discovered[0][0]
