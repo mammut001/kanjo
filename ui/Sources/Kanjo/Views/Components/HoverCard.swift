@@ -98,8 +98,9 @@ struct QuotaBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.08))
-                if fraction > 0 {
-                    Capsule().fill(color).frame(width: max(height, geo.size.width * min(fraction, 1)))
+                let w = LayoutMath.barWidth(available: geo.size.width, fraction: fraction, minWidth: height)
+                if w > 0 {
+                    Capsule().fill(color).frame(width: w)
                 }
             }
         }

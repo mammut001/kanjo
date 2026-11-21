@@ -300,7 +300,7 @@ struct DiskView: View {
                     }
                     GeometryReader { geo in
                         Capsule().fill(AgentPalette.color(for: agent.agent))
-                            .frame(width: max(geo.size.width * CGFloat(min(max(fraction, 0), 1)), 3))
+                            .frame(width: LayoutMath.barWidth(available: geo.size.width, fraction: fraction, minWidth: 3))
                     }
                     .frame(height: 3)
                 }
