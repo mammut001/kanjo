@@ -74,7 +74,7 @@ public static class ReportDates
     {
         if (string.IsNullOrEmpty(s)) return null;
         if (s.Length < 10) return null;
-        return DateOnly.TryParseExact(s[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
+        return DateOnly.TryParseExact(s.AsSpan(0, 10), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
             ? d
             : null;
     }

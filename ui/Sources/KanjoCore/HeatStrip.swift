@@ -111,11 +111,33 @@ public enum HeatStrip {
         return Swift.min(Swift.max(Int((r * steps).rounded(.up)), 1), levels - 1)
     }
 
+    private struct WeekLabelKey: Hashable {
+        let start: Date
+        let calendar: Calendar
+        let language: String
+    }
+    private static let labelLock = NSLock()
+    private static var labels: [WeekLabelKey: String] = [:]
+
     /// "Oct 13–19"；跨月 "Sep 29–Oct 5"；跨年 "Dec 29, 2025–Jan 4, 2026"。
     public static func weekLabel(start: Date, calendar: Calendar = .current) -> String {
+        let key = WeekLabelKey(start: start, calendar: calendar, language: L10n.currentLanguage)
+        labelLock.lock()
+        let cached = labels[key]
+        labelLock.unlock()
+        if let cached { return cached }
+        let label = makeWeekLabel(start: start, calendar: calendar, language: key.language)
+        labelLock.lock()
+        if labels.count >= 512 { labels.removeAll() }
+        labels[key] = label
+        labelLock.unlock()
+        return label
+    }
+
+    private static func makeWeekLabel(start: Date, calendar: Calendar, language: String) -> String {
         guard let end = calendar.date(byAdding: .day, value: 6, to: start) else { return "" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.currentLanguage)
+        f.locale = Locale(identifier: language)
         f.calendar = calendar
         f.timeZone = calendar.timeZone
         let c0 = calendar.dateComponents([.year, .month], from: start)
@@ -128,17 +150,34 @@ public enum HeatStrip {
         let a = f.string(from: start)
         if c0.month != c1.month { return "\(a)–\(f.string(from: end))" }
         let dFormatter = DateFormatter()
-        dFormatter.locale = Locale(identifier: L10n.currentLanguage)
+        dFormatter.locale = Locale(identifier: language)
         dFormatter.calendar = calendar
         dFormatter.timeZone = calendar.timeZone
         dFormatter.setLocalizedDateFormatFromTemplate("d")
         return "\(a)–\(dFormatter.string(from: end))"
     }
 
+    private struct DayKey: Hashable {
+        let day: String
+        let calendar: Calendar
+    }
+    private static let dayLock = NSLock()
+    private static var dates: [DayKey: Date] = [:]
+
     /// "YYYY-MM-DD" → 该日在 `calendar` 时区的零点。
     static func parseDay(_ s: String, calendar: Calendar) -> Date? {
+        let key = DayKey(day: s, calendar: calendar)
+        dayLock.lock()
+        let cached = dates[key]
+        dayLock.unlock()
+        if let cached { return cached }
         let parts = s.split(separator: "-")
         guard parts.count == 3, let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2]) else { return nil }
-        return calendar.date(from: DateComponents(year: y, month: m, day: d))
+        guard let date = calendar.date(from: DateComponents(year: y, month: m, day: d)) else { return nil }
+        dayLock.lock()
+        if dates.count >= 4096 { dates.removeAll() }
+        dates[key] = date
+        dayLock.unlock()
+        return date
     }
 }

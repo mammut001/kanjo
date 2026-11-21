@@ -58,10 +58,11 @@ extension UsageReport {
 }
 
 extension Project {
-    func heatWeeks(endingOn end: Date) -> [WeekCost] {
+    func heatWeeks(endingOn end: Date, timezone: TimeZone) -> [WeekCost] {
         HeatStrip.weekly(byDay, endingOn: end,
                          fallbackAgent: dominantAgent(byAgent)?.agent
                             ?? byAgent.first?.agent
-                            ?? "unknown")
+                            ?? "unknown",
+                         calendar: RangeEngine.calendar(timezone: timezone))
     }
 }

@@ -52,6 +52,10 @@ public struct ShareSummary: Equatable {
         
         let agentSummary = AgentSummary.build(report: report, filtered: filtered, now: now)
         
+        var sessionCounts: [String: Int] = [:]
+        for project in filtered.projects {
+            for session in project.sessionsDetail { sessionCounts[session.agent, default: 0] += 1 }
+        }
         let agentRows = agentSummary.rows.map { row in
             AgentRow(
                 agent: row.agent,
@@ -62,7 +66,7 @@ public struct ShareSummary: Equatable {
                 cost: row.cost,
                 subscription: row.subscription,
                 multiplier: row.multiplier,
-                sessionCount: filtered.projects.flatMap { $0.sessionsDetail }.filter { $0.agent == row.agent }.count,
+                sessionCount: sessionCounts[row.agent, default: 0],
                 projectShares: filtered.projects.compactMap { p -> AgentProjectShare? in
                     guard let agentCost = p.byAgent.first(where: { $0.agent == row.agent })?.cost, agentCost > 0 else { return nil }
                     return AgentProjectShare(name: p.project.name, cost: agentCost)

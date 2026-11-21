@@ -18,6 +18,7 @@
 		93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */; };
 		9BE13390CEC83B19C773AA19 /* CommonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EE56787B5D8F5630C8F324 /* CommonViews.swift */; };
 		A2CBF778CE45748A794082F9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2D3BCBEFE7170B43A61B18A4 /* Assets.xcassets */; };
+		BE8F206916111521EDF4530A /* SnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6234BE9DD1F6402C9969216B /* SnapshotStoreTests.swift */; };
 		C41C7B6697DD2DCF7AD44397 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */; };
 		C8061586A8BEFE61041E99C9 /* SnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 624BFEF0D28FC81441D67019 /* SnapshotStore.swift */; };
 		E7E2189D2377ADB0FE4EDBDA /* KanjoCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9B8C72260EBD90BDF78E87A /* KanjoCore */; };
@@ -25,7 +26,18 @@
 		FDC1B631BBF60F50C8301407 /* sample-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = B0908A345408422DD68F8556 /* sample-snapshot.json */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		00FFC9EF8F89EB5D4DEF3283 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D95072E1A052ECAA7AB40E62 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D130056C5C354A79AFB4A19A;
+			remoteInfo = Kanjo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		044E994AE39AB51A03189673 /* KanjoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = KanjoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		11501081076B36A53170935D /* Kanjo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kanjo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		2D3BCBEFE7170B43A61B18A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -33,6 +45,7 @@
 		39D4773DEC1DD1A811985E85 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4CC30710793234C731B0DE10 /* SnapshotSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotSource.swift; sourceTree = "<group>"; };
 		4E4C917DEC7EA914B04DE6C0 /* KanjoAvatarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanjoAvatarIcon.swift; sourceTree = "<group>"; };
+		6234BE9DD1F6402C9969216B /* SnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStoreTests.swift; sourceTree = "<group>"; };
 		624BFEF0D28FC81441D67019 /* SnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStore.swift; sourceTree = "<group>"; };
 		6942A238E68DF45A2BF1878A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8074615AC33AF3C6C2B90AF2 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
@@ -70,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				2BD481D8752F0EA85A76A767 /* Kanjo */,
+				6D5CA03E6C4ADBBF0AFC40F1 /* KanjoTests */,
 				41EC2971E25AD475F7ED623B /* Packages */,
 				44C62873AB7D9E631447F7D7 /* Products */,
 			);
@@ -127,8 +141,17 @@
 			isa = PBXGroup;
 			children = (
 				11501081076B36A53170935D /* Kanjo.app */,
+				044E994AE39AB51A03189673 /* KanjoTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6D5CA03E6C4ADBBF0AFC40F1 /* KanjoTests */ = {
+			isa = PBXGroup;
+			children = (
+				6234BE9DD1F6402C9969216B /* SnapshotStoreTests.swift */,
+			);
+			path = KanjoTests;
 			sourceTree = "<group>";
 		};
 		C7CA76C8EC4903C1E1D9281D /* Components */ = {
@@ -157,6 +180,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A8D65505B35C440F2045EABC /* KanjoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8A38AC3CB5B44DA6B242E370 /* Build configuration list for PBXNativeTarget "KanjoTests" */;
+			buildPhases = (
+				0C0BAB409E503DC9B5BEB1F9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9DABDD84809F98CA8ED36290 /* PBXTargetDependency */,
+			);
+			name = KanjoTests;
+			packageProductDependencies = (
+			);
+			productName = KanjoTests;
+			productReference = 044E994AE39AB51A03189673 /* KanjoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		D130056C5C354A79AFB4A19A /* Kanjo */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 67261E10C61A7F55FB2FEA25 /* Build configuration list for PBXNativeTarget "Kanjo" */;
@@ -210,6 +251,7 @@
 			projectRoot = "";
 			targets = (
 				D130056C5C354A79AFB4A19A /* Kanjo */,
+				A8D65505B35C440F2045EABC /* KanjoTests */,
 			);
 		};
 /* End PBXProject section */
@@ -228,6 +270,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0C0BAB409E503DC9B5BEB1F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BE8F206916111521EDF4530A /* SnapshotStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57A88771B39CE054E8B4DCD2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -249,6 +299,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		9DABDD84809F98CA8ED36290 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D130056C5C354A79AFB4A19A /* Kanjo */;
+			targetProxy = 00FFC9EF8F89EB5D4DEF3283 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		6EB1F689DE19AFAC916E31BC /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -262,9 +320,9 @@
 				DEVELOPMENT_TEAM = Z5D5N7CU6L;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kanjo;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -280,6 +338,24 @@
 			};
 			name = Release;
 		};
+		9337E011DAAD654FF3AEBF92 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanshuagent.kanjo.ios.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kanjo.app/Kanjo";
+			};
+			name = Release;
+		};
 		A949350424AF99CF63AC7A8E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -292,9 +368,9 @@
 				DEVELOPMENT_TEAM = Z5D5N7CU6L;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kanjo;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -429,6 +505,24 @@
 			};
 			name = Debug;
 		};
+		CEF9796C94154C243F1A4374 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanshuagent.kanjo.ios.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kanjo.app/Kanjo";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -437,6 +531,15 @@
 			buildConfigurations = (
 				A949350424AF99CF63AC7A8E /* Debug */,
 				6EB1F689DE19AFAC916E31BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8A38AC3CB5B44DA6B242E370 /* Build configuration list for PBXNativeTarget "KanjoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEF9796C94154C243F1A4374 /* Debug */,
+				9337E011DAAD654FF3AEBF92 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

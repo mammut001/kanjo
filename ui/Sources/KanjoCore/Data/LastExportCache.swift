@@ -48,7 +48,7 @@ public struct LastExportCache: Sendable {
     /// `KANJO_CACHE_DIR` -> `XDG_CACHE_HOME/kanjo` -> `~/.cache/kanjo`.
     public static func cacheDirectory(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: URL = FileManager.default.homeDirectoryForCurrentUser
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
     ) -> URL {
         if let explicit = environment["KANJO_CACHE_DIR"], !explicit.isEmpty {
             let expanded = (explicit as NSString).expandingTildeInPath
@@ -71,7 +71,7 @@ public struct LastExportCache: Sendable {
     public init(
         directory: URL? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: URL = FileManager.default.homeDirectoryForCurrentUser
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
     ) {
         let dir = directory ?? Self.cacheDirectory(environment: environment, home: home)
         self.fileURL = dir.appendingPathComponent(Self.fileName, isDirectory: false)
