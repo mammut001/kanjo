@@ -57,13 +57,13 @@ def main(argv=None):
     )
     serve_parser.add_argument(
         "--api-host",
-        default=os.environ.get("FAMILY_API_HOST", "0.0.0.0"),
-        help="Host for report API listener (default: 0.0.0.0, env: FAMILY_API_HOST)",
+        default=os.environ.get("FAMILY_API_HOST", "127.0.0.1"),
+        help="Host for report API listener (default: 127.0.0.1, env: FAMILY_API_HOST)",
     )
     serve_parser.add_argument(
         "--dashboard-host",
-        default=os.environ.get("FAMILY_DASHBOARD_HOST", "0.0.0.0"),
-        help="Host for dashboard listener (default: 0.0.0.0, env: FAMILY_DASHBOARD_HOST)",
+        default=os.environ.get("FAMILY_DASHBOARD_HOST", "127.0.0.1"),
+        help="Host for dashboard listener (default: 127.0.0.1, env: FAMILY_DASHBOARD_HOST)",
     )
     serve_parser.add_argument(
         "--firebase-project-id",

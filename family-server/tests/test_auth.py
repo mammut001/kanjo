@@ -660,3 +660,14 @@ class TestFirebaseAuth(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestJWKLogging(unittest.TestCase):
+    def test_unknown_key_id_is_not_logged(self):
+        from family_server.auth import JWKManager
+        manager = JWKManager()
+        manager._cache = {'known': (1, 1)}
+        manager._expires_at = float('inf')
+        manager._fetch_keys = lambda now: None
+        with self.assertLogs('family_server.auth', level='INFO') as logs:
+            manager.get_jwk('private-token-value')
+        self.assertNotIn('private-token-value', '\n'.join(logs.output))

@@ -28,7 +28,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args) -> None:
         """Sanitized log output - never prints request bodies or tokens."""
-        logger.info("%s - %s", self.address_string(), format % args)
+        # Request targets may contain credentials; never log them.
+        logger.info("%s - request handled", self.address_string())
 
     def _send_json_response(self, status: int, data: dict, headers: Optional[dict] = None) -> None:
         payload = json.dumps(data).encode("utf-8")
@@ -88,17 +89,17 @@ class APIHandler(BaseHTTPRequestHandler):
                     self._send_json_response(HTTPStatus.BAD_REQUEST, {"status": "error", "error": "Invalid Content-Length"})
                     return
 
+                if content_length < 0:
+                    self._send_json_response(HTTPStatus.BAD_REQUEST, {"status": "error", "error": "Invalid Content-Length"})
+                    return
+
                 if content_length > MAX_PAYLOAD_BYTES:
                     logger.warning("Rejected report from '%s': Content-Length exceeds 2 MB (%d bytes)", member_name, content_length)
-                    # Drain incoming stream so client socket receives 413 cleanly
+                    # Bound the time and bytes spent draining an oversized upload.
+                    self.connection.settimeout(1.0)
                     try:
-                        remaining = content_length
-                        while remaining > 0:
-                            chunk = self.rfile.read(min(remaining, 65536))
-                            if not chunk:
-                                break
-                            remaining -= len(chunk)
-                    except Exception:
+                        self.rfile.read(min(content_length, MAX_PAYLOAD_BYTES + 65536))
+                    except (OSError, TimeoutError):
                         pass
                     self.close_connection = True
                     self._send_json_response(
@@ -108,7 +109,8 @@ class APIHandler(BaseHTTPRequestHandler):
                     )
                     return
             else:
-                content_length = None
+                self._send_json_response(HTTPStatus.LENGTH_REQUIRED, {"status": "error", "error": "Content-Length required"})
+                return
 
             # 3. Read body with limit
             if content_length is not None:
@@ -129,7 +131,7 @@ class APIHandler(BaseHTTPRequestHandler):
             # 4. Privacy backstop check
             privacy_err = check_privacy_backstop(raw_body)
             if privacy_err:
-                logger.warning("Rejected report from '%s': %s", member_name, privacy_err)
+                logger.warning("Rejected report from '%s': privacy check failed", member_name)
                 self._send_json_response(HTTPStatus.BAD_REQUEST, {"status": "error", "error": privacy_err})
                 return
 
@@ -145,7 +147,7 @@ class APIHandler(BaseHTTPRequestHandler):
             # 6. Validate payload structure and types
             val_err = validate_report_payload(payload)
             if val_err:
-                logger.warning("Rejected report from '%s': %s", member_name, val_err)
+                logger.warning("Rejected report from '%s': validation failed", member_name)
                 self._send_json_response(HTTPStatus.BAD_REQUEST, {"status": "error", "error": val_err})
                 return
 
@@ -161,6 +163,17 @@ class APIHandler(BaseHTTPRequestHandler):
                         headers={"Retry-After": str(retry_secs)},
                     )
                     return
+
+            # Recheck ownership under a write lock so revocation or merge cannot
+            # race the insert after the initial authentication.
+            conn.execute("BEGIN IMMEDIATE")
+            member = db.get_member_by_token_hash(conn, token_hash)
+            if not member:
+                conn.rollback()
+                self._send_json_response(HTTPStatus.UNAUTHORIZED, {"status": "error", "error": "Unauthorized"})
+                return
+            member_id = member["id"]
+            member_name = member["name"]
 
             # 8. Store report in SQLite
             now_iso = datetime.now(timezone.utc).isoformat()

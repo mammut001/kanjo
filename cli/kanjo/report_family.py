@@ -41,6 +41,18 @@ def _with_hint(message: str, exc: BaseException) -> str:
     return f"{message} {hint}" if hint else message
 
 
+def _report_request(endpoint: str, data: bytes, token: str):
+    req = urllib.request.Request(
+        endpoint, data=data,
+        headers={"Content-Type": "application/json; charset=utf-8",
+                 "User-Agent": f"kanjo/{__version__}"},
+        method="POST",
+    )
+    # urllib otherwise forwards regular headers to redirect destinations.
+    req.add_unredirected_header("Authorization", f"Bearer {token}")
+    return req
+
+
 def cmd_report_family(args) -> int:
     # 1. Token must come strictly from environment variable or Windows Credential Manager
     token = os.environ.get("KANJO_FAMILY_TOKEN")
@@ -105,16 +117,7 @@ def cmd_report_family(args) -> int:
     # 4. Prepare HTTP request
     endpoint = raw_url.strip().rstrip("/") + "/api/report"
     req_data = json.dumps(doc, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        endpoint,
-        data=req_data,
-        headers={
-            "Content-Type": "application/json; charset=utf-8",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": f"kanjo/{__version__}",
-        },
-        method="POST",
-    )
+    req = _report_request(endpoint, req_data, token)
 
     # 5. POST to server with 30s timeout, no retries
     try:

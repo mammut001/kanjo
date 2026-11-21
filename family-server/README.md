@@ -220,3 +220,5 @@ Add the following entry to root crontab (`crontab -e`):
 ```
 
 This backs up the database daily and removes backups older than 30 days.
+
+When running directly on a host, both listeners bind to 127.0.0.1 by default. Set `FAMILY_API_HOST` and `FAMILY_DASHBOARD_HOST` explicitly to expose them. The container image binds to its private container network for the tunnel.

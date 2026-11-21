@@ -100,7 +100,7 @@ class JWKManager:
                 return self._cache[kid]
 
             # Refetch once on unknown kid in case of key rotation
-            logger.info("Unknown kid '%s'; refetching JWKs once", kid)
+            logger.info("Unknown key ID; refetching JWKs once")
             self._fetch_keys(now)
             return self._cache.get(kid)
 
