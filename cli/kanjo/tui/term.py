@@ -417,8 +417,8 @@ def run_export_subprocess(
 def _project_sort_key(row: Any, col: str) -> Any:
     if isinstance(row, ProjectRowViewModel):
         if col == "tokens":
-            from .model import parse_tokens_str
-            return parse_tokens_str(row.tokens_str)
+            tokens = (row.project or {}).get("tokens") or {}
+            return tokens.get("total", 0) if isinstance(tokens, dict) else tokens
         if col == "sessions":
             try:
                 return int(row.sessions_str)
@@ -543,8 +543,13 @@ class ViewModelCache:
                     now=now_dt, filtered=filtered, lang=lang,
                 )
             elif state.detail_project:
+                selected = state.detail_project
+                project_id = selected.get("id")
+                current = next((p for p in filtered.projects
+                                if (p.get("id") == project_id if project_id
+                                    else p.get("name") == selected.get("name"))), None)
                 detail_vm = build_project_detail(
-                    state.detail_project, now_dt, tz,
+                    current or selected, now_dt, tz,
                     ascii_mode=state.ascii_mode, lang=lang,
                 )
 
@@ -751,7 +756,7 @@ def run_curses_tui(
         time_range=time_range,
         view_mode=view_mode,
         ascii_mode=ascii_mode,
-        no_color=no_color,
+        no_color=no_color or not color_mgr.can_color,
         is_scanning=(initial_doc is None),
         last_refresh_time=scanner.last_scan_time,
         lang=lang,
@@ -1077,6 +1082,15 @@ def run_curses_tui(
 
             dirty = True
 
+            # Terminal resize
+            if ch == curses.KEY_RESIZE:
+                try:
+                    h, w = stdscr.getmaxyx()
+                    curses.resizeterm(h, w)
+                except Exception:
+                    pass
+                continue
+
             # Antigravity login switch confirmation
             if state.confirm_switch_email:
                 if ch in (ord('y'), ord('Y')):
@@ -1105,15 +1119,6 @@ def run_curses_tui(
                     state.filter_input = state.filter_query
                 elif 32 <= ch <= 126:
                     state.filter_input += chr(ch)
-                continue
-
-            # Terminal resize
-            if ch == curses.KEY_RESIZE:
-                try:
-                    h, w = stdscr.getmaxyx()
-                    curses.resizeterm(h, w)
-                except Exception:
-                    pass
                 continue
 
             # Normal key bindings
@@ -1240,8 +1245,8 @@ def run_curses_tui(
             # Enter on Project / Agent -> Detail pane; Enter on account -> switch login
             if ch in (10, 13, curses.KEY_ENTER):
                 if state.view_mode == ViewMode.PROJECTS and proj_rows:
-                    if 0 <= state.selected_index < len(filtered.projects):
-                        state.detail_project = filtered.projects[state.selected_index]
+                    if 0 <= state.selected_index < len(proj_rows):
+                        state.detail_project = proj_rows[state.selected_index].project
                         state.detail_agent = None
                         state.detail_open = True
                 elif state.view_mode == ViewMode.AGENTS and agent_rows:
