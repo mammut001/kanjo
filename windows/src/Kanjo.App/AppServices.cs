@@ -13,9 +13,17 @@ namespace Kanjo.App;
 public sealed class AppServices
 {
     private readonly object _refreshLock = new();
+    private readonly Dictionary<string, string> _pendingAntigravityAccountPlans = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _writingAntigravityEmails = new(StringComparer.Ordinal);
     private int _generation;
     private CancellationTokenSource? _refreshCancellation;
     private IReportCommandRunner? _reportRunner;
+
+    /// <summary>还没写进 overrides.json 的 Antigravity 账号套餐选择（email → plan key）。</summary>
+    public IReadOnlyDictionary<string, string> PendingAntigravityAccountPlans => _pendingAntigravityAccountPlans;
+
+    /// <summary>最近一次 Antigravity 账号套餐写入失败（设置行展示）。</summary>
+    public string? AccountPlanError { get; private set; }
 
     public AppSettings Settings { get; }
     public string[] Arguments { get; }
@@ -133,6 +141,11 @@ public sealed class AppServices
     /// <summary>订阅卡是否展开（「Show N more」开关；批次 2 起是页面本地状态，保留给截图 / 兼容）。</summary>
     public bool SubscriptionCardExpanded { get; set; }
 
+    /// <summary>
+    /// 额度钉选自动展开后用户点了「收起」的 agent；存在服务上，因为总览页会随 Changed 整页重建。
+    /// </summary>
+    public string? DismissedQuotaRouteAgent { get; set; }
+
     /// <summary>「+N more」模型的展开状态（总览页本地状态）。</summary>
     public bool ModelsExpanded { get; set; }
 
@@ -237,6 +250,7 @@ public sealed class AppServices
                 {
                     Report = loaded;
                     Error = null;
+                    ReconcilePendingAccountPlans(loaded);
                 }
             }
         }
@@ -284,10 +298,70 @@ public sealed class AppServices
             Report = LoadReport();
             Error = null;
             LastRefresh = DateTimeOffset.UtcNow;
+            ReconcilePendingAccountPlans(Report);
         }
         catch (Exception e)
         {
             Error = e is DataSourceError d ? d.Message : e.Message;
+        }
+    }
+
+    /// <summary>
+    /// 记下选择并立刻更新 UI；后台写入 <c>antigravity_accounts.&lt;email&gt;.plan</c>。
+    /// <paramref name="plan"/> 为 null / "" / "none" 时写入显式 none。
+    /// </summary>
+    public void SetAntigravityAccountPlan(string email, string? plan)
+    {
+        if (!CanEditSubscriptions) return;
+        var normEmail = email.Trim().ToLowerInvariant();
+        var key = AntigravityAggregation.NormalizedPlanKey(plan);
+        lock (_pendingAntigravityAccountPlans) _pendingAntigravityAccountPlans[normEmail] = key;
+        AccountPlanError = null;
+        var writePlan = key.Length == 0 ? "none" : key;
+        NotifyChanged();
+        Task.Run(() =>
+        {
+            lock (_writingAntigravityEmails) _writingAntigravityEmails.Add(normEmail);
+            try
+            {
+                Config.SetAntigravityAccountPlan(normEmail, writePlan);
+                Refresh();
+            }
+            catch (Exception e)
+            {
+                lock (_pendingAntigravityAccountPlans)
+                {
+                    if (_pendingAntigravityAccountPlans.GetValueOrDefault(normEmail) == key)
+                    {
+                        _pendingAntigravityAccountPlans.Remove(normEmail);
+                    }
+                }
+                AccountPlanError = e.Message;
+            }
+            finally
+            {
+                lock (_writingAntigravityEmails) _writingAntigravityEmails.Remove(normEmail);
+                NotifyChanged();
+            }
+        });
+    }
+
+    private void ReconcilePendingAccountPlans(UsageReport? report)
+    {
+        if (_pendingAntigravityAccountPlans.Count == 0 ||
+            report?.AntigravityAccounts?.Accounts is not { } accounts)
+        {
+            return;
+        }
+        HashSet<string> busy;
+        lock (_writingAntigravityEmails) busy = [.. _writingAntigravityEmails];
+        var remaining = AntigravityAggregation.RemainingPending(
+            _pendingAntigravityAccountPlans, accounts, busy);
+        if (remaining.Count == _pendingAntigravityAccountPlans.Count) return;
+        lock (_pendingAntigravityAccountPlans)
+        {
+            _pendingAntigravityAccountPlans.Clear();
+            foreach (var (k, v) in remaining) _pendingAntigravityAccountPlans[k] = v;
         }
     }
 
@@ -401,7 +475,12 @@ public sealed class AppServices
     /// <summary>当前数据源的可读描述（和 Mac 的 <c>makeSource</c> 文案一致，出错时也能显示）。</summary>
     public string DescribeSource()
     {
-        if (DataOverride is { } path) return $"File (--data): {path}";
+        if (DataOverride is { } path)
+        {
+            // 截图模式只露文件名：完整路径会随生成目录变化，还会把开发机的目录写进公开截图。
+            var shown = SnapshotMode ? Path.GetFileName(path) : path;
+            return $"File (--data): {shown}";
+        }
         var kind = SourceResolution.Resolve(Settings.GetString(SettingsKeys.SourceKind));
         if (kind == SourceKind.File)
         {

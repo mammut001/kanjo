@@ -21,6 +21,7 @@ public sealed class QuotaResetRow : StackPanel
 
     private readonly AppServices _services;
     private readonly string _agent;
+    private readonly string _displayLabel;
     private readonly QuotaWindow? _quota;
     private readonly TimeZoneInfo _timezone;
     private string _weekday;
@@ -34,22 +35,22 @@ public sealed class QuotaResetRow : StackPanel
         _agent = agent;
         _timezone = RangeEngine.TimezoneOf(report);
         report.QuotaWindows?.TryGetValue(agent, out _quota);
-        var label = report.AgentLabels().GetValueOrDefault(agent)
-                    ?? AgentColors.DefaultLabels.GetValueOrDefault(agent, agent);
+        _displayLabel = report.AgentLabels().GetValueOrDefault(agent)
+                        ?? AgentColors.DefaultLabels.GetValueOrDefault(agent, agent);
         (_weekday, _time) = QuotaResetValue.Parse(_quota, _timezone);
 
         Orientation = Orientation.Vertical;
         Spacing = 4;
-        Build(label);
+        Build();
     }
 
-    private void Build(string label)
+    private void Build()
     {
         Children.Clear();
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         var left = Ui.H(6);
         left.Children.Add(Ui.Dot(_agent, 8));
-        left.Children.Add(Ui.Text(label, Type.BodySize, maxLines: 1));
+        left.Children.Add(Ui.Text(_displayLabel, Type.BodySize, maxLines: 1));
         Grid.SetColumn(left, 0);
         header.Children.Add(left);
         var source = Ui.Text(_quota?.Source ?? "none", Type.CaptionSize, null, Palette.Secondary, mono: true);
@@ -109,7 +110,7 @@ public sealed class QuotaResetRow : StackPanel
         pickers.Children.Add(Picker.Make(weekdayLabels, Math.Max(weekdayIndex, 0), index =>
         {
             _weekday = Weekdays[index].Key;
-            Save($"{_weekday} {_time}");
+            Build();
         }, enabled: CanEdit, minWidth: 96));
 
         var times = AvailableTimes;
@@ -117,7 +118,7 @@ public sealed class QuotaResetRow : StackPanel
         pickers.Children.Add(Picker.Make(times, Math.Max(timeIndex, 0), index =>
         {
             _time = times[index];
-            Save($"{_weekday} {_time}");
+            Build();
         }, enabled: CanEdit, minWidth: 92));
 
         var buttons = Ui.H(8);
@@ -172,7 +173,7 @@ public sealed class QuotaResetRow : StackPanel
         if (!CanEdit) return;
         _saving = true;
         _error = null;
-        Build(Label());
+        Build();
         Task.Run(() =>
         {
             try
@@ -188,8 +189,6 @@ public sealed class QuotaResetRow : StackPanel
             _services.NotifyChanged();
         });
     }
-
-    private string Label() => _agent;
 
     /// <summary>`Sat, Oct 31 at 10:40`（Swift 的 EEEMMMdHHmm 模板）。</summary>
     public static string Stamp(DateTimeOffset date, TimeZoneInfo timezone)

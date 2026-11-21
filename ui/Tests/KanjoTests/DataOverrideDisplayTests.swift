@@ -11,4 +11,16 @@ final class DataOverrideDisplayTests: KanjoTestCase {
     func testNormalRunKeepsFullPath() {
         XCTAssertEqual(DataOverrideDisplay.path(fullPath, snapshot: false), fullPath)
     }
+
+    func testSnapshotFileDataSourceDescriptionShowsOnlyFileName() {
+        XCTAssertEqual(
+            DataOverrideDisplay.fileDataSourceDescription(path: fullPath, snapshot: true),
+            "File (--data): sample.json")
+    }
+
+    func testNormalFileDataSourceDescriptionKeepsFullPath() {
+        XCTAssertEqual(
+            DataOverrideDisplay.fileDataSourceDescription(path: fullPath, snapshot: false),
+            "File (--data): \(fullPath)")
+    }
 }
