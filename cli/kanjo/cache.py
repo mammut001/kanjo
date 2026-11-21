@@ -162,6 +162,7 @@ class RepoCache:
         self._stat_sig_cache: Dict[str, Optional[list]] = {}
         self._stat_isdir_cache: Dict[str, bool] = {}
         self._lexists_cache: Dict[str, bool] = {}
+        self._config_sig_cache: Dict[str, Optional[list]] = {}
         try:
             with open(self.path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -241,7 +242,7 @@ class RepoCache:
             self._stat_sig_cache[stat_path] = current_sig
             self._stat_isdir_cache[stat_path] = is_dir
 
-        if current_sig is not None:
+        if current_sig is not None and entry.get("cfg") == self._config_sig(entry.get("repo"), fs_root):
             if current_sig == sig or (is_dir and current_sig[1] == sig[1]):
                 if current_sig != sig:
                     entry["sig"] = current_sig
@@ -261,8 +262,26 @@ class RepoCache:
             self._lexists_cache[stat_path] = found
         return found
 
+    def _config_sig(self, repo: Optional[dict], fs_root: str) -> list:
+        """(size, mtime_ns) of the config file of ``repo`` and of each enclosing
+        repo it falls back to. The remote is read from there, and git rewrites it
+        by renaming a lock file over it, which leaves the .git inode unchanged."""
+        out = []
+        while isinstance(repo, dict):
+            common = repo.get("common_dir") or ""
+            cfg_path = os.path.join((fs_root + common) if fs_root else common, "config")
+            if cfg_path not in self._config_sig_cache:
+                try:
+                    st = os.stat(cfg_path)
+                    self._config_sig_cache[cfg_path] = [st.st_size, st.st_mtime_ns]
+                except OSError:
+                    self._config_sig_cache[cfg_path] = None
+            out.append(self._config_sig_cache[cfg_path])
+            repo = repo.get("outer")
+        return out
+
     def put(self, path: str, repo: Optional[dict], dotgit: Optional[str] = None,
-            sig: Optional[list] = None, now: Optional[float] = None) -> None:
+            sig: Optional[list] = None, now: Optional[float] = None, fs_root: str = "") -> None:
         if repo is None:
             current_time = time.time() if now is None else now
             self.entries[path] = {"repo": None, "ts": current_time}
@@ -273,6 +292,7 @@ class RepoCache:
                     "repo": repo,
                     "dotgit": dotgit,
                     "sig": sig,
+                    "cfg": self._config_sig(repo, fs_root),
                 }
                 self.dirty = True
 

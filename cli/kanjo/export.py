@@ -659,12 +659,37 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
     config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
 
+    # A cached decision names project ids, so it also depends on which project
+    # each of the session's paths resolves to now (a remote added or changed
+    # turns a path id into a remote id). Taken right after prewarm, before any
+    # decision runs, so it is the same whether or not decisions come from cache.
+    identity_sigs: Dict[int, str] = {}
+    if attr_cache is not None:
+        fast_resolved = resolver._fast_resolve_cache
+        for unit in units:
+            top = unit.top
+            seen_paths = set(top.cwd_counts)
+            for call in top.tool_paths:
+                for p in call:
+                    r = norm_memo.get(p)
+                    if r is None:
+                        r = dirname(p) if search_file_like(p) else p
+                    seen_paths.add(r)
+            pairs = []
+            for p in sorted(seen_paths):
+                proj = fast_resolved.get((p, False))
+                if proj is not None:
+                    pairs.append(p + "\0" + proj.id)
+            identity_sigs[id(top)] = "%s:%s" % (
+                worktree_sig, hashlib.sha1("\n".join(pairs).encode("utf-8")).hexdigest())
+
     def _unit_sig(unit) -> str:
         s_list = [unit.top] + unit.subs
         return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
 
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
+        unit_wt_sig = identity_sigs.get(id(unit.top), worktree_sig)
+        dec_data = attr_cache.get(unit.top, unit_wt_sig, config_sig) if attr_cache is not None else None
         if dec_data is not None:
             decision = attr.Decision(kind=dec_data["kind"],
                                      shares=[tuple(x) for x in dec_data["shares"]],
@@ -691,7 +716,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                     "scores": decision.scores,
                     "paths": added_paths,
                 }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         unique_sessions += 1
         agent = unit.top.agent
         msgs = unit.messages
@@ -1010,7 +1035,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 }
                 dec_data["unit_sig"] = u_sig
                 dec_data["unit_agg"] = new_u_data
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         else:
             priced = []
             for m in msgs:
