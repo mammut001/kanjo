@@ -24,12 +24,14 @@ public struct PanelData: Equatable {
         
         let models = ModelAggregation.aggregate(in: filtered)
         let reference = WeeklyTokens.reference(now: now, generatedAt: ReportDates.parseTimestamp(report.generatedAt))
-        let weeklyTokens = WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: .current)
+        // 报告里的 YYYY-MM-DD 是报告时区的公历日期，划周也必须用同一本日历（不是本机的 Calendar.current）。
+        let cal = RangeEngine.calendar(timezone: RangeEngine.timezone(of: report))
+        let weeklyTokens = WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: cal)
         let end = ReportDates.parseTimestamp(report.generatedAt) ?? report.totals.lastActive.flatMap(ReportDates.parseDay) ?? now
         var heatWeeks: [String: [WeekCost]] = [:]
         for project in filtered.projects {
             let p = project.projected
-            heatWeeks[p.id] = HeatStrip.weekly(p.byDay, endingOn: end, fallbackAgent: RangeEngine.fallbackAgent(for: p))
+            heatWeeks[p.id] = HeatStrip.weekly(p.byDay, endingOn: end, fallbackAgent: RangeEngine.fallbackAgent(for: p), calendar: cal)
         }
         return PanelData(
             rangeSpec: spec,

@@ -123,12 +123,38 @@ public sealed class PanelView : Grid
         else Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
     }
 
-    private void OnChanged()
+    private void OnChanged() => RefreshContent();
+
+    /// <summary>
+    /// 数据变了（报告 / 设置）但路由没变：能原地更新的页面原地更新，不换实例。
+    /// 磁盘页不看用量报告，只更新横幅和底栏（选中项、清理预览、清理结果都在页面实例上）；
+    /// 设置页用自己的 Rebuild（保留滚动位置、正在输入的令牌、「Show N more」）；
+    /// 其它滚动页重新构造，但回到原来的滚动位置。
+    /// </summary>
+    public void RefreshContent()
     {
         if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(Rebuild);
+            Avalonia.Threading.Dispatcher.UIThread.Post(RefreshContent);
             return;
+        }
+        if (!SnapshotMode)
+        {
+            switch (_page)
+            {
+                case DiskPage when Route.Kind == AppRouteKind.Disk:
+                    RebuildBanners();
+                    UpdateChrome();
+                    return;
+                case SettingsPage settings when Route.Kind == AppRouteKind.Settings:
+                    RebuildBanners();
+                    settings.Rebuild();
+                    UpdateChrome();
+                    return;
+                case ScrollPage page when _restoreOverviewOffset is null && page.VerticalOffset > 0:
+                    _restoreOverviewOffset = page.VerticalOffset;
+                    break;
+            }
         }
         Rebuild();
     }
@@ -196,7 +222,7 @@ public sealed class PanelView : Grid
         _page = content;
         // 截图模式：滚动页交出内部内容，按整页高度渲染（和 Mac 的 TALL 截图一致）。
         if (SnapshotMode && content is ISnapshotPage snapshotPage) return snapshotPage.SnapshotBody;
-        // 返回总览：等这一页布局完成后把滚动位置放回去（动画不会改变最终位置）。
+        // 返回总览 / 同一页因数据刷新重建：等这一页布局完成后把滚动位置放回去（动画不会改变最终位置）。
         if (content is ScrollPage page && _restoreOverviewOffset is { } restore)
         {
             _restoreOverviewOffset = null;

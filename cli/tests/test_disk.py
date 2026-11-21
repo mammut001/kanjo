@@ -454,6 +454,95 @@ class DiskTest(unittest.TestCase):
         self.assertGreaterEqual(exported["ledger"]["orphaned"], 1)
         self.assertGreaterEqual(exported["ledger"]["sessions"], 1)
 
+    def _assistant_line(self, msg_id, output_tokens):
+        return json.dumps({
+            "type": "assistant",
+            "timestamp": "2026-10-02T19:50:00.000Z",
+            "cwd": self.tmp,
+            "sessionId": SID,
+            "uuid": "u-" + msg_id,
+            "message": {
+                "model": "claude-opus-5-5",
+                "id": msg_id,
+                "content": [],
+                "usage": {"input_tokens": 10, "output_tokens": output_tokens},
+            },
+        }) + "\n"
+
+    def _ledger_output_tokens(self):
+        ledger = Ledger(directory=self.data)
+        return sum(m.output for _key, session in ledger.orphan_sessions() for m in session.messages)
+
+    def test_usage_written_after_the_last_import_is_kept_by_clean(self):
+        path = self.write_claude()
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(self._assistant_line("msg_disk_later", 50000))
+        self.assertEqual(self.entry(self.report(), "claude:sessions")["blocked"], [])
+        self.clean(["claude:sessions"], yes=True)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self._ledger_output_tokens(), 50004)
+
+    def test_session_imported_while_empty_is_reimported_before_clean(self):
+        path = self.write(os.path.join(self.projects, "slug", SID + ".jsonl"), json.dumps({
+            "type": "user", "timestamp": "2026-10-02T19:48:00.000Z", "cwd": self.tmp,
+            "sessionId": SID, "uuid": "u0", "message": {"role": "user", "content": "hi"},
+        }) + "\n")
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(self._assistant_line("msg_disk_reply", 7))
+        self.clean(["claude:sessions"], yes=True)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self._ledger_output_tokens(), 7)
+
+    def test_claude_memory_is_never_moved_with_the_sessions(self):
+        log = self.write_claude()
+        memory = self.write(os.path.join(self.projects, "slug", "memory", "MEMORY.md"), "- remember\n")
+        topic = self.write(os.path.join(self.projects, "slug", "memory", "topic.md"), "notes\n")
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        now = time.time()
+        set_tree_mtime(self.projects, now - 40 * DAY)
+        self.assertEqual(self.entry(self.report(now), "claude:sessions")["blocked"], [])
+
+        plan = self.clean(["claude:sessions"], older_than_days=30, dry_run=True, now=now)
+        self.assertIn(log, plan["moved"])
+        self.assertNotIn(memory, plan["moved"])
+        self.assertNotIn(topic, plan["moved"])
+
+        done = self.clean(["claude:sessions"], yes=True, now=now)
+        self.assertFalse(os.path.exists(log))
+        self.assertTrue(os.path.isfile(memory))
+        self.assertTrue(os.path.isfile(topic))
+        self.assertNotIn(self.projects, done["moved"])
+
+    def test_tool_home_without_its_sessions_folder_is_not_a_sessions_entry(self):
+        subdirs = {
+            "workbuddy": "projects", "workbuddy_ai": "projects", "codebuddy": "projects",
+            "qodercli": "projects", "qodercli_cn": "projects", "kimicode": "sessions",
+            "musecode": "sessions", "prime_agent": "sessions", "omp": "sessions",
+            "qwenwork": os.path.join("logs", "sessions"), "grok_bot": "sand-client-persistence",
+            "openclaw": "agents",
+        }
+        for key, sub in subdirs.items():
+            home = os.path.join(self.tmp, "home-" + key)
+            auth = self.write(os.path.join(home, "auth.json"), "{}")
+            set_tree_mtime(home, time.time() - 40 * DAY)
+            roots = {key: home}
+            doc = disk.report(roots=roots, rescan=True)
+            ids = [e["id"] for a in doc["agents"] for e in a["entries"]]
+            self.assertEqual(ids, [], key)
+            done = disk.clean([key + ":sessions"], yes=True, roots=roots, trash_dir=self.trash)
+            self.assertEqual(done["moved"], [], key)
+            self.assertTrue(os.path.isfile(auth), key)
+            # With the folder present, only that folder is the entry.
+            os.makedirs(os.path.join(home, sub))
+            doc = disk.report(roots=roots, rescan=True)
+            paths = [e["path"] for a in doc["agents"] for e in a["entries"]]
+            self.assertEqual(paths, [os.path.join(home, sub)], key)
+
     def test_cli_table_and_json_stay_inside_the_temp_tree(self):
         path = self.write(os.path.join(self.shell, "a.txt"), "a")
         code, out, _ = self.cli("disk", "--json")
@@ -901,6 +990,45 @@ class DiskRootIsolationTest(unittest.TestCase):
         )
         for path in seen:
             self.assertFalse(path == home or path.startswith(home + os.sep), path)
+
+
+
+class LsofNonAsciiTest(unittest.TestCase):
+    """lsof escapes non-ASCII bytes as \\xNN in the C locale; the probe must still match."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-lsof-")
+        self.dir = os.path.join(self.tmp, "\u9879\u76ee wt")
+        os.makedirs(self.dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_escaped_name_counts_as_in_use(self):
+        raw = os.path.realpath(self.dir).encode("utf-8")
+        escaped = b"".join(b"\\x%02x" % c if c >= 0x80 else bytes([c]) for c in raw)
+
+        class FakeProc:
+            def communicate(self, timeout=None):
+                return b"p1\nR1\nfcwd\nn" + escaped + b"\n", b""
+
+        paths = disk._finish_cwd_probe(FakeProc())
+        with mock.patch.object(disk, "_lsof_bin", return_value="/usr/sbin/lsof"), \
+             mock.patch.object(disk.winsupport, "is_windows", return_value=False):
+            self.assertTrue(disk._path_in_use(self.dir, paths))
+
+    def test_probe_runs_lsof_in_a_utf8_locale(self):
+        seen = {}
+
+        def fake_popen(argv, **kwargs):
+            seen["env"] = kwargs.get("env")
+            raise OSError("no lsof here")
+
+        with mock.patch.object(disk.winsupport, "is_windows", return_value=False), \
+             mock.patch.object(disk.shutil, "which", return_value="/usr/sbin/lsof"), \
+             mock.patch.object(disk.subprocess, "Popen", side_effect=fake_popen):
+            self.assertIsNone(disk._start_cwd_probe())
+        self.assertIn("UTF-8", (seen["env"] or {}).get("LC_ALL", ""))
 
 
 if __name__ == "__main__":

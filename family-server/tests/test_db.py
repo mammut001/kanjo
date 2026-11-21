@@ -362,6 +362,37 @@ class TestDatabaseAndPrune(unittest.TestCase):
             self.assertEqual(len(db.list_member_tokens(conn, "Windows VM")), 0)
             self.assertEqual(len(db.list_member_tokens(conn, "Payton Mac")), 2)
 
+    def test_revoking_merged_member_revokes_its_moved_tokens(self):
+        with db.get_connection(self.db_path) as conn:
+            w_token, w_id = db.add_member(conn, "Windows VM")
+            w_rotated = db.rotate_member_token(conn, w_id)
+            p_token, p_id = db.add_member(conn, "Payton Mac")
+            db.merge_members(conn, w_id, p_id)
+            self.assertEqual(db.get_member_by_token(conn, w_rotated)["name"], "Payton Mac")
+
+            self.assertTrue(db.revoke_member(conn, "Windows VM"))
+            self.assertIsNone(db.get_member_by_token(conn, w_rotated))
+            self.assertIsNone(db.get_member_by_token(conn, w_token))
+            self.assertEqual(db.get_member_by_token(conn, p_token)["name"], "Payton Mac")
+            # Second revoke has nothing left to do.
+            self.assertFalse(db.revoke_member(conn, "Windows VM"))
+
+    def test_revoking_merged_member_after_migration_uses_original_token(self):
+        import sqlite3
+
+        with db.get_connection(self.db_path) as conn:
+            w_token, w_id = db.add_member(conn, "Windows VM")
+            p_token, p_id = db.add_member(conn, "Payton Mac")
+            db.merge_members(conn, w_id, p_id)
+        # Simulate a database merged before token origins were recorded.
+        with sqlite3.connect(self.db_path) as raw:
+            raw.execute("UPDATE member_tokens SET origin_member_id = NULL")
+        db.init_db(self.db_path)
+        with db.get_connection(self.db_path) as conn:
+            self.assertTrue(db.revoke_member(conn, "Windows VM"))
+            self.assertIsNone(db.get_member_by_token(conn, w_token))
+            self.assertEqual(db.get_member_by_token(conn, p_token)["name"], "Payton Mac")
+
     def test_merge_waits_for_concurrent_revocation(self):
         with db.get_connection(self.db_path) as conn:
             _, source = db.add_member(conn, "Source")

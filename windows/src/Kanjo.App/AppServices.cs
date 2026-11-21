@@ -5,6 +5,13 @@ using Kanjo.Core;
 
 namespace Kanjo.App;
 
+/// <summary>设置页里按 agent 写配置的那几类动作（错误按「类别 + agent」记住）。</summary>
+public enum ConfigWriteKind
+{
+    QuotaReset,
+    Subscription,
+}
+
 /// <summary>
 /// 应用服务容器：设置、数据源（--data / CLI）、磁盘报告、配置写入、家庭上报 / 发布，
 /// 以及后台刷新的编排（文件监听 / 兜底定时器 / 电源事件 / 面板打开）。
@@ -24,6 +31,27 @@ public sealed class AppServices
 
     /// <summary>最近一次 Antigravity 账号套餐写入失败（设置行展示）。</summary>
     public string? AccountPlanError { get; private set; }
+
+    private readonly Dictionary<(ConfigWriteKind, string), string> _configWriteErrors = new();
+
+    /// <summary>
+    /// 某一行最近一次配置写入失败的信息。记在这里而不是行上：失败后的 <see cref="NotifyChanged"/>
+    /// 会让设置页重建所有行，行自己的字段留不住（和 <see cref="AccountPlanError"/> 同理）。
+    /// </summary>
+    public string? ConfigWriteError(ConfigWriteKind kind, string agent)
+    {
+        lock (_configWriteErrors) return _configWriteErrors.GetValueOrDefault((kind, agent));
+    }
+
+    /// <summary>记下（或用 null 清掉）某一行的配置写入错误。</summary>
+    public void RecordConfigWriteError(ConfigWriteKind kind, string agent, string? error)
+    {
+        lock (_configWriteErrors)
+        {
+            if (error is null) _configWriteErrors.Remove((kind, agent));
+            else _configWriteErrors[(kind, agent)] = error;
+        }
+    }
 
     public AppSettings Settings { get; }
     public string[] Arguments { get; }

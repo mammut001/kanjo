@@ -453,9 +453,9 @@ class Resolver:
                     if alt_c != c:
                         self.repo_cache.put(alt_c, None)
                 elif dotgit and sig:
-                    self.repo_cache.put(c, dumped, dotgit, sig)
+                    self.repo_cache.put(c, dumped, dotgit, sig, fs_root=self.fs_root)
                     if alt_c != c:
-                        self.repo_cache.put(alt_c, dumped, dotgit, sig)
+                        self.repo_cache.put(alt_c, dumped, dotgit, sig, fs_root=self.fs_root)
 
         self._dir_repo[path] = result
         alt_p = _private_alias(path)
@@ -467,9 +467,9 @@ class Resolver:
                 if alt_p != path:
                     self.repo_cache.put(alt_p, None)
             elif dotgit and sig:
-                self.repo_cache.put(path, dumped, dotgit, sig)
+                self.repo_cache.put(path, dumped, dotgit, sig, fs_root=self.fs_root)
                 if alt_p != path:
-                    self.repo_cache.put(alt_p, dumped, dotgit, sig)
+                    self.repo_cache.put(alt_p, dumped, dotgit, sig, fs_root=self.fs_root)
 
         return result
 

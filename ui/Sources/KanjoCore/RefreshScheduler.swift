@@ -28,12 +28,14 @@ public struct RefreshScheduler: Equatable {
         fallbackMinutes: Int = defaultFallbackMinutes,
         backgroundInterval: TimeInterval = 60,
         lastRefreshTime: Date? = nil,
-        isPanelVisible: Bool = false
+        isPanelVisible: Bool = false,
+        isLowPowerMode: Bool = false
     ) {
         self.fallbackMinutes = Self.migrateFallbackMinutes(fallbackMinutes)
         self.backgroundInterval = backgroundInterval
         self.lastRefreshTime = lastRefreshTime
         self.isPanelVisible = isPanelVisible
+        self.isLowPowerMode = isLowPowerMode
     }
 
     public mutating func onBackgroundIntervalChanged(_ interval: TimeInterval, at date: Date = Date()) -> Action {

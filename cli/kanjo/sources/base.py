@@ -132,10 +132,13 @@ def _parse_iso_string(ts: str) -> Optional[float]:
             return None
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
-    # Python 3.9 fromisoformat accepts at most 6 fractional digits
-    m = re.match(r"^(.*?\.\d{1,6})\d*(.*)$", s)
+    # Python 3.9/3.10 fromisoformat accepts exactly 3 or 6 fractional digits
+    m = re.match(r"^(.*?\.)(\d+)(.*)$", s)
     if m:
-        s = m.group(1) + m.group(2)
+        s = m.group(1) + (m.group(2) + "000000")[:6] + m.group(3)
+    # ... and only "+HH:MM" offsets, not "+HHMM"
+    if "T" in s or " " in s:
+        s = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", s)
     try:
         dt = datetime.fromisoformat(s)
     except ValueError:

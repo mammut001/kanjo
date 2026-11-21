@@ -173,9 +173,13 @@ def parse_iso(ts: Optional[str]) -> Optional[datetime]:
         clean = ts.strip()
         if clean.endswith("Z"):
             clean = clean[:-1] + "+00:00"
-        return datetime.fromisoformat(clean)
+        parsed = datetime.fromisoformat(clean)
     except Exception:
         return None
+    # Client-supplied: extreme years would overflow timezone conversion and date math.
+    if not 2000 <= parsed.year <= 2100:
+        return None
+    return parsed
 
 
 def format_tokens(n: int) -> str:
@@ -227,6 +231,8 @@ def pool_tokens_for_day(day: dict, fallback_total: int) -> int:
         gp = [p for p in by_provider if isinstance(p, dict) and p.get("provider") == "google"]
         if gp:
             return int(sum(_as_float((p.get("tokens") or {}).get("total")) or 0 for p in gp))
+    if (isinstance(by_agent, list) and by_agent) or (isinstance(by_provider, list) and by_provider):
+        return 0  # the day has a breakdown, and none of it is pool usage
     return int(fallback_total or 0)
 
 
@@ -475,7 +481,7 @@ def generate_dashboard_html(
                 dev_plans = dev.get("plans") or merged.get("plans") or {}
                 ag_qw = qw.get("antigravity")
                 if isinstance(ag_qw, dict):
-                    pct = _as_float(ag_qw.get("weekly_used_percent")) or 0.0
+                    pct = _as_float(ag_qw.get("weekly_used_percent"))  # None = unknown
                     resets_at = ag_qw.get("weekly_resets_at")
                     plan_name = dev_plans.get("antigravity", "Google AI Ultra") if isinstance(dev_plans, dict) else "Google AI Ultra"
                     dev_quota = {
@@ -551,11 +557,7 @@ def generate_dashboard_html(
                 for mod, data in cycle_models.items()
             ]
             sorted_models.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
-            if sorted_models:
-                member_info["top_models"] = sorted_models[:5]
-            else:
-                all_time = summary.get("all_time", {})
-                member_info["top_models"] = all_time.get("top_models", [])[:5]
+            member_info["top_models"] = sorted_models[:5]
 
         members_processed.append(member_info)
 
@@ -942,7 +944,8 @@ def generate_dashboard_html(
                 doc.append('      <div class="pool-note">按天统计，额度周起始当天的用量整天计入。</div>')
 
     # Per-member view only when members disagree (pool may not actually be shared).
-    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries]
+    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries
+                   if q["quota"]["weekly_used_percent"] is not None]
     show_per_member = len(weekly_vals) > 1 and (max(weekly_vals) - min(weekly_vals)) > 2.0
     if show_per_member:
         doc.append('      <h3 class="pool-subtitle">各成员上报的周额度（数值不一致，额度可能并非共用）</h3>')
@@ -955,7 +958,9 @@ def generate_dashboard_html(
             reset_dt = parse_iso(q["quota"]["weekly_resets_at"])
             reset_str = format_dt(reset_dt, tz) if reset_dt else "—"
 
-            if pct >= 95.0:
+            if pct is None:
+                bar_color = "var(--text-muted)"
+            elif pct >= 95.0:
                 bar_color = "var(--red)"
             elif pct >= 80.0:
                 bar_color = "var(--amber)"
@@ -967,11 +972,13 @@ def generate_dashboard_html(
             doc.append(f'            <span class="quota-user">{name}{lbl}</span>')
             doc.append(f'            <span class="quota-plan">{plan}</span>')
             doc.append('          </div>')
-            doc.append('          <div class="progress-bar">')
-            doc.append(f'            <div class="progress-fill" style="width: {min(100.0, pct):.1f}%; background: {bar_color};"></div>')
-            doc.append('          </div>')
+            if pct is not None:
+                doc.append('          <div class="progress-bar">')
+                doc.append(f'            <div class="progress-fill" style="width: {min(100.0, pct):.1f}%; background: {bar_color};"></div>')
+                doc.append('          </div>')
+            pct_str = "未知" if pct is None else f"{pct:.1f}%"
             doc.append('          <div class="quota-footer">')
-            doc.append(f'            <span>周额度已用：<strong>{pct:.1f}%</strong></span>')
+            doc.append(f'            <span>周额度已用：<strong>{pct_str}</strong></span>')
             doc.append(f'            <span>重置时间：{html.escape(reset_str)}</span>')
             doc.append('          </div>')
             doc.append('        </div>')
@@ -1554,7 +1561,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not session_id:
             return None
         with db.get_connection(self.db_path) as conn:
-            return db.get_session(conn, session_id)
+            session = db.get_session(conn, session_id)
+            if session and self.admin_emails:
+                email = (session.get("email") or "").lower().strip()
+                if email not in self.admin_emails:
+                    # Email was removed from FAMILY_ADMIN_EMAILS: revoke the session.
+                    db.delete_session(conn, session_id)
+                    return None
+            return session
 
     def _check_csrf(self) -> bool:
         """Verify CSRF protections on POST requests.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import operator
 import os
 import re
 import sys
@@ -21,7 +22,7 @@ from . import quota
 from .config import Config, default_config_paths
 from .cache import _cache_dir, _dump_session, _load_session, _FILE_LIKE
 from .device import build_device_info
-from .ledger import Ledger, entry_key, marker_key
+from .ledger import Ledger, ScanScope, entry_key, marker_key
 from .subscriptions import subscriptions as load_subscriptions
 from .identity import Resolver, ScratchpadDecoder
 from .pricing import PriceBook, default_book
@@ -120,6 +121,7 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     seen = set()
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}
+    scope = ScanScope()
     for agent, module in SOURCES.items():
         if dirs is not None:
             roots = dirs.get(agent, [])
@@ -129,19 +131,23 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             roots = module.roots()
         st = SourceStats(agent=agent, dirs=[r for r in roots])
         stats[agent] = st
+        scope.note_roots(agent, roots)
         for path, parent in module.discover(roots):
+            scope.note_path(agent, path)
             st.files += 1
             try:
                 session = cache.get(agent, path, parent, module.parse_file) if cache else module.parse_file(path, parent)
             except ParseError as exc:
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             except Exception as exc:  # unknown format change: count it, never abort the scan
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             if not session.messages:
                 m_key = marker_key(agent, path)
@@ -158,6 +164,12 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             sessions.append(session)
             grouped.setdefault(key, []).append(session)
             grouped_paths.setdefault(key, []).append(path)
+        skipped = getattr(module, "skipped_paths", None)
+        if callable(skipped):
+            for path in skipped():
+                scope.note_path(agent, path)
+    if hasattr(ledger, "set_scan_scope"):
+        ledger.set_scan_scope(scope)
     modified_keys = getattr(cache, "modified_keys", None) if cache else None
     changed = [key for key, paths in grouped_paths.items()
                if modified_keys is None or any(path in modified_keys for path in paths)]
@@ -592,6 +604,12 @@ def _build_antigravity_accounts(sessions: List[Session],
     }
 
 
+_SIG_NUMBERS = operator.attrgetter("ts", "input", "output", "cache_read", "cache_write",
+                                   "cache_write_1h", "thinking")
+_SIG_MODEL = operator.attrgetter("model")
+_SIG_BRANCH = operator.attrgetter("branch")
+
+
 def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
                  prices: Optional[PriceBook] = None, home: Optional[str] = None,
                  now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
@@ -659,12 +677,49 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
     config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
 
+    # A cached decision names project ids, so it also depends on which project
+    # each of the session's paths resolves to now (a remote added or changed
+    # turns a path id into a remote id). Taken right after prewarm, before any
+    # decision runs, so it is the same whether or not decisions come from cache.
+    identity_sigs: Dict[int, str] = {}
+    if attr_cache is not None:
+        fast_resolved = resolver._fast_resolve_cache
+        for unit in units:
+            top = unit.top
+            seen_paths = set(top.cwd_counts)
+            for call in top.tool_paths:
+                for p in call:
+                    r = norm_memo.get(p)
+                    if r is None:
+                        r = dirname(p) if search_file_like(p) else p
+                    seen_paths.add(r)
+            pairs = []
+            for p in sorted(seen_paths):
+                proj = fast_resolved.get((p, False))
+                if proj is not None:
+                    pairs.append(p + "\0" + proj.id)
+            identity_sigs[id(top)] = "%s:%s" % (
+                worktree_sig, hashlib.sha1("\n".join(pairs).encode("utf-8")).hexdigest())
+
     def _unit_sig(unit) -> str:
+        # Everything the cached aggregate and detail are built from: message
+        # tokens can be rewritten in place (OpenCode) and titles change later.
+        # hash() of ints and floats does not depend on PYTHONHASHSEED; strings go
+        # through sha1.
         s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
+        top = unit.top
+        parts = [repr((top.title, top.cwd, top.branch, top.origin_ts))]
+        for s in s_list:
+            msgs = s.messages
+            parts.append("%d\0%s\0%s" % (hash(tuple(map(_SIG_NUMBERS, msgs))),
+                                          "\0".join(map(str, map(_SIG_MODEL, msgs))),
+                                          "\0".join(map(str, map(_SIG_BRANCH, msgs)))))
+        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list) + \
+            ";" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
 
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
+        unit_wt_sig = identity_sigs.get(id(unit.top), worktree_sig)
+        dec_data = attr_cache.get(unit.top, unit_wt_sig, config_sig) if attr_cache is not None else None
         if dec_data is not None:
             decision = attr.Decision(kind=dec_data["kind"],
                                      shares=[tuple(x) for x in dec_data["shares"]],
@@ -691,7 +746,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                     "scores": decision.scores,
                     "paths": added_paths,
                 }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         unique_sessions += 1
         agent = unit.top.agent
         msgs = unit.messages
@@ -1010,7 +1065,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 }
                 dec_data["unit_sig"] = u_sig
                 dec_data["unit_agg"] = new_u_data
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         else:
             priced = []
             for m in msgs:
@@ -1505,12 +1560,20 @@ _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE = re.compile(
 )
 
 
+_MODEL_FILE_RE = re.compile(r"^(?:[/~\\]|[A-Za-z]:[/\\])|\\|\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+_MODEL_FILE_EXT_RE = re.compile(r"\.(?:gguf|bin|safetensors)$", re.IGNORECASE)
+
+
 def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) -> Optional[str]:
     if not raw_model or raw_model == "<synthetic>":
         return None
     model_id, estimated = prices.resolve(raw_model, agent)
     if model_id and not estimated:
         return strip_vendor_prefix(model_id)
+    if _MODEL_FILE_RE.search(raw_model.strip()):
+        # A local server reports the model file path: keep only the file name.
+        name = _MODEL_FILE_EXT_RE.sub("", re.split(r"[/\\]", raw_model.strip())[-1])
+        return name or None
     name = strip_vendor_prefix(raw_model)
     while True:
         m = _PUBLIC_SUMMARY_STRIP_SUFFIXES_RE.search(name)
@@ -1518,6 +1581,31 @@ def _public_model_name(raw_model: Optional[str], agent: str, prices: PriceBook) 
             break
         name = name[:m.start()]
     return name
+
+
+def _reconcile_costs(items: List[dict], period_cost_usd: float, tokens: Callable[[dict], int]) -> None:
+    """Make the rounded ``cost_usd`` of ``items`` add up to ``period_cost_usd``.
+
+    The rounding residual goes to the costliest item. A negative residual larger
+    than that item is taken from the next ones, so no item drops below zero.
+    """
+    if not items:
+        return
+    diff = round(period_cost_usd - round(sum(x["cost_usd"] for x in items), 2), 2)
+    if diff == 0:
+        return
+    ordered = sorted(items, key=lambda x: (x["cost_usd"], tokens(x)), reverse=True)
+    if diff > 0:
+        ordered[0]["cost_usd"] = round(ordered[0]["cost_usd"] + diff, 2)
+        return
+    for item in ordered:
+        take = min(item["cost_usd"], -diff)
+        if take <= 0:
+            continue
+        item["cost_usd"] = round(item["cost_usd"] - take, 2)
+        diff = round(diff + take, 2)
+        if diff >= 0:
+            break
 
 
 class PublicPeriodAgg:
@@ -1604,12 +1692,7 @@ class PublicPeriodAgg:
                 "cost_usd": round(data["cost"], 2),
                 "models": p_models[:5],
             })
-        if provider_items:
-            sum_prov_cost = round(sum(p["cost_usd"] for p in provider_items), 2)
-            diff = round(period_cost_usd - sum_prov_cost, 2)
-            if diff != 0:
-                largest = max(provider_items, key=lambda x: (x["tokens"]["total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(provider_items, period_cost_usd, lambda x: x["tokens"]["total"])
         provider_items.sort(key=lambda x: (-x["tokens"]["total"], -x["cost_usd"], x["provider"]))
 
         agent_items = []
@@ -1620,12 +1703,7 @@ class PublicPeriodAgg:
                 "tokens_total": data["tokens_total"],
                 "cost_usd": round(data["cost"], 2),
             })
-        if agent_items:
-            sum_agent_cost = round(sum(a["cost_usd"] for a in agent_items), 2)
-            diff = round(period_cost_usd - sum_agent_cost, 2)
-            if diff != 0:
-                largest = max(agent_items, key=lambda x: (x["tokens_total"], x["cost_usd"]))
-                largest["cost_usd"] = round(largest["cost_usd"] + diff, 2)
+        _reconcile_costs(agent_items, period_cost_usd, lambda x: x["tokens_total"])
         agent_items.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["agent"]))
 
         model_items = []
@@ -1671,18 +1749,6 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     sessions = dedupe(result.sessions)
     units = build_units(sessions)
 
-    if repo_cache is None and cache is not None:
-        repo_cache = getattr(cache, "repo_cache", None)
-    worktree_cache = getattr(cache, "worktree_cache", None) if cache is not None else None
-    attr_cache = getattr(cache, "attr_cache", None) if cache is not None else None
-
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root,
-                        repo_cache=repo_cache, worktree_cache=worktree_cache)
-    scratch = ScratchpadDecoder(fs_root=fs_root)
-    for s in sessions:
-        for path, remote in s.remote_hints.items():
-            resolver.add_remote_hint(path, remote)
-
     tz_name = local_timezone_name()
     tz = local_zone(tz_name)
 
@@ -1691,43 +1757,12 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     weeks: Dict[str, PublicPeriodAgg] = {}
     days: Dict[str, PublicPeriodAgg] = {}
 
-    worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
-    config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
-
-    def _unit_sig(unit) -> str:
-        s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
-
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
-        if dec_data is not None:
-            decision = attr.Decision(kind=dec_data["kind"],
-                                     shares=[tuple(x) for x in dec_data["shares"]],
-                                     scores=dec_data.get("scores", {}))
-            cached_paths = dec_data.get("paths")
-            if cached_paths:
-                for pid, paths in cached_paths.items():
-                    proj = resolver.project(pid)
-                    if proj is not None:
-                        for p in paths:
-                            proj.add_path(p)
-        else:
-            resolver._hint_paths_added = []
-            decision = attr.decide(unit.top, resolver, scratch, config)
-            added_paths = {}
-            if resolver._hint_paths_added:
-                for pid, p in resolver._hint_paths_added:
-                    added_paths.setdefault(pid, []).append(p)
-            resolver._hint_paths_added = None
-            if attr_cache is not None:
-                dec_data = {
-                    "kind": decision.kind,
-                    "shares": decision.shares,
-                    "scores": decision.scores,
-                    "paths": added_paths,
-                }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
-        if decision.kind == "excluded":
+        # Only exclusion matters here, and it depends on the cwd alone
+        # (attribution.decide). Project decisions belong to build_export, which
+        # makes them after prewarm; this path never reads or writes that cache.
+        rule = config.match_override(unit.top.cwd)
+        if rule is not None and rule[0] == "exclude":
             continue
 
         effective_filter_accounts = filter_accounts
@@ -1870,6 +1905,16 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         cleaned_entry = dict(entry)
         if agent == "antigravity" and filter_accounts is not None:
             live_email = cleaned_entry.get("email") or cleaned_entry.get("user_email")
+            if not live_email and cleaned_entry.get("source") == "live":
+                # quota_windows drops the email; the live reading it used is in
+                # the quota cache it just wrote (no network here).
+                try:
+                    from .quota_fetch import fetch_all_quotas
+                    raw = fetch_all_quotas(now=now.timestamp(), no_network=True).get("antigravity") or {}
+                    found = raw.get("email") or raw.get("user_email")
+                    live_email = found.strip() if isinstance(found, str) and found.strip() else None
+                except Exception:
+                    live_email = None
             if not live_email:
                 try:
                     from .antigravity_accounts import get_account_index
@@ -1949,6 +1994,12 @@ def check_public_summary_invariants(doc: dict, tolerance: float = 0.01) -> List[
         if agent_tokens_sum != p_tokens["total"]:
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens["total"]))
+
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
 
         prov_cost = sum(prov["cost_usd"] for prov in p["by_provider"])
         if abs(prov_cost - p["cost_usd"]) > tolerance + 1e-6:
@@ -2081,6 +2132,12 @@ def check_family_report_invariants(doc: dict, tolerance: float = 0.01) -> List[s
         if agent_tokens_sum != p_tokens.get("total", 0):
             problems.append("%s: by_agent tokens_total %d != tokens.total %d"
                             % (pk, agent_tokens_sum, p_tokens.get("total", 0)))
+
+        for name, field_name in (("by_provider", "provider"), ("by_agent", "agent")):
+            for item in p.get(name, []):
+                if item.get("cost_usd", 0.0) < 0:
+                    problems.append("%s: %s %s cost_usd %.2f < 0"
+                                    % (pk, name, item.get(field_name, "unknown"), item["cost_usd"]))
 
         prov_cost = sum(prov.get("cost_usd", 0.0) for prov in p.get("by_provider", []))
         if abs(prov_cost - p.get("cost_usd", 0.0)) > tolerance + 1e-6:

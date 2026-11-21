@@ -525,7 +525,14 @@ public static class RangeEngine
             return new FilteredBucket(b.Cost, b.Tokens.Total, b.Sessions, b.SessionsDetail, b.FirstActive, b.LastActive);
         }
         var ss = b.SessionsDetail.Where(spec.Includes).ToList();
-        var days = ss.SelectMany(s => new[] { s.StartedDate, s.EndedDate })
+        // 会话起止夹到该 agent 的区间内，否则跨范围起点的会话会把日期跨度带到范围之外。
+        var days = ss.SelectMany(s =>
+            {
+                var w = spec.Window(s.Agent);
+                DateTimeOffset? start = s.StartedDate is { } d0 && w?.Start is { } ws && ws > d0 ? ws : s.StartedDate;
+                DateTimeOffset? end = s.EndedDate is { } d1 && w?.End is { } we && we.AddSeconds(-1) < d1 ? we.AddSeconds(-1) : s.EndedDate;
+                return new[] { start, end };
+            })
             .Where(d => d is not null)
             .Select(d => Time.DayString(spec.Timezone, d!.Value))
             .ToList();

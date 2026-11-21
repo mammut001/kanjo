@@ -598,6 +598,21 @@ public sealed class TimeRangeTests : KanjoTestCase
         Assert.Equal(2000, filtered.Tokens);
     }
 
+    [Fact]
+    public void TestFilterSessionBucketClampsDaySpanToRange()
+    {
+        var spec = RangeEngine.DateInterval(TimeRange.Days7, Ts("2026-11-21T12:00:00Z"), TimeZoneInfo.Utc, null);
+        var s = new Session("s1", "claude", "Claude Code",
+            "2026-11-10T08:00:00Z", "2026-11-16T09:00:00Z", null, null, ["opus"], 10.0,
+            Tokens.WithTotal(1000), 1, "none", 0, null, null);
+        var bucket = new SessionBucket(10.0, Tokens.WithTotal(1000), 1, "2026-11-10", "2026-11-16", [s]);
+
+        var filtered = RangeEngine.Filter(bucket, spec);
+        Assert.Equal(1, filtered.Sessions);
+        Assert.Equal("2026-11-15", filtered.FirstActive);
+        Assert.Equal("2026-11-16", filtered.LastActive);
+    }
+
     private sealed class DoubleComparer : IEqualityComparer<double>
     {
         public bool Equals(double x, double y) => Math.Abs(x - y) < 1e-9;

@@ -116,11 +116,73 @@ def _migrate_entry(entry: dict) -> None:
         entry["source_paths"] = paths_of(entry)
 
 
-def _all_missing(entry: dict) -> bool:
+def _owner_only(path: str, mode: int) -> None:
+    """Drop group and other access (the ledger holds prompt titles and paths)."""
+    try:
+        current = os.stat(path).st_mode & 0o777
+        if current & 0o077:
+            os.chmod(path, mode)
+    except OSError:
+        pass
+
+
+def _private(path: str, flags: int) -> int:
+    """``open`` opener: new files get mode 0600."""
+    return os.open(path, flags, 0o600)
+
+
+class ScanScope:
+    """What one scan discovered, per agent.
+
+    Database-backed sources record ``<db>::<session id>`` paths. Such a path is
+    gone when its database is gone, and also when this scan read that database
+    (it lies under the agent's roots, or another of its sessions was found) and
+    did not list the session: the user deleted it inside the app. Sessions the
+    source leaves out on purpose are passed as ``skipped`` and are not gone.
+    """
+
+    def __init__(self) -> None:
+        self._found: Dict[str, Set[str]] = {}
+        self._dbs: Dict[str, Set[str]] = {}
+        self._roots: Dict[str, List[str]] = {}
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        return os.path.normcase(os.path.abspath(path))
+
+    def note_roots(self, agent: str, roots: Iterable[str]) -> None:
+        self._roots.setdefault(agent, []).extend(self._norm(r) for r in roots if r)
+
+    def note_path(self, agent: str, path: str) -> None:
+        self._found.setdefault(agent, set()).add(path)
+        if "::" in path:
+            self._dbs.setdefault(agent, set()).add(self._norm(path.split("::", 1)[0]))
+
+    def session_gone(self, agent: Optional[str], path: str) -> bool:
+        if agent is None or path in self._found.get(agent, ()):
+            return False
+        db = self._norm(path.split("::", 1)[0])
+        if db in self._dbs.get(agent, ()):
+            return True
+        for root in self._roots.get(agent, ()):
+            if db == root or db.startswith(root.rstrip(os.sep) + os.sep):
+                return True
+        return False
+
+
+def _path_gone(path: str, agent: Optional[str] = None, scope: Optional[ScanScope] = None) -> bool:
+    if "::" not in path:
+        return not os.path.exists(path)
+    if not os.path.exists(path.split("::", 1)[0]):
+        return True
+    return scope is not None and scope.session_gone(agent, path)
+
+
+def _all_missing(entry: dict, agent: Optional[str] = None, scope: Optional[ScanScope] = None) -> bool:
     paths = paths_of(entry)
     if not paths:
         return True
-    return all(not os.path.exists(path.split("::", 1)[0] if "::" in path else path) for path in paths)
+    return all(_path_gone(path, agent, scope) for path in paths)
 
 
 class Ledger:
@@ -136,6 +198,7 @@ class Ledger:
         self.dirty = False
         self.dirty_keys: Set[str] = set()
         self._loaded = False
+        self._scope: Optional[ScanScope] = None
         self._load()
 
     @property
@@ -448,13 +511,18 @@ class Ledger:
             self.dirty = True
             self.dirty_keys.add(key)
 
+    def set_scan_scope(self, scope: Optional[ScanScope]) -> None:
+        """Judge database-backed session paths against what this scan discovered."""
+        self._scope = scope
+
     def orphan_sessions(self, exclude_keys=None) -> List[Tuple[str, Session]]:
         """Session entries whose log files are all gone, as ``(key, session)``.
 
         Empty and error rows are not sessions. A row that still has one file on
         disk is skipped; the scan reads that file.
         """
-        if not self._loaded and hasattr(self, "_known_keys"):
+        lazy = not self._loaded and hasattr(self, "_known_keys")
+        if lazy:
             unseen = [k for k in (self._known_keys - set(exclude_keys or ())) - set(getattr(self, "_meta_orphans", {})) if k.count("\0") == 2]
             new_orphan_possible = False
             missing_paths_keys = []
@@ -462,7 +530,7 @@ class Ledger:
             for k in unseen:
                 paths = meta_paths.get(k)
                 if paths is not None:
-                    if all(not os.path.exists(p.split("::", 1)[0] if "::" in p else p) for p in paths):
+                    if all(_path_gone(p, k.split("\0", 1)[0], self._scope) for p in paths):
                         new_orphan_possible = True
                         break
                 else:
@@ -473,11 +541,16 @@ class Ledger:
                     entry = self._entries.get(k) or found_entries.get(k)
                     if entry is not None:
                         meta_paths[k] = paths_of(entry)
-                        if _all_missing(entry):
+                        if _all_missing(entry, agent_of(k, entry), self._scope):
                             new_orphan_possible = True
                             break
             if not new_orphan_possible:
-                if missing_paths_keys:
+                # A recorded orphan whose session was read again is no longer one.
+                meta_orphans = getattr(self, "_meta_orphans", {})
+                revived = [k for k in meta_orphans if exclude_keys and k in exclude_keys]
+                for k in revived:
+                    meta_orphans.pop(k, None)
+                if missing_paths_keys or revived:
                     self._save_meta()
                 found = []
                 for k, s in getattr(self, "_meta_orphans", {}).items():
@@ -495,12 +568,15 @@ class Ledger:
         for key, entry in self._entries.items():
             if exclude_keys and key in exclude_keys:
                 continue
-            if not _is_session_entry(entry) or not _all_missing(entry):
+            if not _is_session_entry(entry) or not _all_missing(entry, agent_of(key, entry), self._scope):
                 continue
             try:
                 found.append((key, _load_session(dict(entry["session"]))))
             except (TypeError, KeyError, ValueError):
                 continue
+        if lazy:
+            # Record the new orphans so later runs stay on the meta fast path.
+            self._save_meta()
         return found
 
     def signatures_by_path(self) -> Dict[str, list]:
@@ -517,10 +593,10 @@ class Ledger:
     def summary(self) -> dict:
         if not self._loaded and hasattr(self, "_summary") and self._summary:
             s = dict(self._summary)
+            if hasattr(self, "_meta_orphans"):
+                s["orphaned"] = len(self._meta_orphans)
             if self.dirty:
                 s["updated_at"] = self.updated_at or _EMPTY_UPDATED_AT
-                if hasattr(self, "_meta_orphans"):
-                    s["orphaned"] = len(self._meta_orphans)
                 if hasattr(self, "_known_keys"):
                     s["sessions"] = len([k for k in self._known_keys if k.count("\0") == 2])
             return s
@@ -537,7 +613,7 @@ class Ledger:
                 errors += 1
                 continue
             sessions += 1
-            if _all_missing(entry):
+            if _all_missing(entry, agent_of(None, entry), self._scope):
                 orphaned += 1
         return {
             "path": self.path,
@@ -555,10 +631,13 @@ class Ledger:
             return 0
 
     def forget_orphans(self) -> int:
+        # The last scan's orphans include sessions deleted inside a database
+        # that still exists; only a scan can tell those apart.
+        recorded = set(getattr(self, "_meta_orphans", {})) if not self._loaded else set()
         self._ensure_loaded()
         gone = []
         for key, entry in self.entries.items():
-            if _is_session_entry(entry) and _all_missing(entry):
+            if _is_session_entry(entry) and (key in recorded or _all_missing(entry, agent_of(key, entry), self._scope)):
                 gone.append(key)
         for key in gone:
             del self.entries[key]
@@ -572,7 +651,10 @@ class Ledger:
         """Atomic replace, or append to journal when change is proportional."""
         if not self.dirty:
             return
-        os.makedirs(self.dir, exist_ok=True)
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        _owner_only(self.dir, 0o700)
+        for path in (self.path, self.journal_path, self.meta_path):
+            _owner_only(path, 0o600)
         stamp = iso_utc(time.time())
 
         # Proportional save: append to journal if under threshold and ledger.json exists
@@ -585,7 +667,7 @@ class Ledger:
                         with open(self.journal_path, "rb") as handle:
                             handle.seek(-1, os.SEEK_END)
                             needs_newline = handle.read(1) != b"\n"
-                    with open(self.journal_path, "a", encoding="utf-8") as handle:
+                    with open(self.journal_path, "a", encoding="utf-8", opener=_private) as handle:
                         if needs_newline:
                             handle.write("\n")
                         for key in sorted(self.dirty_keys):
@@ -605,7 +687,7 @@ class Ledger:
         tmp = "%s.%d.%s.tmp" % (self.path, os.getpid(), uuid.uuid4().hex[:8])
         try:
             data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-            with open(tmp, "w", encoding="utf-8") as handle:
+            with open(tmp, "w", encoding="utf-8", opener=_private) as handle:
                 handle.write(data)
                 handle.write("\n")
             del data
@@ -637,7 +719,7 @@ class Ledger:
                 for k, entry in self.entries.items():
                     if _is_session_entry(entry):
                         source_paths[k] = paths_of(entry)
-                        if _all_missing(entry):
+                        if _all_missing(entry, agent_of(k, entry), self._scope):
                             orphans[k] = entry["session"]
                 known_keys = list(self.entries.keys())
                 summary = self._compute_summary()
@@ -646,6 +728,8 @@ class Ledger:
                 orphans = dict(getattr(self, "_meta_orphans", {}))
                 known_keys = list(getattr(self, "_known_keys", []))
                 summary = dict(getattr(self, "_summary", {}))
+                if summary:
+                    summary["orphaned"] = len(orphans)
             meta = {
                 "version": LEDGER_VERSION,
                 "mtime_ns": st.st_mtime_ns,
@@ -657,7 +741,7 @@ class Ledger:
                 "orphans": orphans,
             }
             tmp = "%s.%d.part" % (self.meta_path, os.getpid())
-            with open(tmp, "w", encoding="utf-8") as handle:
+            with open(tmp, "w", encoding="utf-8", opener=_private) as handle:
                 handle.write(json.dumps(meta, ensure_ascii=False, separators=(",", ":")))
             os.replace(tmp, self.meta_path)
         except OSError:

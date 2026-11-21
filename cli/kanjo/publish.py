@@ -57,14 +57,59 @@ def _unpushed_commits(repo: str, branch: str) -> int:
         return 0
 
 
+_USAGE_SUBJECT = "chore: update AI token usage ("
+
+
+def _foreign_commits(repo: str, branch: str, file_rel: str) -> int:
+    """Unpushed commits that are not kanjo usage commits (the user's own work).
+
+    A usage commit has kanjo's subject and touches only ``file_rel``. Those are the
+    only commits publish-usage may push: the website checkout is also where the user
+    works, and a local draft must never reach the remote (which often deploys it).
+    """
+    res = _git(repo, "log", "--format=%H%x00%s", "origin/%s..HEAD" % branch)
+    if res.returncode != 0:
+        return 0
+    want = os.path.normpath(file_rel).replace(os.sep, "/")
+    foreign = 0
+    for line in res.stdout.splitlines():
+        sha, _, subject = line.partition("\0")
+        if not sha:
+            continue
+        if subject.startswith(_USAGE_SUBJECT):
+            files = _git(repo, "diff-tree", "-z", "--no-commit-id", "--name-only", "-r", sha)
+            if files.returncode == 0 and [f for f in files.stdout.split("\0") if f] == [want]:
+                continue
+        foreign += 1
+    return foreign
+
+
+def _foreign_error(count: int) -> str:
+    return ("%d local commit(s) on this branch are not kanjo usage commits and are not pushed yet; "
+            "push or remove them first, kanjo will not publish them" % count)
+
+
+def _rebase(repo: str, branch: str) -> Optional[str]:
+    """Rebase local commits onto origin/<branch>. Returns an error or None.
+
+    A failed rebase is aborted, so the next run does not find the repo mid-rebase
+    (no current branch) and fail for good.
+    """
+    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
+    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
+    if rebase_res.returncode != 0:
+        _git(repo, "rebase", "--abort")
+        return "git pull --rebase failed: %s" % _git_error(rebase_res)
+    return None
+
+
 def _push(repo: str, branch: str) -> Optional[str]:
     """Push HEAD to origin/<branch>, rebasing once if the remote moved. Returns an error or None."""
     if _git(repo, "push", "origin", branch).returncode == 0:
         return None
-    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
-    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
-    if rebase_res.returncode != 0:
-        return "git pull --rebase failed: %s" % _git_error(rebase_res)
+    err = _rebase(repo, branch)
+    if err:
+        return err
     retry_res = _git(repo, "push", "origin", branch)
     if retry_res.returncode != 0:
         return "git push retry failed: %s" % _git_error(retry_res)
@@ -109,7 +154,15 @@ def cmd_publish_usage(args) -> int:
                              capture_output=True, text=True, encoding="utf-8", check=False)
         if res.returncode != 0:
             err = res.stderr.strip() or res.stdout.strip()
-            return _error("git pull --ff-only failed: %s" % err)
+            # Local usage commits left by a failed push, while the remote moved on:
+            # fast-forward is impossible, so rebase them (as _push would) instead of
+            # failing on every later run. Anything else stays an error.
+            pending = _unpushed_commits(repo, branch)
+            if not pending or _foreign_commits(repo, branch, file_rel):
+                return _error("git pull --ff-only failed: %s" % err)
+            rebase_err = _rebase(repo, branch)
+            if rebase_err:
+                return _error(rebase_err)
 
     # 3. Generate public summary
     cfg = _config(args)
@@ -141,7 +194,11 @@ def cmd_publish_usage(args) -> int:
         if ex_cmp == new_cmp:
             # The data is already committed, but an earlier push may have failed: push it now,
             # otherwise the commit would sit on this machine until the numbers change again.
-            if not dry_run and _unpushed_commits(repo, branch) > 0:
+            pending = 0 if dry_run else _unpushed_commits(repo, branch)
+            foreign = _foreign_commits(repo, branch, file_rel) if pending else 0
+            if foreign and foreign < pending:
+                return _error(_foreign_error(foreign))
+            if pending and not foreign:
                 err = _push(repo, branch)
                 if err:
                     return _error(err)
@@ -155,6 +212,10 @@ def cmd_publish_usage(args) -> int:
         payload = json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
         sys.stdout.write(payload)
         return 0
+
+    foreign = _foreign_commits(repo, branch, file_rel)
+    if foreign:
+        return _error(_foreign_error(foreign))
 
     # 4. Write file: 2 spaces indent, trailing newline
     target_dir = os.path.dirname(target_path)

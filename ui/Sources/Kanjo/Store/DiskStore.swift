@@ -21,9 +21,7 @@ final class DiskStore: ObservableObject {
     var isStale: Bool { state.isStale() }
 
     private let cache: DiskReportCache?
-    private var generation = 0
-    private var pendingRefresh = false
-    private var pendingRescan = false
+    private var gate = DiskRefreshGate()
     private var source: (any DiskSource)?
     private var autoCleanRunning = false
     private var autoCleanLastAttempt: Set<String> = []
@@ -53,11 +51,10 @@ final class DiskStore: ObservableObject {
     func refresh(rescan: Bool = false) {
         guard state.beginRefresh() else {
             // 清理或手动刷新发生在预取中时，串行补跑强制扫描，避免两个 disk 进程竞争。
-            pendingRefresh = true
-            if rescan { pendingRescan = true }
+            gate.queue(rescan: rescan)
             return
         }
-        let gen = generation
+        let gen = gate.begin(sourceKey: makeSource().1)
         let (src, desc) = makeSource(rescan: rescan)
         source = src
         sourceDescription = desc
@@ -65,7 +62,7 @@ final class DiskStore: ObservableObject {
             var loaded: DiskReport?
             do {
                 let r = try await src.load()
-                if gen == generation {
+                if gate.accepts(gen) {
                     loaded = r
                     error = nil
                     if let cache {
@@ -74,28 +71,24 @@ final class DiskStore: ObservableObject {
                 }
             } catch {
                 if src is DiskDataSource { await ReportStore.shared.checkPython() }
-                if gen == generation {
+                if gate.accepts(gen) {
                     self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 }
             }
-            state.finishRefresh(report: gen == generation ? loaded : nil)
-            lastRefresh = Date()
+            state.finishRefresh(report: gate.accepts(gen) ? loaded : nil)
+            if gate.accepts(gen) { lastRefresh = Date() }
             if let loaded { autoCleanMergedWorktrees(after: loaded) }
-            if pendingRefresh || pendingRescan {
-                let force = pendingRescan
-                pendingRefresh = false
-                pendingRescan = false
+            if let force = gate.takePending() {
                 refresh(rescan: force)
             }
         }
     }
 
-    /// 设置改动后由用量报告完成时调度预取，忽略旧数据源仍在运行的结果。
+    /// 设置改动后：只有磁盘命令或工作目录变了才作废旧数据源仍在运行的结果，并用新数据源补跑。
     func applySettings() {
-        generation += 1
-        source = nil
-        pendingRefresh = false
-        pendingRescan = false
+        if gate.settingsApplied(sourceKey: makeSource().1, isLoading: state.isLoading) {
+            source = nil
+        }
     }
 
     /// `disk clean --merged-worktrees`，同样先 dry-run 再确认。

@@ -161,7 +161,7 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             non_cached_in = max(0, inp - cache_r)
 
             meta = msg_dict.get("meta") if isinstance(msg_dict.get("meta"), dict) else {}
-            mid = obj.get("id") or meta.get("messageId") or f"line_{idx}"
+            mid = obj.get("id") or meta.get("messageId") or f"{session.id}:line_{idx}"
             model = obj.get("model") or "unknown"
 
             messages.append(

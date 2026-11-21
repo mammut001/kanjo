@@ -226,4 +226,15 @@ final class RefreshSchedulerTests: XCTestCase {
         XCTAssertTrue(scheduler.isAsleep)
         XCTAssertEqual(scheduler.onWake(at: t), .refreshNow)
     }
+
+    /// 启动时 Low Power Mode 已经开着：调度器从一开始就要按低电量处理，不能等到下一次切换通知。
+    func testLowPowerModeOnAtLaunchHoldsBackgroundRefreshes() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var scheduler = RefreshScheduler(fallbackMinutes: 30, backgroundInterval: 60,
+                                         lastRefreshTime: start, isLowPowerMode: true)
+        XCTAssertTrue(scheduler.isLowPowerMode)
+        XCTAssertEqual(scheduler.onFileEvent(at: start.addingTimeInterval(10)), .none)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+        XCTAssertEqual(scheduler.onFallbackTimerFired(at: start.addingTimeInterval(31 * 60)), .none)
+    }
 }

@@ -121,6 +121,8 @@ public final class ReportLoader {
         }
         state = starting
         
+        // 被取代的旧刷新结果反正会被丢弃：取消它，让 CLI 数据源终止仍在跑的 `kanjo export`。
+        refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -154,7 +156,7 @@ public final class ReportLoader {
                     await self.onCLIFailure()
                 }
                 guard gen == self.generation else { return }
-                self.hasFinishedLiveRefresh = true
+                // 失败不算「已拿到实时报告」：启动缓存晚到时仍要显示（标为过期，错误横幅保留）。
                 var updated = self.state
                 updated.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 if !quiet {

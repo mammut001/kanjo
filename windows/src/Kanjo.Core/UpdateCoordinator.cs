@@ -139,7 +139,11 @@ public sealed class UpdateCoordinator : IDisposable
     {
         try
         {
-            SetStatus(new UpdateStatus(UpdateState.Checking) { CurrentVersion = CurrentVersion });
+            // 已经下载好一个版本（Ready）：后台检查不能把「Restart to update」藏起来，
+            // 检查失败 / 没有更新的版本时原样保留 Ready。
+            var ready = Status is { State: UpdateState.Ready } current ? current : null;
+            if (ready is null)
+                SetStatus(new UpdateStatus(UpdateState.Checking) { CurrentVersion = CurrentVersion });
 
             string? version;
             try
@@ -148,10 +152,22 @@ public sealed class UpdateCoordinator : IDisposable
             }
             catch (Exception e)
             {
+                if (ready is not null)
+                {
+                    System.Diagnostics.Trace.WriteLine($"kanjo: update check failed: {e.Message}");
+                    FinishRun(runId, ready);
+                    return;
+                }
                 Fail(e, runId);
                 return;
             }
             if (IsDisposed) return;
+
+            if (ready is not null && (version is not { Length: > 0 } || version == ready.Version))
+            {
+                FinishRun(runId, ready);
+                return;
+            }
 
             if (version is not { Length: > 0 })
             {
@@ -187,6 +203,12 @@ public sealed class UpdateCoordinator : IDisposable
             }
             catch (Exception e)
             {
+                if (ready is not null)
+                {
+                    System.Diagnostics.Trace.WriteLine($"kanjo: update download failed: {e.Message}");
+                    FinishRun(runId, ready);
+                    return;
+                }
                 Fail(e, runId);
                 return;
             }

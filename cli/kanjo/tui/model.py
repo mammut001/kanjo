@@ -16,10 +16,15 @@ from .. import perf as _perf
 from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
+from . import calendar_time as _cal
 from .range_engine import (
+    FilteredBucket as _FilteredBucket,
+    FilteredUsage as _FilteredUsage,
     aggregate_models,
+    apportion as _apportion_tokens,
     build_range_helpers as _build_range_helpers,
     filtered_usage,
+    parse_iso_dt as _engine_parse_iso_dt,
     window_start,
 )
 
@@ -398,7 +403,7 @@ def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[d
 
 # ---- HeatStrip & Sparkline ----
 
-_BLOCK_CHARS = " ▂▃▄▅▆▇█"
+_BLOCK_CHARS = "▁▂▃▄▅▆▇█"
 _ASCII_CHARS = " .:-=+*#%"
 
 
@@ -603,8 +608,25 @@ def compute_agent_model_perf(doc: dict, agent: str, time_range: TimeRange = Time
     return _summarize_perf(doc, time_range, now, key_field="model", agent_filter=agent)
 
 
-def _filtered_project_dict(fp) -> dict:
+def _project_models_in_range(fp, spec) -> List[dict]:
+    """Per-model rows for one project in a non-All range, apportioned like the Models view."""
+    empty = _FilteredBucket(0.0, 0, 0, [], None, None)
+    one = _FilteredUsage(spec, [fp], empty, empty, fp.cost, fp.tokens, fp.sessions, None, None)
+    rows = [{
+        "model": m["model"],
+        "agent": m["agent"],
+        "cost": m["cost"],
+        "tokens": {"total": m["tokens"]},
+        "estimated": m.get("estimated", False),
+    } for m in aggregate_models(one)]
+    rows.sort(key=lambda m: (-m["cost"], -m["tokens"]["total"], m["model"]))
+    return rows
+
+
+def _filtered_project_dict(fp, spec=None) -> dict:
     p = dict(fp.project)
+    if spec is not None and not spec.is_all:
+        p["by_model"] = _project_models_in_range(fp, spec)
     p["cost"] = fp.cost
     p["tokens"] = {"total": fp.tokens}
     p["sessions"] = fp.sessions
@@ -627,6 +649,84 @@ def _filtered_bucket_dict(b) -> dict:
     }
 
 
+def _session_day_split(s: dict, spec) -> List[Tuple[str, float, int]]:
+    """Spread one bucket session's in-range cost and tokens over the local days it covers.
+
+    Uses the session's own ``by_day`` when present, otherwise the time share of its
+    ``[started, ended]`` interval inside the range window, matching
+    ``RangeSpec.in_range_cost_and_tokens``.
+    """
+    total_c, total_t = spec.in_range_cost_and_tokens(s)
+    if not (total_c > 0) and total_t <= 0:
+        return []
+    ag = str(s.get("agent") or "")
+    days: List[str] = []
+    weights: List[float] = []
+    tok_weights: List[float] = []
+    by_day = s.get("by_day")
+    if isinstance(by_day, list) and by_day:
+        for d in by_day:
+            if not isinstance(d, dict):
+                continue
+            day = str(d.get("day") or "")
+            rng = spec.day_range(day)
+            if rng is None:
+                continue
+            if not spec.is_all and not spec.includes_day(rng[0], rng[1], ag):
+                continue
+            try:
+                w = float(d.get("cost") or 0.0)
+            except (TypeError, ValueError):
+                w = 0.0
+            try:
+                tw = float(d.get("tokens") or 0)
+            except (TypeError, ValueError):
+                tw = 0.0
+            days.append(day)
+            weights.append(w)
+            tok_weights.append(tw)
+    else:
+        tz = spec.tz
+        started = _engine_parse_iso_dt(s.get("started"), default_tz=tz)
+        ended = _engine_parse_iso_dt(s.get("ended"), default_tz=tz) or started
+        if not started and not ended:
+            return []
+        s0 = min(started or ended, ended or started)
+        s1 = max(started or ended, ended or started)
+        w = (None, None) if spec.is_all else spec.window(ag)
+        if w is None:
+            return []
+        o0 = max(s0, w[0]) if w[0] is not None else s0
+        o1 = min(s1, w[1]) if w[1] is not None else s1
+        if o1 <= o0:
+            days.append(_cal.day_string(tz, s0 if s1 <= s0 else o0))
+            weights.append(1.0)
+            tok_weights.append(1.0)
+        else:
+            cur = _cal.start_of_day(tz, o0)
+            while cur < o1:
+                nxt = _cal.add_days(tz, cur, 1)
+                if nxt <= cur:
+                    break
+                seg = (min(o1, nxt) - max(o0, cur)).total_seconds()
+                if seg > 0:
+                    days.append(_cal.day_string(tz, max(o0, cur)))
+                    weights.append(seg)
+                    tok_weights.append(seg)
+                cur = nxt
+    if not days:
+        return []
+    sum_w = sum(weights)
+    if not (sum_w > 0):
+        weights, sum_w = tok_weights, sum(tok_weights)
+    if sum_w > 0:
+        costs = [total_c * (w / sum_w) for w in weights]
+    else:
+        costs = [total_c / len(days)] * len(days)
+    toks = _apportion_tokens(total_t, tok_weights)
+    return list(zip(days, costs, toks))
+
+
 def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                   now: Optional[datetime] = None) -> FilteredData:
     """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
@@ -634,7 +734,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     fu = filtered_usage(doc, time_range, now=now)
     tz, now_dt, _, _, _, session_in_range_cost_tokens = _build_range_helpers(doc, time_range, now=now)
 
-    filtered_projects = [_filtered_project_dict(fp) for fp in fu.projects]
+    filtered_projects = [_filtered_project_dict(fp, fu.spec) for fp in fu.projects]
     filtered_projects.sort(key=lambda p: (-p.get("cost", 0.0), str(p.get("name", "")).lower()))
     filtered_unattr = _filtered_bucket_dict(fu.unattributed)
     filtered_excl = _filtered_bucket_dict(fu.excluded)
@@ -698,6 +798,14 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                 d_t = int(d.get("tokens", 0) or 0)
             except (ValueError, TypeError):
                 d_t = 0
+            daily_agg[d_str]["cost"] += d_c
+            daily_agg[d_str]["tokens"] += d_t
+    for s in (filtered_unattr.get("sessions_detail") or []) + (filtered_excl.get("sessions_detail") or []):
+        if not isinstance(s, dict):
+            continue
+        for d_str, d_c, d_t in _session_day_split(s, fu.spec):
+            if d_str not in daily_agg:
+                daily_agg[d_str] = {"day": d_str, "cost": 0.0, "tokens": 0}
             daily_agg[d_str]["cost"] += d_c
             daily_agg[d_str]["tokens"] += d_t
 
@@ -775,8 +883,9 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         row["perf_samples"] = perf.sample_count if perf else 0
         by_agent_list.append(row)
 
-    first_act = min((p["first_active"] for p in filtered_projects if p.get("first_active")), default=None)
-    last_act = max((p["last_active"] for p in filtered_projects if p.get("last_active")), default=None)
+    # filtered_usage already spans projects plus the unattributed/excluded buckets.
+    first_act = fu.first_active or min((p["first_active"] for p in filtered_projects if p.get("first_active")), default=None)
+    last_act = fu.last_active or max((p["last_active"] for p in filtered_projects if p.get("last_active")), default=None)
 
     return FilteredData(
         time_range=time_range,
@@ -1111,6 +1220,15 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
                     level=quota_level(pct),
                     detail=detail,
                 ))
+            elif five_hours is not None:
+                # The CLI keeps the window length but nulls resets_at once the
+                # window has ended (CONTRACT.md): say so instead of hiding it.
+                windows.append(QuotaMeterWindow(
+                    name=five_title,
+                    percent=None,
+                    level=None,
+                    detail=t("meter.window_ended", lang),
+                ))
 
         # Extra windows (e.g. Claude & GPT weekly in Antigravity)
         for ew in (q.get("extra_windows") or []):
@@ -1135,6 +1253,13 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
                     percent=pct,
                     level=quota_level(pct),
                     detail=detail,
+                ))
+            else:
+                windows.append(QuotaMeterWindow(
+                    name=ew_title,
+                    percent=None,
+                    level=None,
+                    detail=t("meter.window_ended", lang),
                 ))
 
         if not windows:

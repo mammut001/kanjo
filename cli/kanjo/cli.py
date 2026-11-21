@@ -660,7 +660,13 @@ def cmd_usage(args) -> int:
             lang=lang,
             detail_agent=getattr(args, "detail", None),
         )
-        sys.stdout.write(snapshot)
+        try:
+            sys.stdout.write(snapshot)
+        except UnicodeEncodeError:
+            # A stdout that cannot encode some character (project names, a
+            # non-UTF-8 locale) gets a replacement mark instead of a crash.
+            enc = getattr(sys.stdout, "encoding", None) or "ascii"
+            sys.stdout.write(snapshot.encode(enc, errors="replace").decode(enc))
         sys.stdout.flush()
         return 0
 

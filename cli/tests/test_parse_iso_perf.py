@@ -20,6 +20,16 @@ class ParseHotPathTest(unittest.TestCase):
         self.assertIsNone(parse_iso("2026-99-02T03:04:05.123Z"))
         self.assertIsNone(parse_iso([]))
 
+    def test_any_fraction_length_and_compact_offsets(self):
+        for digits in range(1, 10):
+            frac = "123456789"[:digits]
+            want = datetime(2026, 1, 2, 3, 4, 5, int((frac + "000000")[:6]), tzinfo=timezone.utc).timestamp()
+            self.assertEqual(parse_iso("2026-01-02T03:04:05.%sZ" % frac), want, frac)
+            self.assertEqual(parse_iso("2026-01-02T11:04:05.%s+08:00" % frac), want, frac)
+            self.assertEqual(parse_iso("2026-01-02T11:04:05.%s+0800" % frac), want, frac)
+        self.assertEqual(parse_iso("2026-01-02T11:04:05+0800"),
+                         datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
+
     def test_usage_key_keeps_canonical_json(self):
         info = {"total_token_usage": {"z": [1, {"b": "é", "a": None}], "a": 2},
                 "last_token_usage": {"output_tokens": 3, "input_tokens": 4}}

@@ -124,6 +124,25 @@ def canvas_to_ansi(canvas: Canvas, no_color: bool = False, truecolor: bool = Tru
     return "\n".join(lines) + "\n"
 
 
+# One-column ASCII stand-ins for the symbols the UI draws regardless of
+# --ascii, so the snapshot keeps its column layout.
+_ASCII_SUBSTITUTES = {
+    "\u00b7": "-",  # middle dot separator
+    "\u2014": "-",  # em dash for missing values
+    "\u2013": "-",  # en dash
+    "\u2026": ".",  # ellipsis of truncated text
+    "\u00d7": "x",  # multiplier sign
+}
+
+
+def _asciify_canvas(canvas: Canvas) -> None:
+    for y in range(canvas.height):
+        for cell in canvas.grid[y]:
+            sub = _ASCII_SUBSTITUTES.get(cell.char)
+            if sub is not None:
+                cell.char = sub
+
+
 def is_truecolor_supported() -> bool:
     colorterm = os.environ.get("COLORTERM", "").lower()
     return colorterm in ("truecolor", "24bit")
@@ -226,6 +245,9 @@ def render_static_snapshot(
         detail_vm=detail_vm,
         static_mode=True,
     )
+
+    if ascii_mode:
+        _asciify_canvas(canvas)
 
     tc = is_truecolor_supported() and not no_color
     return canvas_to_ansi(canvas, no_color=no_color, truecolor=tc)

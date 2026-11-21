@@ -116,6 +116,87 @@ public sealed class PageRebuildTests : KanjoTestCase
         });
     }
 
+    /// <summary>用量刷新（AppServices.Changed）不该换掉磁盘页：选中项 / 预览 / 清理结果都在页面实例上。</summary>
+    [Fact]
+    public void TestUsageRefreshKeepsDiskPageAndSelection()
+    {
+        OnUi(() =>
+        {
+            var services = NewServices(FreshDiskFile());
+            services.LoadQuietly();
+            services.Disk.RefreshBlocking();
+            var panel = Show(services, AppRoute.Disk with { Anchor = RouteAnchors.DiskExpanded });
+            var page = Assert.IsType<DiskPage>(panel.CurrentPage);
+            var box = page.GetVisualDescendants().OfType<CheckBox>().First(c => c.IsEnabled);
+            box.IsChecked = true;
+            Dispatcher.UIThread.RunJobs();
+            var selected = page.Selected.ToList();
+            Assert.NotEmpty(selected);
+            var count = DiskPage.ConstructionCount;
+
+            services.NotifyChanged();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(page, panel.CurrentPage);
+            Assert.Equal(count, DiskPage.ConstructionCount);
+            Assert.Equal(selected, page.Selected.ToList());
+        });
+    }
+
+    /// <summary>设置页里切一个开关 / 后台刷新：原地重建，不换新页面，滚动位置保留。</summary>
+    [Fact]
+    public void TestUsageRefreshKeepsSettingsPageAndScroll()
+    {
+        OnUi(() =>
+        {
+            var services = NewServices();
+            services.LoadQuietly();
+            var panel = Show(services, AppRoute.Settings);
+            var page = Assert.IsType<SettingsPage>(panel.CurrentPage);
+            page.UpdateLayout();
+            page.ScrollTo(300);
+            Dispatcher.UIThread.RunJobs();
+            var offset = page.VerticalOffset;
+            Assert.True(offset > 0);
+            var count = SettingsPage.ConstructionCount;
+
+            services.NotifyChanged();
+            Dispatcher.UIThread.RunJobs();
+            panel.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(page, panel.CurrentPage);
+            Assert.Equal(count, SettingsPage.ConstructionCount);
+            Assert.Equal(offset, page.VerticalOffset, 1);
+        });
+    }
+
+    /// <summary>总览因为数据刷新重建时，新页面要回到原来的滚动位置（不是每次刷新跳回顶部）。</summary>
+    [Fact]
+    public void TestUsageRefreshKeepsOverviewScroll()
+    {
+        OnUi(() =>
+        {
+            var services = NewServices();
+            services.LoadQuietly();
+            var panel = Show(services, AppRoute.Overview);
+            var page = Assert.IsType<OverviewPage>(panel.CurrentPage);
+            page.UpdateLayout();
+            page.ScrollTo(200);
+            Dispatcher.UIThread.RunJobs();
+            var offset = page.VerticalOffset;
+            Assert.True(offset > 0);
+
+            services.NotifyChanged();
+            Dispatcher.UIThread.RunJobs();
+            panel.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
+            var rebuilt = Assert.IsType<OverviewPage>(panel.CurrentPage);
+            Assert.Equal(offset, rebuilt.VerticalOffset, 1);
+        });
+    }
+
     [Fact]
     public void TestClosedPanelDoesNotRebuild()
     {

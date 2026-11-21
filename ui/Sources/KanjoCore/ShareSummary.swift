@@ -50,7 +50,16 @@ public struct ShareSummary: Equatable {
         let resolved = RangeEngine.resolve(raw: rangeRaw, report: report, now: now)
         let filtered = RangeEngine.filtered(report, range: resolved.spec, fallbackAgentFor: { RangeEngine.fallbackAgent(for: $0) })
         
-        let agentSummary = AgentSummary.build(report: report, filtered: filtered, now: now)
+        var agentSummary = AgentSummary.build(report: report, filtered: filtered, now: now)
+        // 分享图里的「钱花在哪」不能出现隐藏项目：只在可见项目之间重算占比。
+        if !hiddenProjects.isEmpty {
+            for i in agentSummary.rows.indices {
+                let (top, others) = AgentSummary.buildProjectShares(
+                    agent: agentSummary.rows[i].agent, projects: filtered.projects, excluding: hiddenProjects)
+                agentSummary.rows[i].projectShares = top
+                agentSummary.rows[i].othersProjectShare = others
+            }
+        }
         
         var sessionCounts: [String: Int] = [:]
         for project in filtered.projects {
@@ -67,7 +76,7 @@ public struct ShareSummary: Equatable {
                 subscription: row.subscription,
                 multiplier: row.multiplier,
                 sessionCount: sessionCounts[row.agent, default: 0],
-                projectShares: filtered.projects.compactMap { p -> AgentProjectShare? in
+                projectShares: filtered.projects.filter { !hiddenProjects.contains($0.id) }.compactMap { p -> AgentProjectShare? in
                     guard let agentCost = p.byAgent.first(where: { $0.agent == row.agent })?.cost, agentCost > 0 else { return nil }
                     return AgentProjectShare(name: p.project.name, cost: agentCost)
                 }

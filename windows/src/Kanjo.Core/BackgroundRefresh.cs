@@ -305,6 +305,8 @@ public sealed class RefreshEngine : IDisposable
         lock (_lock)
         {
             if (_disposed) return;
+            // 打开节电：已挂的防抖刷新不能照常在节电时触发（调度器把它记成恢复后补刷）。
+            if (enabled) CancelScheduledLocked();
             action = _scheduler.OnLowPowerModeChanged(enabled, _clock());
         }
         Handle(action);

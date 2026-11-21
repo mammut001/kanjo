@@ -7,10 +7,30 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 FORBIDDEN_SUBSTRINGS = ("/Users/", "/home/")
+# Home folders without the leading slash, with backslashes, or as Windows drive paths.
+FORBIDDEN_PATH_REGEX = re.compile(r'(?:^|["/\\])(?:Users|home)[/\\]|\b[A-Za-z]:\\')
 FORBIDDEN_KEYS = frozenset({"sessions_detail", "account", "paths", "title", "sessions"})
 EMAIL_REGEX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 DEVICE_ID_REGEX = re.compile(r"[0-9a-f]{16}")
 VALID_DEVICE_OS = frozenset({"macos", "linux", "windows"})
+
+
+def _reset_out_of_range(value: Any) -> bool:
+    """True for a reset timestamp that parses but lies outside 2000-2100.
+
+    Unparseable strings are left alone (the dashboard shows them as unknown);
+    parseable extreme years would overflow the dashboard's timezone arithmetic.
+    """
+    if not isinstance(value, str):
+        return False
+    clean = value.strip()
+    if clean.endswith("Z"):
+        clean = clean[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(clean)
+    except ValueError:
+        return False
+    return not 2000 <= parsed.year <= 2100
 
 
 def _check_privacy_violations(obj: Any) -> Optional[str]:
@@ -25,6 +45,8 @@ def _check_privacy_violations(obj: Any) -> Optional[str]:
             for pattern in FORBIDDEN_SUBSTRINGS:
                 if pattern in k_str:
                     return f"Privacy violation: key contains forbidden pattern '{pattern}'"
+            if FORBIDDEN_PATH_REGEX.search(k_str):
+                return "Privacy violation: key contains a local path"
             found = _check_privacy_violations(v)
             if found:
                 return found
@@ -39,6 +61,8 @@ def _check_privacy_violations(obj: Any) -> Optional[str]:
         for pattern in FORBIDDEN_SUBSTRINGS:
             if pattern in obj:
                 return f"Privacy violation: value contains forbidden pattern '{pattern}'"
+        if FORBIDDEN_PATH_REGEX.search(obj):
+            return "Privacy violation: value contains a local path"
     return None
 
 
@@ -239,6 +263,9 @@ def validate_report_payload(data: Any) -> Optional[str]:
         for key in ("weekly_resets_at", "five_hour_resets_at", "source"):
             if key in quota and quota[key] is not None and not isinstance(quota[key], str):
                 return f"quota_windows.{agent}.{key} must be a string or null"
+        for key in ("weekly_resets_at", "five_hour_resets_at"):
+            if _reset_out_of_range(quota.get(key)):
+                return f"quota_windows.{agent}.{key} is out of range"
         for key in ("weekly_used_percent", "five_hour_used_percent", "weekly_window_hours", "five_hour_window_hours"):
             value = quota.get(key)
             if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
@@ -253,6 +280,8 @@ def validate_report_payload(data: Any) -> Optional[str]:
                 for key in ("id", "label", "resets_at"):
                     if key in window and window[key] is not None and not isinstance(window[key], str):
                         return f"quota_windows.{agent}.extra_windows.{key} must be a string or null"
+                if _reset_out_of_range(window.get("resets_at")):
+                    return f"quota_windows.{agent}.extra_windows.resets_at is out of range"
                 value = window.get("used_percent")
                 if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
                     return f"quota_windows.{agent}.extra_windows.used_percent must be a number or null"

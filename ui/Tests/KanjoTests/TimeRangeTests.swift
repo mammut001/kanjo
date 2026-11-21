@@ -537,4 +537,21 @@ final class TimeRangeTests: KanjoTestCase {
         XCTAssertEqual(filtered.cost, 20.0, accuracy: 1e-4)
         XCTAssertEqual(filtered.tokens, 2000)
     }
+
+    func testFilterSessionBucketClampsDaySpanToRange() {
+        let utc = TimeZone(identifier: "UTC")!
+        let spec = RangeEngine.dateInterval(for: .days7, now: ts("2026-11-21T12:00:00Z"), timezone: utc, quota: nil)
+        let s = Session(
+            id: "s1", agent: "claude", label: "Claude Code",
+            started: "2026-11-10T08:00:00Z", ended: "2026-11-16T09:00:00Z",
+            cwd: nil, branch: nil, models: ["opus"],
+            cost: 10.0, tokens: Tokens(total: 1000), share: 1, attribution: "none", subagents: 0
+        )
+        let bucket = SessionBucket(cost: 10.0, tokens: Tokens(total: 1000), sessions: 1,
+                                   firstActive: "2026-11-10", lastActive: "2026-11-16", sessionsDetail: [s])
+        let filtered = RangeEngine.filter(bucket, range: spec)
+        XCTAssertEqual(filtered.sessions, 1)
+        XCTAssertEqual(filtered.firstActive, "2026-11-15")
+        XCTAssertEqual(filtered.lastActive, "2026-11-16")
+    }
 }
