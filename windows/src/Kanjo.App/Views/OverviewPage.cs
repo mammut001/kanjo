@@ -31,10 +31,6 @@ public sealed class OverviewPage : ScrollPage
         _anchor = anchor;
         _snapshot = snapshot;
         Content = _services.Report is null ? ErrorOrLoading() : LoadedContent();
-        if (snapshot)
-        {
-            Content = _services.Report is null ? ErrorOrLoading() : BuildStatic();
-        }
     }
 
     /// <summary>页面内容本身（不含滚动容器）：截图 / 面板快照模式直接用。</summary>
@@ -73,17 +69,6 @@ public sealed class OverviewPage : ScrollPage
             }, Avalonia.Threading.DispatcherPriority.Loaded);
         }
         return root;
-    }
-
-    /// <summary>页面内容，供快照模式复用。</summary>
-    private Control BuildStatic()
-    {
-        var ctx = new RangeContext(Report, _services.Settings.GetString(SettingsKeys.TimeRange), _services.Now);
-        var filtered = ctx.Filtered();
-        var pinned = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.PinnedProjects, ""));
-        var hidden = ProjectPrefs.Parse(_services.Settings.Str(SettingsKeys.HiddenProjects, ""));
-        var arranged = ArrangeProjects(filtered, ctx.IsAll, pinned, hidden);
-        return BuildStatic(ctx, filtered, arranged);
     }
 
     private Control BuildStatic(RangeContext ctx, FilteredReport filtered, Lists arranged)
