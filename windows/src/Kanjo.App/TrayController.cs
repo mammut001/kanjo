@@ -146,7 +146,7 @@ public sealed class TrayController : IDisposable
         Task.Run(() =>
         {
             _services.RequestUserRefresh();
-            Dispatcher.UIThread.Post(() => _panel?.Panel.Rebuild());
+            Dispatcher.UIThread.Post(() => _panel?.Panel.RefreshContent());
         });
     }
 
