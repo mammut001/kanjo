@@ -235,6 +235,8 @@ def _zone(name: str):
             # Rather than fail the whole export, use the current UTC offset.
             from .sources.base import local_zone
             return local_zone(name)
+        from .sources.base import _warn_fixed_offset
+        _warn_fixed_offset()
         return timezone.utc
 
 

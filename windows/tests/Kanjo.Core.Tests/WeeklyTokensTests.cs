@@ -83,7 +83,7 @@ public sealed class WeeklyTokensTests : KanjoTestCase
             L10n.TrL("en", "overview.this_week_tokens", Fmt.Tokens(12_345, "en")));
         Assert.Equal("本周：1.2万 token",
             L10n.TrL("zh-Hans", "overview.this_week_tokens", Fmt.Tokens(12_345, "zh-Hans")));
-        Assert.Equal("Cette semaine : 12,3k tokens",
+        Assert.Equal("Cette semaine : 12,3k jetons",
             L10n.TrL("fr", "overview.this_week_tokens", Fmt.Tokens(12_345, "fr")));
     }
 }

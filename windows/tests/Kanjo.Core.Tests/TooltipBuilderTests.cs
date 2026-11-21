@@ -24,9 +24,9 @@ public sealed class TooltipBuilderTests : KanjoTestCase
             TooltipBuilder.CostAndTokens(0, 0, "USD", "en"));
 
         // fr: k / M / Md
-        Assert.Equal("$12.34 · 120M tokens",
+        Assert.Equal("$12.34 · 120M jetons",
             TooltipBuilder.CostAndTokens(12.34, 120_000_000, "USD", "fr"));
-        Assert.Equal("$10.00 · 90M tokens",
+        Assert.Equal("$10.00 · 90M jetons",
             TooltipBuilder.CostAndTokens(10.00, 90_000_000, "USD", "fr"));
 
         // Non-USD currency

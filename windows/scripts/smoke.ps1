@@ -69,6 +69,9 @@ if (-not (Test-Path $Python)) {
     $version = & $Python -m kanjo --version 2>&1
     $ok = $LASTEXITCODE -eq 0 -and "$version" -match '^kanjo \d+\.\d+\.\d+'
     Write-Check "python -m kanjo --version" $ok ("exit $LASTEXITCODE, output: " + ($version -join " | "))
+    $zoneOutput = & $Python -c "import zoneinfo; zoneinfo.ZoneInfo('America/New_York')" 2>&1
+    Write-Check "bundled timezone database loads America/New_York" ($LASTEXITCODE -eq 0) `
+        ("exit $LASTEXITCODE, output: " + ($zoneOutput -join " | "))
 }
 
 # 3. The CLI can load its pricing data and version from <install>\cli

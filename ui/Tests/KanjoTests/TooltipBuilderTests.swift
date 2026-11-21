@@ -34,11 +34,11 @@ final class TooltipBuilderTests: KanjoTestCase {
         // fr: k / M / Md
         XCTAssertEqual(
             TooltipBuilder.costAndTokens(cost: 12.34, tokens: 120_000_000, currency: "USD", language: "fr"),
-            "$12.34 · 120M tokens"
+            "$12.34 · 120M jetons"
         )
         XCTAssertEqual(
             TooltipBuilder.costAndTokens(cost: 10.00, tokens: 90_000_000, currency: "USD", language: "fr"),
-            "$10.00 · 90M tokens"
+            "$10.00 · 90M jetons"
         )
 
         // Non-USD currency
