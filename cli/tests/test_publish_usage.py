@@ -242,6 +242,53 @@ class PublishUsageTest(unittest.TestCase):
         self.assertEqual(code3, 0)
         self.assertEqual(json.loads(out3.strip())["status"], "unchanged")
 
+    def test_pending_commit_survives_the_remote_moving_on(self):
+        self._set_push_rejected(True)
+        code1, out1, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(json.loads(out1.strip())["status"], "error")
+        self._set_push_rejected(False)
+
+        second_clone = os.path.join(self.tmp, "clone2")
+        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
+                       check=True, capture_output=True)
+        with open(os.path.join(second_clone, "dependabot.txt"), "w", encoding="utf-8") as f:
+            f.write("bump\n")
+        subprocess.run(["git", "-C", second_clone, "add", "dependabot.txt"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "commit", "-m", "remote: dependabot"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "push", "origin", "main"], check=True, capture_output=True)
+
+        code2, out2, err2 = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code2, 0, out2 + err2)
+        self.assertEqual(json.loads(out2.strip())["status"], "pushed")
+        self.assertEqual(self._head(self.work_repo), self._head(self.bare_remote))
+        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "dependabot.txt")))
+        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "src/data/token-usage.json")))
+
+    def test_failed_rebase_does_not_leave_the_repo_mid_rebase(self):
+        self._set_push_rejected(True)
+        self._run_cli("publish-usage", "--repo", self.work_repo)
+        self._set_push_rejected(False)
+        # Another machine publishes different numbers to the same file: the rebase conflicts.
+        second_clone = os.path.join(self.tmp, "clone2")
+        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
+                       check=True, capture_output=True)
+        os.makedirs(os.path.join(second_clone, "src", "data"), exist_ok=True)
+        with open(os.path.join(second_clone, "src", "data", "token-usage.json"), "w", encoding="utf-8") as f:
+            f.write("{}\n")
+        subprocess.run(["git", "-C", second_clone, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "commit", "-m", "other machine"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "push", "origin", "main"], check=True, capture_output=True)
+
+        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(json.loads(out2.strip())["status"], "error")
+        branch = subprocess.run(["git", "-C", self.work_repo, "branch", "--show-current"],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(branch, "main")
+
     def _commit_local(self, name, message):
         with open(os.path.join(self.work_repo, name), "w", encoding="utf-8") as f:
             f.write("draft\n")

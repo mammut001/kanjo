@@ -89,14 +89,27 @@ def _foreign_error(count: int) -> str:
             "push or remove them first, kanjo will not publish them" % count)
 
 
+def _rebase(repo: str, branch: str) -> Optional[str]:
+    """Rebase local commits onto origin/<branch>. Returns an error or None.
+
+    A failed rebase is aborted, so the next run does not find the repo mid-rebase
+    (no current branch) and fail for good.
+    """
+    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
+    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
+    if rebase_res.returncode != 0:
+        _git(repo, "rebase", "--abort")
+        return "git pull --rebase failed: %s" % _git_error(rebase_res)
+    return None
+
+
 def _push(repo: str, branch: str) -> Optional[str]:
     """Push HEAD to origin/<branch>, rebasing once if the remote moved. Returns an error or None."""
     if _git(repo, "push", "origin", branch).returncode == 0:
         return None
-    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
-    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
-    if rebase_res.returncode != 0:
-        return "git pull --rebase failed: %s" % _git_error(rebase_res)
+    err = _rebase(repo, branch)
+    if err:
+        return err
     retry_res = _git(repo, "push", "origin", branch)
     if retry_res.returncode != 0:
         return "git push retry failed: %s" % _git_error(retry_res)
@@ -141,7 +154,15 @@ def cmd_publish_usage(args) -> int:
                              capture_output=True, text=True, encoding="utf-8", check=False)
         if res.returncode != 0:
             err = res.stderr.strip() or res.stdout.strip()
-            return _error("git pull --ff-only failed: %s" % err)
+            # Local usage commits left by a failed push, while the remote moved on:
+            # fast-forward is impossible, so rebase them (as _push would) instead of
+            # failing on every later run. Anything else stays an error.
+            pending = _unpushed_commits(repo, branch)
+            if not pending or _foreign_commits(repo, branch, file_rel):
+                return _error("git pull --ff-only failed: %s" % err)
+            rebase_err = _rebase(repo, branch)
+            if rebase_err:
+                return _error(rebase_err)
 
     # 3. Generate public summary
     cfg = _config(args)
