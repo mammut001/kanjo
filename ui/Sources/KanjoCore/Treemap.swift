@@ -53,9 +53,17 @@ public enum Treemap {
             if free.width >= free.height {
                 // 竖着放在左侧一列。最后一行吃掉全部剩余宽度，消除浮点误差。
                 let colW = isLast ? free.width : CGFloat(rowArea / Double(free.height))
+                guard colW.isFinite, colW > 0, free.height.isFinite, free.height > 0 else {
+                    for item in row {
+                        result.append(Tile(id: item.id, value: item.value,
+                                           rect: CGRect(origin: free.origin, size: .zero)))
+                    }
+                    break
+                }
                 var y = free.minY
                 for (k, item) in row.enumerated() {
-                    let h = k == row.count - 1 ? free.maxY - y : CGFloat(item.area / Double(colW))
+                    let rawH = k == row.count - 1 ? free.maxY - y : CGFloat(item.area / Double(colW))
+                    let h = rawH.isFinite ? max(rawH, 0) : 0
                     result.append(Tile(id: item.id, value: item.value,
                                        rect: CGRect(x: free.minX, y: y, width: colW, height: h)))
                     y += h
@@ -64,9 +72,17 @@ public enum Treemap {
             } else {
                 // 横着放在顶部一行。
                 let rowH = isLast ? free.height : CGFloat(rowArea / Double(free.width))
+                guard rowH.isFinite, rowH > 0, free.width.isFinite, free.width > 0 else {
+                    for item in row {
+                        result.append(Tile(id: item.id, value: item.value,
+                                           rect: CGRect(origin: free.origin, size: .zero)))
+                    }
+                    break
+                }
                 var x = free.minX
                 for (k, item) in row.enumerated() {
-                    let w = k == row.count - 1 ? free.maxX - x : CGFloat(item.area / Double(rowH))
+                    let rawW = k == row.count - 1 ? free.maxX - x : CGFloat(item.area / Double(rowH))
+                    let w = rawW.isFinite ? max(rawW, 0) : 0
                     result.append(Tile(id: item.id, value: item.value,
                                        rect: CGRect(x: x, y: free.minY, width: w, height: rowH)))
                     x += w

@@ -194,14 +194,17 @@ struct AgentsView: View {
     private func proportionBar(rows: [AgentSummaryRow]) -> some View {
         GeometryReader { geo in
             let gap: CGFloat = 1.5
-            let count = rows.count
-            let avail = max(geo.size.width - CGFloat(max(count - 1, 0)) * gap, 0)
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: rows.map(\.share),
+                gap: gap,
+                minWidth: 2
+            )
             HStack(spacing: gap) {
-                ForEach(rows) { row in
-                    let w = max(avail * CGFloat(max(row.share, 0)), 2)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     Rectangle()
                         .fill(AgentPalette.color(for: row.agent))
-                        .frame(width: w)
+                        .frame(width: widths[i])
                         .hoverTip("\(row.label) · \(Fmt.tokens(row.tokens)) (\(Fmt.percent(row.share)))")
                 }
             }
@@ -488,14 +491,18 @@ struct AgentDetailCard: View {
             (t.cacheRead, AgentPalette.tokenCacheRead),
             (t.cacheWrite, AgentPalette.tokenCacheWrite),
         ].filter { $0.tokens > 0 }
-        let total = max(parts.reduce(0) { $0 + $1.tokens }, 1)
         return GeometryReader { geo in
-            let avail = max(geo.size.width - CGFloat(max(parts.count - 1, 0)), 0)
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: parts.map { Double($0.tokens) },
+                gap: 1,
+                minWidth: 2
+            )
             HStack(spacing: 1) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
+                ForEach(Array(parts.enumerated()), id: \.offset) { i, p in
                     Rectangle()
                         .fill(p.color)
-                        .frame(width: max(avail * CGFloat(p.tokens) / CGFloat(total), 2))
+                        .frame(width: widths[i])
                 }
             }
             .clipShape(Capsule())
@@ -700,18 +707,25 @@ struct AgentDetailCard: View {
     }
 
     private var projectProportionBar: some View {
-        let segCount = row.projectShares.count + (row.othersProjectShare == nil ? 0 : 1)
         let gap: CGFloat = 1.5
+        let weights: [Double] = row.projectShares.map(\.share)
+            + (row.othersProjectShare.map { [$0.share] } ?? [])
         return GeometryReader { geo in
-            let avail = max(geo.size.width - CGFloat(max(segCount - 1, 0)) * gap, 0)
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: weights,
+                gap: gap,
+                minWidth: 3
+            )
             HStack(spacing: gap) {
                 ForEach(Array(row.projectShares.enumerated()), id: \.element.id) { idx, seg in
-                    projectBarSegment(index: idx, seg: seg, avail: avail)
+                    projectBarSegment(index: idx, seg: seg, width: widths[idx])
                 }
                 if let others = row.othersProjectShare {
+                    let othersWidth = widths[row.projectShares.count]
                     Rectangle()
                         .fill(AgentPalette.neutral)
-                        .frame(width: max(avail * CGFloat(max(others.share, 0)), 3))
+                        .frame(width: othersWidth)
                         .hoverTip("\(L10n.tr("agents.detail.others")) (\(others.count)) · \(Fmt.money(others.cost, currency: currency)) (\(Fmt.percent(others.share)))")
                 }
             }
@@ -758,10 +772,10 @@ struct AgentDetailCard: View {
         }
     }
 
-    private func projectBarSegment(index: Int, seg: AgentProjectShare, avail: CGFloat) -> some View {
+    private func projectBarSegment(index: Int, seg: AgentProjectShare, width: CGFloat) -> some View {
         let rect = Rectangle()
             .fill(projectSegmentColor(index: index))
-            .frame(width: max(avail * CGFloat(max(seg.share, 0)), 3))
+            .frame(width: width)
 
         if forShare {
             return AnyView(rect)

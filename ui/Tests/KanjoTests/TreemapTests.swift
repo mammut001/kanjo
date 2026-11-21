@@ -99,4 +99,27 @@ final class TreemapTests: KanjoTestCase {
         let g = Treemap.groupSmall([(id: String, value: Double)](), threshold: 0.015)
         XCTAssertTrue(g.kept.isEmpty && g.merged.isEmpty)
     }
+
+    func testNonFiniteValuesExcluded() {
+        let tiles = Treemap.layout([("a", .nan), ("b", .infinity), ("c", 4), ("d", -.infinity)], in: bounds)
+        XCTAssertEqual(tiles.map(\.id), ["c"])
+        XCTAssertTrue(tiles.allSatisfy { $0.rect.width.isFinite && $0.rect.height.isFinite })
+    }
+
+    func testDegenerateNearZeroBoundsStayFinite() {
+        let tiny = CGRect(x: 0, y: 0, width: 1e-12, height: 1e-12)
+        let tiles = Treemap.layout([("a", 1), ("b", 2), ("c", 3)], in: tiny)
+        for t in tiles {
+            XCTAssertTrue(t.rect.width.isFinite, t.id)
+            XCTAssertTrue(t.rect.height.isFinite, t.id)
+            XCTAssertFalse(t.rect.width.isNaN || t.rect.height.isNaN, t.id)
+            XCTAssertGreaterThanOrEqual(t.rect.width, 0, t.id)
+            XCTAssertGreaterThanOrEqual(t.rect.height, 0, t.id)
+        }
+    }
+
+    func testAllZeroCostsProduceNoTiles() {
+        let tiles = Treemap.layout([("a", 0), ("b", 0)], in: bounds)
+        XCTAssertTrue(tiles.isEmpty)
+    }
 }
