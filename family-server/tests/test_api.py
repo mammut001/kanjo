@@ -86,6 +86,19 @@ class TestAPIEndpoint(unittest.TestCase):
         data = json.loads(body.decode("utf-8"))
         self.assertEqual(data.get("status"), "ok")
 
+    def test_intake_preserves_old_report_history(self):
+        with db.get_connection(self.db_path) as conn:
+            db.insert_report(conn, self.m_alice, "2020-01-01", '{"old":true}',
+                             received_at="2020-01-01")
+        status, _, _ = self._api_request(
+            "POST", "/api/report", data=json.dumps(self.fixture_data).encode(),
+            headers={"Authorization": f"Bearer {self.token_alice}"},
+        )
+        self.assertEqual(status, 200)
+        with db.get_connection(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM reports WHERE member_id = ?",
+                                          (self.m_alice,)).fetchone()[0], 2)
+
     def test_unknown_path_is_404(self):
         status, _, _ = self._api_request("GET", "/unknown")
         self.assertEqual(status, 404)

@@ -197,8 +197,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 device_name=device_name,
             )
 
-            # Trigger hourly prune check on insert
-            db.maybe_prune_hourly(conn)
+            # Expired sessions can be removed independently of report retention.
+            db.maybe_prune_sessions_hourly(conn)
 
             logger.info("Successfully accepted report from member '%s'", member_name)
             self._send_json_response(HTTPStatus.OK, {"status": "ok", "received_at": now_iso})

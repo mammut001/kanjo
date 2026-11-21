@@ -83,6 +83,29 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("尚未添加任何成员", html)
         self.assertIn("按公开 API 价格折算，不是实际支出", html)
 
+    def test_aggregate_cache_tracks_report_and_member_changes(self):
+        from unittest.mock import patch
+        from family_server import dashboard
+
+        dashboard._cached_dashboard_merge.cache_clear()
+        with db.get_connection(self.db_path) as conn:
+            _, member = db.add_member(conn, "Alice")
+            raw = json.dumps(self.fixture_data)
+            db.insert_report(conn, member, "2026-01-01", raw, received_at="2026-01-01")
+        with patch.object(dashboard, "merge_member_reports", wraps=dashboard.merge_member_reports) as merge:
+            first = dashboard.generate_dashboard_html(self.db_path)
+            self.assertEqual(first, dashboard.generate_dashboard_html(self.db_path))
+            self.assertEqual(merge.call_count, 1)
+            with db.get_connection(self.db_path) as conn:
+                db.insert_report(conn, member, "2026-01-02", raw, received_at="2026-01-02")
+            dashboard.generate_dashboard_html(self.db_path)
+            self.assertEqual(merge.call_count, 2)
+            with db.get_connection(self.db_path) as conn:
+                conn.execute("UPDATE members SET name = 'Alicia' WHERE id = ?", (member,))
+                conn.commit()
+            self.assertIn("Alicia", dashboard.generate_dashboard_html(self.db_path))
+            self.assertEqual(merge.call_count, 3)
+
     def test_dashboard_healthz_and_404(self):
         status, body = self._dash_request("/healthz")
         self.assertEqual(status, 200)

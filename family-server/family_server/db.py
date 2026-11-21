@@ -405,14 +405,14 @@ def get_member_latest_reports_by_device(conn: sqlite3.Connection, member_id: int
     cur.execute(
         "SELECT r.id, r.member_id, r.received_at, r.generated_at, r.payload_json, r.device_id, r.device_name "
         "FROM reports r "
-        "WHERE r.member_id = ? "
-        "AND r.id = ("
-        "    SELECT r2.id FROM reports r2 "
-        "    WHERE r2.member_id = r.member_id AND r2.device_id = r.device_id "
-        "    ORDER BY r2.received_at DESC, r2.id DESC LIMIT 1"
+        "WHERE r.id IN ("
+        "    SELECT (SELECT r2.id FROM reports r2 "
+        "            WHERE r2.member_id = ? AND r2.device_id = devices.device_id "
+        "            ORDER BY r2.received_at DESC, r2.id DESC LIMIT 1) "
+        "    FROM (SELECT DISTINCT device_id FROM reports WHERE member_id = ?) AS devices"
         ") "
         "ORDER BY r.received_at DESC, r.id DESC",
-        (member_id,),
+        (member_id, member_id),
     )
     return [dict(r) for r in cur.fetchall()]
 
@@ -532,6 +532,24 @@ def prune_reports(conn: sqlite3.Connection, now: Optional[datetime] = None) -> i
 
     conn.commit()
     return total_deleted
+
+
+def maybe_prune_sessions_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None) -> None:
+    """Clean up expired sessions without deleting report history during intake."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    row = conn.execute("SELECT value FROM meta WHERE key = 'last_session_prune_time'").fetchone()
+    if row and row["value"]:
+        try:
+            last = datetime.fromisoformat(row["value"].replace("Z", "+00:00"))
+            if (now - last).total_seconds() < 3600:
+                return
+        except (TypeError, ValueError):
+            pass
+    prune_sessions(conn, now)
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_session_prune_time', ?)",
+                 (now.isoformat(),))
+    conn.commit()
 
 
 def maybe_prune_hourly(conn: sqlite3.Connection, now: Optional[datetime] = None) -> Optional[int]:
