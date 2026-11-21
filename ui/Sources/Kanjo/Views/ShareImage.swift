@@ -92,9 +92,9 @@ struct MultiImageView: View {
     let summary: ShareSummary
 
     var body: some View {
-        // 640 pt card, 18 pt inset, 16 pt gap → 588 pt for the two columns. ~52% mosaic / ~48% agents.
+        // 640 pt card, 18 pt inset, 16 pt gap → 588 pt for the two columns. 50% mosaic / 50% agents.
         let columns = CGFloat(640 - 18 * 2 - 16)
-        let mosaicW = (columns * 0.52).rounded()
+        let mosaicW = (columns * 0.50).rounded()
         let agentsW = columns - mosaicW
         let mosaicH: CGFloat = 230
         let shown = Array(summary.agentRows.prefix(7))
@@ -103,7 +103,8 @@ struct MultiImageView: View {
         let costW = width(shown.map { Fmt.money($0.cost, currency: summary.currency) }
             + (summary.agentRows.count > 7 ? [Fmt.money(overflowCost, currency: summary.currency)] : []))
         let multiplierW = width(shown.map { multiplierText($0) }, weight: .semibold)
-        let nameW = max(0, agentsW - 12 - tokenW - costW - multiplierW - 12)
+        let columnGap: CGFloat = 12
+        let nameW = max(0, agentsW - 12 - tokenW - costW - multiplierW - 3 * columnGap)
 
         VStack(spacing: 18) {
             header
@@ -132,7 +133,7 @@ struct MultiImageView: View {
                     }
                     ShareProportionBar(rows: summary.agentRows)
                     
-                    Grid(alignment: .center, horizontalSpacing: 4, verticalSpacing: 8) {
+                    Grid(alignment: .center, horizontalSpacing: columnGap, verticalSpacing: 8) {
                         let maxShown = 7
                         let overflow = max(0, summary.agentRows.count - maxShown)
                         

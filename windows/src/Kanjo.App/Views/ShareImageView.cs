@@ -35,7 +35,7 @@ public sealed class ShareImageView : Border
         Padding = new Thickness(Pad);
 
         var columns = CardWidth - Pad * 2 - ColumnGap;
-        var mosaicW = Math.Round(columns * 0.52, MidpointRounding.AwayFromZero);
+        var mosaicW = Math.Round(columns * 0.50, MidpointRounding.AwayFromZero);
         var agentsW = columns - mosaicW;
 
         var body = Ui.V(18);
@@ -172,7 +172,7 @@ public sealed class ShareImageView : Border
         const int maxShown = 7;
         var grid = new Grid
         {
-            ColumnSpacing = 4,
+            ColumnSpacing = 12,
             RowSpacing = 8,
             ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"),
         };
