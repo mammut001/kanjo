@@ -181,7 +181,7 @@ public enum SnapshotDevice {
 
     #if os(macOS)
     public static var deviceName: String {
-        "Mac"
+        Host.current().localizedName ?? ProcessInfo.processInfo.hostName
     }
     #endif
 }
