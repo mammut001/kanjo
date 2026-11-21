@@ -12,6 +12,7 @@ change before accepting the files:
 ```sh
 (cd ui && KANJO_PARITY_DUMP="$PWD/../parity/mac.json" swift test --filter ParityDumpTests)
 KANJO_PARITY_DUMP="$PWD/parity/windows.json" dotnet test windows/tests/Kanjo.Core.Tests/Kanjo.Core.Tests.csproj --filter FullyQualifiedName~ParityDumpTests
+(cd cli && KANJO_PARITY_DUMP="$PWD/../parity/tui.json" python3 -m unittest tests.test_parity_dump.ParityDumpTests.test_dump)
 python3 parity/compare.py
 ```
 
