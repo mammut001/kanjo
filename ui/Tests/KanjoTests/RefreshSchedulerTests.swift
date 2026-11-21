@@ -125,4 +125,105 @@ final class RefreshSchedulerTests: XCTestCase {
         let action = scheduler.onWake(at: t)
         XCTAssertEqual(action, RefreshScheduler.Action.refreshNow)
     }
+
+    /// A file event already armed a refresh. Sleep cancels that timer; wake must still run it.
+    func testSleepParksScheduledRefreshUntilWake() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        _ = scheduler.onFileEvent(at: t)
+        XCTAssertTrue(scheduler.hasScheduledRefresh)
+
+        scheduler.onSleep()
+        XCTAssertFalse(scheduler.hasScheduledRefresh)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+        XCTAssertEqual(scheduler.onWake(at: t.addingTimeInterval(120)), .refreshNow)
+    }
+
+    /// Enabling Low Power must park an armed refresh and resume it when power returns.
+    func testLowPowerParksScheduledRefreshUntilPowerReturns() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        _ = scheduler.onFileEvent(at: t)
+
+        XCTAssertEqual(scheduler.onLowPowerModeChanged(enabled: true, at: t), .none)
+        XCTAssertFalse(scheduler.hasScheduledRefresh)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+        XCTAssertEqual(scheduler.onFileEvent(at: t.addingTimeInterval(1)), .none)
+        XCTAssertEqual(scheduler.onLowPowerModeChanged(enabled: false, at: t.addingTimeInterval(1)), .refreshNow)
+    }
+
+    /// A change that arrives mid-refresh, then the machine sleeps before the refresh finishes,
+    /// must still refresh after wake. The in-flight result is already stale.
+    func testFileEventDuringRefreshSurvivesSleep() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        scheduler.onRefreshStarted(at: t)
+        XCTAssertEqual(scheduler.onFileEvent(at: t), .none)
+        XCTAssertTrue(scheduler.hasPendingEventWhileRefreshing)
+
+        scheduler.onSleep()
+        XCTAssertEqual(scheduler.onRefreshFinished(at: t), .none)
+        XCTAssertEqual(scheduler.onWake(at: t.addingTimeInterval(120)), .refreshNow)
+    }
+
+    /// Same as sleep, but the machine is busy when the in-flight refresh finishes.
+    func testFileEventDuringRefreshSurvivesBusy() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        scheduler.onRefreshStarted(at: t)
+        XCTAssertEqual(scheduler.onFileEvent(at: t), .none)
+        XCTAssertEqual(scheduler.onSystemBusyChanged(busy: true, at: t), .none)
+        XCTAssertEqual(scheduler.onRefreshFinished(at: t), .none)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+
+        XCTAssertEqual(scheduler.onSystemBusyChanged(busy: false, at: t.addingTimeInterval(120)), .refreshNow)
+    }
+
+    /// Wake while the deferred refresh is still running must not drop the follow-up.
+    func testWakeDuringRefreshDefersFollowUpUntilFinish() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        scheduler.onSleep()
+        _ = scheduler.onFileEvent(at: t)
+        scheduler.onRefreshStarted(at: t)
+
+        let wake = scheduler.onWake(at: t.addingTimeInterval(5))
+        XCTAssertEqual(wake, .none)
+        XCTAssertTrue(scheduler.hasPendingEventWhileRefreshing)
+
+        let finished = scheduler.onRefreshFinished(at: t.addingTimeInterval(5))
+        guard case .scheduleRefresh(let delay) = finished else {
+            return XCTFail("expected a follow-up schedule, got \(finished)")
+        }
+        XCTAssertEqual(delay, 60, accuracy: 0.001)
+        XCTAssertFalse(scheduler.pendingWakeRefresh)
+    }
+
+    /// Waking into Low Power must not refresh until Low Power is off.
+    func testWakeWhileLowPowerDoesNotRefresh() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        _ = scheduler.onLowPowerModeChanged(enabled: true, at: t)
+        scheduler.onSleep()
+        _ = scheduler.onFileEvent(at: t)
+
+        XCTAssertEqual(scheduler.onWake(at: t), .none)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+        XCTAssertTrue(scheduler.isLowPowerMode)
+        XCTAssertEqual(scheduler.onLowPowerModeChanged(enabled: false, at: t), .refreshNow)
+    }
+
+    /// Low Power ending while the machine is still asleep must not refresh.
+    func testLowPowerOffWhileAsleepDoesNotRefresh() {
+        var scheduler = RefreshScheduler(backgroundInterval: 60, lastRefreshTime: Date(timeIntervalSince1970: 0))
+        let t = Date(timeIntervalSince1970: 1000)
+        _ = scheduler.onLowPowerModeChanged(enabled: true, at: t)
+        scheduler.onSleep()
+        _ = scheduler.onFileEvent(at: t)
+
+        XCTAssertEqual(scheduler.onLowPowerModeChanged(enabled: false, at: t), .none)
+        XCTAssertTrue(scheduler.pendingWakeRefresh)
+        XCTAssertTrue(scheduler.isAsleep)
+        XCTAssertEqual(scheduler.onWake(at: t), .refreshNow)
+    }
 }

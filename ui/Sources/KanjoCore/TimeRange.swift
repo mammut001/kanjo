@@ -105,14 +105,8 @@ public struct RangeSpec: Equatable {
             for d in byDay {
                 guard let d0 = HeatStrip.parseDay(d.day, calendar: calendar),
                       let d1 = calendar.date(byAdding: .day, value: 1, to: d0) else { continue }
-                if includes(dayStart: d0, dayEnd: d1, agent: session.agent) {
-                    if d.cost > 0 || d.tokens > 0 { return true }
-                }
-            }
-            for d in byDay {
-                guard let d0 = HeatStrip.parseDay(d.day, calendar: calendar),
-                      let d1 = calendar.date(byAdding: .day, value: 1, to: d0) else { continue }
-                if includes(dayStart: d0, dayEnd: d1, agent: session.agent) {
+                if includes(dayStart: d0, dayEnd: d1, agent: session.agent),
+                   d.cost > 0 || d.tokens > 0 {
                     return true
                 }
             }
@@ -124,7 +118,11 @@ public struct RangeSpec: Equatable {
         }
         let sessionStart = min(s, e)
         let sessionEnd = max(s, e)
-        if let start = w.start, sessionEnd < start { return false }
+        // 半开区间 [start, end)。正时长会话恰好在 start 结束时没有重叠；
+        // 零时长会话落在 start 上仍然计入。
+        if let start = w.start, sessionEnd < start || (sessionEnd == start && sessionStart < sessionEnd) {
+            return false
+        }
         if let end = w.end, sessionStart >= end { return false }
         return true
     }

@@ -227,6 +227,12 @@ final class ReportStore: ObservableObject {
 
     private func onPowerStateDidChange() {
         let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if isLowPower {
+            // Same as sleep: the armed timer must not fire while Low Power is on.
+            // The scheduler parks it in pendingWakeRefresh and resumes when power returns.
+            scheduledTask?.cancel()
+            scheduledTask = nil
+        }
         let action = loader.scheduler.onLowPowerModeChanged(enabled: isLowPower)
         handleSchedulerAction(action)
         checkBusy()
@@ -309,15 +315,8 @@ final class ReportStore: ObservableObject {
         case .none:
             break
         case .refreshNow:
-            // Check busy before refresh
             checkBusy()
-            if loader.scheduler.isSystemBusy {
-                loader.scheduler.deferForBusy()
-                return
-            }
-            scheduledTask?.cancel()
-            scheduledTask = nil
-            refresh(quiet: true, qualityOfService: .background)
+            startBackgroundRefreshIfIdle()
         case .scheduleRefresh(let delay):
             scheduledTask?.cancel()
             scheduledTask = Task { [weak self] in
@@ -325,16 +324,27 @@ final class ReportStore: ObservableObject {
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 } catch { return }
                 guard let self = self, !Task.isCancelled else { return }
-                
-                // Before refresh, check busy
                 self.checkBusy()
-                if self.loader.scheduler.isSystemBusy {
-                    self.loader.scheduler.deferForBusy()
-                    return
-                }
-                self.refresh(quiet: true, qualityOfService: .background)
+                self.startBackgroundRefreshIfIdle()
             }
         }
+    }
+
+    /// One quiet refresh, unless sleep, Low Power, or busy should hold it,
+    /// or a nested busy check already started one.
+    private func startBackgroundRefreshIfIdle() {
+        if loader.scheduler.isSystemBusy || loader.scheduler.isLowPowerMode || loader.scheduler.isAsleep {
+            scheduledTask?.cancel()
+            scheduledTask = nil
+            loader.scheduler.deferForBusy()
+            return
+        }
+        if loader.scheduler.isRefreshing {
+            return
+        }
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        refresh(quiet: true, qualityOfService: .background)
     }
 
     func onPanelOpened() {

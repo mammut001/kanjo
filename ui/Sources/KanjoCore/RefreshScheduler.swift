@@ -96,16 +96,21 @@ public struct RefreshScheduler: Equatable {
     public mutating func onRefreshFinished(at date: Date = Date()) -> Action {
         isRefreshing = false
         lastRefreshTime = date
+        let followUp = hasPendingEventWhileRefreshing
+        hasPendingEventWhileRefreshing = false
 
         if isAsleep || isLowPowerMode || isSystemBusy {
+            // The result is already stale, but a refresh cannot start until the machine is idle.
+            if followUp {
+                pendingWakeRefresh = true
+            }
             return .none
         }
 
-        if hasPendingEventWhileRefreshing {
-            hasPendingEventWhileRefreshing = false
+        pendingWakeRefresh = false
+        if followUp {
             return scheduleFileEventRefresh(at: date, minIntervalAnchor: date)
         }
-
         return .none
     }
 
@@ -133,9 +138,12 @@ public struct RefreshScheduler: Equatable {
         return isStaleReport && !isRefreshing
     }
 
-    /// System will sleep.
+    /// System will sleep. An armed timer is cancelled by the store; remember to run it on wake.
     public mutating func onSleep() {
         isAsleep = true
+        if hasScheduledRefresh || hasPendingEventWhileRefreshing {
+            pendingWakeRefresh = true
+        }
         hasScheduledRefresh = false
     }
 
@@ -146,52 +154,53 @@ public struct RefreshScheduler: Equatable {
             pendingWakeRefresh = true
             return .none
         }
-        guard pendingWakeRefresh else { return .none }
-        pendingWakeRefresh = false
-        if isRefreshing { return .none }
-        let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
-        if date >= minIntervalTarget {
-            return .refreshNow
-        } else {
-            hasScheduledRefresh = true
-            return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
+        if isLowPowerMode {
+            return .none
         }
+        return resumeIfIdle(at: date)
     }
 
     /// Low Power Mode state changed.
     public mutating func onLowPowerModeChanged(enabled: Bool, at date: Date = Date()) -> Action {
         isLowPowerMode = enabled
-        if !enabled && pendingWakeRefresh {
-            if isSystemBusy { return .none }
-            pendingWakeRefresh = false
-            if isRefreshing { return .none }
-            let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
-            if date >= minIntervalTarget {
-                return .refreshNow
-            } else {
-                hasScheduledRefresh = true
-                return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
+        if enabled {
+            if hasScheduledRefresh || hasPendingEventWhileRefreshing {
+                pendingWakeRefresh = true
             }
+            hasScheduledRefresh = false
+            return .none
         }
-        return .none
+        return resumeIfIdle(at: date)
     }
 
     /// System busy state changed.
     public mutating func onSystemBusyChanged(busy: Bool, at date: Date = Date()) -> Action {
         isSystemBusy = busy
-        if !busy && pendingWakeRefresh {
-            if isAsleep || isLowPowerMode { return .none }
-            pendingWakeRefresh = false
-            if isRefreshing { return .none }
-            let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
-            if date >= minIntervalTarget {
-                return .refreshNow
-            } else {
-                hasScheduledRefresh = true
-                return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
-            }
+        if busy { return .none }
+        return resumeIfIdle(at: date)
+    }
+
+    /// Run a deferred refresh once sleep, Low Power, and busy are all clear.
+    /// An in-flight refresh keeps the follow-up for `onRefreshFinished` instead of starting a second one.
+    private mutating func resumeIfIdle(at date: Date) -> Action {
+        guard pendingWakeRefresh || hasPendingEventWhileRefreshing else { return .none }
+        if isAsleep || isLowPowerMode || isSystemBusy {
+            pendingWakeRefresh = true
+            return .none
         }
-        return .none
+        if isRefreshing {
+            hasPendingEventWhileRefreshing = true
+            pendingWakeRefresh = false
+            return .none
+        }
+        pendingWakeRefresh = false
+        hasPendingEventWhileRefreshing = false
+        let minIntervalTarget = (lastRefreshTime ?? .distantPast).addingTimeInterval(backgroundInterval)
+        if date >= minIntervalTarget {
+            return .refreshNow
+        }
+        hasScheduledRefresh = true
+        return .scheduleRefresh(after: max(0, minIntervalTarget.timeIntervalSince(date)))
     }
 
     /// Called when the fallback timer fires.

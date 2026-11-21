@@ -210,6 +210,23 @@ final class DiskTests: KanjoTestCase {
             "export PATH=\"$PATH\"; python3 -m kanjo disk clean codex:cache --dry-run")
     }
 
+    /// 空目录的 CLI 报告把 oldest/newest 写成 null。整份磁盘报告仍要能解码，否则磁盘页打不开。
+    func testEmptyEntryNullDatesDoNotFailTheReport() throws {
+        let report = try DiskDecoder.decode(Data("""
+        {"schema_version":1,"generated_at":"2026-10-25T10:00:00Z","total_bytes":0,"reclaimable_bytes":0,
+         "agents":[{"agent":"codex","label":"Codex CLI","bytes":0,"entries":[
+           {"id":"codex:cache","kind":"cache","path":"/Users/alice/.codex/cache","bytes":0,"files":0,
+            "oldest":null,"newest":null,"deletable":"always","blocked":[]}
+         ]}]}
+        """.utf8))
+        let entry = try XCTUnwrap(report.agents.first?.entries.first)
+        XCTAssertEqual(entry.id, "codex:cache")
+        XCTAssertNil(entry.oldest)
+        XCTAssertNil(entry.newest)
+        XCTAssertEqual(entry.files, 0)
+        XCTAssertTrue(entry.isReclaimable)
+    }
+
     func testCleanPlanText() throws {
         let report = try DiskDecoder.decode(Data("""
         {"schema_version":1,"generated_at":"2026-10-25T10:00:00Z","total_bytes":7000000000,"reclaimable_bytes":7000000000,
