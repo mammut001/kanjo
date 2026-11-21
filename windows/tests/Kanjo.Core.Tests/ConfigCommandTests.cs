@@ -94,6 +94,37 @@ public sealed class ConfigCommandTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestAntigravityAccountPlanArguments()
+    {
+        Assert.Equal(
+            ["config", "set", "antigravity_accounts.alex@example.com.plan", "google_ai_ultra"],
+            ConfigCommand.AntigravityAccountPlanArguments("alex@example.com", "google_ai_ultra"));
+        Assert.Equal(
+            ["config", "unset", "antigravity_accounts.alex@example.com.plan"],
+            ConfigCommand.AntigravityAccountPlanArguments("alex@example.com", null));
+        Assert.Equal(
+            ["config", "unset", "antigravity_accounts.alex@example.com.plan"],
+            ConfigCommand.AntigravityAccountPlanArguments("alex@example.com", "  "));
+
+        var cmd = ConfigCommand.Command(DefaultCommand,
+            ConfigCommand.AntigravityAccountPlanArguments("alex@example.com", "google_ai_pro"));
+        Assert.Equal(
+            "python.exe -m kanjo config set 'antigravity_accounts.alex@example.com.plan' google_ai_pro", cmd);
+
+        var dotted = ConfigCommand.AntigravityAccountPlanArguments(
+            "first.last+tag@example.com", "google_ai_pro");
+        Assert.Equal("antigravity_accounts.first.last+tag@example.com.plan", dotted[2]);
+        var dottedCmd = ConfigCommand.Command(DefaultCommand, dotted);
+        Assert.Contains("'antigravity_accounts.first.last+tag@example.com.plan'", dottedCmd);
+
+        foreach (var bad in new[] { "", "not-an-email", "bad;email@example.com", "a b@example.com" })
+        {
+            Assert.Throws<DataSourceError>(() =>
+                ConfigCommand.AntigravityAccountPlanArguments(bad, "google_ai_pro"));
+        }
+    }
+
+    [Fact]
     public void TestPlansCommand()
     {
         Assert.Equal(["config", "plans", "--json"], ConfigCommand.PlansArguments());

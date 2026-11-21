@@ -11,7 +11,7 @@ public sealed class ConfigDataSource
     private IReadOnlyDictionary<string, IReadOnlyList<KnownPlan>>? _cachedPlans;
     private bool _attempted;
 
-    public Func<CliRunner> Runner { get; }
+    public Func<CliRunner> Runner { get; set; }
 
     public ConfigDataSource(Func<CliRunner> runner) => Runner = runner;
 
@@ -133,6 +133,9 @@ public sealed class ConfigDataSource
 
     public void SetFamilyAgents(string? agents) =>
         Execute(ConfigCommand.FamilyAgentsArguments(agents));
+
+    public void SetAntigravityAccountPlan(string email, string? plan) =>
+        Execute(ConfigCommand.AntigravityAccountPlanArguments(email, plan));
 }
 
 /// <summary>
