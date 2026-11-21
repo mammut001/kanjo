@@ -450,6 +450,16 @@ public sealed class TimeRangeTests : KanjoTestCase
             [new DayCost("2026-10-23", 3, 30, null, null), new DayCost("2026-10-24", 2, 20, null, null)]);
         Assert.True(todaySpec.Includes(sessionWithTodayUsage));
 
+        // A daily entry without usage does not make a session active in this range.
+        var emptyToday = sessionWithTodayUsage with { ByDay = [new DayCost("2026-10-24", 0, 0, null, null)] };
+        Assert.False(todaySpec.Includes(emptyToday));
+
+        // A positive-duration session ending at the half-open start does not overlap;
+        // a zero-duration session at that instant does.
+        var endsAtStart = sessionActiveToday with { Ended = "2026-10-23T16:00:00Z" };
+        Assert.False(todaySpec.Includes(endsAtStart));
+        Assert.True(todaySpec.Includes(endsAtStart with { Started = "2026-10-23T16:00:00Z" }));
+
         // 4. 项目过滤验证（project row / overview summary）
         var dayToday = new DayCost("2026-10-24", 2, 20,
             new Dictionary<string, double> { ["claude"] = 2 }, new Dictionary<string, long> { ["claude"] = 20 });

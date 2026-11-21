@@ -18,6 +18,7 @@ final class SnapshotStore {
     private(set) var deviceName: String?
     private(set) var accountCode: String?
     private(set) var isSampleMode: Bool = false
+    private(set) var refreshFailed = false
     private let source: SnapshotSource
 
     init(source: SnapshotSource? = nil) {
@@ -34,6 +35,7 @@ final class SnapshotStore {
 
     func loadSample() async {
         isSampleMode = true
+        refreshFailed = false
         state = .loading
         do {
             let sampleSource = BundledSampleSnapshotSource()
@@ -75,9 +77,23 @@ final class SnapshotStore {
         }
         if !preserveState {
             state = .loading
+            refreshFailed = false
         }
         do {
             let report = try await source.load()
+            if preserveState, case .loaded(let previous) = state {
+                guard let report else {
+                    refreshFailed = true
+                    return
+                }
+                if let previousDate = ReportDates.parseTimestamp(previous.generatedAt),
+                   let newDate = ReportDates.parseTimestamp(report.generatedAt),
+                   newDate < previousDate {
+                    refreshFailed = true
+                    return
+                }
+            }
+            refreshFailed = false
             deviceName = source.lastDeviceName
             accountCode = source.lastAccountCode
             if let report {
@@ -93,7 +109,11 @@ final class SnapshotStore {
             } else {
                 SyncLog.sync.error("load failed: \(String(describing: type(of: error)), privacy: .public), description \(error.localizedDescription, privacy: .private)")
             }
-            state = .failed(error.localizedDescription)
+            if preserveState, case .loaded = state {
+                refreshFailed = true
+            } else {
+                state = .failed(error.localizedDescription)
+            }
         }
     }
 }
