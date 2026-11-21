@@ -525,6 +525,8 @@ class SessionCache:
         self.modified_keys: Set[str] = set()
         self.dirty = False
         self.dirty_keys: Set[str] = set()
+        # entries whose content is unchanged and only got a new file signature
+        self.sig_keys: Set[str] = set()
         self._session_cache: Dict[str, Session] = {}
         try:
             with open(self.path, "r", encoding="utf-8") as handle:
@@ -548,6 +550,8 @@ class SessionCache:
                             self.entries.pop(k, None)
                         elif "v" in row:
                             self.entries[k] = row["v"]
+                        elif "s" in row and k in self.entries:
+                            self.entries[k]["sig"] = row["s"]
             except (OSError, ValueError):
                 pass
 
@@ -585,6 +589,8 @@ class SessionCache:
             dumped = _dump_session(session)
             if entry is not None and entry.get("session") == dumped:
                 entry["sig"] = sig
+                self.dirty = True
+                self.sig_keys.add(key)
                 if agent == "antigravity":
                     self._apply_antigravity_accounts(session)
                 return session
@@ -636,7 +642,8 @@ class SessionCache:
             return
 
         # Proportional save: append to journal if under threshold and parse-cache exists
-        if os.path.isfile(self.path) and not stale and self.dirty_keys and len(self.dirty_keys) <= 500:
+        if (os.path.isfile(self.path) and not stale and (self.dirty_keys or self.sig_keys)
+                and len(self.dirty_keys) <= 500):
             try:
                 j_size = os.path.getsize(self.journal_path) if os.path.isfile(self.journal_path) else 0
                 if j_size < 5 * 1024 * 1024:
@@ -644,8 +651,12 @@ class SessionCache:
                         for key in sorted(self.dirty_keys):
                             if key in self.entries:
                                 handle.write(json.dumps({"k": key, "v": self.entries[key]}, ensure_ascii=False) + "\n")
+                        for key in sorted(self.sig_keys - self.dirty_keys):
+                            if key in self.entries:
+                                handle.write(json.dumps({"k": key, "s": self.entries[key]["sig"]}, ensure_ascii=False) + "\n")
                     self.dirty = False
                     self.dirty_keys.clear()
+                    self.sig_keys.clear()
                     self.repo_cache.save()
                     self.worktree_cache.save()
                     self.attr_cache.save()
@@ -670,6 +681,7 @@ class SessionCache:
                 pass
             self.dirty = False
             self.dirty_keys.clear()
+            self.sig_keys.clear()
         except OSError:
             pass  # a cache that cannot be written only costs speed
         finally:

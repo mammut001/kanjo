@@ -143,5 +143,50 @@ class InPlaceUpdateCacheTest(unittest.TestCase):
         self.assertEqual(cached["totals"]["cost"], fresh["totals"]["cost"])
 
 
+class RefreshedSignatureTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-stale-test-")
+        self.db = os.path.join(self.tmp, "opencode.db")
+        with open(self.db, "w", encoding="utf-8") as handle:
+            handle.write("v1")
+        self.calls = 0
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def parse(self, path, parent):
+        self.calls += 1
+        sid = path.split("::", 1)[1]
+        return make_session(sid, PROJ, agent="opencode")
+
+    def scan(self, n=20):
+        self.calls = 0
+        cache = SessionCache(os.path.join(self.tmp, "cache"))
+        for i in range(n):
+            cache.get("opencode", "%s::ses_%02d" % (self.db, i), None, self.parse)
+        cache.save()
+        return self.calls
+
+    def touch_db(self):
+        st = os.stat(self.db)
+        with open(self.db, "a", encoding="utf-8") as handle:
+            handle.write("x")
+        os.utime(self.db, ns=(st.st_atime_ns, st.st_mtime_ns + 10 ** 9))
+
+    def test_unchanged_sessions_are_not_reparsed_after_db_write(self):
+        self.assertEqual(self.scan(), 20)
+        self.assertEqual(self.scan(), 0)
+        self.touch_db()
+        self.assertEqual(self.scan(), 20)   # content unchanged, but the sig moved
+        self.assertEqual(self.scan(), 0)
+        self.assertEqual(self.scan(), 0)
+
+    def test_refreshed_signature_survives_full_rewrite(self):
+        self.assertEqual(self.scan(600), 600)
+        self.touch_db()
+        self.assertEqual(self.scan(600), 600)
+        self.assertEqual(self.scan(600), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
