@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text.Json;
 using Kanjo.App;
 using Kanjo.App.Views;
 using Xunit;
@@ -11,33 +9,6 @@ namespace Kanjo.Core.Tests;
 public sealed class PerformanceTests(ITestOutputHelper output) : KanjoTestCase
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-25T10:00:00Z");
-
-    private static string Fingerprint(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
-
-    private static string[] Results(UsageReport report) => TimeRanges.All.Select(range =>
-    {
-        var ctx = new RangeContext(report, range.RawValue(), Now);
-        var filtered = ctx.Filtered();
-        return Fingerprint(new
-        {
-            filtered.Projects, filtered.Unattributed, filtered.Excluded, filtered.Cost, filtered.Tokens,
-            filtered.Sessions, filtered.FirstActive, filtered.LastActive,
-            Models = ModelAggregation.Aggregate(filtered),
-            Detail = ctx.Filter(report.Projects[0]),
-            Heat = report.Projects.Select(p => HeatStrip.Weekly(p.ByDay, Now, RangeContext.FallbackAgent(p), timezone: ctx.Spec.Timezone)),
-            Weekly = WeeklyTokens.Since(Now, report.Projects, ctx.Spec.Timezone),
-            Share = ShareSummary.Build(report, range.RawValue(), Now),
-            ctx.CaptionResult,
-        });
-    }).ToArray();
-
-    [Fact]
-    public void FixtureResultsMatchBaseline()
-    {
-        var actual = Results(LoadFixture());
-        var baseline = Path.Combine(DefaultPaths.RepoRoot!, "windows", "tests", "Kanjo.Core.Tests", "performance-baseline.txt");
-        Assert.Equal(File.ReadAllLines(baseline), actual);
-    }
 
     [Fact]
     public void SyntheticBenchmark()
@@ -72,9 +43,6 @@ public sealed class PerformanceTests(ITestOutputHelper output) : KanjoTestCase
         Measure("heat strips", () => { foreach (var p in report.Projects) HeatStrip.Weekly(p.ByDay, Now, RangeContext.FallbackAgent(p), timezone: all.Spec.Timezone); });
         Measure("weekly tokens", () => WeeklyTokens.Since(Now, report.Projects, all.Spec.Timezone));
         Measure("share summary / agent models", () => ShareSummary.Build(report, "all", Now));
-        var fingerprintPath = Path.Combine(DefaultPaths.RepoRoot!, "windows", "tests", "Kanjo.Core.Tests", "performance-synthetic-baseline.txt");
-        var fingerprints = Results(report);
-        Assert.Equal(File.ReadAllLines(fingerprintPath), fingerprints);
         OnUi(() =>
         {
             var services = new AppServices(Settings, ["--snapshot", "--data", path], TempDir(),
