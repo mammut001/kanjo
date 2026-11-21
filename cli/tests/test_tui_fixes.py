@@ -246,5 +246,13 @@ class EndedQuotaWindowTest(unittest.TestCase):
         self.assertEqual(extra[0].detail, "window ended")
 
 
+class TotalLastActiveTest(unittest.TestCase):
+    def test_total_last_active_includes_buckets(self):
+        doc = synthetic_doc()
+        self.assertEqual(filter_report(doc, TimeRange.ALL, now=NOW).last_active, "2026-11-20")
+        self.assertEqual(filter_report(doc, TimeRange.TODAY, now=NOW).last_active, "2026-11-20")
+        self.assertEqual(filter_report(doc, TimeRange.DAYS_7, now=NOW).first_active, "2026-11-18")
+
+
 if __name__ == "__main__":
     unittest.main()

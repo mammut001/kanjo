@@ -883,8 +883,9 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
         row["perf_samples"] = perf.sample_count if perf else 0
         by_agent_list.append(row)
 
-    first_act = min((p["first_active"] for p in filtered_projects if p.get("first_active")), default=None)
-    last_act = max((p["last_active"] for p in filtered_projects if p.get("last_active")), default=None)
+    # filtered_usage already spans projects plus the unattributed/excluded buckets.
+    first_act = fu.first_active or min((p["first_active"] for p in filtered_projects if p.get("first_active")), default=None)
+    last_act = fu.last_active or max((p["last_active"] for p in filtered_projects if p.get("last_active")), default=None)
 
     return FilteredData(
         time_range=time_range,
