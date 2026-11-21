@@ -36,7 +36,8 @@ def init_db(db_path: str) -> None:
                 member_id INTEGER NOT NULL REFERENCES members(id),
                 token_sha256 TEXT UNIQUE NOT NULL,
                 created_at TEXT NOT NULL,
-                revoked_at TEXT
+                revoked_at TEXT,
+                origin_member_id INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS idx_member_tokens_member ON member_tokens(member_id);
@@ -96,6 +97,18 @@ def init_db(db_path: str) -> None:
             FROM members
             """
         )
+        # Idempotent migration: the member a token was issued to, kept across merges.
+        token_cols = {row["name"] for row in conn.execute("PRAGMA table_info(member_tokens)").fetchall()}
+        if "origin_member_id" not in token_cols:
+            conn.execute("ALTER TABLE member_tokens ADD COLUMN origin_member_id INTEGER")
+        conn.execute(
+            """
+            UPDATE member_tokens SET origin_member_id = COALESCE(
+                (SELECT m.id FROM members m WHERE m.token_sha256 = member_tokens.token_sha256),
+                member_id)
+            WHERE origin_member_id IS NULL
+            """
+        )
         conn.commit()
 
 
@@ -133,8 +146,9 @@ def add_member(conn: sqlite3.Connection, name: str) -> Tuple[str, int]:
     )
     member_id = cur.lastrowid
     cur.execute(
-        "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at) VALUES (?, ?, ?, NULL)",
-        (member_id, token_sha256, created_at),
+        "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at, origin_member_id) "
+        "VALUES (?, ?, ?, NULL, ?)",
+        (member_id, token_sha256, created_at, member_id),
     )
     conn.commit()
     return token, member_id
@@ -199,16 +213,26 @@ def list_members(conn: sqlite3.Connection, include_merged: bool = True) -> List[
 
 
 def revoke_member(conn: sqlite3.Connection, name: str) -> bool:
-    """Revoke a member and all of its active tokens by name. Returns True if revoked, False if already revoked."""
+    """Revoke a member and all of its active tokens by name. Returns True if revoked, False if already revoked.
+
+    For a merged member, revokes the tokens issued to it that the merge moved to the target.
+    """
     name = name.strip()
     cur = conn.cursor()
-    cur.execute("SELECT id, revoked_at FROM members WHERE name = ?", (name,))
+    cur.execute("SELECT id, revoked_at, merged_into FROM members WHERE name = ?", (name,))
     row = cur.fetchone()
     if not row:
         raise ValueError(f"Member '{name}' not found.")
 
     if row["revoked_at"] is not None:
-        return False
+        if row["merged_into"] is None:
+            return False
+        cur.execute(
+            "UPDATE member_tokens SET revoked_at = ? WHERE origin_member_id = ? AND revoked_at IS NULL",
+            (datetime.now(timezone.utc).isoformat(), row["id"]),
+        )
+        conn.commit()
+        return cur.rowcount > 0
 
     revoked_at = datetime.now(timezone.utc).isoformat()
     cur.execute("UPDATE members SET revoked_at = ? WHERE id = ?", (revoked_at, row["id"]))
@@ -244,8 +268,9 @@ def rotate_member_token(conn: sqlite3.Connection, member_id: int) -> str:
             (now_iso, member_id),
         )
         cur.execute(
-            "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at) VALUES (?, ?, ?, NULL)",
-            (member_id, new_hash, now_iso),
+            "INSERT INTO member_tokens (member_id, token_sha256, created_at, revoked_at, origin_member_id) "
+            "VALUES (?, ?, ?, NULL, ?)",
+            (member_id, new_hash, now_iso, member_id),
         )
         conn.commit()
     except Exception:
