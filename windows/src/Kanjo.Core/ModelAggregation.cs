@@ -33,7 +33,7 @@ public static class ModelAggregation
                 }
             }
         }
-        else
+        // 两种范围共用的分配逻辑：非 All 时分项目会话与桶会话；All 时项目用 ByModel 精确值，只分桶会话。
         {
             void ProcessGroup(IReadOnlyList<Session> sessions, double targetCost, long targetTokens)
             {
@@ -156,7 +156,22 @@ public static class ModelAggregation
                 }
             }
 
-            foreach (var fp in report.Projects) ProcessGroup(fp.SessionsDetail, fp.Cost, fp.Tokens);
+            foreach (var fp in report.Spec.IsAll ? [] : report.Projects)
+            {
+                // 按 (项目, agent) 分配：每个 agent 只分它自己在范围内的花费与 token；
+                // 没有范围内会话的 agent（或 ByAgent 缺失）留下的余量才按旧办法摊到项目全部会话上。
+                var restCost = fp.Cost;
+                var restTokens = fp.Tokens;
+                foreach (var a in fp.ByAgent)
+                {
+                    var own = fp.SessionsDetail.Where(s => s.Agent == a.Agent).ToList();
+                    if (own.Count == 0) continue;
+                    ProcessGroup(own, a.Cost, a.Tokens.Total);
+                    restCost -= a.Cost;
+                    restTokens -= a.Tokens.Total;
+                }
+                ProcessGroup(fp.SessionsDetail, restCost > 1e-9 ? restCost : 0, Math.Max(0, restTokens));
+            }
             ProcessGroup(report.Unattributed.SessionsDetail, report.Unattributed.Cost, report.Unattributed.Tokens);
             ProcessGroup(report.Excluded.SessionsDetail, report.Excluded.Cost, report.Excluded.Tokens);
         }

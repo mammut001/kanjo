@@ -26,7 +26,9 @@ public enum ModelAggregation {
                     }
                 }
             }
-        } else {
+        }
+        // 两种范围共用的分配逻辑：非 All 时分项目会话与桶会话；All 时项目用 by_model 精确值，只分桶会话。
+        do {
             // 采用最大余额法（Hamilton-Hare）按比例分配整数 token，保证分配后之和严格等于 targetTokens
             func apportion(total: Int, weights: [Double]) -> [Int] {
                 guard !weights.isEmpty else { return [] }
@@ -193,8 +195,20 @@ public enum ModelAggregation {
                 }
             }
 
-            for fp in report.projects {
-                processGroup(sessions: fp.sessionsDetail, targetCost: fp.cost, targetTokens: fp.tokens)
+            for fp in report.projects where !report.spec.isAll {
+                // 按 (项目, agent) 分配：每个 agent 只分它自己在范围内的花费与 token；
+                // 没有范围内会话的 agent（或 byAgent 缺失）留下的余量才按旧办法摊到项目全部会话上。
+                var restCost = fp.cost
+                var restTokens = fp.tokens
+                for a in fp.byAgent {
+                    let own = fp.sessionsDetail.filter { $0.agent == a.agent }
+                    guard !own.isEmpty else { continue }
+                    processGroup(sessions: own, targetCost: a.cost, targetTokens: a.tokens.total)
+                    restCost -= a.cost
+                    restTokens -= a.tokens.total
+                }
+                processGroup(sessions: fp.sessionsDetail, targetCost: restCost > 1e-9 ? restCost : 0,
+                             targetTokens: max(0, restTokens))
             }
             processGroup(sessions: report.unattributed.sessionsDetail, targetCost: report.unattributed.cost, targetTokens: report.unattributed.tokens)
             processGroup(sessions: report.excluded.sessionsDetail, targetCost: report.excluded.cost, targetTokens: report.excluded.tokens)

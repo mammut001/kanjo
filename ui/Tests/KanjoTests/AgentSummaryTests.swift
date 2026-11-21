@@ -110,6 +110,13 @@ final class AgentSummaryTests: KanjoTestCase {
             report.projects[i].byModel.removeAll { $0.agent == "antigravity" }
         }
         report.projects[0].byModel.append(contentsOf: customModels)
+        // All 范围也计入未归属 / 已排除会话的模型；去掉其中 antigravity 会话的模型，只留上面这 10 个。
+        for i in report.buckets.unattributed.sessionsDetail.indices where report.buckets.unattributed.sessionsDetail[i].agent == "antigravity" {
+            report.buckets.unattributed.sessionsDetail[i].models = []
+        }
+        for i in report.buckets.excluded.sessionsDetail.indices where report.buckets.excluded.sessionsDetail[i].agent == "antigravity" {
+            report.buckets.excluded.sessionsDetail[i].models = []
+        }
 
         let spec = RangeEngine.spec(.all, report: report)
         let filtered = RangeEngine.filtered(report, range: spec) {

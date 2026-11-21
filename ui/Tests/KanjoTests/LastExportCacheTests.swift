@@ -290,6 +290,30 @@ final class LastExportCacheTests: KanjoTestCase {
     }
 
     @MainActor
+    func testReportLoaderAppliesDelayedCacheWhenLiveFailsFirst() async throws {
+        let cachedReport = try ReportDecoder.decode(try sampleReportData())
+        let cacheGate = DispatchSemaphore(value: 0)
+        let fakeSource = FakeUsageDataSource { throw FakeSourceError.boom }
+        let loader = ReportLoader(
+            makeSource: { (fakeSource, "Fake CLI", true) },
+            loadCachedReport: {
+                _ = cacheGate.wait(timeout: .now() + 2.0)
+                return cachedReport
+            }
+        )
+
+        loader.startInitialLoad()
+        await loader.waitForRefresh()
+        cacheGate.signal()
+        await loader.waitForInitialCache()
+
+        XCTAssertEqual(loader.state.report, cachedReport)
+        XCTAssertTrue(loader.state.isStaleReport)
+        XCTAssertEqual(loader.state.error, "boom")
+        XCTAssertFalse(loader.state.isLoading)
+    }
+
+    @MainActor
     func testReportLoaderKeepsCachedReportAndSetsErrorWhenLiveFails() async throws {
         let cachedReport = try ReportDecoder.decode(try sampleReportData())
 

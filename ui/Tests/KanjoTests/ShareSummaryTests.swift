@@ -79,6 +79,23 @@ final class ShareSummaryTests: KanjoTestCase {
         XCTAssertTrue(sharesSum <= 1.0001)
     }
     
+    func testHiddenProjectsLeftOutOfAgentProjectShares() throws {
+        let report = try makeReport()
+        let now = Date(timeIntervalSince1970: 1763460000)
+        let summary = ShareSummary.build(report: report, rangeRaw: "all", now: now, hiddenProjects: ["p1"])
+        XCTAssertFalse(summary.agentSummaryRows.isEmpty)
+        for row in summary.agentSummaryRows {
+            XCTAssertFalse(row.projectShares.contains { $0.projectId == "p1" }, row.agent)
+            let shares = row.projectShares.map(\.share).reduce(0, +) + (row.othersProjectShare?.share ?? 0)
+            if !row.projectShares.isEmpty { XCTAssertEqual(shares, 1, accuracy: 1e-9) }
+        }
+        for row in summary.agentRows {
+            XCTAssertFalse(row.projectShares.contains { $0.name == "Project 1" }, row.agent)
+        }
+        let all = ShareSummary.build(report: report, rangeRaw: "all", now: now)
+        XCTAssertTrue(all.agentSummaryRows.contains { $0.projectShares.contains { $0.projectId == "p1" } })
+    }
+
     func testAgentRowsMatchAgentSummary() throws {
         let report = try makeReport()
         let now = Date(timeIntervalSince1970: 1763460000)

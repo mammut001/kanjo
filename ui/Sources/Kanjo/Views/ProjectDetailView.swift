@@ -196,7 +196,7 @@ struct ProjectDetailView: View {
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(L10n.tr("project.last_8_weeks")).font(.system(size: 9.5)).foregroundStyle(.secondary)
-                    HeatStripView(weeks: shown.heatWeeks(endingOn: report.heatEndDate),
+                    HeatStripView(weeks: shown.heatWeeks(endingOn: report.heatEndDate, calendar: report.heatCalendar),
                                   agentLabels: report.agentLabels, currency: cur,
                                   cell: CGSize(width: 12, height: 20), radius: 3)
                 }
