@@ -690,9 +690,9 @@ class DiskTest(unittest.TestCase):
         self.write(os.path.join(self.scratch, "p", "s", "scratchpad", "f.txt"), "f")
         set_tree_mtime(self.scratch, time.time() - 3 * DAY)
         self.report()
-        with mock.patch.object(disk, "_fresh_path_in_use", return_value=True) as probe:
+        busy = os.path.join(self.scratch, "p", "s")
+        with mock.patch.object(disk, "_run_path_probe", return_value=[busy]):
             result = self.clean(["claude:scratch:p/s"], yes=True)
-        probe.assert_called()
         self.assertEqual(result["moved"], [])
         self.assertEqual(result["skipped"], [{"id": "claude:scratch:p/s", "reason": "active"}])
 
@@ -700,10 +700,57 @@ class DiskTest(unittest.TestCase):
         self.write(os.path.join(self.scratch, "loose.log"), "l")
         set_tree_mtime(self.scratch, time.time() - 3 * DAY)
         self.report()
-        with mock.patch.object(disk, "_fresh_path_in_use", return_value=None):
+        with mock.patch.object(disk, "_run_path_probe", return_value=None):
             result = self.clean(["claude:scratch"], yes=True)
         self.assertEqual(result["moved"], [])
         self.assertIn({"id": "claude:scratch", "reason": "active"}, result["skipped"])
+
+    def test_scratch_in_use_from_one_lsof_probe(self):
+        s1 = os.path.join(self.scratch, "proj", "sess1")
+        s2 = os.path.join(self.scratch, "proj", "sess2")
+        s3 = os.path.join(self.scratch, "proj", "sess3")
+        self.write(os.path.join(s1, "scratchpad", "cwd.log"), "c")
+        open_file = self.write(os.path.join(s2, "scratchpad", "keep.log"), "k")
+        self.write(os.path.join(s3, "scratchpad", "idle.log"), "i")
+        set_tree_mtime(self.scratch, time.time() - 3 * DAY)
+        lsof_out = b"\n".join([
+            b"p99991", b"fcwd", ("n" + os.path.realpath(s1)).encode(),
+            b"p99992", b"f5", ("n" + open_file).encode(),
+        ]) + b"\n"
+
+        class FakeProc:
+            def communicate(self, timeout=None):
+                return lsof_out, b""
+
+            def kill(self):
+                pass
+
+        popen_calls = []
+
+        def fake_popen(args, **kwargs):
+            popen_calls.append(args)
+            return FakeProc()
+
+        with mock.patch.object(disk, "_lsof_bin", return_value="/usr/sbin/lsof"), \
+                mock.patch.object(disk.subprocess, "Popen", side_effect=fake_popen):
+            doc = self.report()
+        self.assertEqual(len(popen_calls), 1)
+        self.assertIn("active", self.entry(doc, "claude:scratch:proj/sess1")["blocked"])
+        self.assertIn("active", self.entry(doc, "claude:scratch:proj/sess2")["blocked"])
+        self.assertEqual(self.entry(doc, "claude:scratch:proj/sess3")["blocked"], [])
+
+        popen_calls.clear()
+        with mock.patch.object(disk, "_lsof_bin", return_value="/usr/sbin/lsof"), \
+                mock.patch.object(disk.subprocess, "Popen", side_effect=fake_popen):
+            result = self.clean(
+                ["claude:scratch:proj/sess1", "claude:scratch:proj/sess2", "claude:scratch:proj/sess3"],
+                yes=True,
+            )
+        # One lsof for the rescan report, one for the clean-time scratch recheck.
+        self.assertEqual(len(popen_calls), 2)
+        self.assertEqual(result["moved"], [s3])
+        skipped_ids = {row["id"] for row in result["skipped"]}
+        self.assertEqual(skipped_ids, {"claude:scratch:proj/sess1", "claude:scratch:proj/sess2"})
 
     def test_doctor_prints_disk_cache_path_and_age(self):
         self.report()

@@ -592,6 +592,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 targets.append(entry["id"])
             else:
                 skipped.append({"id": entry["id"], "reason": "not_merged"})
+    open_paths: Optional[List[str]] = None
+    open_paths_ready = False
     seen_targets = set()
     for eid in targets:
         if eid in seen_targets:
@@ -613,7 +615,10 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
             skipped.append({"id": eid, "reason": ",".join(entry["blocked"])})
             continue
         if entry.get("kind") == "scratch":
-            in_use = _fresh_path_in_use(entry["path"])
+            if not open_paths_ready:
+                open_paths = _run_path_probe()
+                open_paths_ready = True
+            in_use = _path_in_use(entry["path"], open_paths)
             if in_use is None or in_use:
                 skipped.append({"id": eid, "reason": "active"})
                 continue
@@ -1559,9 +1564,10 @@ def _is_merged(path: str, head: str, target: str) -> Optional[bool]:
 
 
 def _start_cwd_probe() -> Optional[subprocess.Popen]:
-    """Start ``lsof`` listing every process's working directory, in the background.
+    """Start ``lsof`` listing cwd and open file paths for every process, in the background.
 
-    POSIX only and best effort: no ``lsof`` (or Windows) means no probe.
+    POSIX only and best effort: no ``lsof`` (or Windows) means no probe. One call
+    per report or per ``clean()`` replaces per-directory ``lsof +D`` scans.
     """
     if winsupport.is_windows():
         return None
@@ -1569,14 +1575,14 @@ def _start_cwd_probe() -> Optional[subprocess.Popen]:
     if not lsof:
         return None
     try:
-        return subprocess.Popen([lsof, "-n", "-w", "-d", "cwd", "-FpRn"],
+        return subprocess.Popen([lsof, "-n", "-w", "-FpRn"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except OSError:
         return None
 
 
 def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
-    """Working directories from ``_start_cwd_probe``; ``None`` when unknown."""
+    """Cwd and open-file paths from ``_start_cwd_probe``; ``None`` when unknown."""
     if proc is None:
         return None
     try:
@@ -1590,7 +1596,8 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
     # lsof exits 1 when some processes could not be inspected; the rest is still valid.
     # This scan's own git commands run inside the worktrees, so they do not count.
     me = str(os.getpid()).encode()
-    found = []
+    found: List[str] = []
+    seen = set()
     ours = False
     for line in out.splitlines():
         if line.startswith(b"p"):
@@ -1598,7 +1605,10 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
         elif line.startswith(b"R"):
             ours = ours or line[1:] == me
         elif line.startswith(b"n") and not ours:
-            found.append(line[1:].decode("utf-8", "surrogateescape"))
+            p = line[1:].decode("utf-8", "surrogateescape")
+            if p not in seen:
+                seen.add(p)
+                found.append(p)
     return found
 
 
@@ -1608,51 +1618,33 @@ def _lsof_bin() -> Optional[str]:
     return shutil.which("lsof") or ("/usr/sbin/lsof" if os.path.exists("/usr/sbin/lsof") else None)
 
 
-def _lsof_open_under(path: str) -> Optional[bool]:
-    """True when a process has a file open under ``path``; ``None`` when unknown."""
-    lsof = _lsof_bin()
-    if not lsof:
-        return None
-    try:
-        proc = subprocess.run([lsof, "-n", "-w", "-t", "+D", path],
-                              capture_output=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if proc.returncode == 0:
-        return bool(proc.stdout.strip())
-    if proc.returncode == 1:
-        return False
-    return None
-
-
-def _cwd_inside(path: str, cwds: Optional[List[str]]) -> bool:
-    if not cwds:
-        return False
-    real = os.path.realpath(path)
-    return any(cwd == real or _inside(cwd, real) for cwd in cwds)
-
-
-def _path_in_use(path: str, cwds: Optional[List[str]]) -> Optional[bool]:
+def _path_in_use(path: str, paths: Optional[List[str]]) -> Optional[bool]:
     """True when a process cwd or open file is under ``path``; ``None`` if unknown (POSIX lsof)."""
     if winsupport.is_windows():
         return False
     if not _lsof_bin():
         return None
-    cwd_busy = _cwd_inside(path, cwds) if cwds is not None else None
-    open_busy = _lsof_open_under(path)
-    if cwd_busy is None and open_busy is None:
+    if paths is None:
         return None
-    if cwd_busy is True or open_busy is True:
-        return True
-    if cwd_busy is False and open_busy is False:
+    if not paths:
         return False
-    return None
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        real = _norm(path)
+    for p in paths:
+        try:
+            rp = os.path.realpath(p)
+        except OSError:
+            rp = p
+        if rp == real or _inside(rp, real):
+            return True
+    return False
 
 
-def _fresh_path_in_use(path: str) -> Optional[bool]:
-    proc = _start_cwd_probe()
-    cwds = _finish_cwd_probe(proc)
-    return _path_in_use(path, cwds)
+def _run_path_probe() -> Optional[List[str]]:
+    """One ``lsof`` listing cwd and open files; reused for every scratch entry in ``clean()``."""
+    return _finish_cwd_probe(_start_cwd_probe())
 
 
 # ---- clean ----------------------------------------------------------------------------
