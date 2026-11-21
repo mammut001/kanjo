@@ -153,7 +153,7 @@ public sealed class QuotaResetRow : StackPanel
                 Padding = new Thickness(Metrics.RowInset, 0, Metrics.RowInset, 8),
             });
         }
-        if (_error is { } error)
+        if ((_error ?? _services.ConfigWriteError(ConfigWriteKind.QuotaReset, _agent)) is { } error)
         {
             var block = Widgets.StatusBlock(true,
             [
@@ -173,6 +173,7 @@ public sealed class QuotaResetRow : StackPanel
         if (!CanEdit) return;
         _saving = true;
         _error = null;
+        _services.RecordConfigWriteError(ConfigWriteKind.QuotaReset, _agent, null);
         Build();
         Task.Run(() =>
         {
@@ -184,6 +185,7 @@ public sealed class QuotaResetRow : StackPanel
             catch (Exception e)
             {
                 _error = e.Message;
+                _services.RecordConfigWriteError(ConfigWriteKind.QuotaReset, _agent, e.Message);
             }
             _saving = false;
             _services.NotifyChanged();

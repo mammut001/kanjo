@@ -125,7 +125,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
             Children.Add(accountErr);
         }
 
-        if (_error is { } error)
+        if ((_error ?? _services.ConfigWriteError(ConfigWriteKind.Subscription, _agent)) is { } error)
         {
             var block = Widgets.StatusBlock(true,
             [
@@ -310,6 +310,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
         {
             _editing = false;
             _error = null;
+            _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, null);
             SyncInputs(Current);
             Rebuild();
         }, enabled: !_saving);
@@ -575,6 +576,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
         if (!CanEdit) return;
         _saving = true;
         _error = null;
+        _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, null);
         Rebuild();
         Task.Run(() =>
         {
@@ -586,6 +588,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
             catch (Exception e)
             {
                 _error = e.Message;
+                _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, e.Message);
             }
             _saving = false;
             _services.NotifyChanged();
@@ -605,6 +608,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
         if (fields is null) return;
         _saving = true;
         _error = null;
+        _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, null);
         Rebuild();
         Task.Run(() =>
         {
@@ -617,6 +621,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
             catch (Exception e)
             {
                 _error = e.Message;
+                _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, e.Message);
             }
             _saving = false;
             _services.NotifyChanged();
@@ -627,6 +632,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
     {
         _saving = true;
         _error = null;
+        _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, null);
         Rebuild();
         Task.Run(() =>
         {
@@ -639,6 +645,7 @@ public sealed class SubscriptionSettingsRow : StackPanel
             catch (Exception e)
             {
                 _error = e.Message;
+                _services.RecordConfigWriteError(ConfigWriteKind.Subscription, _agent, e.Message);
             }
             _saving = false;
             _services.NotifyChanged();
