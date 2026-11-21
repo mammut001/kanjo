@@ -192,6 +192,7 @@ class ColorManager:
         self.no_color = no_color
         self.can_color = False
         self.colors_256 = False
+        self.colors_16 = False
         self.pair_cache: Dict[Tuple[int, int], int] = {}
         self.next_pair = 1
 
@@ -202,6 +203,7 @@ class ColorManager:
                     curses.use_default_colors()
                     self.can_color = True
                     self.colors_256 = (getattr(curses, "COLORS", 0) >= 256)
+                    self.colors_16 = (getattr(curses, "COLORS", 0) >= 16)
             except Exception:
                 self.can_color = False
 
@@ -218,6 +220,11 @@ class ColorManager:
             gg = 1 if g > 128 else 0
             bg_b = 1 if b > 128 else 0
             code = (rg << 0) | (gg << 1) | (bg_b << 2)
+            if code == 0 and max(r, g, b) > 0:
+                # Dark colour: keep its dominant channels instead of black,
+                # which is invisible on a dark terminal.
+                top = max(r, g, b) * 0.75
+                code = (int(r >= top) << 0) | (int(g >= top) << 1) | (int(b >= top) << 2)
             # Map RGB bitmask to curses colors:
             # 0: black, 1: red, 2: green, 3: yellow, 4: blue, 5: magenta, 6: cyan, 7: white
             mapping = [
@@ -236,10 +243,24 @@ class ColorManager:
             if c_low in ("magenta",): return curses.COLOR_MAGENTA
             if c_low in ("cyan",): return curses.COLOR_CYAN
             if c_low in ("white",): return curses.COLOR_WHITE
-            if c_low in ("gray", "grey"): return 8 if self.colors_256 else curses.COLOR_BLACK
+            if c_low in ("gray", "grey"):
+                # Colour 8 (bright black) exists from 16 colours up; on an
+                # 8-colour terminal black would vanish, so use white.
+                return 8 if (self.colors_256 or self.colors_16) else curses.COLOR_WHITE
         if isinstance(c, int):
             return c
         return -1
+
+    def pair_and_attrs(self, style: Style) -> Tuple[int, int]:
+        """Colour pair plus extra attributes for ``style``.
+
+        Without a usable grey (fewer than 16 colours) a grey background, the
+        selected-row highlight, is drawn in reverse video instead.
+        """
+        if (self.can_color and not self.no_color and not (self.colors_256 or self.colors_16)
+                and isinstance(style.bg, str) and style.bg.lower() in ("gray", "grey")):
+            return self.get_pair(Style(fg=style.fg)), curses.A_REVERSE
+        return self.get_pair(style), 0
 
     def get_pair(self, style: Style) -> int:
         if not self.can_color or self.no_color:
@@ -532,7 +553,7 @@ class ViewModelCache:
         agent_rows = build_agent_rows(filtered, filter_query=query, lang=lang)
         day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
 
-        if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
+        if state.view_mode == ViewMode.PROJECTS and (state.sort_column != "cost" or not state.sort_descending):
             sorted_projects = iter(sorted(
                 (r for r in proj_rows if r.project is not None),
                 key=lambda r: _project_sort_key(r, state.sort_column),
@@ -818,7 +839,9 @@ def run_curses_tui(
 
     dirty = True
     last_doc_version = scanner.doc_version
-    last_error_seq = scanner.error_seq
+    # The scanner thread is already running: an error it hit before this point
+    # must still be reported, so start from its initial sequence number.
+    last_error_seq = 0
     last_screen_size: Optional[Tuple[int, int]] = None
     last_now_bucket: Optional[Tuple[int, int, int, int, int, str]] = None
     current_timeout = 50
@@ -839,6 +862,7 @@ def run_curses_tui(
             if new_doc_version != last_doc_version:
                 doc = new_doc
                 last_doc_version = new_doc_version
+                state.load_error = ""
                 antigravity_accounts_data = new_ag_accounts
                 current_account = new_cur_account
                 state.is_stale = False
@@ -872,6 +896,8 @@ def run_curses_tui(
                 last_error_seq = new_error_seq
                 if new_error:
                     set_status(t("refresh.error", lang, error=new_error))
+                    if doc is None:
+                        state.load_error = new_error
                 dirty = True
 
             # Pick up a finished background login switch.
@@ -907,7 +933,7 @@ def run_curses_tui(
                 dirty = True
 
             # Spinner animation only while scanning or loading
-            if state.is_scanning or doc is None:
+            if state.is_scanning or (doc is None and not state.load_error):
                 if now_ts - last_spinner_tick > 0.1:
                     state.spinner_frame = (state.spinner_frame + 1) % 60
                     last_spinner_tick = now_ts
@@ -1003,7 +1029,8 @@ def run_curses_tui(
                             attrs |= curses.A_REVERSE
                         if style.underline:
                             attrs |= curses.A_UNDERLINE
-                        pair = color_mgr.get_pair(style)
+                        pair, extra_attrs = color_mgr.pair_and_attrs(style)
+                        attrs |= extra_attrs
                         if pair > 0:
                             attrs |= curses.color_pair(pair)
 
@@ -1029,7 +1056,7 @@ def run_curses_tui(
 
             # Pace getch timeout: fast when spinner/switch is active, quiet when idle
             switch_active = switch_thread is not None and switch_thread.is_alive()
-            if state.is_scanning or doc is None or switch_active:
+            if state.is_scanning or (doc is None and not state.load_error) or switch_active:
                 desired_timeout = 50
             elif state.status_message and state.status_until > 0:
                 desired_timeout = 200
@@ -1219,6 +1246,7 @@ def run_curses_tui(
                     cols = ["cost", "tokens", "sessions", "name"]
                     c_idx = cols.index(state.sort_column) if state.sort_column in cols else 0
                     state.sort_column = cols[(c_idx + 1) % len(cols)]
+                    state.sort_descending = state.sort_column != "name"
                     state.selected_index = 0
                     state.scroll_top = 0
                 continue
