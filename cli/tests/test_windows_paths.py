@@ -398,6 +398,9 @@ class RecycleBinTest(unittest.TestCase):
         })
         self.env.start()
         self.addCleanup(self.env.stop)
+        # The suite points KANJO_TRASH_DIR at a temp folder. This case is the
+        # unset path: Windows clean must use the Recycle Bin, not that folder.
+        os.environ.pop("KANJO_TRASH_DIR", None)
         winsupport._shell_backend = None
         self.addCleanup(setattr, winsupport, "_shell_backend", None)
 

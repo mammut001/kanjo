@@ -1345,10 +1345,13 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
     if cfg.source:
         config_paths.append(os.path.join(os.path.dirname(cfg.source), "overrides.json"))
 
-    claude_cfg = os.environ.get("KANJO_CLAUDE_CONFIG") or os.path.expanduser("~/.claude.json")
-    config_paths.append(claude_cfg)
+    claude_cfg = os.environ.get("KANJO_CLAUDE_CONFIG")
+    if claude_cfg:
+        config_paths.append(os.path.expanduser(claude_cfg))
+    elif not os.environ.get("KANJO_DATA_DIR"):
+        config_paths.append(os.path.expanduser("~/.claude.json"))
 
-    t_dir = os.environ.get("KANJO_TOKEI_DIR") or os.path.expanduser("~/.tokei")
+    t_dir = quota.tokei_dir()
     config_paths.append(os.path.join(t_dir, "codex_quota_cache.json"))
     config_paths.append(os.path.join(t_dir, "grok_quota_cache.json"))
 

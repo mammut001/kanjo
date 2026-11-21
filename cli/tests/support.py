@@ -7,18 +7,21 @@ import tempfile
 from datetime import datetime, timedelta
 
 
+def _under_home(path: str, home: str) -> bool:
+    """True when ``path`` is missing or lives in the real home directory."""
+    if not path:
+        return True
+    absolute = os.path.abspath(os.path.expanduser(path))
+    return absolute == home or absolute.startswith(home + os.sep)
+
+
 def ensure_test_data_dir():
-    """Keep the permanent ledger off the real home directory during tests."""
+    """Keep the ledger, cache, config and default tool dirs off the real home."""
     os.environ.setdefault("KANJO_NO_NETWORK", "1")
     current = os.environ.get("KANJO_DATA_DIR", "")
     home = os.path.abspath(os.path.expanduser("~"))
-    if current:
-        absolute = os.path.abspath(os.path.expanduser(current))
-        if absolute != home and not absolute.startswith(home + os.sep):
-            test_dir = absolute
-        else:
-            test_dir = tempfile.mkdtemp(prefix="kanjo-test-data-")
-            os.environ["KANJO_DATA_DIR"] = test_dir
+    if current and not _under_home(current, home):
+        test_dir = os.path.abspath(os.path.expanduser(current))
     else:
         test_dir = tempfile.mkdtemp(prefix="kanjo-test-data-")
         os.environ["KANJO_DATA_DIR"] = test_dir
@@ -31,6 +34,21 @@ def ensure_test_data_dir():
         val = os.environ.get(var, "")
         if not val or val == os.path.join(home, ".claude.json") or val.startswith(home + os.sep + "."):
             os.environ[var] = os.path.join(test_dir, filename)
+
+    # These defaults are not implied by KANJO_DATA_DIR in every call site.
+    # Point any that still name the real home at the test directory.
+    for var, name in (
+        ("KANJO_CACHE_DIR", "cache"),
+        ("KANJO_CONFIG_DIR", "config"),
+        ("KANJO_TOKEI_DIR", "tokei"),
+        ("KANJO_SCRATCH_DIR", "scratch"),
+        ("KANJO_CLAUDE_APP_CACHE", "claude-app"),
+        ("KANJO_TRASH_DIR", "trash"),
+    ):
+        if _under_home(os.environ.get(var, ""), home):
+            path = os.path.join(test_dir, name)
+            os.makedirs(path, exist_ok=True)
+            os.environ[var] = path
 
 
 ensure_test_data_dir()

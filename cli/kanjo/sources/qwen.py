@@ -131,6 +131,11 @@ def _locate_qwen_root(path: str) -> str:
     explicit = os.environ.get("KANJO_QWEN_DIR")
     if explicit:
         return winsupport.expanduser(explicit)
+    # A file that is not inside a Qwen tree must not pull in the real ~/.qwen
+    # while tests have relocated the ledger.
+    data = os.environ.get("KANJO_DATA_DIR")
+    if data:
+        return os.path.join(winsupport.expanduser(data), "no-qwen")
     return winsupport.expanduser("~/.qwen")
 
 

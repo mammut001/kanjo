@@ -598,15 +598,24 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
 # -----------------------------------------------------------------------------
 
 def _load_codex_auth() -> Optional[Tuple[str, Optional[str]]]:
-    """Returns (access_token, account_id) from ~/.codex/auth.json."""
-    path = os.path.expanduser(os.path.join("~", ".codex", "auth.json"))
-    codex_dir = os.environ.get("KANJO_CODEX_DIR")
-    if codex_dir:
-        for p in codex_dir.split(os.pathsep):
-            parent_auth = os.path.join(os.path.dirname(os.path.expanduser(p)), "auth.json")
-            if os.path.isfile(parent_auth):
-                path = parent_auth
-                break
+    """Returns (access_token, account_id) from the Codex auth file.
+
+    ``KANJO_CODEX_AUTH`` is the whole path (tests point it at a fixture).
+    Otherwise the file is ``~/.codex/auth.json``, or ``auth.json`` beside
+    ``KANJO_CODEX_DIR`` when that file exists.
+    """
+    override = os.environ.get("KANJO_CODEX_AUTH")
+    if override:
+        path = os.path.expanduser(override)
+    else:
+        path = os.path.expanduser(os.path.join("~", ".codex", "auth.json"))
+        codex_dir = os.environ.get("KANJO_CODEX_DIR")
+        if codex_dir:
+            for p in codex_dir.split(os.pathsep):
+                parent_auth = os.path.join(os.path.dirname(os.path.expanduser(p)), "auth.json")
+                if os.path.isfile(parent_auth):
+                    path = parent_auth
+                    break
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -917,11 +926,19 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
 # -----------------------------------------------------------------------------
 
 def _load_grok_auth() -> Optional[str]:
-    """Find valid Grok bearer token from ~/.grok/auth.json."""
-    path = os.path.expanduser(os.path.join("~", ".grok", "auth.json"))
-    grok_dir = os.environ.get("KANJO_GROK_DIR")
-    if grok_dir:
-        path = os.path.join(os.path.expanduser(grok_dir), "auth.json")
+    """Find a valid Grok bearer token.
+
+    ``KANJO_GROK_AUTH`` is the whole path. Otherwise the file is
+    ``~/.grok/auth.json``, or ``auth.json`` inside ``KANJO_GROK_DIR``.
+    """
+    override = os.environ.get("KANJO_GROK_AUTH")
+    if override:
+        path = os.path.expanduser(override)
+    else:
+        path = os.path.expanduser(os.path.join("~", ".grok", "auth.json"))
+        grok_dir = os.environ.get("KANJO_GROK_DIR")
+        if grok_dir:
+            path = os.path.join(os.path.expanduser(grok_dir), "auth.json")
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)

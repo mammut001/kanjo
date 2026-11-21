@@ -757,5 +757,55 @@ def _session_ids(doc):
 ACTIVE_INSIDE = 23 * 3600
 
 
+class DiskRootIsolationTest(unittest.TestCase):
+    """``KANJO_DATA_DIR`` must not point scratch or the Claude app cache at the real home."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-disk-roots-")
+        self.data = os.path.join(self.tmp, "data")
+        self.scratch = os.path.join(self.tmp, "scratch")
+        self.app = os.path.join(self.tmp, "ClaudeApp")
+        os.makedirs(self.data)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def test_data_dir_hides_real_scratch_and_claude_app(self):
+        with mock.patch.dict(os.environ, {"KANJO_DATA_DIR": self.data}, clear=True):
+            roots = disk.default_roots()
+        self.assertIsNone(roots["scratch"])
+        self.assertIsNone(roots["claude_app"])
+
+    def test_explicit_scratch_and_claude_app_still_win(self):
+        env = {
+            "KANJO_DATA_DIR": self.data,
+            "KANJO_SCRATCH_DIR": self.scratch,
+            "KANJO_CLAUDE_APP_CACHE": self.app,
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            roots = disk.default_roots()
+        self.assertEqual(roots["scratch"], self.scratch)
+        self.assertEqual(roots["claude_app"], self.app)
+
+    def test_unisolated_defaults_are_names_only(self):
+        seen = []
+        real_isdir = os.path.isdir
+
+        def tracking(path):
+            seen.append(os.path.abspath(os.fspath(path)))
+            return real_isdir(path)
+
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch("os.path.isdir", tracking):
+            roots = disk.default_roots()
+        home = os.path.abspath(os.path.expanduser("~"))
+        self.assertEqual(roots["scratch"], disk._default_scratch())
+        self.assertEqual(
+            roots["claude_app"],
+            os.path.join(home, "Library", "Application Support", "Claude"),
+        )
+        for path in seen:
+            self.assertFalse(path == home or path.startswith(home + os.sep), path)
+
+
 if __name__ == "__main__":
     unittest.main()

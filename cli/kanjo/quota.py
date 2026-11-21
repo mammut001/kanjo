@@ -97,7 +97,19 @@ def next_occurrence(weekly_reset: str, now: float, tz_name: Optional[str] = None
 
 
 def tokei_dir() -> str:
-    return os.path.expanduser(os.environ.get("KANJO_TOKEI_DIR") or os.path.join("~", ".tokei"))
+    """Tokei quota cache directory.
+
+    ``KANJO_TOKEI_DIR`` always wins. When tests (or a relocated ledger) set
+    ``KANJO_DATA_DIR`` and leave ``KANJO_TOKEI_DIR`` unset, this stays inside
+    that directory instead of opening the real ``~/.tokei``.
+    """
+    explicit = os.environ.get("KANJO_TOKEI_DIR")
+    if explicit:
+        return os.path.expanduser(explicit)
+    data = os.environ.get("KANJO_DATA_DIR")
+    if data:
+        return os.path.join(os.path.expanduser(data), "no-tokei")
+    return os.path.expanduser(os.path.join("~", ".tokei"))
 
 
 def _num(value) -> Optional[float]:

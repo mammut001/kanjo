@@ -494,6 +494,54 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertEqual(res["five_hour_resets_at"], "2024-10-27T08:00:00Z")
         self.assertEqual(res["source"], "live")
 
+    def _assert_open_misses_home(self, relative, loader, env_name):
+        missing = os.path.join(self.tmp, "missing-auth.json")
+        home_file = os.path.abspath(os.path.join(os.path.expanduser("~"), *relative))
+        opened = []
+        real_open = open
+
+        def tracking(path, *args, **kwargs):
+            opened.append(os.path.abspath(os.fspath(path)))
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch.dict(os.environ, {env_name: missing}), \
+                mock.patch("builtins.open", tracking):
+            self.assertIsNone(loader())
+        self.assertNotIn(home_file, opened)
+        self.assertIn(os.path.abspath(missing), opened)
+
+    def test_codex_auth_override_does_not_open_home(self):
+        self._assert_open_misses_home(
+            (".codex", "auth.json"), quota_fetch._load_codex_auth, "KANJO_CODEX_AUTH")
+
+    def test_grok_auth_override_does_not_open_home(self):
+        self._assert_open_misses_home(
+            (".grok", "auth.json"), quota_fetch._load_grok_auth, "KANJO_GROK_AUTH")
+
+    def test_scan_skips_real_claude_desktop_cache_when_data_dir_set(self):
+        seen = []
+
+        def tracking(path):
+            seen.append(os.fspath(path))
+            return False
+
+        with mock.patch.dict(os.environ, {"KANJO_DATA_DIR": self.data_dir}, clear=True), \
+                mock.patch("os.path.isdir", tracking):
+            self.assertIsNone(quota_claude_cache.scan_claude_desktop_cache(now=1.0))
+        self.assertEqual(seen, [])
+
+    def test_scan_names_default_cache_dir_when_unisolated(self):
+        seen = []
+
+        def tracking(path):
+            seen.append(os.fspath(path))
+            return False
+
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("os.path.isdir", tracking):
+            self.assertIsNone(quota_claude_cache.scan_claude_desktop_cache(now=1.0))
+        self.assertEqual(seen, [quota_claude_cache.default_cache_dir()])
+
 
 if __name__ == "__main__":
     unittest.main()

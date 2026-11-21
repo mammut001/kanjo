@@ -71,7 +71,8 @@ final class UpdateTests: KanjoTestCase {
 
     func testUpdaterSkippedInDevelopmentModes() {
         for arguments in [["--snapshot", "/tmp/out.png"], ["--snapshot=/tmp/out.png"],
-                          ["--window"], ["--data", "/tmp/data.json"], ["--data=/tmp/data.json"]] {
+                          ["--window"], ["--share-image", "/tmp/out.png"], ["--share-image=/tmp/out.png"],
+                          ["--data", "/tmp/data.json"], ["--data=/tmp/data.json"]] {
             XCTAssertFalse(UpdateGate.shouldStartUpdater(
                 bundleURL: appURL(),
                 infoDictionary: info(),
