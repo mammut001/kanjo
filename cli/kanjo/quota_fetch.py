@@ -5,7 +5,7 @@ Security rules:
 1. NEVER log, print, or write tokens/secrets to disk.
 2. Credentials kept in memory only; sent only to provider's HTTPS API
    (or 127.0.0.1 for Antigravity's local language server).
-3. 10s timeout, never raise (return None on any error).
+3. Short request timeouts and a bounded overall fetch budget; never raise.
 4. Results cached in ~/.local/share/kanjo/quota_cache.json with 5-minute TTL,
    storing only public window/percent/reset information (mode 0600).
 5. KANJO_NO_NETWORK=1 disables all outbound requests.
@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -34,7 +35,8 @@ from .quota_claude_cache import scan_claude_desktop_cache
 
 CACHE_VERSION = 1
 CACHE_TTL = 300  # 5 minutes
-REQUEST_TIMEOUT = 10
+REQUEST_TIMEOUT = 3
+FETCH_BUDGET = 3
 MAX_RESPONSE_BYTES = 256 * 1024
 
 
@@ -78,7 +80,10 @@ def _percentage(value) -> Optional[float]:
 def _iso_utc(ts: Optional[float]) -> Optional[str]:
     if ts is None or not math.isfinite(ts):
         return None
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _parse_iso(text: Optional[str]) -> Optional[float]:
@@ -89,6 +94,33 @@ def _parse_iso(text: Optional[str]) -> Optional[float]:
         return datetime.fromisoformat(raw).timestamp()
     except (ValueError, TypeError):
         return None
+
+
+def _timestamp(value):
+    if isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            return _parse_iso(value)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    value = float(value)
+    return value / 1000 if abs(value) >= 100_000_000_000 else value
+
+
+def _window_reset(window, now):
+    reset = _timestamp(window.get("reset_at"))
+    if reset is None:
+        delay = window.get("reset_after_seconds")
+        if isinstance(delay, (int, float)) and not isinstance(delay, bool) and math.isfinite(delay):
+            reset = now + delay
+    return reset
+
+
+def _hours(value, default):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0:
+        return max(1, int(round(value / 3600)))
+    return default
 
 
 # -----------------------------------------------------------------------------
@@ -410,7 +442,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                 req.add_header("Connect-Protocol-Version", "1")
                 req.add_header("Content-Type", "application/json")
                 if csrf:
-                    req.add_header("X-Codeium-Csrf-Token", csrf)
+                    req.add_unredirected_header("X-Codeium-Csrf-Token", csrf)
                 try:
                     import ssl
                     ctx = ssl.create_default_context()
@@ -442,7 +474,7 @@ def fetch_antigravity_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optio
                     req_status.add_header("Connect-Protocol-Version", "1")
                     req_status.add_header("Content-Type", "application/json")
                     if csrf:
-                        req_status.add_header("X-Codeium-Csrf-Token", csrf)
+                        req_status.add_unredirected_header("X-Codeium-Csrf-Token", csrf)
                     with urllib.request.urlopen(req_status, timeout=min(timeout, 3), context=ctx) as res:
                         st_data = json.loads(res.read(MAX_RESPONSE_BYTES).decode("utf-8"))
                         if isinstance(st_data, dict):
@@ -504,7 +536,7 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
         is_gemini = "gemini" in display
         is_3p = any(k in display for k in ("claude", "gpt", "third", "3p"))
 
-        for bucket in group.get("buckets") or []:
+        for bucket in (group.get("buckets") if isinstance(group.get("buckets"), list) else []):
             if not isinstance(bucket, dict) or bucket.get("disabled") is True:
                 continue
             cadence = " ".join(str(bucket.get(k) or "") for k in ("window", "bucketId", "displayName")).lower()
@@ -519,9 +551,9 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
             reset_raw = bucket.get("resetTime")
             reset_ts = None
             if isinstance(reset_raw, (int, float)):
-                reset_ts = float(reset_raw)
+                reset_ts = _timestamp(reset_raw)
             elif isinstance(reset_raw, str):
-                reset_ts = _parse_iso(reset_raw)
+                reset_ts = _timestamp(reset_raw)
 
             mins = None
             for mk in ("windowMinutes", "window_minutes"):
@@ -549,22 +581,23 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
                 extra_windows.append({
                     "id": bid,
                     "title": btitle,
-                    "used_percent": pct,
+                    "used_percent": pct if reset_ts is not None and reset_ts > now else None,
                     "resets_at": _iso_utc(reset_ts) if reset_ts and reset_ts > now else None,
                     "window_hours": int(round(mins / 60)) if mins else None,
                 })
 
     if not gemini_weekly and not gemini_5h and not extra_windows:
         return None
+    if not extra_windows and all(not w or (w["reset"] is None and w["pct"] is None) for w in (gemini_weekly, gemini_5h)):
+        return None
 
-    weekly_reset = gemini_weekly["reset"] if gemini_weekly else now + 168 * 3600
+    weekly_reset = gemini_weekly["reset"] if gemini_weekly else None
     weekly_hours = gemini_weekly["hours"] if gemini_weekly else 168
     weekly_pct = gemini_weekly["pct"] if gemini_weekly else None
 
-    # Rollover logic if weekly_reset has passed
-    period = weekly_hours * 3600
-    if weekly_reset <= now:
-        weekly_reset += period * (math.floor((now - weekly_reset) / period) + 1)
+    # An ended window cannot describe current usage.
+    if weekly_reset is not None and weekly_reset <= now:
+        weekly_reset = None
         weekly_pct = None
 
     five_reset = gemini_5h["reset"] if gemini_5h else None
@@ -651,7 +684,7 @@ def fetch_codex_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[di
         req.add_unredirected_header("ChatGPT-Account-Id", account_id)
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
+        with urllib.request.urlopen(req, timeout=min(timeout, REQUEST_TIMEOUT), context=ssl_context()) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "chatgpt.com":
                 _debug_log("codex", "parse_error")
@@ -679,38 +712,27 @@ def fetch_codex_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[di
 def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
     if not isinstance(data, dict):
         return None
-    rl = data.get("rate_limit") or {}
-    pri = rl.get("primary_window") or {}
-    sec = rl.get("secondary_window") or {}
+    rl = data.get("rate_limit")
+    if not isinstance(rl, dict):
+        return None
+    pri = rl.get("primary_window") if isinstance(rl.get("primary_window"), dict) else {}
+    sec = rl.get("secondary_window") if isinstance(rl.get("secondary_window"), dict) else {}
     if not pri and not sec:
         return None
 
     # Secondary window (weekly)
     sec_pct = _pct(sec.get("used_percent"))
-    sec_secs = sec.get("limit_window_seconds")
-    sec_hours = int(round(float(sec_secs) / 3600)) if sec_secs else 168
-
-    sec_reset = sec.get("reset_at")
-    if sec_reset is None and sec.get("reset_after_seconds") is not None:
-        sec_reset = now + float(sec["reset_after_seconds"])
-    elif sec_reset is not None:
-        sec_reset = float(sec_reset)
+    sec_hours = _hours(sec.get("limit_window_seconds"), 168)
+    sec_reset = _window_reset(sec, now)
 
     if sec_reset is not None and sec_reset <= now:
-        period = sec_hours * 3600
-        sec_reset += period * (math.floor((now - sec_reset) / period) + 1)
+        sec_reset = None
         sec_pct = None
 
     # Primary window (5h)
     pri_pct = _pct(pri.get("used_percent"))
-    pri_secs = pri.get("limit_window_seconds")
-    pri_hours = int(round(float(pri_secs) / 3600)) if pri_secs else 5
-
-    pri_reset = pri.get("reset_at")
-    if pri_reset is None and pri.get("reset_after_seconds") is not None:
-        pri_reset = now + float(pri["reset_after_seconds"])
-    elif pri_reset is not None:
-        pri_reset = float(pri_reset)
+    pri_hours = _hours(pri.get("limit_window_seconds"), 5)
+    pri_reset = _window_reset(pri, now)
 
     if pri_reset is not None and pri_reset <= now:
         pri_reset = None
@@ -778,7 +800,7 @@ def _load_claude_credentials() -> Optional[str]:
 
     The token is only ever returned; it is never printed or logged.
     """
-    if winsupport.is_windows():
+    if winsupport.is_windows() or os.environ.get("KANJO_CLAUDE_CREDENTIALS"):
         try:
             with open(claude_credentials_path(), "r", encoding="utf-8") as handle:
                 token = _claude_oauth_token_from_json(handle.read())
@@ -848,7 +870,7 @@ def fetch_claude_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[d
             req.add_unredirected_header("Authorization", f"Bearer {token}")
 
             try:
-                with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
+                with urllib.request.urlopen(req, timeout=min(timeout, REQUEST_TIMEOUT), context=ssl_context()) as res:
                     parsed = urllib.parse.urlparse(res.geturl())
                     if parsed.scheme != "https" or parsed.hostname != "api.anthropic.com":
                         _debug_log("claude", "parse_error")
@@ -885,8 +907,8 @@ def fetch_claude_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[d
 def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
     if not isinstance(data, dict):
         return None
-    seven = data.get("seven_day") or {}
-    five = data.get("five_hour") or {}
+    seven = data.get("seven_day") if isinstance(data.get("seven_day"), dict) else {}
+    five = data.get("five_hour") if isinstance(data.get("five_hour"), dict) else {}
     if not seven and not five:
         return None
 
@@ -895,8 +917,7 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
     sec_reset = _parse_iso(seven.get("resets_at"))
     sec_hours = 168
     if sec_reset is not None and sec_reset <= now:
-        period = sec_hours * 3600
-        sec_reset += period * (math.floor((now - sec_reset) / period) + 1)
+        sec_reset = None
         sec_pct = None
 
     # 5h
@@ -977,7 +998,7 @@ def fetch_grok_quota(now: float, timeout: int = REQUEST_TIMEOUT) -> Optional[dic
     req.add_unredirected_header("Authorization", f"Bearer {token}")
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as res:
+        with urllib.request.urlopen(req, timeout=min(timeout, REQUEST_TIMEOUT), context=ssl_context()) as res:
             parsed = urllib.parse.urlparse(res.geturl())
             if parsed.scheme != "https" or parsed.hostname != "cli-chat-proxy.grok.com":
                 _debug_log("grok", "parse_error")
@@ -1008,7 +1029,7 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
     cfg = data.get("config")
     if not isinstance(cfg, dict):
         return None
-    period = cfg.get("currentPeriod") or {}
+    period = cfg.get("currentPeriod") if isinstance(cfg.get("currentPeriod"), dict) else {}
     end_raw = period.get("end") or cfg.get("billingPeriodEnd")
     reset_ts = _parse_iso(end_raw)
 
@@ -1025,8 +1046,7 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
 
     hours = 168
     if reset_ts is not None and reset_ts <= now:
-        period_s = hours * 3600
-        reset_ts += period_s * (math.floor((now - reset_ts) / period_s) + 1)
+        reset_ts = None
         used_pct = None
 
     plan = data.get("subscriptionTier") or data.get("plan") or ("SuperGrok" if cfg.get("isUnifiedBillingUser") else None)
@@ -1068,36 +1088,28 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
                 return {k: v for k, v in providers.items() if isinstance(v, dict)}
 
     if no_network or is_network_disabled():
-        if cached:
-            providers = cached.get("providers")
-            if isinstance(providers, dict):
-                return {k: v for k, v in providers.items() if isinstance(v, dict)}
         return {}
 
     results = {}
-    for agent, fetcher in FETCHERS.items():
+    lock = threading.Lock()
+    def run(agent, fetcher):
         try:
             res = fetcher(now=now)
             if res:
-                results[agent] = res
-                if agent == "antigravity" and fetcher is not fetch_antigravity_quota:
-                    record_antigravity_account_quota(res, now=now)
+                with lock:
+                    results[agent] = res
         except Exception:
             pass
 
-    if results:
-        old_providers = (cached.get("providers") if cached else {}) or {}
-        merged = dict(old_providers)
-        merged.update(results)
-        save_quota_cache({
-            "version": CACHE_VERSION,
-            "fetched_at": now,
-            "providers": merged,
-        })
-        return results
-
-    if cached:
-        providers = cached.get("providers")
-        if isinstance(providers, dict):
-            return {k: v for k, v in providers.items() if isinstance(v, dict)}
-    return {}
+    threads = [threading.Thread(target=run, args=(agent, fetcher), daemon=True)
+               for agent, fetcher in FETCHERS.items()]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + FETCH_BUDGET
+    for thread in threads:
+        thread.join(max(0, deadline - time.monotonic()))
+    with lock:
+        completed = dict(results)
+    if completed:
+        save_quota_cache({"version": CACHE_VERSION, "fetched_at": now, "providers": completed})
+    return completed

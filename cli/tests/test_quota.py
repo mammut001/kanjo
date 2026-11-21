@@ -106,10 +106,10 @@ class QuotaTest(unittest.TestCase):
         check_quota_windows(self, qw)
 
     def test_used_percent_edge_cases(self):
-        # past weekly reset rolls forward and drops the old window's percent; past 5h drops both
+        # past weekly reset drops the old window's percent; past 5h drops both
         self.write(quota.CLAUDE_FILE, claude_cache(NOW - HOUR, ts("2026-10-20T14:00:00Z"), ts("2026-10-24T10:00:00Z")))
         c = quota.quota_windows(directory=self.dir, now=NOW)["claude"]
-        self.assertEqual(c["weekly_resets_at"], "2026-10-27T14:00:00Z")
+        self.assertIsNone(c["weekly_resets_at"])
         self.assertIsNone(c["weekly_used_percent"])
         self.assertIsNone(c["five_hour_resets_at"])
         self.assertEqual(c["five_hour_window_hours"], 5)  # ended, not absent
@@ -221,16 +221,16 @@ class QuotaTest(unittest.TestCase):
         self.write_both(age=13 * DAY)
         self.assertEqual(set(quota.quota_windows(directory=self.dir, now=NOW)), {"claude", "codex"})
 
-    def test_past_resets_roll_forward(self):
+    def test_past_resets_are_cleared(self):
         # fetched 3 days ago: weekly reset passed once, 5-hour reset long gone
         self.write(quota.CLAUDE_FILE, claude_cache(NOW - 3 * DAY, ts("2026-10-22T14:00:00Z"), ts("2026-10-21T16:30:00Z")))
         self.write(quota.CODEX_FILE, codex_cache(NOW - 3 * DAY, ts("2026-10-24T11:00:00Z"), ts("2026-10-21T17:00:00Z"),
                                                  window_minutes=4320))
         qw = quota.quota_windows(directory=self.dir, now=NOW)
-        self.assertEqual(qw["claude"]["weekly_resets_at"], "2026-10-29T14:00:00Z")
+        self.assertIsNone(qw["claude"]["weekly_resets_at"])
         self.assertIsNone(qw["claude"]["five_hour_resets_at"])
         self.assertEqual(qw["codex"]["weekly_window_hours"], 72)
-        self.assertEqual(qw["codex"]["weekly_resets_at"], "2026-10-27T11:00:00Z")
+        self.assertIsNone(qw["codex"]["weekly_resets_at"])
 
     def test_manual_overrides_tokei(self):
         self.write_both()
