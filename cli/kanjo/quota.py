@@ -301,15 +301,18 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
 
     # 3. Manual config (highest priority)
     for agent, spec in (manual or {}).items():
-        if "weekly_reset" in spec:
-            weekly = next_occurrence(spec["weekly_reset"], now, tz_name)
-        elif "weekly_resets_at" in spec:
-            weekly = spec["weekly_resets_at"]
-        else:
+        try:
+            if "weekly_reset" in spec:
+                weekly = next_occurrence(spec["weekly_reset"], now, tz_name)
+            elif "weekly_resets_at" in spec:
+                weekly = spec["weekly_resets_at"]
+            else:
+                continue
+            hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
+            out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now,
+                                 five_hours=5 if spec.get("five_hour_resets_at") is not None else None)
+        except (ValueError, OverflowError, OSError):
             continue
-        hours = spec.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS)
-        out[agent] = window(weekly, hours, spec.get("five_hour_resets_at"), "manual", now,
-                             five_hours=5 if spec.get("five_hour_resets_at") is not None else None)
     return {agent: out[agent] for agent in sorted(out) if has_weekly_reset(out[agent])}
 
 

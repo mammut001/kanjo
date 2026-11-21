@@ -252,6 +252,18 @@ class QuotaTest(unittest.TestCase):
                                         "five_hour_window_hours": None, "five_hour_used_percent": None,
                                         "source": "manual"}})
 
+    def test_manual_out_of_range_timestamps_are_rejected_and_skipped(self):
+        bad = 1793534400000
+        for field in ("weekly_resets_at", "five_hour_resets_at"):
+            spec = {"weekly_resets_at": NOW + DAY, field: bad}
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ConfigError, field):
+                    config.from_dict({"quota_windows": {"claude": spec}})
+                windows = quota.quota_windows(manual={"claude": spec, "codex": {"weekly_resets_at": NOW + DAY}},
+                                              directory="/nonexistent/tokei", now=NOW, no_network=True)
+                self.assertNotIn("claude", windows)
+                self.assertIn("codex", windows)
+
     def test_manual_config_parsing(self):
         text = ('dominant_threshold = 0.7\n'
                 '[quota_windows.claude]\n'

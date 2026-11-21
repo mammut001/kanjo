@@ -332,7 +332,12 @@ def from_dict(data: dict, source: Optional[str] = None) -> Config:
 def _parse_time(value, where: str) -> float:
     """ISO 8601 string (or a tomllib datetime) -> epoch seconds. Naive times are UTC."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
+        try:
+            result = float(value)
+            datetime.fromtimestamp(result, timezone.utc)
+            return result
+        except (ValueError, OverflowError, OSError):
+            raise ConfigError("%s: invalid epoch seconds %r" % (where, value))
     if isinstance(value, datetime):
         dt = value
     elif isinstance(value, str):

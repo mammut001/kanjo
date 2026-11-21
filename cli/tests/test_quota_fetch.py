@@ -157,6 +157,17 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertEqual(res["five_hour_window_hours"], 5)
         self.assertEqual(res["weekly_window_hours"], 168)
 
+    def test_claude_small_utilization_is_percent(self):
+        data = {
+            "five_hour": {"utilization": 1.0, "resets_at": "2024-10-27T10:00:00Z"},
+            "seven_day": {"utilization": 0.5, "resets_at": "2024-10-31T10:00:00Z"},
+        }
+        for parser in (quota_fetch.parse_claude_usage, quota_claude_cache._parse_usage_payload):
+            with self.subTest(parser=parser.__module__):
+                result = parser(data, now=1730000000.0)
+                self.assertEqual(result["five_hour_used_percent"], 1.0)
+                self.assertEqual(result["weekly_used_percent"], 0.5)
+
     def test_parse_grok_usage_unified_billing_omitted_zero(self):
         now = 1730000000.0
         # Protobuf JSON omits creditUsagePercent when 0.0
@@ -324,6 +335,25 @@ class QuotaFetchTest(unittest.TestCase):
         }
         qw_manual = quota.quota_windows(manual=manual, directory="/nonexistent/tokei", now=now, no_network=True)
         self.assertEqual(qw_manual["claude"]["source"], "manual")
+
+    def test_claude_cache_skips_large_non_json_before_valid_entry(self):
+        now = 1730000000.0
+        cache_dir = os.path.join(self.tmp, "claude_cache")
+        os.makedirs(cache_dir)
+        valid = os.path.join(cache_dir, "valid")
+        noise = os.path.join(cache_dir, "noise")
+        with open(valid, "wb") as fh:
+            fh.write(json.dumps({"seven_day": {"utilization": 2, "resets_at": "2024-10-31T10:00:00Z"}}).encode())
+        js = (b"function f(e){return e.x?{a:e.b,c:[1,2]}:null};" * 420
+              + b"e.five_hour;" + b"function f(e){return {a:e.b}};" * 700)
+        with open(noise, "wb") as fh:
+            fh.write(gzip.compress(js))
+        os.utime(valid, (now, now))
+        os.utime(noise, (now + 1, now + 1))
+        start = time.monotonic()
+        result = quota_claude_cache.scan_claude_desktop_cache(now=now, cache_dir=cache_dir)
+        self.assertLess(time.monotonic() - start, 1.0)
+        self.assertEqual(result["weekly_used_percent"], 2.0)
 
     def test_claude_desktop_cache_fresh_payloads(self):
         now = 1730000000.0  # 2024-10-27T03:33:20Z
