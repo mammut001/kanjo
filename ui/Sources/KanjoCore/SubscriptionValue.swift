@@ -183,10 +183,10 @@ public enum SubscriptionValue {
 
     /// 每个有订阅的 agent 一行，按账期用量降序。用量是该 agent 从自己的 cycle_start 到 now，
     /// 全部项目加上 unattributed / excluded 的 API 等价金额。
-    public static func rows(of report: UsageReport, now: Date = Date()) -> [SubscriptionRow] {
+    public static func rows(of report: UsageReport, now: Date = Date(), cycleUsage: CycleUsage? = nil) -> [SubscriptionRow] {
         let subs = report.subscriptions ?? [:]
         guard !subs.isEmpty else { return [] }
-        let usage = cycleUsage(of: report, now: now)
+        let usage = cycleUsage ?? self.cycleUsage(of: report, now: now)
         return subs.map { agent, sub in
             let cost = usage.total(for: agent)
             return SubscriptionRow(

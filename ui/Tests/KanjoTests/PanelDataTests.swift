@@ -129,6 +129,23 @@ final class PanelDataTests: XCTestCase {
         }
     }
 
+    func testPreparedOverviewAndAgentDataMatchesDirectCalculation() throws {
+        let report = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
+        let now = Date(timeIntervalSince1970: 1_795_000_000)
+        let reference = WeeklyTokens.reference(now: now, generatedAt: ReportDates.parseTimestamp(report.generatedAt))
+        let end = ReportDates.parseTimestamp(report.generatedAt) ?? report.totals.lastActive.flatMap(ReportDates.parseDay) ?? now
+        for range in TimeRange.allCases {
+            let data = try XCTUnwrap(PanelData.compute(report: report, rangeRaw: range.rawValue, now: now))
+            XCTAssertEqual(data.weeklyTokens, WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: .current))
+            XCTAssertEqual(data.models, ModelAggregation.aggregate(in: data.filteredReport))
+            XCTAssertEqual(data.agentSummary, AgentSummary.build(report: report, filtered: data.filteredReport, now: now))
+            for item in data.filteredReport.projects {
+                let project = item.projected
+                XCTAssertEqual(data.heatWeeks[project.id], HeatStrip.weekly(project.byDay, endingOn: end, fallbackAgent: RangeEngine.fallbackAgent(for: project)))
+            }
+        }
+    }
+
     func testMatches() {
         let report = try! JSONDecoder().decode(UsageReport.self, from: """
         {

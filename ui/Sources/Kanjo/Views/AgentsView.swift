@@ -55,7 +55,7 @@ struct AgentsView: View {
                 return ctx.filtered()
             }
         }()
-        let summary = AgentSummary.build(report: report, filtered: filtered, quotaNow: effectiveQuotaNow)
+        let summary = panelData?.agentSummary ?? AgentSummary.build(report: report, filtered: filtered, quotaNow: effectiveQuotaNow)
 
         ScrollViewReader { proxy in
             OptionalScrollView {
@@ -126,19 +126,7 @@ struct AgentsView: View {
     }
 
     private var effectiveQuotaNow: Date {
-        let realNow = Date()
-        guard isSnapshotMode, let windows = report.quotaWindows, !windows.isEmpty else {
-            return realNow
-        }
-        let allEnded = windows.values.allSatisfy { w in
-            (ReportDates.parseTimestamp(w.weeklyResetsAt) ?? .distantPast) <= realNow
-        }
-        guard allEnded else { return realNow }
-        let fiveHourResets = windows.values.compactMap { $0.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp) }
-        if let earliest5h = fiveHourResets.min() {
-            return earliest5h.addingTimeInterval(-6660)
-        }
-        return ReportDates.parseTimestamp(report.generatedAt) ?? realNow
+        AgentSummary.quotaReference(report: report, now: Date(), isSnapshot: isSnapshotMode)
     }
 
     private func sharedQuotaLabelWidth(for rows: [AgentSummaryRow]) -> CGFloat {

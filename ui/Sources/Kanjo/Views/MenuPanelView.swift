@@ -301,14 +301,19 @@ struct MenuPanelView: View {
                     let showAgents = activeRoute == .agents || (activeRoute == .overview && !isExplicitOverviewAnchor && panelViewMode == PanelViewMode.agents.rawValue)
                     VStack(spacing: 0) {
                         panelModeHeader(selected: showAgents ? .agents : .projects)
-                        if showAgents {
-                            AgentsView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
+                        if let data = store.panelData,
+                           data.matches(report: r, spec: RangeEngine.resolve(raw: rangeRaw, report: r, now: Date()).spec) {
+                            if showAgents {
+                                AgentsView(report: r, panelData: data, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
+                            } else {
+                                OverviewView(report: r, panelData: data, scrollAnchor: activeAnchor, onSelect: { route = $0 },
+                                             onSetRenewalDay: { agent in
+                                    overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
+                                    route = .settings
+                                })
+                            }
                         } else {
-                            OverviewView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelect: { route = $0 },
-                                         onSetRenewalDay: { agent in
-                                overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
-                                route = .settings
-                            })
+                            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                 }

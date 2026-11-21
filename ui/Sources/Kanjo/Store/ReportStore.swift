@@ -11,6 +11,9 @@ final class ReportStore: ObservableObject {
     @Published private(set) var report: UsageReport?
     @Published private(set) var panelData: PanelData?
     private var panelGeneration: Int = 0
+    private var reportRevision = 0
+    private var panelCache: [String: PanelData] = [:]
+    private var panelLanguage: String?
     @Published private(set) var isStaleReport = false
     @Published private(set) var staleReportGeneratedAt: String?
     @Published private(set) var knownPlans: [String: [KnownPlan]]?
@@ -121,6 +124,13 @@ final class ReportStore: ObservableObject {
 
     private func handleDefaultsChange() {
         let newRange = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
+        let language = defaults.string(forKey: SettingsKeys.appLanguage)
+        if language != panelLanguage {
+            panelLanguage = language
+            panelCache.removeAll()
+            prepare(rangeRaw: newRange)
+            return
+        }
         if let currentRange = panelData?.rangeSpec.range.rawValue, currentRange == newRange {
             return
         }
@@ -134,7 +144,9 @@ final class ReportStore: ObservableObject {
         lastRefresh = state.lastRefresh
         sourceDescription = state.sourceDescription
         
-        if state.report?.generatedAt != report?.generatedAt || (state.report == nil) != (report == nil) {
+        if state.reportRevision != reportRevision {
+            reportRevision = state.reportRevision
+            panelCache.removeAll()
             let gen = panelGeneration + 1
             panelGeneration = gen
             
@@ -143,7 +155,7 @@ final class ReportStore: ObservableObject {
                 let range = defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue
                 Task.detached(priority: .userInitiated) {
                     let now = Date()
-                    let data = PanelData.compute(report: newReport, rangeRaw: range, now: now)
+                    let data = PanelData.compute(report: newReport, rangeRaw: range, now: now, isSnapshot: AppDefaults.isSnapshotMode())
                     await MainActor.run {
                         guard self.panelGeneration == gen else { return }
                         self.report = newReport
@@ -151,6 +163,7 @@ final class ReportStore: ObservableObject {
                         self.isStaleReport = state.isStaleReport
                         self.staleReportGeneratedAt = state.staleReportGeneratedAt
                         self.panelData = data
+                        self.panelCache[range] = data
                         self.pendingReport = nil
                     }
                 }
@@ -171,15 +184,26 @@ final class ReportStore: ObservableObject {
         let gen = panelGeneration + 1
         panelGeneration = gen
         
+        let now = Date()
+        let spec = RangeEngine.resolve(raw: rangeRaw, report: report, now: now).spec
+        if pendingReport == nil, let cached = panelCache[rangeRaw],
+           cached.matches(report: report, spec: spec),
+           now.timeIntervalSince(cached.now) >= 0, now.timeIntervalSince(cached.now) < 60,
+           Calendar.current.isDate(cached.now, inSameDayAs: now) {
+            panelData = cached
+            return
+        }
+
         let stale = pendingReport?.isStale
         let staleAt = pendingReport?.staleAt
         
         Task.detached(priority: .userInitiated) {
             let now = Date()
-            let data = PanelData.compute(report: report, rangeRaw: rangeRaw, now: now)
+            let data = PanelData.compute(report: report, rangeRaw: rangeRaw, now: now, isSnapshot: AppDefaults.isSnapshotMode())
             await MainActor.run {
                 guard self.panelGeneration == gen else { return }
                 self.panelData = data
+                self.panelCache[rangeRaw] = data
                 if let stale = stale {
                     self.report = report
                     self.isStaleReport = stale
@@ -348,6 +372,9 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelOpened() {
+        if pendingReport == nil {
+            prepare(rangeRaw: defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue)
+        }
         let shouldRefresh = loader.scheduler.shouldRefreshOnOpen(isStaleReport: isStaleReport)
         let action = loader.scheduler.onPanelVisibilityChanged(visible: true)
         if shouldRefresh {
