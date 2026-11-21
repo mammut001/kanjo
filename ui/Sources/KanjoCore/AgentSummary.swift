@@ -70,6 +70,13 @@ public struct AgentSummaryReport: Equatable {
 
 /// 按 agent 聚合当前范围内的用量、额度窗口、性能样本与项目流向（纯函数，无 SwiftUI 依赖）。
 public enum AgentSummary {
+    public static func quotaReference(report: UsageReport, now: Date, isSnapshot: Bool) -> Date {
+        guard isSnapshot, let windows = report.quotaWindows, !windows.isEmpty,
+              windows.values.allSatisfy({ (ReportDates.parseTimestamp($0.weeklyResetsAt) ?? .distantPast) <= now }) else { return now }
+        let resets = windows.values.compactMap { $0.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp) }
+        return resets.min().map { $0.addingTimeInterval(-6660) } ?? ReportDates.parseTimestamp(report.generatedAt) ?? now
+    }
+
     /// 缓存命中率：cache_read ÷ (input + cache_read)；分母为 0 时返回 nil。
     public static func cacheHitRate(for tokens: Tokens) -> Double? {
         let denom = tokens.input + tokens.cacheRead
@@ -81,7 +88,9 @@ public enum AgentSummary {
         report: UsageReport,
         filtered: FilteredReport,
         now: Date = Date(),
-        quotaNow: Date? = nil
+        quotaNow: Date? = nil,
+        cycleUsage: CycleUsage? = nil,
+        models: [ModelCost]? = nil
     ) -> AgentSummaryReport {
         var agentCost: [String: Double] = [:]
         var agentTokens: [String: Int] = [:]
@@ -125,13 +134,13 @@ public enum AgentSummary {
         let totalActiveTokens = activeAgents.reduce(0) { $0 + (agentTokens[$1] ?? 0) }
 
         // 4. 预先准备跨行共享的数据（避免重复全量计算）
-        let allModels = ModelAggregation.aggregate(in: filtered)
+        let allModels = models ?? ModelAggregation.aggregate(in: filtered)
         var modelsByAgent: [String: [ModelCost]] = [:]
         for m in allModels {
             modelsByAgent[m.agent, default: []].append(m)
         }
 
-        let cycleUsage = SubscriptionValue.cycleUsage(of: report, now: now)
+        let cycleUsage = cycleUsage ?? SubscriptionValue.cycleUsage(of: report, now: now)
         let tz = RangeEngine.timezone(of: report)
         let exactBreakdowns = exactAllTimeBreakdowns(report: report)
         let inRangeSessionsByAgent = collectInRangeSessions(filtered: filtered)

@@ -6,22 +6,40 @@ public struct PanelData: Equatable {
     public let subscriptionRows: [SubscriptionRow]
     public let reportGeneratedAt: String
     public let now: Date
+    public var models: [ModelCost] = []
+    public var agentSummary: AgentSummaryReport? = nil
+    public var weeklyTokens: Int = 0
+    public var heatWeeks: [String: [WeekCost]] = [:]
 
-    public static func compute(report: UsageReport, rangeRaw: String, now: Date) -> PanelData? {
+    public static func compute(report: UsageReport, rangeRaw: String, now: Date, isSnapshot: Bool = false) -> PanelData? {
         let resolved = RangeEngine.resolve(raw: rangeRaw, report: report, now: now)
         let spec = resolved.spec
         
         let filtered = RangeEngine.filtered(report, range: spec, fallbackAgentFor: { p in
             dominantAgent(p.byAgent)?.agent ?? p.byAgent.first?.agent ?? "unknown"
         })
-        let subscriptionRows = SubscriptionValue.rows(of: report, now: now)
+        let cycleUsage = SubscriptionValue.cycleUsage(of: report, now: now)
+        let subscriptionRows = SubscriptionValue.rows(of: report, now: now, cycleUsage: cycleUsage)
         
+        let models = ModelAggregation.aggregate(in: filtered)
+        let reference = WeeklyTokens.reference(now: now, generatedAt: ReportDates.parseTimestamp(report.generatedAt))
+        let weeklyTokens = WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: .current)
+        let end = ReportDates.parseTimestamp(report.generatedAt) ?? report.totals.lastActive.flatMap(ReportDates.parseDay) ?? now
+        var heatWeeks: [String: [WeekCost]] = [:]
+        for project in filtered.projects {
+            let p = project.projected
+            heatWeeks[p.id] = HeatStrip.weekly(p.byDay, endingOn: end, fallbackAgent: RangeEngine.fallbackAgent(for: p))
+        }
         return PanelData(
             rangeSpec: spec,
             filteredReport: filtered,
             subscriptionRows: subscriptionRows,
             reportGeneratedAt: report.generatedAt,
-            now: now
+            now: now,
+            models: models,
+            agentSummary: AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: AgentSummary.quotaReference(report: report, now: now, isSnapshot: isSnapshot), cycleUsage: cycleUsage, models: models),
+            weeklyTokens: weeklyTokens,
+            heatWeeks: heatWeeks
         )
     }
 
