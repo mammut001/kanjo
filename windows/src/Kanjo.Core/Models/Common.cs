@@ -10,16 +10,63 @@ public static class Contract
 
 public static class ReportDates
 {
-    /// <summary>ISO 8601 时间戳 → <see cref="DateTimeOffset"/>；带或不带小数秒都接受。</summary>
+    /// <summary>
+    /// ISO 8601 时间戳 → <see cref="DateTimeOffset"/>。
+    /// 接受带时区的完整时间，包括 Mac ISO8601 回退支持的无冒号偏移
+    /// <c>YYYY-MM-DDTHH:MM:SS[.fff…]Z</c> 或 <c>±HH:MM</c>。
+    /// 纯日期、缺时区、空格分隔、没有冒号的偏移都拒绝。小数秒全部保留。
+    /// </summary>
     public static DateTimeOffset? ParseTimestamp(string? s)
     {
-        if (string.IsNullOrEmpty(s)) return null;
+        if (string.IsNullOrEmpty(s) || !HasMacTimestampShape(s)) return null;
         if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dto))
         {
             return dto;
         }
         return null;
+    }
+
+    /// <summary>Mac <c>ReportDates.parseTimestamp</c> 接受的常见形状。不合形状的字符串直接拒绝，不再交给 TryParse。</summary>
+    private static bool HasMacTimestampShape(string s)
+    {
+        if (s.Length < 20) return false;
+        if (s[0] is < '0' or > '9' || s[1] is < '0' or > '9' || s[2] is < '0' or > '9' || s[3] is < '0' or > '9'
+            || s[5] is < '0' or > '9' || s[6] is < '0' or > '9' || s[8] is < '0' or > '9' || s[9] is < '0' or > '9'
+            || s[11] is < '0' or > '9' || s[12] is < '0' or > '9' || s[14] is < '0' or > '9' || s[15] is < '0' or > '9'
+            || s[17] is < '0' or > '9' || s[18] is < '0' or > '9')
+        {
+            return false;
+        }
+        if (s[4] != '-' || s[7] != '-' || s[10] != 'T' || s[13] != ':' || s[16] != ':') return false;
+
+        var pos = 19;
+        if (s[pos] == '.')
+        {
+            pos++;
+            var digits = 0;
+            while (pos < s.Length && s[pos] is >= '0' and <= '9')
+            {
+                digits++;
+                pos++;
+            }
+            if (digits == 0) return false;
+        }
+        if (pos >= s.Length) return false;
+        if (s[pos] == 'Z') return pos + 1 == s.Length;
+        if (s[pos] is not ('+' or '-')) return false;
+        if (pos + 5 == s.Length)
+        {
+            return s[pos + 1] is >= '0' and <= '9'
+                && s[pos + 2] is >= '0' and <= '9'
+                && s[pos + 3] is >= '0' and <= '9'
+                && s[pos + 4] is >= '0' and <= '9';
+        }
+        if (pos + 6 != s.Length || s[pos + 3] != ':') return false;
+        return s[pos + 1] is >= '0' and <= '9'
+            && s[pos + 2] is >= '0' and <= '9'
+            && s[pos + 4] is >= '0' and <= '9'
+            && s[pos + 5] is >= '0' and <= '9';
     }
 
     /// <summary>"YYYY-MM-DD"（契约里的本地日期）→ 本地零点。</summary>

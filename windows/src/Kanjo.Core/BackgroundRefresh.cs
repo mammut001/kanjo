@@ -165,6 +165,8 @@ public sealed class RefreshEngine : IDisposable
         power.DidResume += HandleDidResume;
         power.LowPowerModeChanged += HandleLowPowerModeChanged;
         power.Start();
+        // 轮询只在节电模式发生变化时通知。启动时已经开着的话，不读当前值就会一直当成没开。
+        if (power.IsLowPowerMode) SetLowPowerMode(true);
     }
 
     /// <summary>

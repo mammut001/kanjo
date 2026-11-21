@@ -21,12 +21,41 @@ public static class Time
         return FromLocal(tz, date);
     }
 
-    /// <summary>本地日期（00:00）→ 该时区下的时刻。</summary>
+    /// <summary>
+    /// 本地日期（00:00）→ 该时区下的时刻。
+    /// 春令时拨快时钟时，缺口里的本地时间不存在，<see cref="TimeZoneInfo.ConvertTimeToUtc"/> 会抛。
+    /// Foundation 日历会按缺口长度向前推（纽约 02:30 → 03:30），这里同样处理。
+    /// 秋令时重叠的时间仍然交给 ConvertTimeToUtc，它取标准时。
+    /// </summary>
     public static DateTimeOffset FromLocal(TimeZoneInfo tz, DateTime local)
     {
         var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (tz.IsInvalidTime(unspecified))
+        {
+            unspecified = DateTime.SpecifyKind(AdvancePastGap(tz, unspecified), DateTimeKind.Unspecified);
+        }
         var utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, tz);
         return new DateTimeOffset(utc, TimeSpan.Zero);
+    }
+
+    /// <summary>把落在夏令时缺口里的本地时间向前推一个缺口的长度。</summary>
+    private static DateTime AdvancePastGap(TimeZoneInfo tz, DateTime local)
+    {
+        var before = local;
+        for (var i = 0; i < 180 && tz.IsInvalidTime(before); i++) before = before.AddMinutes(-1);
+        var after = local;
+        for (var i = 0; i < 180 && tz.IsInvalidTime(after); i++) after = after.AddMinutes(1);
+        if (!tz.IsInvalidTime(before) && !tz.IsInvalidTime(after))
+        {
+            var delta = after - before.AddMinutes(1);
+            if (delta > TimeSpan.Zero)
+            {
+                var shifted = local + delta;
+                if (!tz.IsInvalidTime(shifted)) return shifted;
+            }
+        }
+        if (!tz.IsInvalidTime(after)) return after;
+        return local.AddHours(1);
     }
 
     public static DateTimeOffset AddDays(TimeZoneInfo tz, DateTimeOffset instant, int days)
