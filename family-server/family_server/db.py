@@ -299,32 +299,33 @@ def merge_members(conn: sqlite3.Connection, from_id: int, into_id: int) -> Dict[
     if from_id == into_id:
         raise ValueError("Cannot merge a member into itself.")
 
-    cur = conn.cursor()
-    cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (from_id,))
-    from_row = cur.fetchone()
-    if not from_row:
-        raise ValueError(f"Source member ID {from_id} not found.")
-
-    cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (into_id,))
-    into_row = cur.fetchone()
-    if not into_row:
-        raise ValueError(f"Target member ID {into_id} not found.")
-
-    if from_row["merged_into"] is not None:
-        raise ValueError(f"Member '{from_row['name']}' is already merged.")
-    if from_row["revoked_at"] is not None:
-        raise ValueError(f"Member '{from_row['name']}' is already revoked.")
-    if into_row["merged_into"] is not None:
-        raise ValueError(f"Target member '{into_row['name']}' is already merged.")
-    if into_row["revoked_at"] is not None:
-        raise ValueError(f"Target member '{into_row['name']}' is already revoked.")
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    legacy_dev_id = f"legacy:{from_id}"
-
     try:
         if not conn.in_transaction:
-            conn.execute("BEGIN")
+            conn.execute("BEGIN IMMEDIATE")
+        else:
+            # Acquire a write lock before reading even in a caller's transaction.
+            conn.execute("UPDATE members SET id = id WHERE 0")
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (from_id,))
+        from_row = cur.fetchone()
+        if not from_row:
+            raise ValueError(f"Source member ID {from_id} not found.")
+
+        cur.execute("SELECT id, name, revoked_at, merged_into FROM members WHERE id = ?", (into_id,))
+        into_row = cur.fetchone()
+        if not into_row:
+            raise ValueError(f"Target member ID {into_id} not found.")
+
+        if from_row["merged_into"] is not None:
+            raise ValueError(f"Member '{from_row['name']}' is already merged.")
+        if from_row["revoked_at"] is not None:
+            raise ValueError(f"Member '{from_row['name']}' is already revoked.")
+        if into_row["merged_into"] is not None:
+            raise ValueError(f"Target member '{into_row['name']}' is already merged.")
+        if into_row["revoked_at"] is not None:
+            raise ValueError(f"Target member '{into_row['name']}' is already revoked.")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        legacy_dev_id = f"legacy:{from_id}"
 
         cur.execute(
             "UPDATE member_tokens SET member_id = ? WHERE member_id = ? AND revoked_at IS NULL",

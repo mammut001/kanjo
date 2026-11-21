@@ -194,7 +194,7 @@ public sealed class CliRunner : IReportCommandRunner
     }
 
     /// <summary>运行 `kanjo &lt;args...&gt;`。返回 stdout / stderr / 退出码。</summary>
-    public CliResult Run(IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
+    public CliResult Run(IReadOnlyList<string> arguments, CancellationToken cancellationToken = default, string? stdinText = null)
     {
         var python = PythonExecutable is null ? ResolvePython() : (PythonExecutable, PythonPrefixArguments);
         if (python is not { } py)
@@ -208,14 +208,14 @@ public sealed class CliRunner : IReportCommandRunner
                 "Kanjo CLI directory not found: bundle <appdir>\\cli, repo cli/, or %LOCALAPPDATA%\\KanjoFamily\\cli.");
         }
         var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
-        return ProcessRunner.Run(py.Item1, fullArgs, cwd, Timeout, Environment, cancellationToken: cancellationToken.CanBeCanceled ? cancellationToken : CancellationToken);
+        return ProcessRunner.Run(py.Item1, fullArgs, cwd, Timeout, Environment, stdinText: stdinText, cancellationToken: cancellationToken.CanBeCanceled ? cancellationToken : CancellationToken);
     }
 
     /// <summary>运行并把失败 / 超时 / 空输出转成 <see cref="DataSourceError"/>。</summary>
-    public CliResult RunChecked(IReadOnlyList<string> arguments, string emptyWhat = "Command output", CancellationToken cancellationToken = default)
+    public CliResult RunChecked(IReadOnlyList<string> arguments, string emptyWhat = "Command output", CancellationToken cancellationToken = default, string? stdinText = null)
     {
         var display = "python -m kanjo " + string.Join(" ", arguments);
-        var result = Run(arguments, cancellationToken);
+        var result = Run(arguments, cancellationToken, stdinText);
         if (result.TimedOut)
         {
             throw DataSourceError.CommandTimedOut(display, (int)Timeout.TotalSeconds);
@@ -246,15 +246,25 @@ public sealed class CliRunner : IReportCommandRunner
         return DiskDecoder.Decode(result.StdoutBytes);
     }
 
-    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed)
+    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
+    {
+        var args = DiskCleanArguments(ids, olderThan, confirmed, onlyPaths);
+        var result = RunChecked(args, stdinText: DiskCleanInput(onlyPaths));
+        return DiskDecoder.DecodeClean(result.StdoutBytes);
+    }
+
+    public static List<string> DiskCleanArguments(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
     {
         var args = new List<string> { "disk", "clean" };
         args.AddRange(ids);
         if (!string.IsNullOrEmpty(olderThan)) args.AddRange(["--older-than", olderThan]);
+        if (onlyPaths is not null) args.AddRange(["--only-paths", "-"]);
         args.Add(confirmed ? "--yes" : "--dry-run");
-        var result = RunChecked(args);
-        return DiskDecoder.DecodeClean(result.StdoutBytes);
+        return args;
     }
+
+    public static string? DiskCleanInput(IReadOnlyList<string>? onlyPaths) =>
+        onlyPaths is null ? null : System.Text.Json.JsonSerializer.Serialize(onlyPaths);
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Paths()
     {

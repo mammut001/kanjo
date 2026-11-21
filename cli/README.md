@@ -159,8 +159,9 @@ file, not by unlinking the directory. `--older-than 30d` keeps files newer than
 Without `--yes` the command prints the plan and moves nothing. Cleaning
 session logs does not remove their numbers from the ledger.
 
-The UI never deletes files itself. It only calls `kanjo disk clean`, first with
-`--dry-run`, then with `--yes` after the user confirms.
+Pass `--only-paths -` and supply the dry-run `moved` array as JSON on stdin (or pass a small inline array with `--only-paths JSON`) to restrict a later run to those exact paths, including an empty array. Paths outside the list and previewed paths that no longer pass checks are skipped with reason `changed`. Existing eligibility checks still apply.
+
+The UI never deletes files itself. It calls `kanjo disk clean` with `--dry-run`, then passes the preview paths on stdin with `--only-paths -` and `--yes` after confirmation.
 
 ### Quota windows (`quota_windows`)
 

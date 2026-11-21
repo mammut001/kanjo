@@ -63,6 +63,19 @@ class TestDashboard(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.read().decode("utf-8")
 
+    def test_stored_labels_and_model_names_are_escaped(self):
+        attack = "<img src=x onerror=alert(1)>"
+        report = copy.deepcopy(self.fixture_data)
+        report["member_label"] = attack
+        report["summary"]["all_time"]["top_models"][0]["model"] = attack
+        with db.get_connection(self.db_path) as conn:
+            _, member = db.add_member(conn, attack)
+            db.insert_report(conn, member, report["generated_at"], json.dumps(report))
+        status, html = self._dash_request("/")
+        self.assertEqual(status, 200)
+        self.assertNotIn(attack, html)
+        self.assertGreaterEqual(html.count("&lt;img src=x onerror=alert(1)&gt;"), 3)
+
     def test_dashboard_empty_state(self):
         status, html = self._dash_request("/")
         self.assertEqual(status, 200)

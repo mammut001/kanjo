@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 import tempfile
+import threading
 import unittest
 
 from family_server import db
@@ -348,6 +349,38 @@ class TestDatabaseAndPrune(unittest.TestCase):
             self.assertEqual(db.get_member_by_token(conn, tok_win)["id"], id_mac)
             self.assertEqual(len(db.list_member_tokens(conn, "Windows VM")), 0)
             self.assertEqual(len(db.list_member_tokens(conn, "Payton Mac")), 2)
+
+    def test_merge_waits_for_concurrent_revocation(self):
+        with db.get_connection(self.db_path) as conn:
+            _, source = db.add_member(conn, "Source")
+            _, target = db.add_member(conn, "Target")
+        started, checked = threading.Event(), threading.Event()
+        result = []
+
+        def merge():
+            with db.get_connection(self.db_path) as conn:
+                conn.set_trace_callback(lambda sql: checked.set() if sql.startswith("SELECT id, name, revoked_at, merged_into") else None)
+                started.set()
+                try:
+                    db.merge_members(conn, source, target)
+                    result.append("merged")
+                except ValueError as exc:
+                    result.append(str(exc))
+
+        with db.get_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("UPDATE members SET revoked_at = 'now' WHERE id = ?", (target,))
+            thread = threading.Thread(target=merge)
+            thread.start()
+            self.assertTrue(started.wait(2))
+            checked.wait(0.5)
+            conn.commit()
+            thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(result), 1)
+        self.assertIn("already revoked", result[0])
+        with db.get_connection(self.db_path) as conn:
+            self.assertIsNone(conn.execute("SELECT merged_into FROM members WHERE id = ?", (source,)).fetchone()[0])
 
     def test_merge_members_refusal_cases(self):
         with db.get_connection(self.db_path) as conn:

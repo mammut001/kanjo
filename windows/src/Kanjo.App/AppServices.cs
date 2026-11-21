@@ -556,6 +556,6 @@ public sealed class CliCliDiskSource : ICancellableDiskSource
         ? _runner.Disk(rescan: true, cancellationToken: cancellationToken)
         : _runner.Disk(maxAge: TimeSpan.FromHours(6), cancellationToken: cancellationToken);
 
-    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed) =>
-        _runner.DiskClean(ids, olderThan, confirmed);
+    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null) =>
+        _runner.DiskClean(ids, olderThan, confirmed, onlyPaths);
 }

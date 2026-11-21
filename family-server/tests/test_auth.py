@@ -493,6 +493,15 @@ class TestFirebaseAuth(unittest.TestCase):
     # CSRF Protection Tests
     # -----------------------------------------------------------------------
 
+    def test_csrf_failure_log_omits_untrusted_headers(self):
+        with self.assertLogs("family_server.dashboard", level="WARNING") as logs:
+            status, _, _ = self._dash_request(
+                "POST", "/auth/session", data=b"{}",
+                headers={"Origin": "https://attacker.example/marker", "Sec-Fetch-Site": "untrusted-marker"},
+            )
+        self.assertEqual(status, 403)
+        self.assertNotIn("marker", " ".join(logs.output))
+
     def test_csrf_protection_on_dashboard_posts(self):
         token = self._create_token()
         payload = json.dumps({"idToken": token}).encode("utf-8")
