@@ -128,6 +128,8 @@
 "settings.subscriptions.price" = "月费";
 "settings.subscriptions_note" = "“应用”通过 CLI 保存续费日；“重置”恢复自动检测。无订阅的 agent 不计入“账单周期”范围。";
 "settings.renews_on_day" = "每月 %d 日续费";
+"settings.renews_on_detected_day" = "约在每月 %d 日续费（来自订阅开通日）";
+"settings.set_manual_renewal_day" = "指定续费日（1–28）…";
 "settings.renews_day_help" = "每月日期（1–28）";
 "settings.renews_day_disabled_help" = "编辑需要 CLI 数据源";
 "settings.open_billing_page" = "打开账单页面";

@@ -128,6 +128,8 @@
 "settings.subscriptions.price" = "Monthly price";
 "settings.subscriptions_note" = "Apply saves the renewal day through the CLI; Reset restores detection. Agents without a subscription are left out of the Billing cycle range.";
 "settings.renews_on_day" = "Renews on day %d";
+"settings.renews_on_detected_day" = "Renews around day %d (from subscription date)";
+"settings.set_manual_renewal_day" = "Set day (1–28)…";
 "settings.renews_day_help" = "Day of the month (1–28)";
 "settings.renews_day_disabled_help" = "Editing needs the CLI data source";
 "settings.open_billing_page" = "Open billing page";

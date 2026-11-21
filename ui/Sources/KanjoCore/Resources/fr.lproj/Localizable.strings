@@ -128,6 +128,8 @@
 "settings.subscriptions.price" = "Prix mensuel";
 "settings.subscriptions_note" = "« Appliquer » enregistre le jour de renouvellement via le CLI ; « Réinitialiser » restaure la détection. Les agents sans abonnement sont exclus de la période Cycle de facturation.";
 "settings.renews_on_day" = "Renouv. le %d";
+"settings.renews_on_detected_day" = "Renouvellement vers le %d (date d'abonnement)";
+"settings.set_manual_renewal_day" = "Fixer le jour (1–28)…";
 "settings.renews_day_help" = "Jour du mois (1–28)";
 "settings.renews_day_disabled_help" = "La modification nécessite la source de données CLI";
 "settings.open_billing_page" = "Ouvrir la page de facturation";

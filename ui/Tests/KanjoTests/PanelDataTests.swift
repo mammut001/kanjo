@@ -166,7 +166,7 @@ final class PanelDataTests: XCTestCase {
         
         let now = Date(timeIntervalSince1970: 1763460000) // 2026-11-18T10:00:00Z
         let spec = RangeEngine.spec(.all, report: report, now: now)
-        let panelData = PanelData(rangeSpec: spec, filteredReport: FilteredReport(spec: spec, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, now: now)
+        let panelData = PanelData(rangeSpec: spec, filteredReport: FilteredReport(spec: spec, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, subscriptionsFingerprint: "", now: now)
         
         // True: same report, same range, same day
         XCTAssertTrue(panelData.matches(report: report, spec: spec))
@@ -182,7 +182,7 @@ final class PanelDataTests: XCTestCase {
         
         // False: today when now moves to next day
         let specToday = RangeEngine.spec(.today, report: report, now: now)
-        let panelDataToday = PanelData(rangeSpec: specToday, filteredReport: FilteredReport(spec: specToday, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, now: now)
+        let panelDataToday = PanelData(rangeSpec: specToday, filteredReport: FilteredReport(spec: specToday, projects: [], unattributed: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), excluded: FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: []), cost: 0, tokens: 0, sessions: 0), subscriptionRows: [], reportGeneratedAt: report.generatedAt, subscriptionsFingerprint: "", now: now)
         
         let laterToday = now.addingTimeInterval(60)
         XCTAssertTrue(panelDataToday.matches(report: report, spec: RangeEngine.spec(.today, report: report, now: laterToday)))
@@ -195,5 +195,37 @@ final class PanelDataTests: XCTestCase {
         var changedAgentStarts = specToday
         changedAgentStarts.agentStarts = ["example": now]
         XCTAssertFalse(panelDataToday.matches(report: report, spec: changedAgentStarts))
+    }
+
+    func testCanReuseSubscriptionRowsRequiresFreshTimeAndMatchingSubscriptions() {
+        let report = try! JSONDecoder().decode(UsageReport.self, from: """
+        {
+            "schema_version": 1,
+            "generated_at": "2026-11-18T10:00:00Z",
+            "currency": "USD",
+            "cost_note": "",
+            "config": {"dominant_threshold": 0},
+            "totals": {"cost": 0, "tokens": {"total": 0}, "sessions": 0},
+            "projects": [],
+            "buckets": {
+                "unattributed": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "excluded": {"cost": 0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []},
+                "parse_failed": {"sessions": 0, "files": []}
+            },
+            "subscriptions": {"claude": {"plan": "pro", "plan_label": "Claude Pro", "monthly_price_usd": 20,
+                "cycle_start": "2026-10-25T00:00:00Z", "cycle_end": "2026-11-25T00:00:00Z",
+                "anchor_day": 25, "cycle_source": "manual", "extra_usage_enabled": false, "source": "manual"}}
+        }
+        """.data(using: .utf8)!)
+
+        let base = Date(timeIntervalSince1970: 1_763_462_400)
+        let panelData = PanelData.compute(report: report, rangeRaw: TimeRange.all.rawValue, now: base)!
+        XCTAssertTrue(panelData.canReuseSubscriptionRows(for: report, now: base.addingTimeInterval(30)))
+
+        var changedPlan = report
+        changedPlan.subscriptions?["claude"]?.plan = "max_5x"
+        XCTAssertFalse(panelData.canReuseSubscriptionRows(for: changedPlan, now: base.addingTimeInterval(30)))
+
+        XCTAssertFalse(panelData.canReuseSubscriptionRows(for: report, now: base.addingTimeInterval(120)))
     }
 }
