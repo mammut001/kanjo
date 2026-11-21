@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import operator
 import os
 import re
 import sys
@@ -592,6 +593,12 @@ def _build_antigravity_accounts(sessions: List[Session],
     }
 
 
+_SIG_NUMBERS = operator.attrgetter("ts", "input", "output", "cache_read", "cache_write",
+                                   "cache_write_1h", "thinking")
+_SIG_MODEL = operator.attrgetter("model")
+_SIG_BRANCH = operator.attrgetter("branch")
+
+
 def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
                  prices: Optional[PriceBook] = None, home: Optional[str] = None,
                  now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
@@ -659,12 +666,49 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
     worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
     config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
 
+    # A cached decision names project ids, so it also depends on which project
+    # each of the session's paths resolves to now (a remote added or changed
+    # turns a path id into a remote id). Taken right after prewarm, before any
+    # decision runs, so it is the same whether or not decisions come from cache.
+    identity_sigs: Dict[int, str] = {}
+    if attr_cache is not None:
+        fast_resolved = resolver._fast_resolve_cache
+        for unit in units:
+            top = unit.top
+            seen_paths = set(top.cwd_counts)
+            for call in top.tool_paths:
+                for p in call:
+                    r = norm_memo.get(p)
+                    if r is None:
+                        r = dirname(p) if search_file_like(p) else p
+                    seen_paths.add(r)
+            pairs = []
+            for p in sorted(seen_paths):
+                proj = fast_resolved.get((p, False))
+                if proj is not None:
+                    pairs.append(p + "\0" + proj.id)
+            identity_sigs[id(top)] = "%s:%s" % (
+                worktree_sig, hashlib.sha1("\n".join(pairs).encode("utf-8")).hexdigest())
+
     def _unit_sig(unit) -> str:
+        # Everything the cached aggregate and detail are built from: message
+        # tokens can be rewritten in place (OpenCode) and titles change later.
+        # hash() of ints and floats does not depend on PYTHONHASHSEED; strings go
+        # through sha1.
         s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
+        top = unit.top
+        parts = [repr((top.title, top.cwd, top.branch, top.origin_ts))]
+        for s in s_list:
+            msgs = s.messages
+            parts.append("%d\0%s\0%s" % (hash(tuple(map(_SIG_NUMBERS, msgs))),
+                                          "\0".join(map(str, map(_SIG_MODEL, msgs))),
+                                          "\0".join(map(str, map(_SIG_BRANCH, msgs)))))
+        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list) + \
+            ";" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
 
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
+        unit_wt_sig = identity_sigs.get(id(unit.top), worktree_sig)
+        dec_data = attr_cache.get(unit.top, unit_wt_sig, config_sig) if attr_cache is not None else None
         if dec_data is not None:
             decision = attr.Decision(kind=dec_data["kind"],
                                      shares=[tuple(x) for x in dec_data["shares"]],
@@ -691,7 +735,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                     "scores": decision.scores,
                     "paths": added_paths,
                 }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         unique_sessions += 1
         agent = unit.top.agent
         msgs = unit.messages
@@ -1010,7 +1054,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 }
                 dec_data["unit_sig"] = u_sig
                 dec_data["unit_agg"] = new_u_data
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
+                attr_cache.put(unit.top, dec_data, unit_wt_sig, config_sig)
         else:
             priced = []
             for m in msgs:
@@ -1671,18 +1715,6 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     sessions = dedupe(result.sessions)
     units = build_units(sessions)
 
-    if repo_cache is None and cache is not None:
-        repo_cache = getattr(cache, "repo_cache", None)
-    worktree_cache = getattr(cache, "worktree_cache", None) if cache is not None else None
-    attr_cache = getattr(cache, "attr_cache", None) if cache is not None else None
-
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root,
-                        repo_cache=repo_cache, worktree_cache=worktree_cache)
-    scratch = ScratchpadDecoder(fs_root=fs_root)
-    for s in sessions:
-        for path, remote in s.remote_hints.items():
-            resolver.add_remote_hint(path, remote)
-
     tz_name = local_timezone_name()
     tz = local_zone(tz_name)
 
@@ -1691,43 +1723,12 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     weeks: Dict[str, PublicPeriodAgg] = {}
     days: Dict[str, PublicPeriodAgg] = {}
 
-    worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
-    config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
-
-    def _unit_sig(unit) -> str:
-        s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
-
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
-        if dec_data is not None:
-            decision = attr.Decision(kind=dec_data["kind"],
-                                     shares=[tuple(x) for x in dec_data["shares"]],
-                                     scores=dec_data.get("scores", {}))
-            cached_paths = dec_data.get("paths")
-            if cached_paths:
-                for pid, paths in cached_paths.items():
-                    proj = resolver.project(pid)
-                    if proj is not None:
-                        for p in paths:
-                            proj.add_path(p)
-        else:
-            resolver._hint_paths_added = []
-            decision = attr.decide(unit.top, resolver, scratch, config)
-            added_paths = {}
-            if resolver._hint_paths_added:
-                for pid, p in resolver._hint_paths_added:
-                    added_paths.setdefault(pid, []).append(p)
-            resolver._hint_paths_added = None
-            if attr_cache is not None:
-                dec_data = {
-                    "kind": decision.kind,
-                    "shares": decision.shares,
-                    "scores": decision.scores,
-                    "paths": added_paths,
-                }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
-        if decision.kind == "excluded":
+        # Only exclusion matters here, and it depends on the cwd alone
+        # (attribution.decide). Project decisions belong to build_export, which
+        # makes them after prewarm; this path never reads or writes that cache.
+        rule = config.match_override(unit.top.cwd)
+        if rule is not None and rule[0] == "exclude":
             continue
 
         effective_filter_accounts = filter_accounts
