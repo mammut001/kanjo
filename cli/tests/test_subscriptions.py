@@ -114,6 +114,7 @@ class SubscriptionTest(unittest.TestCase):
         for tier, plan, label, price in (
                 ("default_claude_max_5x", "max_5x", "Claude Max 5x", 100.0),
                 ("default_claude_max_20x", "max_20x", "Claude Max 20x", 200.0),
+                ("default_claude_ai", "pro", "Claude Pro", 20.0),
                 ("default_claude_pro", "pro", "Claude Pro", 20.0),
                 ("default_claude_max_20x_pro", "max_20x", "Claude Max 20x", 200.0)):
             self.write_claude(tier=tier, extra=True)
@@ -131,6 +132,10 @@ class SubscriptionTest(unittest.TestCase):
             check_subscriptions(self, self.collect())
 
     def test_user_tier_overrides_organization_tier(self):
+        self.write_claude(tier="default_claude_ai", user_tier="default_claude_ai")
+        sub = self.collect()["claude"]
+        self.assertEqual((sub["plan"], sub["plan_label"], sub["monthly_price_usd"]),
+                         ("pro", "Claude Pro", 20.0))
         self.write_claude(tier="default_claude_max_5x", user_tier="default_claude_max_20x")
         sub = self.collect()["claude"]
         self.assertEqual(sub["plan"], "max_20x")

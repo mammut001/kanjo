@@ -185,6 +185,9 @@ def _map_claude(raw: str) -> Tuple[str, str, Optional[float]]:
     for key, (label, price) in KNOWN_PLANS["claude"].items():
         if key in raw:
             return key, label, float(price)
+    if raw == "default_claude_ai":
+        label, price = KNOWN_PLANS["claude"]["pro"]
+        return "pro", label, float(price)
     return raw, _unknown_label("claude", raw), None
 
 
