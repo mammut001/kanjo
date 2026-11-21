@@ -686,6 +686,28 @@ class TestFamilyReportAccountsFilter(unittest.TestCase):
                 doc = export.build_family_report(config=cfg, scan_result=scan_res)
                 self.assertIn("antigravity", doc["quota_windows"])
 
+    def test_quota_windows_uses_live_fetch_email_over_log_index(self):
+        from kanjo.config import Config
+
+        cfg = Config(family_accounts=["kid@example.com"])
+        scan_res = export.ScanResult(sessions=[], failed_files=[], stats={})
+        live = {"antigravity": {"weekly_resets_at": "2099-11-14T12:00:00Z", "weekly_used_percent": 40.0,
+                                "email": "other@example.com"}}
+        with mock.patch("kanjo.quota_fetch.fetch_all_quotas", return_value=live), \
+                mock.patch("kanjo.antigravity_accounts.AntigravityAccountIndex.get_current_account",
+                           return_value="kid@example.com"):
+            doc = export.build_family_report(config=cfg, scan_result=scan_res)
+        self.assertNotIn("antigravity", doc["quota_windows"])
+
+        live["antigravity"]["email"] = "Kid@Example.com"
+        with mock.patch("kanjo.quota_fetch.fetch_all_quotas", return_value=live), \
+                mock.patch("kanjo.antigravity_accounts.AntigravityAccountIndex.get_current_account",
+                           return_value="other@example.com"):
+            doc = export.build_family_report(config=cfg, scan_result=scan_res)
+        self.assertIn("antigravity", doc["quota_windows"])
+        self.assertNotIn("email", doc["quota_windows"]["antigravity"])
+        self.assertNotIn("example.com", json.dumps(doc))
+
 
 class TestFamilyReportDevice(unittest.TestCase):
     def setUp(self):

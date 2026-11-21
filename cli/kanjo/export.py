@@ -1887,6 +1887,16 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
         cleaned_entry = dict(entry)
         if agent == "antigravity" and filter_accounts is not None:
             live_email = cleaned_entry.get("email") or cleaned_entry.get("user_email")
+            if not live_email and cleaned_entry.get("source") == "live":
+                # quota_windows drops the email; the live reading it used is in
+                # the quota cache it just wrote (no network here).
+                try:
+                    from .quota_fetch import fetch_all_quotas
+                    raw = fetch_all_quotas(now=now.timestamp(), no_network=True).get("antigravity") or {}
+                    found = raw.get("email") or raw.get("user_email")
+                    live_email = found.strip() if isinstance(found, str) and found.strip() else None
+                except Exception:
+                    live_email = None
             if not live_email:
                 try:
                     from .antigravity_accounts import get_account_index
