@@ -436,18 +436,18 @@ private struct SubscriptionValueCard: View {
 
     var body: some View {
         let now = Date()
-        let cal = Calendar.current
         let defaultRows: [SubscriptionRow]
-        if let pd = panelData, pd.reportGeneratedAt == report.generatedAt, cal.isDate(pd.now, inSameDayAs: now) {
+        if let pd = panelData, pd.canReuseSubscriptionRows(for: report, now: now) {
             defaultRows = pd.subscriptionRows
         } else {
-            defaultRows = SubscriptionValue.rows(of: report)
+            defaultRows = SubscriptionValue.rows(of: report, now: now)
         }
         let order = SubscriptionOrder.parse(subscriptionOrderRaw)
         let orderedRows = SubscriptionOrder.apply(order: order, to: defaultRows)
         let effectivePinnedAgent = userPinnedAgent ?? effectiveRoutePinnedAgent
         let autoExpandForPinned = effectivePinnedAgent != nil && orderedRows.contains(where: { $0.agent == effectivePinnedAgent })
-        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: isExpanded || autoExpandForPinned, limit: 3)
+        let showsAll = SubscriptionOrder.showsAllRows(userExpanded: isExpanded, autoExpanded: autoExpandForPinned)
+        let visibleRows = SubscriptionOrder.visible(orderedRows, expanded: showsAll, limit: 3)
 
         return PanelSection(L10n.tr("overview.section.subscription_value"), flat: true) {
             VStack(alignment: .leading, spacing: 0) {
@@ -480,10 +480,16 @@ private struct SubscriptionValueCard: View {
                 if orderedRows.count > 3 {
                     RowDivider(inset: Metrics.listInset, trailing: Metrics.listInset)
                     Button {
-                        withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            if autoExpandForPinned && !isExpanded {
+                                dismissedRouteAgent = pinnedQuotaAgent
+                            } else {
+                                isExpanded.toggle()
+                            }
+                        }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(isExpanded
+                            Text(showsAll
                                 ? L10n.tr("overview.subscription_value.show_less")
                                 : L10n.tr("overview.subscription_value.show_more", orderedRows.count - 3))
                                 .font(.system(size: 10.5))

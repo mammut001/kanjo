@@ -94,6 +94,12 @@ final class AntigravityAggregationTests: XCTestCase {
                        ["b@test.com": "google_ai_pro"])
     }
 
+    func testRemainingPendingClearsWhenPendingKeyIsLowercase() {
+        let pending = ["alice.doe@gmail.com": "google_ai_pro"]
+        let report = [account("Alice.Doe@gmail.com", pro)]
+        XCTAssertEqual(AntigravityAggregation.remainingPending(pending, report: report), [:])
+    }
+
     func testNormalizedPlanKey() {
         XCTAssertEqual(AntigravityAggregation.normalizedPlanKey(nil), "")
         XCTAssertEqual(AntigravityAggregation.normalizedPlanKey(" None "), "")
