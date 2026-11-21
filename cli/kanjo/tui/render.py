@@ -224,8 +224,18 @@ class Canvas:
             for _ in range(self.height)
         ]
 
+    def _clear_wide_at(self, x: int, y: int) -> None:
+        if not (0 <= y < self.height and 0 <= x < self.width):
+            return
+        row = self.grid[y]
+        if row[x].char == "" and x > 0:
+            row[x - 1] = Cell()
+        elif char_width(row[x].char) == 2 and x + 1 < self.width:
+            row[x + 1] = Cell()
+
     def set_cell(self, x: int, y: int, char: str, style: Style = Style()) -> None:
         if 0 <= y < self.height and 0 <= x < self.width:
+            self._clear_wide_at(x, y)
             self.grid[y][x] = Cell(char, style)
 
     def draw_text(self, x: int, y: int, text: str, style: Style = Style(),
@@ -247,6 +257,9 @@ class Canvas:
             if cur_x + cw > limit:
                 break
             if cur_x >= 0:
+                self._clear_wide_at(cur_x, y)
+                if cw == 2:
+                    self._clear_wide_at(cur_x + 1, y)
                 self.grid[y][cur_x] = Cell(ch, style)
                 if cw == 2 and cur_x + 1 < limit:
                     # Second column of wide character is a continuation cell
@@ -258,7 +271,7 @@ class Canvas:
                   style: Style = Style()) -> None:
         for cy in range(max(0, y), min(self.height, y + h)):
             for cx in range(max(0, x), min(self.width, x + w)):
-                self.grid[cy][cx] = Cell(char, style)
+                self.set_cell(cx, cy, char, style)
 
     def draw_hline(self, x: int, y: int, w: int, char: str = "─",
                    style: Style = Style()) -> None:
@@ -267,6 +280,9 @@ class Canvas:
             cur_x = x
             while cur_x < x + w and cur_x + cw <= self.width:
                 if cur_x >= 0:
+                    self._clear_wide_at(cur_x, y)
+                    if cw == 2:
+                        self._clear_wide_at(cur_x + 1, y)
                     self.grid[y][cur_x] = Cell(char, style)
                     if cw == 2 and cur_x + 1 < self.width:
                         self.grid[y][cur_x + 1] = Cell("", style)
