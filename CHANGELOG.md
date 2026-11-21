@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.11] - 2026-11-21
+
 ### Added
 
 - Windows: set an Antigravity plan for each account in Settings.
