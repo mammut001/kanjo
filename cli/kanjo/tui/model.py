@@ -16,10 +16,13 @@ from .. import perf as _perf
 from ..sources.base import AGENT_LABELS, local_zone, local_timezone_name
 from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
+from . import calendar_time as _cal
 from .range_engine import (
     aggregate_models,
+    apportion as _apportion_tokens,
     build_range_helpers as _build_range_helpers,
     filtered_usage,
+    parse_iso_dt as _engine_parse_iso_dt,
     window_start,
 )
 
@@ -627,6 +630,84 @@ def _filtered_bucket_dict(b) -> dict:
     }
 
 
+def _session_day_split(s: dict, spec) -> List[Tuple[str, float, int]]:
+    """Spread one bucket session's in-range cost and tokens over the local days it covers.
+
+    Uses the session's own ``by_day`` when present, otherwise the time share of its
+    ``[started, ended]`` interval inside the range window, matching
+    ``RangeSpec.in_range_cost_and_tokens``.
+    """
+    total_c, total_t = spec.in_range_cost_and_tokens(s)
+    if not (total_c > 0) and total_t <= 0:
+        return []
+    ag = str(s.get("agent") or "")
+    days: List[str] = []
+    weights: List[float] = []
+    tok_weights: List[float] = []
+    by_day = s.get("by_day")
+    if isinstance(by_day, list) and by_day:
+        for d in by_day:
+            if not isinstance(d, dict):
+                continue
+            day = str(d.get("day") or "")
+            rng = spec.day_range(day)
+            if rng is None:
+                continue
+            if not spec.is_all and not spec.includes_day(rng[0], rng[1], ag):
+                continue
+            try:
+                w = float(d.get("cost") or 0.0)
+            except (TypeError, ValueError):
+                w = 0.0
+            try:
+                tw = float(d.get("tokens") or 0)
+            except (TypeError, ValueError):
+                tw = 0.0
+            days.append(day)
+            weights.append(w)
+            tok_weights.append(tw)
+    else:
+        tz = spec.tz
+        started = _engine_parse_iso_dt(s.get("started"), default_tz=tz)
+        ended = _engine_parse_iso_dt(s.get("ended"), default_tz=tz) or started
+        if not started and not ended:
+            return []
+        s0 = min(started or ended, ended or started)
+        s1 = max(started or ended, ended or started)
+        w = (None, None) if spec.is_all else spec.window(ag)
+        if w is None:
+            return []
+        o0 = max(s0, w[0]) if w[0] is not None else s0
+        o1 = min(s1, w[1]) if w[1] is not None else s1
+        if o1 <= o0:
+            days.append(_cal.day_string(tz, s0 if s1 <= s0 else o0))
+            weights.append(1.0)
+            tok_weights.append(1.0)
+        else:
+            cur = _cal.start_of_day(tz, o0)
+            while cur < o1:
+                nxt = _cal.add_days(tz, cur, 1)
+                if nxt <= cur:
+                    break
+                seg = (min(o1, nxt) - max(o0, cur)).total_seconds()
+                if seg > 0:
+                    days.append(_cal.day_string(tz, max(o0, cur)))
+                    weights.append(seg)
+                    tok_weights.append(seg)
+                cur = nxt
+    if not days:
+        return []
+    sum_w = sum(weights)
+    if not (sum_w > 0):
+        weights, sum_w = tok_weights, sum(tok_weights)
+    if sum_w > 0:
+        costs = [total_c * (w / sum_w) for w in weights]
+    else:
+        costs = [total_c / len(days)] * len(days)
+    toks = _apportion_tokens(total_t, tok_weights)
+    return list(zip(days, costs, toks))
+
+
 def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                   now: Optional[datetime] = None) -> FilteredData:
     """Filter projects and totals by selected range, matching TimeRange.swift semantics."""
@@ -698,6 +779,14 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
                 d_t = int(d.get("tokens", 0) or 0)
             except (ValueError, TypeError):
                 d_t = 0
+            daily_agg[d_str]["cost"] += d_c
+            daily_agg[d_str]["tokens"] += d_t
+    for s in (filtered_unattr.get("sessions_detail") or []) + (filtered_excl.get("sessions_detail") or []):
+        if not isinstance(s, dict):
+            continue
+        for d_str, d_c, d_t in _session_day_split(s, fu.spec):
+            if d_str not in daily_agg:
+                daily_agg[d_str] = {"day": d_str, "cost": 0.0, "tokens": 0}
             daily_agg[d_str]["cost"] += d_c
             daily_agg[d_str]["tokens"] += d_t
 
