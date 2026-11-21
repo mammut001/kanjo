@@ -13,7 +13,10 @@ try:
 except ImportError:  # Windows has no _curses.
     curses = None
 
-from kanjo.tui.model import AGENT_COLORS, TimeRange, compute_30d_sparkline, compute_8w_strip, filter_report
+from kanjo.tui.model import (
+    AGENT_COLORS, TimeRange, build_subscription_meters, compute_30d_sparkline,
+    compute_8w_strip, filter_report,
+)
 from kanjo.tui.render import SELECTED_ROW_BG, Style, TUIState
 from kanjo.tui.term import ColorManager, ViewModelCache, run_curses_tui
 
@@ -213,6 +216,34 @@ class LowColourTerminalTest(unittest.TestCase):
             pair, extra = cm.pair_and_attrs(Style(bold=True, fg="white", bg=SELECTED_ROW_BG))
         self.assertEqual(extra, 0)
         self.assertIn((curses.COLOR_WHITE, 8), cm.pair_cache)
+
+
+class EndedQuotaWindowTest(unittest.TestCase):
+    def _doc(self, quota: dict) -> dict:
+        doc = synthetic_doc()
+        doc["subscriptions"] = {"claude": {"plan_label": "Max", "monthly_price_usd": 100}}
+        doc["quota_windows"] = {"claude": quota}
+        return doc
+
+    def test_ended_five_hour_window_shows_window_ended(self):
+        doc = self._doc({"weekly_resets_at": "2026-11-23T00:00:00Z", "weekly_window_hours": 168,
+                         "weekly_used_percent": 57, "five_hour_window_hours": 5,
+                         "five_hour_resets_at": None, "five_hour_used_percent": None})
+        windows = build_subscription_meters(doc, now=NOW)[0].windows
+        five = [w for w in windows if w.name == "5-hour"]
+        self.assertEqual(len(five), 1, msg=[w.name for w in windows])
+        self.assertIsNone(five[0].percent)
+        self.assertEqual(five[0].detail, "window ended")
+
+    def test_ended_extra_window_shows_window_ended(self):
+        doc = self._doc({"weekly_resets_at": "2026-11-23T00:00:00Z", "weekly_window_hours": 168,
+                         "extra_windows": [{"id": "custom-5h", "title": "Custom 5h",
+                                            "resets_at": None, "used_percent": 40}]})
+        windows = build_subscription_meters(doc, now=NOW)[0].windows
+        extra = [w for w in windows if w.name == "Custom 5h"]
+        self.assertEqual(len(extra), 1, msg=[w.name for w in windows])
+        self.assertIsNone(extra[0].percent)
+        self.assertEqual(extra[0].detail, "window ended")
 
 
 if __name__ == "__main__":

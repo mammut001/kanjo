@@ -1219,6 +1219,15 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
                     level=quota_level(pct),
                     detail=detail,
                 ))
+            elif five_hours is not None:
+                # The CLI keeps the window length but nulls resets_at once the
+                # window has ended (CONTRACT.md): say so instead of hiding it.
+                windows.append(QuotaMeterWindow(
+                    name=five_title,
+                    percent=None,
+                    level=None,
+                    detail=t("meter.window_ended", lang),
+                ))
 
         # Extra windows (e.g. Claude & GPT weekly in Antigravity)
         for ew in (q.get("extra_windows") or []):
@@ -1243,6 +1252,13 @@ def build_subscription_meters(doc: dict, now: Optional[datetime] = None,
                     percent=pct,
                     level=quota_level(pct),
                     detail=detail,
+                ))
+            else:
+                windows.append(QuotaMeterWindow(
+                    name=ew_title,
+                    percent=None,
+                    level=None,
+                    detail=t("meter.window_ended", lang),
                 ))
 
         if not windows:
