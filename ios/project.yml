@@ -39,11 +39,29 @@ targets:
       - package: KanjoCore
         product: KanjoCore
 
+  KanjoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: KanjoTests
+    dependencies:
+      - target: Kanjo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.lanshuagent.kanjo.ios.tests
+        SWIFT_VERSION: "5.0"
+
 schemes:
   Kanjo:
     build:
       targets:
         Kanjo: all
+    test:
+      commandLineArguments:
+        "-useSampleSnapshot": true
+      targets:
+        - KanjoTests
     run:
       config: Debug
     archive:
