@@ -22,10 +22,11 @@ is the only removal. A session is an orphan only when every recorded path is gon
 from __future__ import annotations
 
 import json
+import mmap
 import os
 import time
 import uuid
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from .cache import _dump_session, _load_session, _signature
 from .sources.base import Session, iso_utc
@@ -251,8 +252,11 @@ class Ledger:
                             self.updated_at = row["u"]
             except (OSError, ValueError):
                 pass
-        for k, v in dirty_entries.items():
-            self.entries[k] = v
+        for k in self.dirty_keys:
+            if k in dirty_entries:
+                self.entries[k] = dirty_entries[k]
+            else:
+                self.entries.pop(k, None)
 
         if not os.path.isfile(self.meta_path) and os.path.isfile(self.path) and not os.path.isfile(self.journal_path):
             self._save_meta()
@@ -263,19 +267,28 @@ class Ledger:
         if not missing or not os.path.isfile(self.path):
             return results
         try:
-            with open(self.path, "rb") as f:
-                data = f.read()
-            dec = json.JSONDecoder()
-            for k in missing:
-                needle = json.dumps(k).encode("utf-8") + b":"
-                pos = data.find(needle)
-                if pos >= 0:
-                    val_start = pos + len(needle)
-                    text = data[val_start:].decode("utf-8").lstrip()
-                    val, _ = dec.raw_decode(text)
-                    if isinstance(val, dict):
-                        _migrate_entry(val)
-                        results[k] = val
+            with open(self.path, "rb") as handle:
+                with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                    dec = json.JSONDecoder()
+                    for k in missing:
+                        needle = json.dumps(k, ensure_ascii=False).encode("utf-8") + b":"
+                        pos = data.find(needle)
+                        if pos < 0:
+                            continue
+                        start = pos + len(needle)
+                        size = 4096
+                        while True:
+                            end = min(start + size, len(data))
+                            try:
+                                val, _ = dec.raw_decode(data[start:end].decode("utf-8").lstrip())
+                                break
+                            except (ValueError, UnicodeDecodeError):
+                                if end == len(data):
+                                    raise
+                                size *= 2
+                        if isinstance(val, dict):
+                            _migrate_entry(val)
+                            results[k] = val
         except (OSError, ValueError):
             pass
         return results
@@ -283,6 +296,13 @@ class Ledger:
     def _find_single_entry(self, target_key: str) -> Optional[dict]:
         res = self._find_entries([target_key])
         return res.get(target_key)
+
+    def prepare_updates(self, keys: Iterable[str]) -> None:
+        """Load once when a batch would otherwise repeatedly search the snapshot."""
+        if not self._loaded:
+            missing = sum(1 for key in keys if key in self._known_keys and key not in self._entries)
+            if missing >= 32:
+                self._ensure_loaded()
 
     def is_known_key(self, key: str) -> bool:
         if not self._loaded and hasattr(self, "_known_keys"):
@@ -330,9 +350,9 @@ class Ledger:
             if len(new_paths) > 1:
                 old["path_sigs"] = {path: known[path] for path in new_paths if path in known}
             old["file_sig"] = known.get(new_paths[0])
-            if set(deduped) > set(old_paths):
-                self.dirty = True
-                self.dirty_keys.add(key)
+            self._entries[key] = old
+            self.dirty = True
+            self.dirty_keys.add(key)
             return
         known = dict(old_sigs)
         known.update(sigs_now)

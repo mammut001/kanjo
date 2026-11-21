@@ -6,6 +6,7 @@ struct SettingsView: View {
     static let bottomAnchor = "settings-bottom"
 
     @EnvironmentObject var store: ReportStore
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
     var scrollTo: String? = nil     // 支持底部或具体订阅行
     var initiallyEditingAgent: String? = nil
     let onBack: () -> Void
@@ -76,7 +77,8 @@ struct SettingsView: View {
 
                 if let o = store.dataOverride {
                     StatusBlock(kind: .warn, icon: "exclamationmark.triangle.fill") {
-                        Text(L10n.tr("settings.data_override", o.path))
+                        Text(L10n.tr("settings.data_override",
+                                     DataOverrideDisplay.path(o.path, snapshot: isSnapshotMode)))
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                     }
