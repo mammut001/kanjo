@@ -1,3 +1,4 @@
+import CloudKit
 import XCTest
 import KanjoCore
 @testable import Kanjo
@@ -108,4 +109,51 @@ final class SnapshotStoreTests: XCTestCase {
         XCTAssertNil(report.timezone)
     }
 
+}
+
+final class CloudKitMetadataTests: XCTestCase {
+    func testFailedLatestFetchIsNotReportedAsNoSnapshot() async {
+        do {
+            let records = try await CloudKitSnapshotSource.combinedMetadata(
+                fetchLatest: { throw CKError(.networkFailure) },
+                fetchQuery: { throw CKError(.invalidArguments) }
+            )
+            XCTFail("Expected the latest-record error, got \(records.count) records")
+        } catch let error as CKError {
+            XCTAssertEqual(error.code, .networkFailure)
+        } catch {
+            XCTFail("Unexpected error \(error)")
+        }
+    }
+
+    func testFailedLatestFetchWithEmptyQueryIsAnError() async {
+        do {
+            _ = try await CloudKitSnapshotSource.combinedMetadata(
+                fetchLatest: { throw CKError(.serviceUnavailable) },
+                fetchQuery: { [] }
+            )
+            XCTFail("Expected the latest-record error")
+        } catch let error as CKError {
+            XCTAssertEqual(error.code, .serviceUnavailable)
+        } catch {
+            XCTFail("Unexpected error \(error)")
+        }
+    }
+
+    func testMissingLatestRecordWithUnqueryableTypeIsStillNoSnapshot() async throws {
+        let records = try await CloudKitSnapshotSource.combinedMetadata(
+            fetchLatest: { nil },
+            fetchQuery: { throw CKError(.invalidArguments) }
+        )
+        XCTAssertTrue(records.isEmpty)
+    }
+
+    func testFailedLatestFetchFallsBackToQueryRecords() async throws {
+        let record = CKRecord(recordType: "Snapshot", recordID: CKRecord.ID(recordName: "device-1"))
+        let records = try await CloudKitSnapshotSource.combinedMetadata(
+            fetchLatest: { throw CKError(.networkFailure) },
+            fetchQuery: { [record] }
+        )
+        XCTAssertEqual(records.map(\.recordID.recordName), ["device-1"])
+    }
 }

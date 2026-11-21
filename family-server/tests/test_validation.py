@@ -156,3 +156,19 @@ class TestUntrustedReports(unittest.TestCase):
                 payload = copy.deepcopy(base)
                 change(payload)
                 self.assertIsNotNone(validate_report_payload(payload))
+
+    def test_rejects_out_of_range_reset_timestamps(self):
+        with open(os.path.join(os.path.dirname(__file__), "fixtures", "report.json"), encoding="utf-8") as f:
+            base = json.load(f)
+        for value in ("0001-01-01T00:00:00Z", "9999-12-31T23:00:00-05:00"):
+            for key in ("weekly_resets_at", "five_hour_resets_at"):
+                with self.subTest(key=key, value=value):
+                    payload = copy.deepcopy(base)
+                    payload["quota_windows"]["antigravity"][key] = value
+                    self.assertIsNotNone(validate_report_payload(payload))
+            with self.subTest(key="extra_windows", value=value):
+                payload = copy.deepcopy(base)
+                payload["quota_windows"]["antigravity"]["extra_windows"] = [
+                    {"id": "3p-weekly", "used_percent": 1.0, "resets_at": value}]
+                self.assertIsNotNone(validate_report_payload(payload))
+        self.assertIsNone(validate_report_payload(base))
