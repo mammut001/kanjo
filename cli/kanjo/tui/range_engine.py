@@ -684,77 +684,78 @@ def aggregate_models(filtered: FilteredUsage) -> List[dict]:
                     mc = 0.0
                 _, _, _, _, _, tot = _token_parts(m.get("tokens"))
                 merge(key, model, agent, mc, tot, bool(m.get("estimated")))
-    else:
-        def process_group(sessions: List[dict], target_cost: float, target_tokens: int) -> None:
-            if not sessions:
-                return
-            if not (target_cost > 0) and target_tokens <= 0:
-                return
-            raw_pairs = [spec.in_range_cost_and_tokens(s) for s in sessions]
-            raw_costs = [c for c, _ in raw_pairs]
-            raw_tokens = [float(t) for _, t in raw_pairs]
-            sum_c = sum(raw_costs)
-            if sum_c > 0:
-                sess_costs = [target_cost * (c / sum_c) for c in raw_costs]
+
+    def process_group(sessions: List[dict], target_cost: float, target_tokens: int) -> None:
+        if not sessions:
+            return
+        if not (target_cost > 0) and target_tokens <= 0:
+            return
+        raw_pairs = [spec.in_range_cost_and_tokens(s) for s in sessions]
+        raw_costs = [c for c, _ in raw_pairs]
+        raw_tokens = [float(t) for _, t in raw_pairs]
+        sum_c = sum(raw_costs)
+        if sum_c > 0:
+            sess_costs = [target_cost * (c / sum_c) for c in raw_costs]
+        else:
+            eq = target_cost / len(sessions)
+            sess_costs = [eq] * len(sessions)
+        sess_toks = apportion(target_tokens, raw_tokens)
+
+        for idx, s in enumerate(sessions):
+            models = s.get("models") or []
+            if not models or not isinstance(models, list):
+                continue
+            sc = sess_costs[idx]
+            st = sess_toks[idx]
+            if not (sc > 0) and st <= 0:
+                continue
+            inp, out, cr, cw, th, orig_tot = _token_parts(s.get("tokens"))
+            orig_sum = inp + out + cr + cw
+            split = apportion(st, [float(inp), float(out), float(cr), float(cw)]) if orig_sum > 0 else [0, 0, 0, 0]
+            scaled_th = int(round(th * (st / orig_tot))) if orig_tot > 0 else 0
+            ag = str(s.get("agent") or "")
+            cnt = len(models)
+            if cnt == 1:
+                model = str(models[0])
+                key = f"{ag}/{model}"
+                merge(key, model, ag, sc, st, False)
             else:
-                eq = target_cost / len(sessions)
-                sess_costs = [eq] * len(sessions)
-            sess_toks = apportion(target_tokens, raw_tokens)
+                share_c = sc / cnt
+                for i, mn in enumerate(models):
+                    model = str(mn)
 
-            for idx, s in enumerate(sessions):
-                models = s.get("models") or []
-                if not models or not isinstance(models, list):
-                    continue
-                sc = sess_costs[idx]
-                st = sess_toks[idx]
-                if not (sc > 0) and st <= 0:
-                    continue
-                inp, out, cr, cw, th, orig_tot = _token_parts(s.get("tokens"))
-                orig_sum = inp + out + cr + cw
-                split = apportion(st, [float(inp), float(out), float(cr), float(cw)]) if orig_sum > 0 else [0, 0, 0, 0]
-                scaled_th = int(round(th * (st / orig_tot))) if orig_tot > 0 else 0
-                ag = str(s.get("agent") or "")
-                cnt = len(models)
-                if cnt == 1:
-                    model = str(models[0])
+                    def split_field(v: int) -> int:
+                        base, rem = divmod(v, cnt)
+                        return base + rem if i == 0 else base
+
+                    si, so, scr, scw = (split_field(x) for x in split)
+                    sth = split_field(scaled_th)
+                    if si + so + scr + scw > 0:
+                        split_total = si + so + scr + scw
+                    else:
+                        split_total = split_field(st)
                     key = f"{ag}/{model}"
-                    merge(key, model, ag, sc, st, False)
-                else:
-                    share_c = sc / cnt
-                    for i, mn in enumerate(models):
-                        model = str(mn)
+                    merge(key, model, ag, share_c, split_total, True)
 
-                        def split_field(v: int) -> int:
-                            base, rem = divmod(v, cnt)
-                            return base + rem if i == 0 else base
-
-                        si, so, scr, scw = (split_field(x) for x in split)
-                        sth = split_field(scaled_th)
-                        if si + so + scr + scw > 0:
-                            split_total = si + so + scr + scw
-                        else:
-                            split_total = split_field(st)
-                        key = f"{ag}/{model}"
-                        merge(key, model, ag, share_c, split_total, True)
-
-        for fp in filtered.projects:
-            # Per (project, agent): each agent splits only its own in-range cost and tokens; the
-            # remainder (agents without in-range sessions, or no by_agent) is spread over all sessions.
-            rest_cost = fp.cost
-            rest_tokens = fp.tokens
-            for a in fp.by_agent:
-                ag = str(a.get("agent") or "")
-                own = [s for s in fp.sessions_detail if str(s.get("agent") or "") == ag]
-                if not own:
-                    continue
-                _, _, _, _, _, a_tok = _token_parts(a.get("tokens"))
-                a_cost = float(a.get("cost") or 0.0)
-                process_group(own, a_cost, a_tok)
-                rest_cost -= a_cost
-                rest_tokens -= a_tok
-            process_group(fp.sessions_detail, rest_cost if rest_cost > 1e-9 else 0.0, max(0, rest_tokens))
-        process_group(filtered.unattributed.sessions_detail, filtered.unattributed.cost, filtered.unattributed.tokens)
-        process_group(filtered.excluded.sessions_detail, filtered.excluded.cost, filtered.excluded.tokens)
+    # Shared by both ranges: All takes exact project by_model above and only splits bucket sessions.
+    for fp in ([] if spec.is_all else filtered.projects):
+        # Per (project, agent): each agent splits only its own in-range cost and tokens; the
+        # remainder (agents without in-range sessions, or no by_agent) is spread over all sessions.
+        rest_cost = fp.cost
+        rest_tokens = fp.tokens
+        for a in fp.by_agent:
+            ag = str(a.get("agent") or "")
+            own = [s for s in fp.sessions_detail if str(s.get("agent") or "") == ag]
+            if not own:
+                continue
+            _, _, _, _, _, a_tok = _token_parts(a.get("tokens"))
+            a_cost = float(a.get("cost") or 0.0)
+            process_group(own, a_cost, a_tok)
+            rest_cost -= a_cost
+            rest_tokens -= a_tok
+        process_group(fp.sessions_detail, rest_cost if rest_cost > 1e-9 else 0.0, max(0, rest_tokens))
+    process_group(filtered.unattributed.sessions_detail, filtered.unattributed.cost, filtered.unattributed.tokens)
+    process_group(filtered.excluded.sessions_detail, filtered.excluded.cost, filtered.excluded.tokens)
 
     out = [m for m in model_map.values() if m["tokens"] > 0 or m["cost"] > 0]
     out.sort(key=lambda m: (-m["tokens"], -m["cost"], m["model"]))

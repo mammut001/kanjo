@@ -423,4 +423,26 @@ final class ModelAggregationTests: KanjoTestCase {
         XCTAssertEqual(claudeModels.reduce(0) { $0 + $1.cost }, 90, accuracy: 1e-6)
         XCTAssertEqual(claudeModels.reduce(0) { $0 + $1.tokens.total }, 900_000)
     }
+
+    /// All 范围也要算上未归属 / 已排除的会话，否则模型行之和小于 hero 总额，且全时段低于 30 天。
+    func testAllRangeIncludesUnattributedAndExcludedSessions() {
+        let opus = ModelCost(model: "claude-opus-5-5", agent: "claude", cost: 100, tokens: Tokens(total: 1000))
+        let p = makeProject(id: "p", models: [opus])
+        let fp = FilteredProject(project: p, cost: 100, tokens: 1000, sessions: 0,
+                                 byAgent: [], byDay: [], sessionsDetail: [])
+        let s = Session(
+            id: "u1", agent: "claude", label: "Claude Code",
+            started: "2026-10-22T09:00:00Z", ended: "2026-10-22T10:00:00Z",
+            cwd: nil, branch: nil, models: ["claude-opus-5-5"],
+            cost: 40, tokens: Tokens(total: 400), share: 1, attribution: "none", subagents: 0)
+        let u = FilteredBucket(cost: 40, tokens: 400, sessions: 1, sessionsDetail: [s])
+        let report = makeFilteredReport(projects: [fp], unattributed: u, isAll: true)
+
+        let models = ModelAggregation.aggregate(in: report)
+        XCTAssertEqual(models.reduce(0) { $0 + $1.cost }, report.cost, accuracy: 1e-9)
+        XCTAssertEqual(models.reduce(0) { $0 + $1.tokens.total }, report.tokens)
+        let row = models.first { $0.model == "claude-opus-5-5" }
+        XCTAssertEqual(row?.cost ?? 0, 140, accuracy: 1e-9)
+        XCTAssertEqual(row?.tokens.total, 1400)
+    }
 }

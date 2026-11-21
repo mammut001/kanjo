@@ -575,14 +575,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -590,14 +590,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -605,19 +605,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -630,9 +630,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -1945,14 +1945,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -1960,14 +1960,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -1975,19 +1975,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -2000,9 +2000,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -3515,14 +3515,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -3530,14 +3530,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -3545,19 +3545,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -3570,9 +3570,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -5879,14 +5879,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -5894,14 +5894,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -5909,19 +5909,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -5934,9 +5934,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -7944,14 +7944,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -7959,14 +7959,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -7974,19 +7974,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -7999,9 +7999,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -9514,14 +9514,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -9529,14 +9529,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -9544,19 +9544,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -9569,9 +9569,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -11687,14 +11687,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -11702,14 +11702,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -11717,19 +11717,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -11742,9 +11742,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
@@ -13257,14 +13257,14 @@
         "end": null,
         "models": {
           "antigravity/gemini-3-flash": {
-            "cost": 45,
-            "estimated": false,
-            "tokens": 6010624
+            "cost": 52,
+            "estimated": true,
+            "tokens": 6379432
           },
           "antigravity/gemini-3-pro": {
-            "cost": 591,
-            "estimated": false,
-            "tokens": 15874235
+            "cost": 598,
+            "estimated": true,
+            "tokens": 16243044
           },
           "antigravity/gemini-3.5-pro-exp": {
             "cost": 90,
@@ -13272,14 +13272,14 @@
             "tokens": 2117687
           },
           "claude/claude-haiku-5-5": {
-            "cost": 283,
-            "estimated": false,
-            "tokens": 9582828
+            "cost": 812,
+            "estimated": true,
+            "tokens": 10862326
           },
           "claude/claude-opus-5-5": {
-            "cost": 16994,
-            "estimated": false,
-            "tokens": 38896791
+            "cost": 17660,
+            "estimated": true,
+            "tokens": 40621697
           },
           "claude/claude-opus-5-6-preview": {
             "cost": 476,
@@ -13287,19 +13287,19 @@
             "tokens": 1308267
           },
           "claude/claude-sonnet-5": {
-            "cost": 3742,
+            "cost": 3783,
             "estimated": false,
-            "tokens": 47599888
+            "tokens": 48283238
           },
           "codex/gpt-5.5-codex": {
-            "cost": 2164,
-            "estimated": false,
-            "tokens": 86751971
+            "cost": 2167,
+            "estimated": true,
+            "tokens": 86847447
           },
           "codex/gpt-5.5-mini": {
-            "cost": 41,
-            "estimated": false,
-            "tokens": 7386948
+            "cost": 45,
+            "estimated": true,
+            "tokens": 7482422
           },
           "commandcode/command-r-plus": {
             "cost": 427,
@@ -13312,9 +13312,9 @@
             "tokens": 8139949
           },
           "grok/grok-4-beta": {
-            "cost": 786,
+            "cost": 820,
             "estimated": false,
-            "tokens": 14673961
+            "tokens": 15270994
           },
           "minimax/minimax-m3": {
             "cost": 50,
