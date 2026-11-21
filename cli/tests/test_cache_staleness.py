@@ -114,5 +114,34 @@ class RemoteChangeCacheTest(unittest.TestCase):
         self.assertEqual(r.resolve(PROJ + "/src").id, "github.com/alice/proj")
 
 
+class InPlaceUpdateCacheTest(unittest.TestCase):
+    export = RemoteChangeCacheTest.export
+    tearDown = RemoteChangeCacheTest.tearDown
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-stale-test-")
+        self.fs = FakeFS()
+        self.fs.repo(PROJ, [("origin", "https://github.com/alice/proj.git")])
+        self.fs.write(PROJ + "/src/a.py", "")
+
+    def details(self, doc):
+        return sorted((d["id"], d["title"], round(d["cost"], 6), d["tokens"]["output"])
+                      for p in doc["projects"] for d in p["sessions_detail"])
+
+    def test_tokens_rewritten_in_place_and_title_change(self):
+        before = make_session("ses_00", PROJ, [[PROJ + "/src/a.py"]], agent="opencode")
+        before.title = "hello 0"
+        before.messages[-1].output = 10
+        self.export([before])
+        after = make_session("ses_00", PROJ, [[PROJ + "/src/a.py"]], agent="opencode")
+        after.title = "Fix login redirect"
+        after.messages[-1].output = 20000
+        cached = self.export([after])
+        fresh = self.export([after], cached=False)
+        self.assertEqual(self.details(cached), self.details(fresh))
+        self.assertEqual(self.details(cached)[0][1], "Fix login redirect")
+        self.assertEqual(cached["totals"]["cost"], fresh["totals"]["cost"])
+
+
 if __name__ == "__main__":
     unittest.main()

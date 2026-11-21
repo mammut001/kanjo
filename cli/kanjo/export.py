@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import operator
 import os
 import re
 import sys
@@ -592,6 +593,12 @@ def _build_antigravity_accounts(sessions: List[Session],
     }
 
 
+_SIG_NUMBERS = operator.attrgetter("ts", "input", "output", "cache_read", "cache_write",
+                                   "cache_write_1h", "thinking")
+_SIG_MODEL = operator.attrgetter("model")
+_SIG_BRANCH = operator.attrgetter("branch")
+
+
 def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[str]]] = None,
                  prices: Optional[PriceBook] = None, home: Optional[str] = None,
                  now: Optional[datetime] = None, scan_result: Optional[ScanResult] = None,
@@ -684,8 +691,20 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 worktree_sig, hashlib.sha1("\n".join(pairs).encode("utf-8")).hexdigest())
 
     def _unit_sig(unit) -> str:
+        # Everything the cached aggregate and detail are built from: message
+        # tokens can be rewritten in place (OpenCode) and titles change later.
+        # hash() of ints and floats does not depend on PYTHONHASHSEED; strings go
+        # through sha1.
         s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
+        top = unit.top
+        parts = [repr((top.title, top.cwd, top.branch, top.origin_ts))]
+        for s in s_list:
+            msgs = s.messages
+            parts.append("%d\0%s\0%s" % (hash(tuple(map(_SIG_NUMBERS, msgs))),
+                                          "\0".join(map(str, map(_SIG_MODEL, msgs))),
+                                          "\0".join(map(str, map(_SIG_BRANCH, msgs)))))
+        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list) + \
+            ";" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
 
     for unit in units:
         unit_wt_sig = identity_sigs.get(id(unit.top), worktree_sig)
