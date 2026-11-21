@@ -1090,39 +1090,16 @@ FETCHERS = {
 }
 
 
-def _provider_fetched_at(cache: dict, agent: str) -> Optional[float]:
-    pfa = cache.get("provider_fetched_at")
-    if isinstance(pfa, dict) and isinstance(pfa.get(agent), (int, float)):
-        return float(pfa[agent])
-    fetched_at = cache.get("fetched_at")
-    if isinstance(fetched_at, (int, float)):
-        return float(fetched_at)
-    return None
-
-
-def _all_providers_fresh(cache: dict, now: float) -> Optional[Dict[str, dict]]:
-    providers = cache.get("providers")
-    if not isinstance(providers, dict) or not providers:
-        return None
-    out: Dict[str, dict] = {}
-    for agent, data in providers.items():
-        if not isinstance(data, dict):
-            return None
-        ts = _provider_fetched_at(cache, agent)
-        if ts is None or not (0 <= now - ts < CACHE_TTL):
-            return None
-        out[agent] = data
-    return out if out else None
-
-
 def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> Dict[str, dict]:
     """Fetch live quotas for all supported providers, respecting cache TTL and security rules."""
     now = time.time() if now is None else now
     cached = load_quota_cache()
     if cached:
-        fresh = _all_providers_fresh(cached, now)
-        if fresh is not None:
-            return fresh
+        fetched_at = cached.get("fetched_at")
+        if isinstance(fetched_at, (int, float)) and 0 <= now - float(fetched_at) < CACHE_TTL:
+            providers = cached.get("providers")
+            if isinstance(providers, dict) and providers:
+                return {k: v for k, v in providers.items() if isinstance(v, dict)}
 
     if no_network or is_network_disabled():
         if cached:

@@ -96,13 +96,19 @@ class QuotaRobustnessTest(unittest.TestCase):
             'provider_fetched_at': saved['provider_fetched_at'],
             'providers': saved['providers'],
         }
+        fail_codex_calls = mock.Mock(side_effect=fail_codex)
+        ok_claude_calls = mock.Mock(side_effect=ok_claude)
         with mock.patch.dict('os.environ', {'KANJO_NO_NETWORK': '0'}), \
                 mock.patch.object(quota_fetch, 'load_quota_cache', return_value=fresh_cache), \
-                mock.patch.object(quota_fetch, 'save_quota_cache'), \
-                mock.patch.dict(quota_fetch.FETCHERS, {'codex': fail_codex, 'claude': ok_claude}, clear=True):
+                mock.patch.object(quota_fetch, 'save_quota_cache') as save_early, \
+                mock.patch.dict(quota_fetch.FETCHERS, {'codex': fail_codex_calls, 'claude': ok_claude_calls}, clear=True):
             early = quota_fetch.fetch_all_quotas(now=now_fetch + 30)
-        self.assertEqual(set(early), {'claude'})
-        self.assertNotIn('codex', early)
+        self.assertEqual(set(early), {'codex', 'claude'})
+        self.assertEqual(early['codex']['marker'], 'codex-old')
+        self.assertEqual(early['claude'], claude_live)
+        fail_codex_calls.assert_not_called()
+        ok_claude_calls.assert_not_called()
+        save_early.assert_not_called()
 
     def test_fetches_run_concurrently_with_bounded_wait(self):
         def slow(now):
