@@ -425,8 +425,12 @@ public enum RangeEngine {
             spec.includes(s)
         }
         let cal = spec.calendar
+        // 会话起止夹到该 agent 的区间内，否则跨范围起点的会话会把日期跨度带到范围之外。
         let days: [String] = ss.flatMap { s -> [String] in
-            [s.startedDate, s.endedDate].compactMap { $0.map { dayString($0, calendar: cal) } }
+            let w = spec.window(for: s.agent)
+            let start = s.startedDate.map { d in w?.start.map { max(d, $0) } ?? d }
+            let end = s.endedDate.map { d in w?.end.map { min(d, $0.addingTimeInterval(-1)) } ?? d }
+            return [start, end].compactMap { $0.map { dayString($0, calendar: cal) } }
         }
         var totalCost: Double = 0
         var totalTokens: Int = 0
