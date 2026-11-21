@@ -125,7 +125,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 if title_candidate is None:
                     data = item.get("data")
                     if isinstance(data, dict):
-                        text = data.get("text") or (data.get("message") or {}).get("content")
+                        message = data.get("message")
+                        text = data.get("text") or (message.get("content") if isinstance(message, dict) else None)
                         if isinstance(text, str) and text.strip():
                             title_candidate = clean_title(text.strip())
                 continue
@@ -175,11 +176,14 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 except (ValueError, TypeError):
                     ts = None
 
-            inp = max(int(usage.get("inputTokens") or usage.get("input") or 0), 0)
-            out = max(int(usage.get("outputTokens") or usage.get("output") or 0), 0)
-            cr = max(int(usage.get("cacheReadTokens") or usage.get("cacheRead") or 0), 0)
-            cw = max(int(usage.get("cacheWriteTokens") or usage.get("cacheWrite") or 0), 0)
-            reason = max(int(usage.get("reasoningTokens") or usage.get("reasoning") or 0), 0)
+            try:
+                inp = max(int(usage.get("inputTokens") or usage.get("input") or 0), 0)
+                out = max(int(usage.get("outputTokens") or usage.get("output") or 0), 0)
+                cr = max(int(usage.get("cacheReadTokens") or usage.get("cacheRead") or 0), 0)
+                cw = max(int(usage.get("cacheWriteTokens") or usage.get("cacheWrite") or 0), 0)
+                reason = max(int(usage.get("reasoningTokens") or usage.get("reasoning") or 0), 0)
+            except (TypeError, ValueError, OverflowError):
+                continue
             thinking = min(reason, out) if out else reason
 
             if inp + out + cr + cw <= 0:

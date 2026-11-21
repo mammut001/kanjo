@@ -41,6 +41,27 @@ final class ReportLoaderQuietRefreshTests: KanjoTestCase {
         for _ in 0..<20 { try? await Task.sleep(nanoseconds: 1_000_000) }
     }
 
+    func testEachAcceptedReportHasANewRevision() async throws {
+        let report = try sampleReport()
+        let source = GatedUsageDataSource()
+        let loader = makeLoader(source)
+        loader.refresh()
+        await source.waitForLoads(1)
+        source.resumeNext(with: report)
+        await loader.waitForRefresh()
+        let firstRevision = loader.state.reportRevision
+        XCTAssertEqual(firstRevision, 1)
+
+        var changed = report
+        changed.costNote = "changed with the same generated_at"
+        loader.refresh()
+        await source.waitForLoads(2)
+        source.resumeNext(with: changed)
+        await loader.waitForRefresh()
+        XCTAssertEqual(loader.state.reportRevision, firstRevision + 1)
+        XCTAssertEqual(loader.state.report?.costNote, changed.costNote)
+    }
+
     func testQuietRefreshDuringRefreshRunsOnceAfterIt() async throws {
         let report = try sampleReport()
         let source = GatedUsageDataSource()

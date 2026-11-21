@@ -202,11 +202,14 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "pi") 
             if not isinstance(usage, dict):
                 continue
 
-            inp = int(usage.get("input") or 0)
-            out = int(usage.get("output") or 0)
-            cache_read = int(usage.get("cacheRead") or usage.get("cache_read") or 0)
-            cache_write = int(usage.get("cacheWrite") or usage.get("cache_write") or 0)
-            reasoning = int(usage.get("reasoning") or usage.get("reasoningTokens") or usage.get("reason") or 0)
+            try:
+                inp = int(usage.get("input") or 0)
+                out = int(usage.get("output") or 0)
+                cache_read = int(usage.get("cacheRead") or usage.get("cache_read") or 0)
+                cache_write = int(usage.get("cacheWrite") or usage.get("cache_write") or 0)
+                reasoning = int(usage.get("reasoning") or usage.get("reasoningTokens") or usage.get("reason") or 0)
+            except (TypeError, ValueError, OverflowError):
+                continue
             thinking = min(reasoning, out) if out else reasoning
 
             model = msg.get("model") or current_model or "unknown"

@@ -51,22 +51,22 @@ public enum ReportDecoder {
         if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) {
             throw DataSourceError.emptyInput("Input")
         }
-        let any: Any
-        do {
-            any = try JSONSerialization.jsonObject(with: data)
-        } catch {
-            let ns = error as NSError
-            let detail = (ns.userInfo[NSDebugDescriptionErrorKey] as? String) ?? ns.localizedDescription
-            throw DataSourceError.invalidJSON(detail)
-        }
-        guard let obj = any as? [String: Any] else {
-            throw DataSourceError.contractMismatch("top level must be a JSON object", schemaVersion: nil)
-        }
-        let version = obj["schema_version"] as? Int
         do {
             return try makeDecoder().decode(UsageReport.self, from: data)
-        } catch let e as DecodingError {
-            throw DataSourceError.contractMismatch(describe(e), schemaVersion: version)
+        } catch let decodingError as DecodingError {
+            // Only build the generic JSON tree on failure, for the existing diagnostics.
+            let any: Any
+            do {
+                any = try JSONSerialization.jsonObject(with: data)
+            } catch {
+                let ns = error as NSError
+                let detail = (ns.userInfo[NSDebugDescriptionErrorKey] as? String) ?? ns.localizedDescription
+                throw DataSourceError.invalidJSON(detail)
+            }
+            guard let obj = any as? [String: Any] else {
+                throw DataSourceError.contractMismatch("top level must be a JSON object", schemaVersion: nil)
+            }
+            throw DataSourceError.contractMismatch(describe(decodingError), schemaVersion: obj["schema_version"] as? Int)
         }
     }
 

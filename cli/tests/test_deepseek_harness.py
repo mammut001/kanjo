@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 import unittest
 
 from kanjo.pricing import default_book
@@ -39,6 +41,22 @@ class DeepSeekHarnessSourceTest(unittest.TestCase):
         self.assertEqual(msg.cache_write, 10)
         self.assertEqual(msg.thinking, 50)
         self.assertEqual(msg.key, "deepseek_harness:dsh-sess-1:1:1")
+
+    def test_malformed_usage_record_does_not_hide_valid_fixture(self):
+        fixture = os.path.join(FIXTURE_DSH, "dsh-sess-1.jsonl")
+        with open(fixture) as handle:
+            lines = handle.readlines()
+        bad = json.loads(lines[-1])
+        bad["data"]["usage"]["inputTokens"] = "invalid"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "session.jsonl")
+            with open(path, "w") as handle:
+                handle.write(json.dumps({"type": "user/message", "data": {"message": "bad"}}) + "\n")
+                handle.write(json.dumps(bad) + "\n")
+                handle.writelines(lines)
+            session = deepseek_harness.parse_file(path)
+        self.assertEqual(len(session.messages), 1)
+        self.assertEqual(session.messages[0].input, 1000)
 
     def test_pricing(self):
         discovered = deepseek_harness.discover([FIXTURE_DSH])

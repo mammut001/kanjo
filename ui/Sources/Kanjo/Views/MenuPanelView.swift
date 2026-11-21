@@ -92,6 +92,21 @@ enum DevRoute {
     }
 }
 
+private struct PanelPreparationKey: Equatable {
+    let reportGeneratedAt: String
+    let rangeRaw: String
+    let spec: RangeSpec
+
+    init(report: UsageReport, rangeRaw: String, now: Date) {
+        reportGeneratedAt = report.generatedAt
+        self.rangeRaw = rangeRaw
+        var resolved = RangeEngine.resolve(raw: rangeRaw, report: report, now: now).spec
+        // Most ranges end at now; that moving endpoint does not invalidate PanelData.
+        if resolved.range != .lastWeek { resolved.end = nil }
+        spec = resolved
+    }
+}
+
 struct MenuPanelView: View {
     static let size = CGSize(width: 360, height: 620)
 
@@ -299,17 +314,22 @@ struct MenuPanelView: View {
                                 || $0.hasPrefix("overview:hover:")
                         } ?? false)
                     let showAgents = activeRoute == .agents || (activeRoute == .overview && !isExplicitOverviewAnchor && panelViewMode == PanelViewMode.agents.rawValue)
-                    VStack(spacing: 0) {
-                        panelModeHeader(selected: showAgents ? .agents : .projects)
-                        if showAgents {
-                            AgentsView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
-                        } else {
-                            OverviewView(report: r, panelData: store.panelData, scrollAnchor: activeAnchor, onSelect: { route = $0 },
-                                         onSetRenewalDay: { agent in
-                                overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
-                                route = .settings
-                            })
+                    TimelineView(.periodic(from: .now, by: 60)) { timeline in
+                        let key = PanelPreparationKey(report: r, rangeRaw: rangeRaw, now: timeline.date)
+                        let data = store.panelData.flatMap { $0.matches(report: r, spec: key.spec) ? $0 : nil }
+                        VStack(spacing: 0) {
+                            panelModeHeader(selected: showAgents ? .agents : .projects)
+                            if showAgents {
+                                AgentsView(report: r, panelData: data, scrollAnchor: activeAnchor, onSelectProject: { route = .project($0) })
+                            } else {
+                                OverviewView(report: r, panelData: data, scrollAnchor: activeAnchor, onSelect: { route = $0 },
+                                             onSetRenewalDay: { agent in
+                                    overviewAnchor = SubscriptionSettingsRoute.anchor(for: agent)
+                                    route = .settings
+                                })
+                            }
                         }
+                        .task(id: key) { store.prepareIfNeeded(rangeRaw: rangeRaw) }
                     }
                 }
             } else if let err = store.error {
