@@ -159,7 +159,7 @@ public sealed record ShareSummary(
             projectCosts[project.Id] = (project.Project.Name, previous.Cost + project.Cost);
         }
 
-        var denom = Math.Max(1, filtered.Cost);
+        var denom = filtered.Cost > 0 ? filtered.Cost : 1;
         var top = projectCosts.Values
             .OrderByDescending(project => project.Cost)
             .Take(5)
