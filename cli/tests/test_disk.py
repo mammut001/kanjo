@@ -903,5 +903,44 @@ class DiskRootIsolationTest(unittest.TestCase):
             self.assertFalse(path == home or path.startswith(home + os.sep), path)
 
 
+
+class LsofNonAsciiTest(unittest.TestCase):
+    """lsof escapes non-ASCII bytes as \\xNN in the C locale; the probe must still match."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-lsof-")
+        self.dir = os.path.join(self.tmp, "\u9879\u76ee wt")
+        os.makedirs(self.dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_escaped_name_counts_as_in_use(self):
+        raw = os.path.realpath(self.dir).encode("utf-8")
+        escaped = b"".join(b"\\x%02x" % c if c >= 0x80 else bytes([c]) for c in raw)
+
+        class FakeProc:
+            def communicate(self, timeout=None):
+                return b"p1\nR1\nfcwd\nn" + escaped + b"\n", b""
+
+        paths = disk._finish_cwd_probe(FakeProc())
+        with mock.patch.object(disk, "_lsof_bin", return_value="/usr/sbin/lsof"), \
+             mock.patch.object(disk.winsupport, "is_windows", return_value=False):
+            self.assertTrue(disk._path_in_use(self.dir, paths))
+
+    def test_probe_runs_lsof_in_a_utf8_locale(self):
+        seen = {}
+
+        def fake_popen(argv, **kwargs):
+            seen["env"] = kwargs.get("env")
+            raise OSError("no lsof here")
+
+        with mock.patch.object(disk.winsupport, "is_windows", return_value=False), \
+             mock.patch.object(disk.shutil, "which", return_value="/usr/sbin/lsof"), \
+             mock.patch.object(disk.subprocess, "Popen", side_effect=fake_popen):
+            self.assertIsNone(disk._start_cwd_probe())
+        self.assertIn("UTF-8", (seen["env"] or {}).get("LC_ALL", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

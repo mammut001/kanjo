@@ -1575,10 +1575,16 @@ def _start_cwd_probe() -> Optional[subprocess.Popen]:
     if not lsof:
         return None
     try:
+        # In the C locale (the apps start the CLI without LANG) lsof prints non-ASCII
+        # bytes as \xNN; a UTF-8 locale gets raw bytes, and _finish_cwd_probe unescapes.
         return subprocess.Popen([lsof, "-n", "-w", "-FpRn"],
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                env=dict(os.environ, LC_ALL="en_US.UTF-8"))
     except OSError:
         return None
+
+
+_LSOF_HEX = re.compile(rb"\\x([0-9a-fA-F]{2})")
 
 
 def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
@@ -1605,7 +1611,7 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
         elif line.startswith(b"R"):
             ours = ours or line[1:] == me
         elif line.startswith(b"n") and not ours:
-            p = line[1:].decode("utf-8", "surrogateescape")
+            p = _LSOF_HEX.sub(lambda m: bytes([int(m.group(1), 16)]), line[1:]).decode("utf-8", "surrogateescape")
             if p not in seen:
                 seen.add(p)
                 found.append(p)
