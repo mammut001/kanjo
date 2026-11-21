@@ -642,6 +642,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
             else:
                 root = _norm(entry["path"])
                 nested = [p for p in all_paths if _inside(p, root)]
+                if entry["kind"] == "sessions":
+                    nested += _kept_in_sessions(agent, root)
                 part_moved, part_freed, reason, file_skips = _clean_tree(
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
                     recycle_bin=recycle_bin, nested=nested, allowed=allowed)
@@ -740,7 +742,8 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
     projects = list(roots.get("claude_projects") or [])
     for path in projects:
         if _isdir(path):
-            add("claude", _session_id("claude", path, used), "sessions", path)
+            add("claude", _session_id("claude", path, used), "sessions", path,
+                exclude=_kept_in_sessions("claude", path) or None)
     for parent in _parents(projects):
         for name, eid in (("shell-snapshots", "claude:shell-snapshots"), ("debug", "claude:debug")):
             path = os.path.join(parent, name)
@@ -868,23 +871,29 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     wb_root = roots.get("workbuddy")
     if wb_root and _isdir(wb_root):
-        cand = os.path.join(wb_root, "projects") if os.path.basename(wb_root) != "projects" and _isdir(os.path.join(wb_root, "projects")) else wb_root
-        add("workbuddy", take_id("workbuddy:sessions"), "sessions", cand, note="WorkBuddy sessions.")
+        # Here and below: only the sessions folder itself. Without it the tool's home
+        # folder (settings, auth) would become a "sessions" entry and be cleaned.
+        cand = wb_root if os.path.basename(wb_root) == "projects" else os.path.join(wb_root, "projects")
+        if _isdir(cand):
+            add("workbuddy", take_id("workbuddy:sessions"), "sessions", cand, note="WorkBuddy sessions.")
 
     wb_ai_root = roots.get("workbuddy_ai")
     if wb_ai_root and _isdir(wb_ai_root):
-        cand = os.path.join(wb_ai_root, "projects") if os.path.basename(wb_ai_root) != "projects" and _isdir(os.path.join(wb_ai_root, "projects")) else wb_ai_root
-        add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
+        cand = wb_ai_root if os.path.basename(wb_ai_root) == "projects" else os.path.join(wb_ai_root, "projects")
+        if _isdir(cand):
+            add("workbuddy_ai", take_id("workbuddy_ai:sessions"), "sessions", cand, note="WorkBuddy Intl. sessions.")
 
     qwork_root = roots.get("qwenwork")
     if qwork_root and _isdir(qwork_root):
-        cand = os.path.join(qwork_root, "logs", "sessions") if os.path.basename(qwork_root) != "sessions" and _isdir(os.path.join(qwork_root, "logs", "sessions")) else qwork_root
-        add("qwenwork", take_id("qwenwork:sessions"), "sessions", cand, note="QwenWork sessions.")
+        cand = qwork_root if os.path.basename(qwork_root) == "sessions" else os.path.join(qwork_root, "logs", "sessions")
+        if _isdir(cand):
+            add("qwenwork", take_id("qwenwork:sessions"), "sessions", cand, note="QwenWork sessions.")
 
     gb_root = roots.get("grok_bot")
     if gb_root and _isdir(gb_root):
-        cand = os.path.join(gb_root, "sand-client-persistence") if os.path.basename(gb_root) != "sand-client-persistence" and _isdir(os.path.join(gb_root, "sand-client-persistence")) else gb_root
-        add("grok_bot", take_id("grok_bot:sessions"), "sessions", cand, note="Grok Bot sessions.")
+        cand = gb_root if os.path.basename(gb_root) == "sand-client-persistence" else os.path.join(gb_root, "sand-client-persistence")
+        if _isdir(cand):
+            add("grok_bot", take_id("grok_bot:sessions"), "sessions", cand, note="Grok Bot sessions.")
 
     qw_root = roots.get("qoderwork")
     if qw_root and (_isdir(qw_root) or os.path.isfile(qw_root)):
@@ -902,13 +911,15 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     qc_root = roots.get("qodercli")
     if qc_root and _isdir(qc_root):
-        cand = os.path.join(qc_root, "projects") if os.path.basename(qc_root) != "projects" and _isdir(os.path.join(qc_root, "projects")) else qc_root
-        add("qodercli", take_id("qodercli:sessions"), "sessions", cand, note="Qoder CLI sessions.")
+        cand = qc_root if os.path.basename(qc_root) == "projects" else os.path.join(qc_root, "projects")
+        if _isdir(cand):
+            add("qodercli", take_id("qodercli:sessions"), "sessions", cand, note="Qoder CLI sessions.")
 
     qc_cn_root = roots.get("qodercli_cn")
     if qc_cn_root and _isdir(qc_cn_root):
-        cand = os.path.join(qc_cn_root, "projects") if os.path.basename(qc_cn_root) != "projects" and _isdir(os.path.join(qc_cn_root, "projects")) else qc_cn_root
-        add("qodercli_cn", take_id("qodercli_cn:sessions"), "sessions", cand, note="Qoder CN sessions.")
+        cand = qc_cn_root if os.path.basename(qc_cn_root) == "projects" else os.path.join(qc_cn_root, "projects")
+        if _isdir(cand):
+            add("qodercli_cn", take_id("qodercli_cn:sessions"), "sessions", cand, note="Qoder CN sessions.")
 
     zc_root = roots.get("zcode")
     if zc_root and (_isdir(zc_root) or os.path.isfile(zc_root)):
@@ -920,18 +931,21 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     kc_root = roots.get("kimicode")
     if kc_root and _isdir(kc_root):
-        cand = os.path.join(kc_root, "sessions") if os.path.basename(kc_root) != "sessions" and _isdir(os.path.join(kc_root, "sessions")) else kc_root
-        add("kimicode", take_id("kimicode:sessions"), "sessions", cand, note="Kimi Code sessions.")
+        cand = kc_root if os.path.basename(kc_root) == "sessions" else os.path.join(kc_root, "sessions")
+        if _isdir(cand):
+            add("kimicode", take_id("kimicode:sessions"), "sessions", cand, note="Kimi Code sessions.")
 
     mc_root = roots.get("musecode")
     if mc_root and _isdir(mc_root):
-        cand = os.path.join(mc_root, "sessions") if os.path.basename(mc_root) != "sessions" and _isdir(os.path.join(mc_root, "sessions")) else mc_root
-        add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
+        cand = mc_root if os.path.basename(mc_root) == "sessions" else os.path.join(mc_root, "sessions")
+        if _isdir(cand):
+            add("musecode", take_id("musecode:sessions"), "sessions", cand, note="Muse Code sessions.")
 
     cb_root = roots.get("codebuddy")
     if cb_root and _isdir(cb_root):
-        cand = os.path.join(cb_root, "projects") if os.path.basename(cb_root) != "projects" and _isdir(os.path.join(cb_root, "projects")) else cb_root
-        add("codebuddy", take_id("codebuddy:sessions"), "sessions", cand, note="CodeBuddy sessions.")
+        cand = cb_root if os.path.basename(cb_root) == "projects" else os.path.join(cb_root, "projects")
+        if _isdir(cand):
+            add("codebuddy", take_id("codebuddy:sessions"), "sessions", cand, note="CodeBuddy sessions.")
 
     qi_root = roots.get("qoder_ide")
     if qi_root and (_isdir(qi_root) or os.path.isfile(qi_root)):
@@ -947,8 +961,9 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     oc_root = roots.get("openclaw")
     if oc_root and _isdir(oc_root):
-        cand = os.path.join(oc_root, "agents") if _isdir(os.path.join(oc_root, "agents")) else oc_root
-        add("openclaw", take_id("openclaw:sessions"), "sessions", cand, note="OpenClaw sessions.")
+        cand = oc_root if os.path.basename(oc_root) == "agents" else os.path.join(oc_root, "agents")
+        if _isdir(cand):
+            add("openclaw", take_id("openclaw:sessions"), "sessions", cand, note="OpenClaw sessions.")
 
     dv_root = roots.get("devin")
     if dv_root and (_isdir(dv_root) or os.path.isfile(dv_root)):
@@ -964,13 +979,15 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
 
     prime_root = roots.get("prime_agent")
     if prime_root and _isdir(prime_root):
-        cand = os.path.join(prime_root, "sessions") if os.path.basename(prime_root) != "sessions" and _isdir(os.path.join(prime_root, "sessions")) else prime_root
-        add("prime_agent", take_id("prime_agent:sessions"), "sessions", cand, note="Prime Agent sessions.")
+        cand = prime_root if os.path.basename(prime_root) == "sessions" else os.path.join(prime_root, "sessions")
+        if _isdir(cand):
+            add("prime_agent", take_id("prime_agent:sessions"), "sessions", cand, note="Prime Agent sessions.")
 
     omp_root = roots.get("omp")
     if omp_root and _isdir(omp_root):
-        cand = os.path.join(omp_root, "sessions") if os.path.basename(omp_root) != "sessions" and _isdir(os.path.join(omp_root, "sessions")) else omp_root
-        add("omp", take_id("omp:sessions"), "sessions", cand, note="OMP sessions.")
+        cand = omp_root if os.path.basename(omp_root) == "sessions" else os.path.join(omp_root, "sessions")
+        if _isdir(cand):
+            add("omp", take_id("omp:sessions"), "sessions", cand, note="OMP sessions.")
 
     dsh_root = roots.get("deepseek_harness")
     if dsh_root and _isdir(dsh_root):
@@ -1136,6 +1153,27 @@ def _log_paths(agent: str, root: str) -> Optional[List[str]]:
     if module is None:
         return None
     return [path for path, _parent in module.discover([root])]
+
+
+def _kept_in_sessions(agent: str, root: str) -> List[str]:
+    """Folders inside a sessions entry that are not session logs and never move.
+
+    Claude Code keeps its per-project auto-memory in ``<projects>/<project>/memory``,
+    next to the logs. Cleaning the logs must leave it where Claude Code reads it.
+    """
+    if agent != "claude":
+        return []
+    found = []
+    try:
+        with os.scandir(root) as it:
+            projects = sorted(ent.path for ent in it if ent.is_dir(follow_symlinks=False))
+    except OSError:
+        return []
+    for project in projects:
+        memory = os.path.join(project, "memory")
+        if os.path.lexists(memory):
+            found.append(_norm(memory))
+    return found
 
 
 def _partial_session_clean(entry: dict, agent: str, days: Optional[int]) -> bool:

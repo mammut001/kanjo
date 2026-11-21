@@ -454,6 +454,52 @@ class DiskTest(unittest.TestCase):
         self.assertGreaterEqual(exported["ledger"]["orphaned"], 1)
         self.assertGreaterEqual(exported["ledger"]["sessions"], 1)
 
+    def test_claude_memory_is_never_moved_with_the_sessions(self):
+        log = self.write_claude()
+        memory = self.write(os.path.join(self.projects, "slug", "memory", "MEMORY.md"), "- remember\n")
+        topic = self.write(os.path.join(self.projects, "slug", "memory", "topic.md"), "notes\n")
+        from kanjo.export import scan
+        scan(self.scan_dirs(), cache=None)
+        now = time.time()
+        set_tree_mtime(self.projects, now - 40 * DAY)
+        self.assertEqual(self.entry(self.report(now), "claude:sessions")["blocked"], [])
+
+        plan = self.clean(["claude:sessions"], older_than_days=30, dry_run=True, now=now)
+        self.assertIn(log, plan["moved"])
+        self.assertNotIn(memory, plan["moved"])
+        self.assertNotIn(topic, plan["moved"])
+
+        done = self.clean(["claude:sessions"], yes=True, now=now)
+        self.assertFalse(os.path.exists(log))
+        self.assertTrue(os.path.isfile(memory))
+        self.assertTrue(os.path.isfile(topic))
+        self.assertNotIn(self.projects, done["moved"])
+
+    def test_tool_home_without_its_sessions_folder_is_not_a_sessions_entry(self):
+        subdirs = {
+            "workbuddy": "projects", "workbuddy_ai": "projects", "codebuddy": "projects",
+            "qodercli": "projects", "qodercli_cn": "projects", "kimicode": "sessions",
+            "musecode": "sessions", "prime_agent": "sessions", "omp": "sessions",
+            "qwenwork": os.path.join("logs", "sessions"), "grok_bot": "sand-client-persistence",
+            "openclaw": "agents",
+        }
+        for key, sub in subdirs.items():
+            home = os.path.join(self.tmp, "home-" + key)
+            auth = self.write(os.path.join(home, "auth.json"), "{}")
+            set_tree_mtime(home, time.time() - 40 * DAY)
+            roots = {key: home}
+            doc = disk.report(roots=roots, rescan=True)
+            ids = [e["id"] for a in doc["agents"] for e in a["entries"]]
+            self.assertEqual(ids, [], key)
+            done = disk.clean([key + ":sessions"], yes=True, roots=roots, trash_dir=self.trash)
+            self.assertEqual(done["moved"], [], key)
+            self.assertTrue(os.path.isfile(auth), key)
+            # With the folder present, only that folder is the entry.
+            os.makedirs(os.path.join(home, sub))
+            doc = disk.report(roots=roots, rescan=True)
+            paths = [e["path"] for a in doc["agents"] for e in a["entries"]]
+            self.assertEqual(paths, [os.path.join(home, sub)], key)
+
     def test_cli_table_and_json_stay_inside_the_temp_tree(self):
         path = self.write(os.path.join(self.shell, "a.txt"), "a")
         code, out, _ = self.cli("disk", "--json")
