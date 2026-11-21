@@ -12,6 +12,7 @@ import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Dict, Iterable, List, Optional
 
 from .. import winsupport
@@ -114,7 +115,20 @@ class ParseError(Exception):
 def parse_iso(ts) -> Optional[float]:
     if not ts or not isinstance(ts, str):
         return None
+    return _parse_iso_string(ts)
+
+
+@lru_cache(maxsize=16384)
+def _parse_iso_string(ts: str) -> Optional[float]:
     s = ts.strip()
+    # The usual UTC timestamps need no fractional-second truncation.
+    if (len(s) in (20, 24, 27) and s[4:5] == "-" and s[7:8] == "-"
+            and s[10:11] == "T" and s[13:14] == ":" and s[16:17] == ":"
+            and s.endswith("Z") and (len(s) == 20 or s[19:20] == ".")):
+        try:
+            return datetime.fromisoformat(s[:-1] + "+00:00").timestamp()
+        except ValueError:
+            return None
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
     # Python 3.9 fromisoformat accepts at most 6 fractional digits
