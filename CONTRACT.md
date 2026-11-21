@@ -444,7 +444,7 @@ CLI 把每个解析过的会话永久存入账本 `~/.local/share/kanjo/ledger.j
 ```
 
 - `subscriptions`：保留，但剥离 `account` 字段（保护隐私）。`quota_windows` 只保留文档列出的额度字段，不包含账号标识。
-- 项目 `id` 使用当前导出顺序生成的 `project-1`…`project-N`，不包含路径或仓库地址；顺序改变时 id 可能改变。iCloud 记录的设备名为 `Mac`，设备 ID 为随机 UUID。
+- 项目 `id` 使用当前导出顺序生成的 `project-1`…`project-N`，不包含路径或仓库地址；顺序改变时 id 可能改变。
 - 每个项目只保留 `id`、`name`、`cost`、`tokens`、`sessions`、`first_active`、`last_active`、`by_agent`、`by_model`、`by_day`、`sessions_detail`；去掉 `config`、`paths`、`remote`、`path_missing`、`by_branch`。
 - `sessions_detail` 是精简会话：每项只保留 `agent`、`started`、`ended`、`cost`、`tokens`（只有 `total`）、`models`；**不含** `id`、`title`、`cwd`、`branch`、`label`、`share`、`attribution`、`subagents`、`by_day`，也不含任何路径或文件名。iOS 端的 Session 解码把这些缺失字段当作可选（`id`/`label` 由 agent 与时间兜底）。
 - `buckets`：`unattributed` / `excluded` 保留 Aggregate 字段和同样精简的 `sessions_detail`；`parse_failed` 只留 `sessions`（不含 `files` 路径）。
