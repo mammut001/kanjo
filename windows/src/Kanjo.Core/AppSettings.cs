@@ -149,12 +149,36 @@ public sealed class AppSettings : ILanguageSettings
                 lock (_lock) value = _values.TryGetValue(key, out var v) ? v : null;
                 obj[key] = value?.DeepClone();
             }
+            if (File.Exists(_path) && !IsJsonObjectFile(_path)) Quarantine(_path);
             File.WriteAllText(_path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception)
         {
             // 设置不可写不影响内存中的值。
         }
+    }
+
+    private static bool IsJsonObjectFile(string path)
+    {
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(path)) is JsonObject;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>把读不出来的设置文件留在旁边（<c>settings.json.bad</c>），不覆盖已有的那份。</summary>
+    private static void Quarantine(string path)
+    {
+        var dest = path + ".bad";
+        if (File.Exists(dest))
+        {
+            dest = path + ".bad-" + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+        }
+        File.Move(path, dest);
     }
 
     // MARK: - 读取

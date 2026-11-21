@@ -15,6 +15,11 @@ public static class ReportDecoder
 
     internal static JsonDocument ParseDocument(byte[] data, string emptyWhat)
     {
+        // JsonDocument 拒绝 UTF-8 BOM（EF BB BF）。编辑器经常给 JSON 加上，先剥掉再解析。
+        if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
+        {
+            data = data[3..];
+        }
         if (IsBlank(data)) throw DataSourceError.EmptyInput(emptyWhat);
         JsonDocument doc;
         try

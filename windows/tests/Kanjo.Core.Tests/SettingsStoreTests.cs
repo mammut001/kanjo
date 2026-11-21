@@ -68,6 +68,27 @@ public sealed class SettingsStoreTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestCorruptFileIsKeptAsideWhenSavingNewValues()
+    {
+        var dir = TempDir();
+        var path = AppSettings.FilePathFor(dir, null);
+        const string original = "{ this is not json";
+        File.WriteAllText(path, original);
+
+        var settings = new AppSettings(path);
+        Assert.False(settings.Has(SettingsKeys.AppLanguage));
+        settings.Set(SettingsKeys.AppLanguage, "zh-Hans");
+
+        var reloaded = new AppSettings(path);
+        Assert.Equal("zh-Hans", reloaded.GetString(SettingsKeys.AppLanguage));
+
+        var preserved = Directory.GetFiles(dir, "settings.json.bad*");
+        Assert.NotEmpty(preserved);
+        Assert.Equal(original, File.ReadAllText(preserved[0]));
+        Assert.DoesNotContain(original, File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TestTolerantNumericAndBoolReads()
     {
         var dir = TempDir();

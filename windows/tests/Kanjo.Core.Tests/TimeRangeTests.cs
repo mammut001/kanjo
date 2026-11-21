@@ -186,6 +186,52 @@ public sealed class TimeRangeTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestSpringForwardGapDoesNotThrowAndKeepsWeeklyWindow()
+    {
+        var ny = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "Eastern Standard Time" : "America/New_York");
+
+        // 2026-03-08 02:30 纽约不存在（02:00 拨到 03:00）。日历周要落到缺口里同样深的位置：03:30 EDT。
+        var gap = new DateTime(2026, 3, 8, 2, 30, 0, DateTimeKind.Unspecified);
+        Assert.Equal(Ts("2026-03-08T07:30:00Z"), Time.FromLocal(ny, gap));
+
+        // 秋令时重叠的 01:30 仍取标准时（UTC−5），和改缺口之前一致。
+        var ambiguous = new DateTime(2026, 11, 1, 1, 30, 0, DateTimeKind.Unspecified);
+        Assert.Equal(Ts("2026-11-01T06:30:00Z"), Time.FromLocal(ny, ambiguous));
+
+        // 重置在 2026-03-01 02:30 EST。加一个日历周正好落进春令时缺口，不能抛。
+        var reset = new QuotaWindow("2026-03-01T07:30:00Z", 168, null, null, null, null, "tokei", null);
+        Assert.Equal(Ts("2026-03-08T07:30:00Z"), RangeEngine.WindowStart(reset, Ts("2026-03-10T15:00:00Z"), ny));
+    }
+
+    [Fact]
+    public void TestBillingTimestampsMatchMacAndKeepRealDay31()
+    {
+        // Mac 的 fastParse 要求带时区的完整时间戳，拒绝纯日期、缺时区和空格；Mac 的 ISO8601 回退允许没有冒号的偏移。
+        // 2 月 31 日本来就不存在。1 月 31 日的合法时间戳要留着（账期日 31 在有 31 天的月份是真的）。
+        Assert.Null(ReportDates.ParseTimestamp("2026-01-31"));
+        Assert.Null(ReportDates.ParseTimestamp("2026-01-31T00:00:00"));
+        Assert.Null(ReportDates.ParseTimestamp("2026-01-31 00:00:00Z"));
+        Assert.Null(ReportDates.ParseTimestamp("2026-02-31T00:00:00Z"));
+        Assert.Equal(Ts("2026-01-30T16:00:00Z"), ReportDates.ParseTimestamp("2026-01-31T00:00:00+0800"));
+        Assert.Equal(Ts("2026-01-31T00:00:00Z"), ReportDates.ParseTimestamp("2026-01-31T00:00:00Z"));
+        Assert.Equal(Ts("2026-01-30T16:00:00Z"), ReportDates.ParseTimestamp("2026-01-31T00:00:00+08:00"));
+
+        var subs = new Dictionary<string, Subscription>
+        {
+            ["day31"] = Sub(start: "2026-01-31T16:00:00Z", anchor: 31),
+            ["dateOnly"] = Sub(start: "2026-01-31", anchor: 31),
+            ["noZone"] = Sub(start: "2026-03-31T00:00:00", anchor: 31),
+            ["feb31"] = Sub(start: "2026-02-31T00:00:00Z", anchor: 31),
+        };
+        var s = Spec(TimeRange.BillingCycle, subscriptions: subs, now: Ts("2026-03-15T00:00:00Z"));
+        Assert.Equal(Ts("2026-01-31T16:00:00Z"), s.AgentStarts["day31"]);
+        Assert.False(s.AgentStarts.ContainsKey("dateOnly"));
+        Assert.False(s.AgentStarts.ContainsKey("noZone"));
+        Assert.False(s.AgentStarts.ContainsKey("feb31"));
+    }
+
+    [Fact]
     public void TestBillingCyclePerAgentStarts()
     {
         var subs = new Dictionary<string, Subscription>

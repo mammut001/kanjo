@@ -226,6 +226,28 @@ public sealed class RefreshEngineTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestLowPowerAlreadyOnAtAttachSuppressesFallback()
+    {
+        var timers = new FakeBackgroundScheduler();
+        var power = new FakePowerMonitor();
+        // 挂上监听之前就已经是节电模式：事件发生在订阅之前，启动时必须读当前值。
+        power.RaiseLowPowerMode(true);
+        var clock = new Clock();
+        var engine = new RefreshEngine(timers, () => clock.Now, 30);
+        var refreshes = new List<RefreshTrigger>();
+        engine.RefreshRequested += trigger => refreshes.Add(trigger);
+        engine.Attach(new FakeLogWatcherFactory(), power);
+        using var _engine = engine;
+
+        Assert.True(engine.IsLowPowerMode);
+        engine.RestartFallbackTimer(30);
+        clock.Advance(3600);
+        timers.Periodic!.Fire();
+        Assert.Empty(refreshes);
+        Assert.True(engine.PendingWakeRefresh);
+    }
+
+    [Fact]
     public void TestPanelOpenRefreshesOnlyWhenStale()
     {
         var (engine, _, _, _, clock, refreshes) = NewEngine();

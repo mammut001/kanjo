@@ -15,6 +15,9 @@ namespace Kanjo.App.Views;
 /// </summary>
 public sealed class OverviewPage : ScrollPage
 {
+    /// <summary>构造次数。面板不该因为磁盘 / 上报状态把总览页拆掉重建。</summary>
+    public static int ConstructionCount;
+
     private readonly AppServices _services;
     private readonly string? _anchor;
     private readonly bool _snapshot;
@@ -23,6 +26,7 @@ public sealed class OverviewPage : ScrollPage
 
     public OverviewPage(AppServices services, string? anchor, bool snapshot) : base(snapshot)
     {
+        ConstructionCount++;
         _services = services;
         _anchor = anchor;
         _snapshot = snapshot;

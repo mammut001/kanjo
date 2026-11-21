@@ -29,6 +29,21 @@ public sealed class DecodingTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestUtf8BomStillDecodes()
+    {
+        var raw = File.ReadAllBytes(FixturePath);
+        var withBom = new byte[raw.Length + 3];
+        withBom[0] = 0xEF;
+        withBom[1] = 0xBB;
+        withBom[2] = 0xBF;
+        raw.CopyTo(withBom, 3);
+
+        var report = ReportDecoder.Decode(withBom);
+        Assert.Equal(1, report.SchemaVersion);
+        Assert.Equal("USD", report.Currency);
+    }
+
+    [Fact]
     public void TestQuotaWindowUsageDecodes()
     {
         var q = Load().QuotaWindows!["claude"];

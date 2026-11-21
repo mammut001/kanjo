@@ -90,12 +90,11 @@ public sealed class AppServices
         };
         Disk = new DiskStore(MakeDiskSource,
             DiskDataOverride is null ? new DiskReportCache(cacheDirectory) : null);
-        Disk.Changed += NotifyChanged;
         Family = new FamilyReportStore(settings, familyTokens ?? NewTokenStorage(), () => ReportRunnerOrNull(),
             NoNetworkReason);
         Publish = new PublishStore(settings, () => ReportRunnerOrNull(), NoNetworkReason);
-        Family.Activity.Changed += NotifyChanged;
-        Publish.Activity.Changed += NotifyChanged;
+        // 磁盘扫描、家庭上报、发布进度都不走 Changed：那会把当前页拆掉重建。
+        // 磁盘页和设置页各自订阅自己要看的事件；底栏只跟 Disk.Changed 改状态文字。
 
         var scheduler = timers ?? ThreadPoolBackgroundScheduler.Shared;
         Background = new RefreshEngine(scheduler, null,

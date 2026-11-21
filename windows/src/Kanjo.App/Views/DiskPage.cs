@@ -13,6 +13,9 @@ namespace Kanjo.App.Views;
 /// </summary>
 public sealed class DiskPage : Grid, ISnapshotPage
 {
+    /// <summary>构造次数。磁盘数据更新应在原页面上重建，选中和展开才不会丢。</summary>
+    public static int ConstructionCount;
+
     /// <summary>截图模式：交出页面内容（不含滚动容器），由面板按整页高度渲染。</summary>
     public Control SnapshotBody
     {
@@ -56,6 +59,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
 
     public DiskPage(AppServices services, bool expandAll, bool snapshot, Action onBack, Action onSettings)
     {
+        ConstructionCount++;
         _services = services;
         _expandAll = expandAll;
         _snapshot = snapshot;

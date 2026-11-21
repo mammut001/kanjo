@@ -178,6 +178,40 @@ public sealed class UpdateCoordinatorTests : KanjoTestCase
     }
 
     [Fact]
+    public async Task TestRepeatedEndpointProgressNotifiesOnce()
+    {
+        var manager = new FakeUpdateManager
+        {
+            Download = progress =>
+            {
+                for (var i = 0; i < 10; i++) progress(0);
+                progress(4);
+                progress(5);
+                for (var i = 0; i < 10; i++) progress(100);
+            },
+        };
+        var zeros = 0;
+        var hundreds = 0;
+        var saw5 = false;
+        using var coordinator = Make(manager);
+        coordinator.Changed += () =>
+        {
+            var current = coordinator.Status;
+            if (current.State != UpdateState.Downloading) return;
+            if (current.Progress == 0) zeros++;
+            if (current.Progress == 5) saw5 = true;
+            if (current.Progress == 100) hundreds++;
+        };
+
+        var status = await RunToEnd(coordinator);
+
+        Assert.Equal(UpdateState.Ready, status.State);
+        Assert.Equal(1, zeros);
+        Assert.True(saw5);
+        Assert.Equal(1, hundreds);
+    }
+
+    [Fact]
     public async Task TestCheckFailureIsShortAndRetryable()
     {
         var manager = new FakeUpdateManager
