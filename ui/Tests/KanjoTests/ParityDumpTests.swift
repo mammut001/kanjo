@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import XCTest
 @testable import KanjoCore
 
@@ -68,14 +69,38 @@ final class ParityDumpTests: KanjoTestCase {
             let reference = WeeklyTokens.reference(now: now, generatedAt: ReportDates.parseTimestamp(report.generatedAt))
             result[zone + "|" + instant] = ["ranges": ranges, "subscriptions": subs, "quotas": quotas, "weeklyTokens": WeeklyTokens.since(mondayOfWeekContaining: reference, projects: report.projects, calendar: cal), "heat": heat]
         }
-        let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
         if let path = ProcessInfo.processInfo.environment["KANJO_PARITY_DUMP"] {
-            try data.write(to: URL(fileURLWithPath: path))
+            let json = try Self.formattedJSON(result)
+            try (json + "\n").write(to: URL(fileURLWithPath: path), atomically: true, encoding: .utf8)
         } else {
             let root = DefaultPaths.sampleFixture.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             let golden = try Data(contentsOf: root.appendingPathComponent("parity/mac.json"))
             let expected = try JSONSerialization.jsonObject(with: golden) as! NSDictionary
             XCTAssertTrue(expected.isEqual(to: result), "Swift parity dump changed; regenerate and compare both goldens")
         }
+    }
+
+    private static func formattedJSON(_ value: Any, depth: Int = 0) throws -> String {
+        let indent = String(repeating: "  ", count: depth)
+        let next = indent + "  "
+        if let object = value as? [String: Any] {
+            guard !object.isEmpty else { return "{}" }
+            let entries = try object.keys.sorted().map { key in
+                try next + formattedJSON(key) + ": " + formattedJSON(object[key]!, depth: depth + 1)
+            }
+            return "{\n" + entries.joined(separator: ",\n") + "\n" + indent + "}"
+        }
+        if let array = value as? [Any] {
+            guard !array.isEmpty else { return "[]" }
+            let entries = try array.map { try next + formattedJSON($0, depth: depth + 1) }
+            return "[\n" + entries.joined(separator: ",\n") + "\n" + indent + "]"
+        }
+        if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+           ["f", "d"].contains(String(cString: number.objCType)) {
+            let text = String(number.doubleValue)
+            return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
+        }
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .withoutEscapingSlashes])
+        return String(decoding: data, as: UTF8.self)
     }
 }

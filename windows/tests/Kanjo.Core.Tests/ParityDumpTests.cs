@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Encodings.Web;
 using Xunit;
 
 namespace Kanjo.Core.Tests;
@@ -70,12 +71,40 @@ public sealed class ParityDumpTests : KanjoTestCase
         }
         var json = JsonSerializer.Serialize(result);
         var path = Environment.GetEnvironmentVariable("KANJO_PARITY_DUMP");
-        if (path is not null) File.WriteAllText(path, json);
+        if (path is not null)
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+                WriteSorted(writer, JsonNode.Parse(json));
+            File.WriteAllText(path, System.Text.Encoding.UTF8.GetString(stream.ToArray()) + "\n");
+        }
         else
         {
             var root = Directory.GetParent(Directory.GetParent(Directory.GetParent(FixturePath)!.FullName)!.FullName)!.FullName;
             var golden = File.ReadAllText(Path.Combine(root, "parity", "windows.json"));
             Assert.True(JsonNode.DeepEquals(JsonNode.Parse(golden), JsonNode.Parse(json)), "Windows parity dump changed; regenerate and compare both goldens");
         }
+    }
+
+    private static void WriteSorted(Utf8JsonWriter writer, JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            writer.WriteStartObject();
+            foreach (var property in obj.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                writer.WritePropertyName(property.Key);
+                WriteSorted(writer, property.Value);
+            }
+            writer.WriteEndObject();
+        }
+        else if (node is JsonArray array)
+        {
+            writer.WriteStartArray();
+            foreach (var item in array) WriteSorted(writer, item);
+            writer.WriteEndArray();
+        }
+        else if (node is null) writer.WriteNullValue();
+        else node.WriteTo(writer);
     }
 }

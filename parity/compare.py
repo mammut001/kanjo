@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare independently generated Mac and Windows parity goldens."""
 import json
+from itertools import islice
 from pathlib import Path
 import sys
 
@@ -11,7 +12,8 @@ MISSING = object()
 def compare(mac, windows, path="$"):
     if isinstance(mac, dict) and isinstance(windows, dict):
         for key in sorted(mac.keys() | windows.keys()):
-            yield from compare(mac.get(key, MISSING), windows.get(key, MISSING), f"{path}.{key}")
+            yield from compare(mac.get(key, MISSING), windows.get(key, MISSING),
+                               f"{path}[{json.dumps(key, ensure_ascii=False)}]")
     elif isinstance(mac, list) and isinstance(windows, list):
         for i in range(max(len(mac), len(windows))):
             yield from compare(mac[i] if i < len(mac) else MISSING,
@@ -27,9 +29,11 @@ def main():
         mac = json.load(f)
     with (ROOT / 'windows.json').open() as f:
         windows = json.load(f)
-    differences = list(compare(mac, windows))
+    differences = list(islice(compare(mac, windows), 21))
     if differences:
-        print('\n'.join(differences))
+        print('\n'.join(differences[:20]))
+        if len(differences) > 20:
+            print('Further differences omitted.')
         return 1
     print(f"Parity goldens match ({len(mac)} scenarios).")
     return 0
