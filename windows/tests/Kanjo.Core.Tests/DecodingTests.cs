@@ -302,6 +302,22 @@ public sealed class DecodingTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestDayTokenCountsAboveIntMaxDecode()
+    {
+        const long big = 3_000_000_000L;
+        var data = MutatedFixture(o =>
+        {
+            var day = o["projects"]!.AsArray()[0]!["by_day"]!.AsArray()[0]!.AsObject();
+            day["tokens"] = big;
+            day["by_agent_tokens"] = new JsonObject { ["claude"] = big };
+        });
+        var r = ReportDecoder.Decode(data);
+        var d = r.Projects[0].ByDay[0];
+        Assert.Equal(big, d.Tokens);
+        Assert.Equal(big, d.ByAgentTokens!["claude"]);
+    }
+
+    [Fact]
     public void TestNewerSchemaStillDecodes()
     {
         var data = MutatedFixture(o => o["schema_version"] = 2);

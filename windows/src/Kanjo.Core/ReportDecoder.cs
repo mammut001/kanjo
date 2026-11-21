@@ -7,33 +7,45 @@ public static class ReportDecoder
 {
     public static UsageReport Decode(byte[] data)
     {
-        using var doc = ParseDocument(data, "Input");
-        return DecodeRoot(doc.RootElement, "Report");
+        var offset = data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF ? 3 : 0;
+        if (IsBlank(data.AsSpan(offset))) throw DataSourceError.EmptyInput("Input");
+        try
+        {
+            using var doc = offset == 0 ? JsonDocument.Parse(data) : JsonDocument.Parse(data.AsMemory(offset));
+            return DecodeRoot(doc.RootElement, "Report");
+        }
+        catch (JsonException e)
+        {
+            throw DataSourceError.InvalidJson(e.Message);
+        }
     }
 
     public static UsageReport Decode(string json) => Decode(System.Text.Encoding.UTF8.GetBytes(json));
 
     internal static JsonDocument ParseDocument(byte[] data, string emptyWhat)
     {
-        // JsonDocument 拒绝 UTF-8 BOM（EF BB BF）。编辑器经常给 JSON 加上，先剥掉再解析。
-        if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
-        {
-            data = data[3..];
-        }
-        if (IsBlank(data)) throw DataSourceError.EmptyInput(emptyWhat);
-        JsonDocument doc;
+        var offset = data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF ? 3 : 0;
+        if (IsBlank(data.AsSpan(offset))) throw DataSourceError.EmptyInput(emptyWhat);
         try
         {
-            doc = JsonDocument.Parse(data);
+            return offset == 0 ? JsonDocument.Parse(data) : JsonDocument.Parse(data.AsMemory(offset));
         }
         catch (JsonException e)
         {
             throw DataSourceError.InvalidJson(e.Message);
         }
-        return doc;
     }
 
-    internal static bool IsBlank(byte[] data)
+    internal static ReadOnlySpan<byte> JsonUtf8Bytes(ReadOnlySpan<byte> data)
+    {
+        if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
+        {
+            return data[3..];
+        }
+        return data;
+    }
+
+    internal static bool IsBlank(ReadOnlySpan<byte> data)
     {
         foreach (var b in data)
         {

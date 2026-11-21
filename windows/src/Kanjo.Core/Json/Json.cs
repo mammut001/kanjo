@@ -202,7 +202,7 @@ public static class J
     {
         if (array is null) return [];
         var element = ToArray(array.Value, path);
-        var result = new List<T>();
+        var result = new List<T>(element.GetArrayLength());
         var i = 0;
         foreach (var item in element.EnumerateArray())
         {
