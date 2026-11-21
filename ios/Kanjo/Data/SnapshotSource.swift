@@ -197,9 +197,22 @@ final class CloudKitSnapshotSource: SnapshotSource {
     }
 
     private func fetchMetadata() async throws -> [CKRecord] {
+        try await Self.combinedMetadata(
+            fetchLatest: { try await self.fetchLatestRecord() },
+            fetchQuery: { try await self.fetchMetadataByQuery() }
+        )
+    }
+
+    /// The `latest` record plus whatever the query finds, de-duplicated by record name.
+    static func combinedMetadata(
+        fetchLatest: () async throws -> CKRecord?,
+        fetchQuery: () async throws -> [CKRecord]
+    ) async throws -> [CKRecord] {
         let latestRecord: CKRecord?
+        // A missing `latest` record comes back as nil; anything thrown is a real failure.
+        var latestError: Error?
         do {
-            latestRecord = try await fetchLatestRecord()
+            latestRecord = try await fetchLatest()
             if let latestRecord {
                 SyncLog.sync.info("fetch latest record finished: \(latestRecord.recordID.recordName, privacy: .public)")
             } else {
@@ -208,11 +221,12 @@ final class CloudKitSnapshotSource: SnapshotSource {
         } catch {
             SyncLog.sync.info("fetch latest record failed: \(error.localizedDescription, privacy: .private)")
             latestRecord = nil
+            latestError = error
         }
 
         let queryRecords: [CKRecord]
         do {
-            queryRecords = try await fetchMetadataByQuery()
+            queryRecords = try await fetchQuery()
         } catch let error as CKError {
             if latestRecord != nil {
                 SyncLog.sync.info("query supplementary fetch ignored error: CKError code \(error.code.rawValue, privacy: .public), description \(error.localizedDescription, privacy: .private)")
@@ -223,6 +237,11 @@ final class CloudKitSnapshotSource: SnapshotSource {
             } else {
                 throw error
             }
+        }
+        // Nothing found, but only because the `latest` fetch failed: report that
+        // failure instead of "no snapshot yet".
+        if let latestError, queryRecords.isEmpty {
+            throw latestError
         }
 
         var combined: [CKRecord] = []
