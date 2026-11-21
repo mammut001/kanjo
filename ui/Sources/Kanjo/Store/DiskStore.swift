@@ -99,9 +99,9 @@ final class DiskStore: ObservableObject {
     }
 
     /// `disk clean --merged-worktrees`，同样先 dry-run 再确认。
-    func cleanMergedWorktrees(confirmed: Bool) async throws -> CleanResult {
+    func cleanMergedWorktrees(confirmed: Bool, onlyPaths: [String]? = nil) async throws -> CleanResult {
         let src = source ?? makeSource().0
-        do { return try await src.cleanMergedWorktrees(confirmed: confirmed) }
+        do { return try await src.cleanMergedWorktrees(confirmed: confirmed, onlyPaths: onlyPaths) }
         catch {
             if src is DiskDataSource { await ReportStore.shared.checkPython() }
             throw error
@@ -127,9 +127,9 @@ final class DiskStore: ObservableObject {
     }
 
     /// 先 dry-run（confirmed: false），用户确认后再带 --yes。文件来源会拒绝，不会动磁盘。
-    func clean(ids: [String], olderThan: String?, confirmed: Bool) async throws -> CleanResult {
+    func clean(ids: [String], olderThan: String?, confirmed: Bool, onlyPaths: [String]? = nil) async throws -> CleanResult {
         let src = source ?? makeSource().0
-        do { return try await src.clean(ids: ids, olderThan: olderThan, confirmed: confirmed) }
+        do { return try await src.clean(ids: ids, olderThan: olderThan, confirmed: confirmed, onlyPaths: onlyPaths) }
         catch {
             if src is DiskDataSource { await ReportStore.shared.checkPython() }
             throw error

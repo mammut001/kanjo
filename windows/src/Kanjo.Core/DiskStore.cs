@@ -191,11 +191,11 @@ public sealed class DiskStore
     private int CurrentGenerationLocked() => _generation;
 
     /// <summary>清理：先 dry-run（confirmed=false），用户确认后再带 --yes。文件来源会拒绝。</summary>
-    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed)
+    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
     {
         IDiskSource source;
         lock (_lock) source = _source ?? _makeSource(false).Source;
-        return source.Clean(ids, olderThan, confirmed);
+        return source.Clean(ids, olderThan, confirmed, onlyPaths);
     }
 
     /// <summary>设置改动后调用：丢弃正在跑的旧结果，清掉排队请求。</summary>

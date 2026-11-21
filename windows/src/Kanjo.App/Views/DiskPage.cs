@@ -597,7 +597,8 @@ public sealed class DiskPage : Grid, ISnapshotPage
     /// <summary>用户已经看过 dry-run 计划，这一步才带 --yes。</summary>
     private void Move()
     {
-        if (_applying) return;
+        if (_applying || _pending is null) return;
+        var paths = _pending.Moved.ToList();
         _applying = true;
         _actionError = null;
         Rebuild();
@@ -607,7 +608,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
         {
             try
             {
-                var result = _services.Disk.Clean(ids, older, confirmed: true);
+                var result = _services.Disk.Clean(ids, older, confirmed: true, onlyPaths: paths);
                 _pending = null;
                 _finished = result;
                 _selected.Clear();
