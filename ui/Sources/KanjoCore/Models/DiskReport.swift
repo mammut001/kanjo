@@ -132,8 +132,9 @@ public struct DiskEntry: Codable, Equatable, Identifiable {
     public var path: String
     public var bytes: Int
     public var files: Int
-    public var oldest: String
-    public var newest: String
+    /// 空目录时 CLI 写 null。缺失和 null 都当成没有日期，不能让整份报告解码失败。
+    public var oldest: String?
+    public var newest: String?
     public var deletable: DiskDeletable
     public var blocked: [String]
     public var note: String?
