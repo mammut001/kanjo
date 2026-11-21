@@ -612,14 +612,22 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
         if entry["blocked"] and not partial:
             skipped.append({"id": eid, "reason": ",".join(entry["blocked"])})
             continue
+        if entry.get("kind") == "scratch":
+            in_use = _fresh_path_in_use(entry["path"])
+            if in_use is None or in_use:
+                skipped.append({"id": eid, "reason": "active"})
+                continue
         detail = None
+        part_moved: List[str] = []
+        part_freed = 0
+        file_skips: List[dict] = []
+        reason = None
         try:
             if entry["kind"] == "worktrees":
                 if allowed is not None and entry["path"] not in allowed:
                     skipped.append({"id": entry["id"], "reason": "changed"})
                     continue
                 part_moved, part_freed, reason, detail = _clean_worktree(entry, older_than_days, now, do_it)
-                file_skips: List[dict] = []
             else:
                 root = _norm(entry["path"])
                 nested = [p for p in all_paths if _inside(p, root)]
@@ -627,10 +635,12 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                     entry, older_than_days, now, do_it, trash_root, agent=agent, imported=imported,
                     recycle_bin=recycle_bin, nested=nested, allowed=allowed)
         except OSError:
-            # A partial per-file clean may already have moved files before failing.
             if do_it:
                 disk_cache.invalidate()
             skipped.append({"id": eid, "reason": "move_failed"})
+            moved.extend(part_moved)
+            freed += part_freed
+            skipped.extend(file_skips)
             continue
         if reason:
             skip = {"id": eid, "reason": reason}
@@ -638,6 +648,8 @@ def clean(ids: List[str], older_than_days: Optional[int] = None, dry_run: bool =
                 skip["detail"] = detail
             skipped.append(skip)
             skipped.extend(file_skips)
+            moved.extend(part_moved)
+            freed += part_freed
             continue
         moved.extend(part_moved)
         freed += part_freed
@@ -681,15 +693,16 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             return
         counts = executor.submit(_import_counts, agent, path, imported) if kind == "sessions" else None
         dirty = merge = None
+        if kind in ("scratch", "worktrees"):
+            if not probe:
+                # lsof takes a moment; it runs beside the scan and is read at the end.
+                probe.append(_start_cwd_probe())
         if kind == "worktrees":
             # Git subprocesses wait on the OS and can run independently of the
             # filesystem measurements, which use a smaller pool.
             git_pool = git_executor or executor
             dirty = git_pool.submit(_worktree_dirty, path)
             merge = git_pool.submit(_merge_status, path)
-            if not probe:
-                # lsof takes a moment; it runs beside the scan and is read at the end.
-                probe.append(_start_cwd_probe())
         parts = []
         shallow = None
         if eid == "claude:scratch":
@@ -972,11 +985,18 @@ def _collect(roots: dict, now: float, imported: Dict[str, set],
             if not busy and not blocked:
                 if not cwds:
                     cwds.append(_finish_cwd_probe(probe[0] if probe else None))
-                busy = _cwd_inside(path, cwds[0])
+                probe_busy = _path_in_use(path, cwds[0] if cwds else None)
+                busy = probe_busy is None or probe_busy
             if busy:
                 blocked.append("active")
         elif kind in ("scratch", "worktrees") and measured["active"]:
             blocked.append("active")
+        elif kind == "scratch" and not measured["active"]:
+            if not cwds:
+                cwds.append(_finish_cwd_probe(probe[0] if probe else None))
+            probe_busy = _path_in_use(path, cwds[0] if cwds else None)
+            if probe_busy is None or probe_busy:
+                blocked.append("active")
         log_files = imported_files = None
         if counts is not None:
             log_files, imported_files = counts.result()
@@ -1582,11 +1602,57 @@ def _finish_cwd_probe(proc: Optional[subprocess.Popen]) -> Optional[List[str]]:
     return found
 
 
+def _lsof_bin() -> Optional[str]:
+    if winsupport.is_windows():
+        return None
+    return shutil.which("lsof") or ("/usr/sbin/lsof" if os.path.exists("/usr/sbin/lsof") else None)
+
+
+def _lsof_open_under(path: str) -> Optional[bool]:
+    """True when a process has a file open under ``path``; ``None`` when unknown."""
+    lsof = _lsof_bin()
+    if not lsof:
+        return None
+    try:
+        proc = subprocess.run([lsof, "-n", "-w", "-t", "+D", path],
+                              capture_output=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode == 0:
+        return bool(proc.stdout.strip())
+    if proc.returncode == 1:
+        return False
+    return None
+
+
 def _cwd_inside(path: str, cwds: Optional[List[str]]) -> bool:
     if not cwds:
         return False
     real = os.path.realpath(path)
     return any(cwd == real or _inside(cwd, real) for cwd in cwds)
+
+
+def _path_in_use(path: str, cwds: Optional[List[str]]) -> Optional[bool]:
+    """True when a process cwd or open file is under ``path``; ``None`` if unknown (POSIX lsof)."""
+    if winsupport.is_windows():
+        return False
+    if not _lsof_bin():
+        return None
+    cwd_busy = _cwd_inside(path, cwds) if cwds is not None else None
+    open_busy = _lsof_open_under(path)
+    if cwd_busy is None and open_busy is None:
+        return None
+    if cwd_busy is True or open_busy is True:
+        return True
+    if cwd_busy is False and open_busy is False:
+        return False
+    return None
+
+
+def _fresh_path_in_use(path: str) -> Optional[bool]:
+    proc = _start_cwd_probe()
+    cwds = _finish_cwd_probe(proc)
+    return _path_in_use(path, cwds)
 
 
 # ---- clean ----------------------------------------------------------------------------
@@ -1629,7 +1695,11 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
                 continue
             nbytes = measure(path, now)["bytes"]
             if do_it:
-                _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
+                try:
+                    _relocate(path, _dest(entry["id"], os.path.basename(root), os.path.relpath(path, root)))
+                except OSError:
+                    changed.append({"id": entry["id"], "reason": "move_failed"})
+                    return moved, freed, "move_failed", changed
             moved.append(path)
             freed += nbytes
         return moved, freed, None, changed
@@ -1659,7 +1729,7 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
     moved = []
     freed = 0
     locked = []
-    for path, nbytes, rel in movable:
+    for i, (path, nbytes, rel) in enumerate(movable):
         if allowed is not None and path not in allowed:
             file_skips.append({"id": path, "reason": "changed"})
             continue
@@ -1667,19 +1737,16 @@ def _clean_tree(entry: dict, days: Optional[int], now: float, do_it: bool, trash
             try:
                 _relocate(path, _dest(entry["id"], rel))
             except OSError:
-                if not winsupport.is_windows():
-                    raise
-                # A file held open by a running agent: keep going and move the rest
-                # of the entry. POSIX gives up on the whole entry instead (the raise
-                # above reaches clean()).
                 locked.append(path)
-                continue
+                if winsupport.is_windows():
+                    continue
+                file_skips.append({"id": path, "reason": "move_failed"})
+                for rest_path, _, _ in movable[i + 1:]:
+                    file_skips.append({"id": rest_path, "reason": "move_failed"})
+                break
         moved.append(path)
         freed += nbytes
     if locked:
-        # ``skipped[].id`` is an entry id (CONTRACT.md section 10), and the POSIX
-        # branch reports this same row when a move fails, so the shape does not
-        # depend on the platform. The files themselves are not part of the JSON.
         file_skips.append({"id": entry["id"], "reason": "move_failed"})
     return moved, freed, None, file_skips
 

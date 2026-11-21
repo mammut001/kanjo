@@ -647,24 +647,63 @@ class DiskTest(unittest.TestCase):
 
     def test_partial_clean_failure_invalidates_cache(self):
         now = time.time()
-        for name in ("a.log", "b.log"):
+        paths = []
+        for name in ("a.log", "b.log", "c.log", "d.log", "e.log"):
             path = self.write(os.path.join(self.debug, name))
             os.utime(path, (now - 10 * DAY, now - 10 * DAY))
+            paths.append(path)
         self.report(now)
         relocate = disk._relocate
         calls = []
-        def fail_second(src, dest):
+        def fail_third(src, dest):
             calls.append(src)
-            if len(calls) == 2:
+            if len(calls) == 3:
                 raise OSError("move failed")
             relocate(src, dest)
-        with mock.patch.object(disk, "_relocate", side_effect=fail_second):
+        with mock.patch.object(disk, "_relocate", side_effect=fail_third):
             result = self.clean(["claude:debug"], older_than_days=5, yes=True, now=now)
-        self.assertEqual(len(calls), 2)
-        self.assertFalse(os.path.exists(calls[0]))
-        self.assertTrue(os.path.exists(calls[1]))
-        self.assertEqual(result["skipped"], [{"id": "claude:debug", "reason": "move_failed"}])
+        self.assertEqual(len(calls), 3)
+        moved_ok = calls[:2]
+        left = set(paths) - set(moved_ok)
+        self.assertEqual(set(result["moved"]), set(moved_ok))
+        self.assertEqual(len(result["moved"]), 2)
+        self.assertGreater(result["freed_bytes"], 0)
+        for path in moved_ok:
+            self.assertFalse(os.path.exists(path))
+        for path in left:
+            self.assertTrue(os.path.exists(path))
+        file_skips = [row for row in result["skipped"] if row["id"] in set(paths)]
+        self.assertEqual({row["id"] for row in file_skips}, left)
+        self.assertTrue(all(row["reason"] == "move_failed" for row in file_skips))
+        self.assertEqual(result["skipped"][-1], {"id": "claude:debug", "reason": "move_failed"})
         self.assertFalse(os.path.exists(disk_cache.cache_path()))
+
+    def test_idle_scratch_blocked_when_process_probe_unknown(self):
+        path = self.write(os.path.join(self.scratch, "p", "s", "scratchpad", "f.txt"), "f")
+        set_tree_mtime(self.scratch, time.time() - 3 * DAY)
+        with mock.patch.object(disk, "_path_in_use", return_value=None):
+            entry = self.entry(self.report(), "claude:scratch:p/s")
+        self.assertIn("active", entry["blocked"])
+        self.assertTrue(os.path.exists(path))
+
+    def test_scratch_clean_uses_in_use_probe(self):
+        self.write(os.path.join(self.scratch, "p", "s", "scratchpad", "f.txt"), "f")
+        set_tree_mtime(self.scratch, time.time() - 3 * DAY)
+        self.report()
+        with mock.patch.object(disk, "_fresh_path_in_use", return_value=True) as probe:
+            result = self.clean(["claude:scratch:p/s"], yes=True)
+        probe.assert_called()
+        self.assertEqual(result["moved"], [])
+        self.assertEqual(result["skipped"], [{"id": "claude:scratch:p/s", "reason": "active"}])
+
+    def test_scratch_clean_skips_when_probe_unknown(self):
+        self.write(os.path.join(self.scratch, "loose.log"), "l")
+        set_tree_mtime(self.scratch, time.time() - 3 * DAY)
+        self.report()
+        with mock.patch.object(disk, "_fresh_path_in_use", return_value=None):
+            result = self.clean(["claude:scratch"], yes=True)
+        self.assertEqual(result["moved"], [])
+        self.assertIn({"id": "claude:scratch", "reason": "active"}, result["skipped"])
 
     def test_doctor_prints_disk_cache_path_and_age(self):
         self.report()
