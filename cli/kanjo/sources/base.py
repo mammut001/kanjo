@@ -753,16 +753,16 @@ def sqlite_uri_path(path: str) -> str:
     """The path part of a SQLite ``file:`` URI.
 
     Windows paths need the URI form ``file:///C:/dir/db`` (``file:C:\\dir\\db`` is
-    not a valid URI there; SQLite treats the ``C:`` as a scheme). POSIX paths keep
-    the ``/abs/path`` spelling they always had.
+    not a valid URI there; SQLite treats the ``C:`` as a scheme). Reserved
+    characters in either path must be escaped so SQLite opens the intended file.
     """
+    from urllib.parse import quote
     if winsupport.is_windows_path(path):
-        from urllib.parse import quote
         return "/" + quote(path.replace("\\", "/"), safe="/:")
     if path.startswith("/"):
         # A POSIX path stays POSIX even on a Windows host (logs from another machine).
-        return posixpath.normpath(path)
-    return os.path.abspath(path)
+        return quote(posixpath.normpath(path), safe="/")
+    return quote(os.path.abspath(path), safe="/")
 
 
 @contextlib.contextmanager

@@ -1,6 +1,9 @@
 """Unit tests for the MiniMax log parser."""
 
 import os
+import shutil
+import sqlite3
+import tempfile
 import unittest
 
 from kanjo.sources import minimax
@@ -39,6 +42,18 @@ class MiniMaxParserTest(unittest.TestCase):
         # Tool paths
         self.assertEqual(len(session.tool_paths), 1)
         self.assertEqual(session.tool_paths[0], ["/Users/alice/Documents/GitHub/testrepo/src/index.ts"])
+
+    @unittest.skipIf(os.name == "nt", "question marks are not valid Windows filenames")
+    def test_database_path_with_uri_characters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plain = os.path.join(tmp, "sqlite.db")
+            target = plain + "?other"
+            shutil.copyfile(os.path.join(FIXTURE_DIR, "sqlite.db"), plain)
+            shutil.copyfile(plain, target)
+            with sqlite3.connect(plain) as conn:
+                conn.execute("UPDATE token_usage SET input_tokens = 999")
+            session = minimax.parse_file(target + "::mvs_test1")
+            self.assertEqual(session.messages[0].input, 100)
 
     def test_stable_dedupe_key(self):
         discovered = minimax.discover([FIXTURE_DIR])

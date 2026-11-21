@@ -30,6 +30,12 @@ struct OverviewView: View {
                 if store?.isSampleMode == true {
                     sampleBanner
                 }
+                if store?.refreshFailed == true {
+                    Text(L10n.tr("menu.refresh_failed_banner"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 header(result)
                 if !(report.subscriptions ?? [:]).isEmpty {
                     SubscriptionValueSection(report: report)

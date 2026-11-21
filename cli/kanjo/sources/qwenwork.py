@@ -216,13 +216,18 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                     if req_id:
                         if req_id in seen_requests:
                             continue
-                        seen_requests.add(req_id)
 
                     model_name = data.get("model") or (pending_models.get(req_id) if req_id else None) or "qmodel_latest"
-                    inp = max(int(data.get("input_tokens") or 0), 0)
-                    out = max(int(data.get("output_tokens") or 0), 0)
-                    cache_read = max(int(data.get("cache_read_input_tokens") or 0), 0)
-                    cache_write = max(int(data.get("cache_creation_input_tokens") or 0), 0)
+                    try:
+                        inp = max(int(data.get("input_tokens") or 0), 0)
+                        out = max(int(data.get("output_tokens") or 0), 0)
+                        cache_read = max(int(data.get("cache_read_input_tokens") or 0), 0)
+                        cache_write = max(int(data.get("cache_creation_input_tokens") or 0), 0)
+
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                    if req_id:
+                        seen_requests.add(req_id)
 
                     # Deduct cache reads and writes from input to avoid double-counting
                     non_cached_in = max(0, inp - cache_read - cache_write)

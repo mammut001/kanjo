@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 import unittest
 
 from kanjo.sources import commandcode
@@ -17,6 +19,21 @@ class CommandCodeSourceTest(unittest.TestCase):
         path, parent = discovered[0]
         self.assertIn("cmd-sess-1.jsonl", path)
         self.assertIsNone(parent)
+
+    def test_malformed_usage_does_not_hide_valid_fixture(self):
+        fixture = commandcode.discover([FIXTURE_CMD])[0][0]
+        with open(fixture) as handle:
+            lines = handle.readlines()
+        bad = json.loads(lines[-1])
+        bad["usage"]["inputTokens"] = "invalid"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "session.jsonl")
+            with open(path, "w") as handle:
+                handle.write(json.dumps(bad) + "\n")
+                handle.writelines(lines)
+            session = commandcode.parse_file(path)
+        self.assertEqual(len(session.messages), 1)
+        self.assertEqual(session.messages[0].input, 1700)
 
     def test_parse_session(self):
         discovered = commandcode.discover([FIXTURE_CMD])

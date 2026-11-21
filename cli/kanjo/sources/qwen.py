@@ -102,8 +102,10 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
         # 2. Check token-usage files for any session not having a chat file
         for u_path in _find_usage_files(root):
             for rec in _read_usage_records(u_path):
+                if not isinstance(rec, dict):
+                    continue
                 sid = rec.get("sessionId")
-                if sid and sid not in seen_sids:
+                if isinstance(sid, str) and sid and sid not in seen_sids:
                     seen_sids.add(sid)
                     # Check if a runtime.json file exists for this session
                     r_candidates = glob.glob(os.path.join(root, "projects", "*", "chats", f"{sid}.runtime.json"))
