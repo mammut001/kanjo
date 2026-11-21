@@ -126,11 +126,6 @@ public sealed record RangeSpec(
                     if (d.Cost > 0 || d.Tokens > 0) return true;
                 }
             }
-            foreach (var d in byDay)
-            {
-                if (DayRange(d.Day) is not { } range) continue;
-                if (IncludesDay(range.Start, range.End, session.Agent)) return true;
-            }
             return false;
         }
         var s = session.StartedDate ?? session.EndedDate;
@@ -138,7 +133,8 @@ public sealed record RangeSpec(
         if (s is null || e is null) return false;
         var sessionStart = s.Value <= e.Value ? s.Value : e.Value;
         var sessionEnd = s.Value <= e.Value ? e.Value : s.Value;
-        if (w.Start is { } start && sessionEnd < start) return false;
+        if (w.Start is { } start &&
+            (sessionEnd < start || (sessionEnd == start && sessionStart < sessionEnd))) return false;
         if (w.End is { } end && sessionStart >= end) return false;
         return true;
     }
