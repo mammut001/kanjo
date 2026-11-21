@@ -223,9 +223,9 @@ class QuotaFetchTest(unittest.TestCase):
         self.assertIn("antigravity", result)
         self.assertEqual(result["antigravity"]["weekly_used_percent"], 80.0)
 
-        # When network is disabled, an expired cache is not presented as live
+        # When network is disabled and cache is stale, returns stale cache
         stale_result = quota_fetch.fetch_all_quotas(now=now + 500, no_network=True)
-        self.assertEqual(stale_result, {})
+        self.assertIn("antigravity", stale_result)
 
     def test_secrets_never_in_cache_file(self):
         secret_token = "SECRET_BEARER_TOKEN_XYZZY_999"

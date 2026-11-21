@@ -19,8 +19,8 @@ Sources, per agent, highest priority first:
 A Tokei cache older than ``MAX_AGE_DAYS`` is ignored. Anything missing or malformed
 just leaves that agent out; this module never raises.
 
-Fetched reset points that are already past become null. Manual weekly schedule
-anchors are advanced by whole windows. The used percent of a window that already ended
+Past periodic reset points are advanced by whole windows; past 5-hour resets
+become null. The used percent of a window that already ended
 is null too: the cache only knows the old window. ``five_hour_window_hours`` stays set
 for an ended 5-hour window (null only when the agent has none), so the UI can say so.
 """
@@ -149,7 +149,7 @@ def window(weekly: float, hours: int, five: Optional[float], source: str, now: f
            weekly_pct=None, five_pct=None, five_hours: Optional[float] = None) -> dict:
     period = hours * 3600
     if weekly <= now:
-        weekly = weekly + period * (math.floor((now - weekly) / period) + 1) if source == "manual" else None
+        weekly += period * (math.floor((now - weekly) / period) + 1)
         weekly_pct = None  # the cached usage belongs to a window that already ended
     if five is not None and five <= now:
         five = None
@@ -260,8 +260,16 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                 for prefix in ("weekly", "five_hour"):
                     key = prefix + "_resets_at"
                     ts = _timestamp(contract_entry[key])
-                    contract_entry[key] = iso_utc(ts) if ts is not None and ts > now else None
                     pct_key = prefix + "_used_percent"
+                    if ts is not None and ts <= now:
+                        contract_entry[pct_key] = None
+                        hours = contract_entry.get("weekly_window_hours")
+                        if prefix == "weekly" and isinstance(hours, (int, float)) and not isinstance(hours, bool) and math.isfinite(hours) and hours > 0:
+                            period = hours * 3600
+                            ts += period * (math.floor((now - ts) / period) + 1)
+                        else:
+                            ts = None
+                    contract_entry[key] = iso_utc(ts) if ts is not None else None
                     contract_entry[pct_key] = _pct(contract_entry[pct_key]) if contract_entry[key] else None
                 if "extra_windows" in contract_entry:
                     cleaned = []
@@ -270,7 +278,15 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                             continue
                         extra = dict(extra)
                         ts = _timestamp(extra.get("resets_at"))
-                        extra["resets_at"] = iso_utc(ts) if ts is not None and ts > now else None
+                        if ts is not None and ts <= now:
+                            extra["used_percent"] = None
+                            hours = extra.get("window_hours")
+                            if isinstance(hours, (int, float)) and not isinstance(hours, bool) and math.isfinite(hours) and hours > 0 and hours != 5:
+                                period = hours * 3600
+                                ts += period * (math.floor((now - ts) / period) + 1)
+                            else:
+                                ts = None
+                        extra["resets_at"] = iso_utc(ts) if ts is not None else None
                         extra["used_percent"] = _pct(extra.get("used_percent")) if extra["resets_at"] else None
                         cleaned.append(extra)
                     contract_entry["extra_windows"] = cleaned

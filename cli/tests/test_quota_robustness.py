@@ -15,13 +15,14 @@ class QuotaRobustnessTest(unittest.TestCase):
     def test_expired_and_extra_windows_are_sanitized_at_export(self):
         entry = {'weekly_resets_at': '1970-01-01T00:01:00Z', 'weekly_used_percent': 120,
                  'five_hour_resets_at': '1970-01-01T00:01:00Z', 'five_hour_used_percent': 10,
-                 'extra_windows': [{'id': 'x', 'resets_at': '1970-01-01T00:01:00Z', 'used_percent': 50}]}
+                 'extra_windows': [{'id': 'x', 'resets_at': '1970-01-01T00:01:00Z', 'used_percent': 50, 'window_hours': 168}]}
         with mock.patch.object(quota_fetch, 'fetch_all_quotas', return_value={'codex': entry}), mock.patch.dict(quota.TOKEI_READERS, {}, clear=True):
             result = quota.quota_windows(now=100)['codex']
-        self.assertIsNone(result['weekly_resets_at'])
+        self.assertEqual(result['weekly_resets_at'], '1970-01-08T00:01:00Z')
         self.assertIsNone(result['weekly_used_percent'])
         self.assertIsNone(result['five_hour_resets_at'])
         self.assertIsNone(result['extra_windows'][0]['used_percent'])
+        self.assertEqual(result['extra_windows'][0]['resets_at'], '1970-01-08T00:01:00Z')
 
     def test_stale_cache_is_not_returned_or_refreshed_by_other_provider(self):
         cache = {'fetched_at': 0, 'providers': {'codex': {'weekly_resets_at': 'old'}}}
@@ -80,10 +81,29 @@ class QuotaRobustnessTest(unittest.TestCase):
                 self.assertEqual(quota_fetch._load_claude_credentials(), 'fake-token')
                 run.assert_not_called()
 
-    def test_expired_provider_windows_do_not_roll_forward(self):
+    def test_expired_provider_windows_roll_forward(self):
         result = quota_fetch.parse_codex_usage({'rate_limit': {'secondary_window': {'reset_at': 99, 'used_percent': 20}, 'primary_window': {'reset_at': 200, 'used_percent': 10}}}, 100)
-        self.assertIsNone(result['weekly_resets_at'])
+        self.assertEqual(result['weekly_resets_at'], '1970-01-08T00:01:39Z')
         self.assertIsNone(result['weekly_used_percent'])
+
+    def test_periodic_provider_and_extra_windows_roll_forward(self):
+        past = '1970-01-01T00:01:39Z'
+        expected = '1970-01-08T00:01:39Z'
+        claude = quota_fetch.parse_claude_usage({'seven_day': {'resets_at': past, 'utilization': 20}}, 100)
+        grok = quota_fetch.parse_grok_usage({'config': {'currentPeriod': {'end': past}}}, 100)
+        antigravity = quota_fetch.parse_antigravity_summary({'groups': [
+            {'displayName': 'Gemini', 'buckets': [{'window': 'weekly', 'resetTime': past, 'remainingFraction': 0.8}]},
+            {'displayName': 'Claude', 'buckets': [{'window': 'weekly', 'resetTime': past, 'remainingFraction': 0.8}]},
+        ]}, 100)
+        for result in (claude, grok, antigravity):
+            self.assertEqual(result['weekly_resets_at'], expected)
+            self.assertIsNone(result['weekly_used_percent'])
+        self.assertEqual(antigravity['extra_windows'][0]['resets_at'], expected)
+        self.assertIsNone(antigravity['extra_windows'][0]['used_percent'])
+
+    def test_budget_matches_request_timeout(self):
+        self.assertEqual(quota_fetch.REQUEST_TIMEOUT, 10)
+        self.assertEqual(quota_fetch.FETCH_BUDGET, quota_fetch.REQUEST_TIMEOUT)
 
     def test_fetch_budget_bounds_stalled_provider(self):
         def slow(now):

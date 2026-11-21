@@ -35,8 +35,8 @@ from .quota_claude_cache import scan_claude_desktop_cache
 
 CACHE_VERSION = 1
 CACHE_TTL = 300  # 5 minutes
-REQUEST_TIMEOUT = 3
-FETCH_BUDGET = 3
+REQUEST_TIMEOUT = 10
+FETCH_BUDGET = REQUEST_TIMEOUT
 MAX_RESPONSE_BYTES = 256 * 1024
 
 
@@ -557,7 +557,7 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
 
             mins = None
             for mk in ("windowMinutes", "window_minutes"):
-                if isinstance(bucket.get(mk), (int, float)):
+                if isinstance(bucket.get(mk), (int, float)) and not isinstance(bucket[mk], bool) and math.isfinite(bucket[mk]) and bucket[mk] >= 60:
                     mins = float(bucket[mk])
                     break
 
@@ -578,12 +578,22 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
                 bid = str(bucket.get("bucketId") or bucket.get("id") or "extra")
                 raw_title = str(bucket.get("displayName") or bucket.get("title") or bid)
                 btitle = _three_p_title(is_3p or "3p" in bid.lower(), cadence, raw_title)
+                extra_hours = int(round(mins / 60)) if mins else None
+                if extra_hours is None and any(k in cadence for k in ("weekly", "week", "7d")):
+                    extra_hours = 168
+                if reset_ts is not None and reset_ts <= now:
+                    pct = None
+                    if extra_hours and extra_hours > 0 and extra_hours != 5:
+                        period = extra_hours * 3600
+                        reset_ts += period * (math.floor((now - reset_ts) / period) + 1)
+                    else:
+                        reset_ts = None
                 extra_windows.append({
                     "id": bid,
                     "title": btitle,
                     "used_percent": pct if reset_ts is not None and reset_ts > now else None,
                     "resets_at": _iso_utc(reset_ts) if reset_ts and reset_ts > now else None,
-                    "window_hours": int(round(mins / 60)) if mins else None,
+                    "window_hours": extra_hours,
                 })
 
     if not gemini_weekly and not gemini_5h and not extra_windows:
@@ -597,7 +607,8 @@ def parse_antigravity_summary(data: dict, now: float, plan_name: Optional[str] =
 
     # An ended window cannot describe current usage.
     if weekly_reset is not None and weekly_reset <= now:
-        weekly_reset = None
+        period = weekly_hours * 3600
+        weekly_reset += period * (math.floor((now - weekly_reset) / period) + 1)
         weekly_pct = None
 
     five_reset = gemini_5h["reset"] if gemini_5h else None
@@ -726,7 +737,8 @@ def parse_codex_usage(data: dict, now: float) -> Optional[dict]:
     sec_reset = _window_reset(sec, now)
 
     if sec_reset is not None and sec_reset <= now:
-        sec_reset = None
+        period = sec_hours * 3600
+        sec_reset += period * (math.floor((now - sec_reset) / period) + 1)
         sec_pct = None
 
     # Primary window (5h)
@@ -917,7 +929,8 @@ def parse_claude_usage(data: dict, now: float) -> Optional[dict]:
     sec_reset = _parse_iso(seven.get("resets_at"))
     sec_hours = 168
     if sec_reset is not None and sec_reset <= now:
-        sec_reset = None
+        period = sec_hours * 3600
+        sec_reset += period * (math.floor((now - sec_reset) / period) + 1)
         sec_pct = None
 
     # 5h
@@ -1046,7 +1059,8 @@ def parse_grok_usage(data: dict, now: float) -> Optional[dict]:
 
     hours = 168
     if reset_ts is not None and reset_ts <= now:
-        reset_ts = None
+        period_s = hours * 3600
+        reset_ts += period_s * (math.floor((now - reset_ts) / period_s) + 1)
         used_pct = None
 
     plan = data.get("subscriptionTier") or data.get("plan") or ("SuperGrok" if cfg.get("isUnifiedBillingUser") else None)
@@ -1088,7 +1102,8 @@ def fetch_all_quotas(now: Optional[float] = None, no_network: bool = False) -> D
                 return {k: v for k, v in providers.items() if isinstance(v, dict)}
 
     if no_network or is_network_disabled():
-        return {}
+        providers = cached.get("providers") if cached else None
+        return {k: v for k, v in providers.items() if isinstance(v, dict)} if isinstance(providers, dict) else {}
 
     results = {}
     lock = threading.Lock()
