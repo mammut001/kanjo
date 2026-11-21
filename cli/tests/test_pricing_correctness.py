@@ -23,6 +23,17 @@ class PricingCorrectness(unittest.TestCase):
                 with self.subTest(name=name):
                     self.assertEqual(self.book.resolve(name), (expected, False))
 
+    def test_dated_openai_snapshots(self):
+        for name, expected in [('gpt-5-2025-08-07', 'openai/gpt-5'),
+                               ('openai/gpt-5-2025-08-07', 'openai/gpt-5'),
+                               ('gpt-5-mini-2025-08-07', 'openai/gpt-5-mini'),
+                               ('gpt-4-0613', 'openai/gpt-4'),
+                               ('gpt-4.1-2025-04-14', 'openai/gpt-4.1')]:
+            with self.subTest(name=name):
+                self.assertEqual(self.book.resolve(name), (expected, False))
+        self.assertAlmostEqual(self.book.cost('gpt-5-2025-08-07', 'codex',
+                                              1000000, 100000, 10000000)[0], 3.5)
+
     def test_fallback_preserves_tier(self):
         for name, tier in [('gpt-5.1-ultra-mini', 'mini'), ('gpt-4.0-mini', 'mini'),
                            ('gpt-99-nano', 'nano'), ('gpt-99-pro', 'pro'),
