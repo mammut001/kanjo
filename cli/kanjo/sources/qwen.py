@@ -102,21 +102,12 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
         # 2. Check token-usage files for any session not having a chat file
         for u_path in _find_usage_files(root):
             for rec in _read_usage_records(u_path):
+                if not isinstance(rec, dict):
+                    continue
                 sid = rec.get("sessionId")
-                if sid and sid not in seen_sids:
+                if isinstance(sid, str) and sid and sid not in seen_sids:
                     seen_sids.add(sid)
-                    # Check if a runtime.json file exists for this session
-                    r_candidates = glob.glob(os.path.join(root, "projects", "*", "chats", f"{sid}.runtime.json"))
-                    if r_candidates:
-                        real = os.path.realpath(r_candidates[0])
-                        if real not in seen:
-                            seen.add(real)
-                            found.append((r_candidates[0], None))
-                    else:
-                        real = os.path.realpath(u_path)
-                        if real not in seen:
-                            seen.add(real)
-                            found.append((u_path, None))
+                    found.append((f"{u_path}::{sid}", None))
 
     return found
 
@@ -140,16 +131,17 @@ def _locate_qwen_root(path: str) -> str:
 
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
-    root = _locate_qwen_root(path)
-    base_name = os.path.basename(path)
-    sid = os.path.splitext(base_name)[0]
+    source_path, sep, target_sid = path.partition("::")
+    root = _locate_qwen_root(source_path)
+    base_name = os.path.basename(source_path)
+    sid = target_sid if sep else os.path.splitext(base_name)[0]
 
     session = Session(id=sid, agent=AGENT, file=path, subagent_of=subagent_of)
 
     # 1. Parse chat transcript if this is a chat file or one exists
     chat_path = None
-    if path.endswith(".jsonl") and not base_name.startswith("token-usage-"):
-        chat_path = path
+    if source_path.endswith(".jsonl") and not base_name.startswith("token-usage-"):
+        chat_path = source_path
     else:
         candidates = glob.glob(os.path.join(root, "projects", "*", "chats", f"{sid}.jsonl"))
         if candidates:
@@ -231,8 +223,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     # 3. Read billed token requests from usage/token-usage-*.jsonl
     usage_files = _find_usage_files(root)
     # If path itself is a token-usage file, make sure it is included
-    if base_name.startswith("token-usage-") and path not in usage_files:
-        usage_files.append(path)
+    if base_name.startswith("token-usage-") and source_path not in usage_files:
+        usage_files.append(source_path)
 
     for u_path in usage_files:
         records = _read_usage_records(u_path)
