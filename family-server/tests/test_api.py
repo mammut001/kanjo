@@ -309,6 +309,35 @@ class TestAPIEndpoint(unittest.TestCase):
         )
         self.assertEqual(status_bob, 200)
 
+    def test_rate_limit_is_per_device_so_a_second_computer_is_accepted(self):
+        def post(dev_id):
+            payload = copy.deepcopy(self.fixture_data)
+            payload["device"] = {"id": dev_id, "name": "PC-" + dev_id[:4], "os": "linux"}
+            status, _, _ = self._api_request(
+                "POST", "/api/report", data=json.dumps(payload).encode("utf-8"),
+                headers={"Authorization": f"Bearer {self.token_alice}"})
+            return status
+
+        self.assertEqual(post("1111111111111111"), 200)
+        self.assertEqual(post("2222222222222222"), 200)
+        self.assertEqual(post("1111111111111111"), 429)
+        with db.get_connection(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT device_id FROM reports WHERE member_id = ?", (self.m_alice,)).fetchall()
+        self.assertEqual(sorted(r[0] for r in rows), ["1111111111111111", "2222222222222222"])
+
+    def test_rate_limit_keeps_a_per_token_ceiling_across_devices(self):
+        statuses = []
+        for i in range(12):
+            payload = copy.deepcopy(self.fixture_data)
+            payload["device"] = {"id": "%016x" % (i + 1), "name": "PC", "os": "linux"}
+            status, _, _ = self._api_request(
+                "POST", "/api/report", data=json.dumps(payload).encode("utf-8"),
+                headers={"Authorization": f"Bearer {self.token_bob}"})
+            statuses.append(status)
+        self.assertEqual(statuses[:10], [200] * 10)
+        self.assertEqual(statuses[10:], [429, 429])
+
     def test_200_stores_device_fields_and_legacy_without_device(self):
         # 1. With device object
         dev_payload = copy.deepcopy(self.fixture_data)

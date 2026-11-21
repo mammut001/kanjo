@@ -25,6 +25,8 @@ class APIHandler(BaseHTTPRequestHandler):
     # Attached by factory/server
     db_path: str = ""
     rate_limiter: Optional[RateLimiter] = None
+    # Looser per-token ceiling so rotating device ids cannot bypass the per-device limit.
+    token_rate_limiter: Optional[RateLimiter] = None
 
     def log_message(self, format: str, *args) -> None:
         """Sanitized log output - never prints request bodies or tokens."""
@@ -151,15 +153,23 @@ class APIHandler(BaseHTTPRequestHandler):
                 self._send_json_response(HTTPStatus.BAD_REQUEST, {"status": "error", "error": val_err})
                 return
 
-            # 7. Rate limiting check (60 s per-token window)
+            # 7. Rate limiting check (60 s window per token and device; one token
+            # may be used on several computers)
             if self.rate_limiter:
-                allowed, retry_after = self.rate_limiter.check_and_record(token_hash, now=time.time())
+                payload_device = payload.get("device")
+                slot = payload_device.get("id") if isinstance(payload_device, dict) else None
+                limit_key = f"{token_hash}:{slot or 'legacy'}"
+                allowed, retry_after = self.rate_limiter.check_and_record(limit_key, now=time.time())
+                error = "Rate limit exceeded (1 request per 60s per device)"
+                if allowed and self.token_rate_limiter:
+                    allowed, retry_after = self.token_rate_limiter.check_and_record(token_hash, now=time.time())
+                    error = "Rate limit exceeded (too many requests for this token)"
                 if not allowed:
                     logger.warning("Rejected report from '%s': rate limit exceeded (retry in %.1fs)", member_name, retry_after)
                     retry_secs = max(1, int(math.ceil(retry_after)))
                     self._send_json_response(
                         HTTPStatus.TOO_MANY_REQUESTS,
-                        {"status": "error", "error": "Rate limit exceeded (1 request per 60s per token)"},
+                        {"status": "error", "error": error},
                         headers={"Retry-After": str(retry_secs)},
                     )
                     return
@@ -211,4 +221,5 @@ def make_api_handler(db_path: str, rate_limiter: RateLimiter):
 
     BoundAPIHandler.db_path = db_path
     BoundAPIHandler.rate_limiter = rate_limiter
+    BoundAPIHandler.token_rate_limiter = RateLimiter(window_seconds=60.0, max_requests=10)
     return BoundAPIHandler
