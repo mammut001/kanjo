@@ -553,11 +553,7 @@ def generate_dashboard_html(
                 for mod, data in cycle_models.items()
             ]
             sorted_models.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
-            if sorted_models:
-                member_info["top_models"] = sorted_models[:5]
-            else:
-                all_time = summary.get("all_time", {})
-                member_info["top_models"] = all_time.get("top_models", [])[:5]
+            member_info["top_models"] = sorted_models[:5]
 
         members_processed.append(member_info)
 

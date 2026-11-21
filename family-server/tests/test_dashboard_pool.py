@@ -86,6 +86,21 @@ class DashboardPoolTests(unittest.TestCase):
         day = _day("2026-11-20", "claude", "anthropic", "claude-opus-5.5", 5000)
         self.assertEqual(dashboard.pool_tokens_for_day(day, 5000), 0)
 
+    def test_cycle_models_table_has_no_all_time_fallback(self):
+        payload = self._payload(
+            "a", [_day("2026-10-15", "antigravity", "google", "gemini-3.8-pro", 50000000, 1234.56)])
+        payload["summary"]["all_time"]["top_models"] = [
+            {"model": "gemini-3.8-pro", "provider": "google", "tokens_total": 50000000, "cost_usd": 1234.56}]
+        self._add("Alice", payload)
+        with db.get_connection(self.db_path) as conn:
+            db.set_setting(conn, "cycle_anchor_day", "9")
+            db.set_setting(conn, "tracking_start", "2026-11-09")
+
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        self.assertIn("本周期暂无模型用量明细", html)
+        self.assertNotIn("50.00M", html)
+        self.assertNotIn("$1,234.56", html)
+
 
 if __name__ == "__main__":
     unittest.main()
