@@ -87,7 +87,9 @@ struct QuotaBarRow: View {
                         Capsule().fill(Color.primary.opacity(0.08))
                         Capsule()
                             .fill(tint(for: percent))
-                            .frame(width: max(0, geo.size.width * CGFloat(percent / 100)))
+                            .frame(width: LayoutMath.barWidth(available: geo.size.width,
+                                                              fraction: percent / 100,
+                                                              minWidth: 0))
                     }
                 }
                 .frame(height: 6)
