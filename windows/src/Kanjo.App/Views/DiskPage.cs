@@ -424,7 +424,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
             : L10n.TrL(null, n == 1 ? "disk.clean_button.singular" : "disk.clean_button.plural", n,
                 Fmt.Bytes(bytes));
 
-        var button = Ui.ProminentButton(title, DryRun);
+        var button = Ui.ProminentButton(title, DryRun, enabled: !_checking && !_applying && _pending is null);
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
         if (_checking || _applying) button.Opacity = 0.6;
         ToolTip.SetTip(button, L10n.Tr("disk.clean_help"));
@@ -601,14 +601,22 @@ public sealed class DiskPage : Grid, ISnapshotPage
             {
                 var result = _services.Disk.Clean(ids, older, confirmed: false);
                 // 冻结 ids / olderThan / moved，确认步不再读可变的勾选与年龄档。
-                _pending = new DiskCleanPreview(ids, older, result);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _pending = new DiskCleanPreview(ids, older, result);
+                    _checking = false;
+                    Rebuild();
+                });
             }
             catch (Exception e)
             {
-                _actionError = e.Message;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _actionError = e.Message;
+                    _checking = false;
+                    Rebuild();
+                });
             }
-            _checking = false;
-            Rebuild();
         });
     }
 
@@ -626,27 +634,32 @@ public sealed class DiskPage : Grid, ISnapshotPage
             {
                 var result = _services.Disk.Clean(preview.Ids, preview.OlderThan, confirmed: true,
                     onlyPaths: preview.Result.Moved);
-                _ = DiskCleanFlow.PresentsAsResultCard(result);
-                _pending = null;
-                _finished = result;
-                if (_services.Disk.Report is { } report)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    var keep = DiskCleanFlow.SelectionAfter(_selected, report, result);
-                    _selected.Clear();
-                    foreach (var id in keep) _selected.Add(id);
-                }
-                else
-                {
-                    _selected.Clear();
-                }
-                _services.Disk.RefreshAfterClean();
+                    _ = DiskCleanFlow.PresentsAsResultCard(result);
+                    _pending = null;
+                    _finished = result;
+                    if (_services.Disk.Report is { } report)
+                    {
+                        var keep = DiskCleanFlow.SelectionAfter(_selected, report, result);
+                        _selected.Clear();
+                        foreach (var id in keep) _selected.Add(id);
+                    }
+                    else _selected.Clear();
+                    _applying = false;
+                    Rebuild();
+                    _services.Disk.RefreshAfterClean();
+                });
             }
             catch (Exception e)
             {
-                _actionError = e.Message;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _actionError = e.Message;
+                    _applying = false;
+                    Rebuild();
+                });
             }
-            _applying = false;
-            Rebuild();
         });
     }
 

@@ -65,9 +65,12 @@ struct HeatStripView: View {
             let cumulative = segs.indices.map { i in segs[0...i].reduce(0) { $0 + $1.share } }
             ZStack(alignment: .top) {
                 ForEach(segs.indices.reversed(), id: \.self) { i in
+                    let h = i == segs.count - 1
+                        ? cell.height
+                        : LayoutMath.segmentHeight(available: cell.height, share: cumulative[i])
                     Rectangle()
                         .fill(AgentPalette.color(for: segs[i].agent))
-                        .frame(height: i == segs.count - 1 ? cell.height : cell.height * cumulative[i])
+                        .frame(height: h)
                 }
             }
             .frame(width: cell.width, height: cell.height, alignment: .top)
