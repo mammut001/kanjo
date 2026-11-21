@@ -37,11 +37,11 @@ struct DiskView: View {
     @State private var age: DiskAge = .any
     @State private var checking = false
     @State private var applying = false
-    @State private var pending: CleanResult?
+    @State private var pending: DiskCleanPreview?
     @State private var finished: CleanResult?
     @State private var actionError: String?
-    /// 确认卡和结果卡来自“清理已合并的工作树”，而不是勾选的条目。
-    @State private var mergedMode = false
+    /// 结果卡来自“清理已合并的工作树”（过滤 not_merged 跳过项）。
+    @State private var finishedMerged = false
 
     init(expandAll: Bool = false, onBack: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.expandAll = expandAll
@@ -211,7 +211,7 @@ struct DiskView: View {
                     }
                     if summary.reclaimableCount > 0 {
                         Button(action: dryRunMerged) {
-                            Text(checking && mergedMode ? L10n.tr("disk.checking") : L10n.tr("disk.merged.clean_button"))
+                            Text(checking && (pending?.merged == true) ? L10n.tr("disk.checking") : L10n.tr("disk.merged.clean_button"))
                                 .font(.system(size: 11.5))
                         }
                         .buttonStyle(.bordered)
@@ -415,31 +415,35 @@ struct DiskView: View {
     @ViewBuilder private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let result = finished {
-                Text(mergedMode ? L10n.tr("disk.merged.removed_title") : L10n.tr("disk.card.moved_title"))
+                Text(finishedMerged ? L10n.tr("disk.merged.removed_title") : L10n.tr("disk.card.moved_title"))
                     .font(.system(size: 14, weight: .semibold))
                 Text(L10n.tr("disk.card.freed", Fmt.bytes(result.freedBytes)))
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Color.accentColor)
-                if mergedMode && !result.moved.isEmpty {
-                    planBody(CleanResult(moved: result.moved, freedBytes: result.freedBytes, skipped: []))
-                }
-                skippedList(result)
-                Button(L10n.tr("common.done")) { finished = nil; actionError = nil; mergedMode = false }
+                // 部分成功也列 moved；skipped 单独渲染（合并模式会滤掉 not_merged）。
+                planBody(CleanResult(moved: result.moved, freedBytes: result.freedBytes, skipped: []),
+                         mergedMode: finishedMerged)
+                skippedList(result, mergedMode: finishedMerged)
+                Button(L10n.tr("common.done")) { finished = nil; actionError = nil; finishedMerged = false }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-            } else if let result = pending {
-                Text(mergedMode ? L10n.tr("disk.merged.confirm_title") : L10n.tr("disk.card.confirm_title"))
+            } else if let preview = pending {
+                let result = preview.result
+                Text(preview.merged ? L10n.tr("disk.merged.confirm_title") : L10n.tr("disk.card.confirm_title"))
                     .font(.system(size: 14, weight: .semibold))
-                Text(mergedMode ? L10n.tr("disk.merged.caption") : age.caption)
+                Text(preview.merged
+                      ? L10n.tr("disk.merged.caption")
+                      : (preview.olderThan.map { L10n.tr("disk.age.caption.older", $0) }
+                         ?? L10n.tr("disk.age.caption.any")))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ScrollView {
-                    planBody(result)
+                    planBody(result, mergedMode: preview.merged)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 320)
-                Text(mergedMode ? L10n.tr("disk.merged.warning") : L10n.tr("disk.card.warning"))
+                Text(preview.merged ? L10n.tr("disk.merged.warning") : L10n.tr("disk.card.warning"))
                     .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionError {
@@ -450,7 +454,7 @@ struct DiskView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    Button(L10n.tr("common.cancel")) { pending = nil; actionError = nil; mergedMode = false }
+                    Button(L10n.tr("common.cancel")) { pending = nil; actionError = nil }
                         .buttonStyle(.bordered)
                         .keyboardShortcut(.cancelAction)
                         .disabled(applying)
@@ -459,12 +463,12 @@ struct DiskView: View {
                         if applying {
                             ProgressView().controlSize(.small).frame(width: 88)
                         } else {
-                            Text(mergedMode ? L10n.tr("disk.merged.remove_button") : L10n.tr("disk.card.move_button"))
+                            Text(preview.merged ? L10n.tr("disk.merged.remove_button") : L10n.tr("disk.card.move_button"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AgentPalette.bad)
-                    .disabled(applying || result.moved.isEmpty)
+                    .disabled(!DiskCleanFlow.canBeginMove(applying: applying, movedCount: result.moved.count))
                 }
             }
         }
@@ -473,7 +477,7 @@ struct DiskView: View {
         .background(CardSurfaceBackground(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)))
     }
 
-    @ViewBuilder private func planBody(_ result: CleanResult) -> some View {
+    @ViewBuilder private func planBody(_ result: CleanResult, mergedMode: Bool) -> some View {
         let groups = CleanPlan.groups(report: disk.report ?? .empty, moved: result.moved)
         if result.moved.isEmpty {
             Text(L10n.tr("disk.card.nothing_moved")).font(.system(size: 12)).foregroundStyle(.secondary)
@@ -498,10 +502,10 @@ struct DiskView: View {
             Text(L10n.tr("disk.card.total", CleanPlan.countAndSize(count: result.moved.count, bytes: result.freedBytes)))
                 .font(.system(size: 11, weight: .medium)).monospacedDigit()
         }
-        skippedList(result)
+        skippedList(result, mergedMode: mergedMode)
     }
 
-    @ViewBuilder private func skippedList(_ result: CleanResult) -> some View {
+    @ViewBuilder private func skippedList(_ result: CleanResult, mergedMode: Bool) -> some View {
         // 清理已合并的工作树时，未合并的 worktree 本来就不在候选里，不逐条列出。
         let skipped = mergedMode ? result.skipped.filter { $0.reason != "not_merged" } : result.skipped
         if !skipped.isEmpty {
@@ -562,13 +566,12 @@ struct DiskView: View {
     private func dryRunMerged() {
         guard !checking, !applying else { return }
         checking = true
-        mergedMode = true
         actionError = nil
         Task {
             do {
-                pending = try await disk.cleanMergedWorktrees(confirmed: false)
+                let result = try await disk.cleanMergedWorktrees(confirmed: false)
+                pending = DiskCleanPreview(ids: [], olderThan: nil, result: result, merged: true)
             } catch {
-                mergedMode = false
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             checking = false
@@ -580,12 +583,13 @@ struct DiskView: View {
         let ids = selected.sorted()
         guard !ids.isEmpty else { return }
         checking = true
-        mergedMode = false
         actionError = nil
         let older = age.argument
         Task {
             do {
-                pending = try await disk.clean(ids: ids, olderThan: older, confirmed: false)
+                let result = try await disk.clean(ids: ids, olderThan: older, confirmed: false)
+                // 冻结 ids / olderThan / moved，确认步不再读可变的勾选与年龄档。
+                pending = DiskCleanPreview(ids: ids, olderThan: older, result: result, merged: false)
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
@@ -595,21 +599,26 @@ struct DiskView: View {
 
     /// 用户已经看过 dry-run 计划，这一步才带 `--yes`。
     private func move() {
-        guard !applying, let preview = pending else { return }
+        guard let preview = pending,
+              DiskCleanFlow.canBeginMove(applying: applying, movedCount: preview.result.moved.count)
+        else { return }
         applying = true
         actionError = nil
-        let ids = selected.sorted()
-        let older = age.argument
-        let merged = mergedMode
         Task {
             do {
-                let result = merged
-                    ? try await disk.cleanMergedWorktrees(confirmed: true, onlyPaths: preview.moved)
-                    : try await disk.clean(ids: ids, olderThan: older, confirmed: true, onlyPaths: preview.moved)
+                let result = preview.merged
+                    ? try await disk.cleanMergedWorktrees(confirmed: true, onlyPaths: preview.result.moved)
+                    : try await disk.clean(ids: preview.ids, olderThan: preview.olderThan, confirmed: true,
+                                           onlyPaths: preview.result.moved)
+                // 部分成功也走结果卡，不当总失败。
+                _ = DiskCleanFlow.presentsAsResultCard(result)
                 pending = nil
                 finished = result
-                if !merged { selected.removeAll() }
-                disk.refresh(rescan: true)
+                finishedMerged = preview.merged
+                if !preview.merged, let report = disk.report {
+                    selected = DiskCleanFlow.selectionAfter(selected: selected, report: report, result: result)
+                }
+                disk.refreshAfterClean()
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

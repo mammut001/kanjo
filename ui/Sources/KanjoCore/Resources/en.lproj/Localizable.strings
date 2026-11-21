@@ -464,9 +464,15 @@
 "disk.block.not_merged" = "not merged";
 "disk.block.worktree_remove_failed" = "git refused";
 "disk.block.nothing_to_move" = "nothing to move";
+"disk.block.move_failed" = "could not move";
+"disk.block.changed" = "changed since preview";
+"disk.block.refused" = "refused";
 "disk.block.explanation.not_merged" = "The branch is not merged into the default branch yet, so merged-worktree cleanup leaves it alone.";
 "disk.block.explanation.worktree_remove_failed" = "git worktree remove refused this worktree (for example it is locked or has changes). The folder was left as it is.";
 "disk.block.explanation.nothing_to_move" = "Nothing is here besides the entries listed on their own.";
+"disk.block.explanation.move_failed" = "The file or folder could not be moved (for example it is in use). Anything already moved stays in Trash; the rest was left as it is.";
+"disk.block.explanation.changed" = "This path no longer matches the dry-run preview, so the confirm step skipped it.";
+"disk.block.explanation.refused" = "Kanjo never cleans this path: it is a protected folder (such as your home folder or a system folder) or a link that points somewhere else.";
 
 /* Session */
 "session.untitled" = "(untitled)";

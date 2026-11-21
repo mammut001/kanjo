@@ -23,7 +23,14 @@ public static class DiskAges
         _ => L10n.Tr("disk.age.90d"),
     };
 
-    public static string? Argument(this DiskAge age) => age == DiskAge.Any ? null : age.Label();
+    /// <summary>传给 CLI 的 <c>--older-than</c> 值；必须是 <c>7d</c>/<c>30d</c>/<c>90d</c>，不能用本地化标签。</summary>
+    public static string? Argument(this DiskAge age) => age switch
+    {
+        DiskAge.Days7 => "7d",
+        DiskAge.Days30 => "30d",
+        DiskAge.Days90 => "90d",
+        _ => null,
+    };
 
     public static string Caption(this DiskAge age) => age == DiskAge.Any
         ? L10n.Tr("disk.age.caption.any")

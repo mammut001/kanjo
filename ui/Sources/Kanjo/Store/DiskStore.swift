@@ -122,7 +122,7 @@ final class DiskStore: ObservableObject {
             defer { autoCleanRunning = false }
             guard let result = try? await cleanMergedWorktrees(confirmed: true), !result.moved.isEmpty else { return }
             autoCleanRecord = AutoCleanRecord(result: result, date: Date())
-            refresh(rescan: true)
+            refreshAfterClean()
         }
     }
 
@@ -134,5 +134,11 @@ final class DiskStore: ObservableObject {
             if src is DiskDataSource { await ReportStore.shared.checkPython() }
             throw error
         }
+    }
+
+    /// 清理成功后：丢掉应用侧磁盘报告缓存，再强制重扫。
+    func refreshAfterClean() {
+        cache?.invalidate()
+        refresh(rescan: true)
     }
 }
