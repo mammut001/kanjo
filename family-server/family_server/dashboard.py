@@ -173,9 +173,13 @@ def parse_iso(ts: Optional[str]) -> Optional[datetime]:
         clean = ts.strip()
         if clean.endswith("Z"):
             clean = clean[:-1] + "+00:00"
-        return datetime.fromisoformat(clean)
+        parsed = datetime.fromisoformat(clean)
     except Exception:
         return None
+    # Client-supplied: extreme years would overflow timezone conversion and date math.
+    if not 2000 <= parsed.year <= 2100:
+        return None
+    return parsed
 
 
 def format_tokens(n: int) -> str:

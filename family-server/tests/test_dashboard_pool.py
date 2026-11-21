@@ -121,6 +121,21 @@ class DashboardPoolTests(unittest.TestCase):
         self.assertIn("周额度已用：<strong>未知</strong>", html)
         self.assertNotIn("周额度已用：<strong>0.0%</strong>", html)
 
+    def test_out_of_range_reset_timestamp_does_not_crash_dashboard(self):
+        for i, value in enumerate(("0001-01-01T00:00:00Z", "9999-12-31T23:00:00-05:00")):
+            with self.subTest(value=value):
+                self.db_path = os.path.join(self.tmp.name, "range%d.db" % i)
+                db.init_db(self.db_path)
+                quota = {"antigravity": {"weekly_resets_at": value, "weekly_used_percent": 10.0,
+                                         "five_hour_resets_at": value, "five_hour_used_percent": 1.0,
+                                         "extra_windows": [{"id": "3p-weekly", "used_percent": 5.0,
+                                                            "resets_at": value}]}}
+                self._add("Alice", self._payload("a", [], quota=self._ag_quota(60.0)),
+                          received_at=NOW.replace(hour=1))
+                self._add("Bob", self._payload("b", [], quota=quota))
+                html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+                self.assertIn("数据来自 Bob 的最新上报", html)
+
 
 if __name__ == "__main__":
     unittest.main()
