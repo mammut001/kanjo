@@ -116,16 +116,16 @@ public readonly record struct Tokens(
 public sealed record Aggregate(
     double Cost,
     Tokens Tokens,
-    int Sessions,
-    int? UniqueSessions,
+    long Sessions,
+    long? UniqueSessions,
     string? FirstActive,
     string? LastActive)
 {
     public static Aggregate Decode(System.Text.Json.JsonElement e, string path) => new(
         J.Number(e, "cost", path),
         Tokens.Decode(J.RequiredObject(e, "tokens", path), J.Child(path, "tokens")),
-        J.Int(e, "sessions", path),
-        J.IntOrNull(e, "unique_sessions", path),
+        J.Long(e, "sessions", path),
+        J.LongOrNull(e, "unique_sessions", path),
         J.StringOrNull(e, "first_active", path),
         J.StringOrNull(e, "last_active", path));
 }
@@ -133,7 +133,7 @@ public sealed record Aggregate(
 public sealed record SessionBucket(
     double Cost,
     Tokens Tokens,
-    int Sessions,
+    long Sessions,
     string? FirstActive,
     string? LastActive,
     RoList<Session> SessionsDetail)
@@ -141,16 +141,16 @@ public sealed record SessionBucket(
     public static SessionBucket Decode(System.Text.Json.JsonElement e, string path) => new(
         J.Number(e, "cost", path),
         Tokens.Decode(J.RequiredObject(e, "tokens", path), J.Child(path, "tokens")),
-        J.Int(e, "sessions", path),
+        J.Long(e, "sessions", path),
         J.StringOrNull(e, "first_active", path),
         J.StringOrNull(e, "last_active", path),
         J.List(J.ArrayOrNull(e, "sessions_detail", path), J.Child(path, "sessions_detail"), Session.Decode));
 }
 
-public sealed record ParseFailedBucket(int Sessions, RoList<string> Files)
+public sealed record ParseFailedBucket(long Sessions, RoList<string> Files)
 {
     public static ParseFailedBucket Decode(System.Text.Json.JsonElement e, string path) => new(
-        J.Int(e, "sessions", path),
+        J.Long(e, "sessions", path),
         J.List(J.ArrayOrNull(e, "files", path), J.Child(path, "files"),
             (item, p) => J.ToString(item, p)));
 }

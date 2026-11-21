@@ -1237,9 +1237,24 @@ MOBILE_PROJECT_KEYS = ("id", "name", "cost", "tokens", "sessions", "first_active
 MOBILE_BUCKET_KEYS = ("cost", "tokens", "sessions", "first_active", "last_active", "sessions_detail")
 
 
-def mobile_project_id(project_id: str) -> str:
-    """Stable opaque id so the phone can key rows without seeing the remote/path."""
-    return hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:12]
+def private_quota_windows(windows: dict, family: bool = False) -> dict:
+    """Keep only documented quota fields in off-machine reports."""
+    keys = {"weekly_resets_at", "weekly_window_hours", "weekly_used_percent",
+            "five_hour_resets_at", "five_hour_window_hours", "five_hour_used_percent", "source"}
+    extra_keys = {"id", "title", "label", "used_percent", "resets_at", "window_hours"}
+    result = {}
+    for agent, entry in windows.items():
+        if not isinstance(entry, dict):
+            continue
+        clean = {k: v for k, v in entry.items() if k in keys}
+        if isinstance(entry.get("extra_windows"), list):
+            clean["extra_windows"] = [
+                {("label" if family and k == "title" else k): v
+                 for k, v in extra.items() if k in extra_keys}
+                for extra in entry["extra_windows"] if isinstance(extra, dict)
+            ]
+        result[agent] = clean
+    return result
 
 
 def mobile_session(session: dict) -> dict:
@@ -1264,8 +1279,8 @@ def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
     for index, project in enumerate(doc["projects"], 1):
         trimmed = {key: project[key] for key in MOBILE_PROJECT_KEYS}
         trimmed["sessions_detail"] = mobile_sessions(project)
+        trimmed["id"] = "project-%d" % index
         if hide_project_names:
-            trimmed["id"] = mobile_project_id(project["id"])
             trimmed["name"] = "Project %d" % index
         projects.append(trimmed)
 
@@ -1279,6 +1294,7 @@ def mobile_document(doc: dict, hide_project_names: bool = False) -> dict:
         mobile_buckets[name]["sessions_detail"] = mobile_sessions(buckets[name])
 
     mobile = {key: doc[key] for key in MOBILE_TOP_LEVEL_KEYS}
+    mobile["quota_windows"] = private_quota_windows(mobile["quota_windows"])
     if "subscriptions" in mobile and isinstance(mobile["subscriptions"], dict):
         clean_subs = {}
         for agent, sub in mobile["subscriptions"].items():
@@ -1868,6 +1884,8 @@ def build_family_report(config: Optional[Config] = None, dirs: Optional[Dict[str
             cleaned_entry["extra_windows"] = cleaned_ew
         qw_clean[agent] = cleaned_entry
 
+    qw_clean = private_quota_windows(qw_clean, family=True)
+
     subs = load_subscriptions(config.subscriptions, directory=tokei_dir, now=now,
                               timezone_name=tz_name,
                               antigravity_accounts=config.antigravity_accounts)
@@ -2132,6 +2150,8 @@ def load_fast_family_report(fingerprint: str, directory: Optional[str] = None,
             payload = json.load(handle)
         if not isinstance(payload, dict):
             return None
+        if payload.get("privacy_version") != 1:
+            return None
         if payload.get("fingerprint") != fingerprint:
             return None
         if scope is not None and payload.get("scope") != scope:
@@ -2170,6 +2190,7 @@ def save_fast_family_report(fingerprint: str, doc: dict, directory: Optional[str
         os.makedirs(cdir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".family-report-last-", dir=cdir)
         payload = {
+            "privacy_version": 1,
             "fingerprint": fingerprint,
             "scanned_at": current,
             "doc": doc,

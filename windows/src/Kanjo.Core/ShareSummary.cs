@@ -26,7 +26,7 @@ public sealed record ShareSummary(
         double Cost,
         Subscription? Subscription,
         double? Multiplier,
-        int SessionCount,
+        long SessionCount,
         IReadOnlyList<AgentProjectShare> ProjectShares);
 
     public sealed record ProjectShare(string Name, double Cost, double Share);
@@ -35,7 +35,7 @@ public sealed record ShareSummary(
         long Tokens,
         double Cost,
         int AgentsCount,
-        int Sessions,
+        long Sessions,
         long Input,
         long Output,
         long CacheRead,
@@ -86,7 +86,7 @@ public sealed record ShareSummary(
 
         var exact = ExactBreakdowns(report);
         var sessionsByAgent = InRangeSessions(filtered);
-        var projectSessionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var projectSessionCounts = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var project in filtered.Projects)
         {
             foreach (var session in project.SessionsDetail)

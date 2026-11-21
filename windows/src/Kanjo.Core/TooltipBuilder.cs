@@ -137,7 +137,7 @@ public static class TooltipBuilder
 public static class OverviewSummaryText
 {
     public static string Make(
-        TimeRange range, string dateRange, int projectsCount, int sessionsCount, long tokensCount,
+        TimeRange range, string dateRange, int projectsCount, long sessionsCount, long tokensCount,
         int hiddenCount = 0, string? language = null)
     {
         var counts = Counts(projectsCount, sessionsCount, tokensCount, hiddenCount, language);
@@ -146,7 +146,7 @@ public static class OverviewSummaryText
 
     /// <summary>项目 / 会话 / token 计数，用「 · 」接起来。日期另算，方便总览把日期和计数分成两行。</summary>
     public static string Counts(
-        int projectsCount, int sessionsCount, long tokensCount,
+        int projectsCount, long sessionsCount, long tokensCount,
         int hiddenCount = 0, string? language = null)
     {
         var lang = language ?? L10n.CurrentLanguage;
@@ -170,7 +170,7 @@ public static class OverviewSummaryText
 /// <summary>项目详情副标题行：Today 隐藏冗余日期，其他范围保留。</summary>
 public static class ProjectSubtitleText
 {
-    public static string Make(TimeRange range, int sessions, string usageDate, string? language = null)
+    public static string Make(TimeRange range, long sessions, string usageDate, string? language = null)
     {
         var lang = language ?? L10n.CurrentLanguage;
         var sessStr = sessions == 1

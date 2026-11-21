@@ -208,7 +208,7 @@ public sealed record FilteredProject(
     Project Project,
     double Cost,
     long Tokens,
-    int Sessions,
+    long Sessions,
     RoList<AgentCost> ByAgent,
     RoList<DayCost> ByDay,
     RoList<Session> SessionsDetail,
@@ -243,7 +243,7 @@ public sealed record FilteredProject(
 public sealed record FilteredBucket(
     double Cost,
     long Tokens,
-    int Sessions,
+    long Sessions,
     RoList<Session> SessionsDetail,
     string? FirstActive,
     string? LastActive);
@@ -255,7 +255,7 @@ public sealed record FilteredReport(
     FilteredBucket Excluded,
     double Cost,
     long Tokens,
-    int Sessions,
+    long Sessions,
     string? FirstActive,
     string? LastActive)
 {
@@ -461,7 +461,7 @@ public static class RangeEngine
 
         var agentCost = new Dictionary<string, double>(StringComparer.Ordinal);
         var agentTokens = new Dictionary<string, long>(StringComparer.Ordinal);
-        var agentSessions = new Dictionary<string, int>(StringComparer.Ordinal);
+        var agentSessions = new Dictionary<string, long>(StringComparer.Ordinal);
         var days = new List<DayCost>();
 
         foreach (var d in p.ByDay)

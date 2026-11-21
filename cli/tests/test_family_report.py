@@ -112,6 +112,24 @@ class FamilyReportExportTest(unittest.TestCase):
         privacy_err = check_privacy_backstop(raw_bytes)
         self.assertIsNone(privacy_err, "family-server privacy backstop failed: %s" % privacy_err)
 
+    def test_quota_drops_unrecognized_account_data(self):
+        from kanjo.config import Config
+        quota = {"antigravity": {"weekly_used_percent": 42, "extra_windows": [
+            {"title": "Claude", "user_email": "alice@example.com", "used_percent": 10}
+        ]}}
+        with mock.patch("kanjo.export.quota.quota_windows", return_value=quota):
+            doc = export.build_family_report(config=Config(), dirs=FIXTURE_DIRS)
+        self.assertNotIn("alice@example.com", json.dumps(doc))
+        self.assertNotIn("user_email", json.dumps(doc))
+
+    def test_legacy_cached_quota_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as cache:
+            path = os.path.join(cache, "family-report-last.json")
+            with open(path, "w") as f:
+                json.dump({"fingerprint": "fixture", "scanned_at": 100,
+                           "doc": {"quota_windows": {"antigravity": {"user_email": "alice@example.com"}}}}, f)
+            self.assertIsNone(export.load_fast_family_report("fixture", directory=cache, now=101))
+
     def test_family_report_null_member_label_by_default(self):
         code, out, err = self._run_cli("export", "--family-report")
         self.assertEqual(code, 0, err)

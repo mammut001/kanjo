@@ -17,6 +17,17 @@ final class DecodingTests: KanjoTestCase {
         XCTAssertTrue((6...8).contains(r.projects.count))
     }
 
+    func testWideTokenAndSessionCountsDecode() throws {
+        let session = #"{"agent":"test","started":"2026-01-01T00:00:00Z","ended":"2026-01-01T01:00:00Z","cost":0,"tokens":{"total":3000000000},"subagents":3000000000}"#
+        let decoded = try JSONDecoder().decode(Session.self, from: Data(session.utf8))
+        XCTAssertEqual(decoded.tokens.total, 3_000_000_000)
+        XCTAssertEqual(decoded.subagents, 3_000_000_000)
+        let day = #"{"day":"2026-01-01","cost":0,"tokens":1000000000000,"by_agent_tokens":{"test":3000000000}}"#
+        let decodedDay = try JSONDecoder().decode(DayCost.self, from: Data(day.utf8))
+        XCTAssertEqual(decodedDay.tokens, 1_000_000_000_000)
+        XCTAssertEqual(decodedDay.byAgentTokens?["test"], 3_000_000_000)
+    }
+
     func testQuotaWindowUsageDecodes() throws {
         let q = try XCTUnwrap(try loadFixture().quotaWindows?["claude"])
         XCTAssertEqual(q.weeklyUsedPercent, 57)

@@ -1,7 +1,6 @@
 """`kanjo export --mobile`: the trimmed phone snapshot (CONTRACT.md section 11)."""
 
 import gzip
-import hashlib
 import json
 import os
 import shutil
@@ -65,12 +64,19 @@ class MobileDocumentTest(unittest.TestCase):
         self.assertNotIn("account", mob["subscriptions"]["claude"])
         self.assertNotIn("@", json.dumps(mob["subscriptions"]))
 
+    def test_quota_account_identifiers_are_removed(self):
+        doc = dict(self.full)
+        doc["quota_windows"] = {"antigravity": {"email": "alice@example.com", "user_email": "alice@example.com", "weekly_used_percent": 42}}
+        payload = json.dumps(mobile_document(doc))
+        self.assertNotIn("alice", payload.lower())
+        self.assertNotIn("example.com", payload.lower())
+
     def test_projects_keep_only_phone_fields(self):
         self.assertEqual(len(self.mobile["projects"]), len(self.full["projects"]))
         for mobile_project, full_project in zip(self.mobile["projects"], self.full["projects"]):
             self.assertEqual(set(mobile_project), MOBILE_PROJECT_KEYS)
             self.assertFalse(DROP_PROJECT_KEYS & set(mobile_project))
-            self.assertEqual(mobile_project["id"], full_project["id"])
+            self.assertNotIn(full_project["id"], json.dumps(mobile_project))
             self.assertEqual(mobile_project["name"], full_project["name"])
             self.assertEqual(mobile_project["cost"], full_project["cost"])
             self.assertEqual(mobile_project["tokens"], full_project["tokens"])
@@ -132,8 +138,7 @@ class MobileDocumentTest(unittest.TestCase):
         self.assertEqual([p["name"] for p in hidden["projects"]],
                          ["Project %d" % i for i in range(1, len(self.full["projects"]) + 1)])
         self.assertEqual([p["id"] for p in hidden["projects"]],
-                         [hashlib.sha256(p["id"].encode("utf-8")).hexdigest()[:12]
-                          for p in self.full["projects"]])
+                         ["project-%d" % i for i in range(1, len(self.full["projects"]) + 1)])
         self.assertEqual([p["cost"] for p in hidden["projects"]],
                          [p["cost"] for p in self.full["projects"]])
         self.assertEqual(len({p["id"] for p in hidden["projects"]}), len(hidden["projects"]))
