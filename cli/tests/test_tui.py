@@ -8,6 +8,8 @@ from datetime import datetime, timezone, timedelta
 import io
 import json
 import os
+import shutil
+import sys
 import tempfile
 import time
 import unittest
@@ -42,7 +44,7 @@ from kanjo.tui.term import (
     apply_mouse_event, mouse_click_key, mouse_event_kind, run_curses_tui,
     run_export_subprocess, visible_row_count
 )
-from kanjo.tui.i18n import resolve_lang, t
+from kanjo.tui.i18n import app_language, resolve_lang, t
 from kanjo.antigravity_accounts import compute_antigravity_accounts_window
 from kanjo.sources.base import Message, Session
 from kanjo import cli
@@ -1195,6 +1197,26 @@ class TUIMouseCliTest(unittest.TestCase):
 
 
 class TUIi18nTest(unittest.TestCase):
+    def test_app_language_skips_defaults_when_data_dir_set(self):
+        data = tempfile.mkdtemp(prefix="kanjo-lang-")
+        self.addCleanup(shutil.rmtree, data, True)
+        with mock.patch.dict(os.environ, {"KANJO_DATA_DIR": data}, clear=True), \
+                mock.patch("kanjo.tui.i18n.subprocess.run") as run, \
+                mock.patch("builtins.open") as opened:
+            self.assertIsNone(app_language())
+        run.assert_not_called()
+        opened.assert_not_called()
+
+    @unittest.skipUnless(sys.platform == "darwin", "defaults read is macOS only")
+    def test_app_language_reads_defaults_when_unisolated(self):
+        fake = mock.Mock(returncode=0, stdout="zh-Hans\n")
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("kanjo.tui.i18n.subprocess.run", return_value=fake) as run, \
+                mock.patch("builtins.open") as opened:
+            self.assertEqual(app_language(), "zh-Hans")
+        run.assert_called_once()
+        opened.assert_not_called()
+
     def test_chinese_compact_tokens(self):
         self.assertEqual(format_tokens(9999, "zh"), "9999")
         self.assertEqual(format_tokens(10000, "zh"), "1万")

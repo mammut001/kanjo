@@ -12,8 +12,8 @@ public enum UpdateGate {
     public static let feedKey = "SUFeedURL"
     public static let publicKeyKey = "SUPublicEDKey"
 
-    /// 开发模式下的启动参数：这些情况下不启动更新（swift run / 截图 / 预览窗口 / 指定数据文件）。
-    static let disablingArguments = ["--snapshot", "--window", "--data"]
+    /// 开发模式下的启动参数：这些情况下不启动更新（swift run / 截图 / 预览窗口 / 分享图 / 指定数据文件）。
+    static let disablingArguments = ["--snapshot", "--window", "--share-image", "--data"]
 
     /// 是否从打包好的 .app 里运行。
     public static func isPackagedApp(bundleURL: URL?) -> Bool {

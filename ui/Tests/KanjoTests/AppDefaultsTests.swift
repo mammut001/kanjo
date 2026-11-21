@@ -64,6 +64,32 @@ final class AppDefaultsTests: XCTestCase {
         XCTAssertEqual(AppDefaults.suiteName(arguments: argsSnapshotWithEnv, environment: env), "env-suite")
     }
 
+    func testShareImageDefaultsToKanjoPreview() {
+        XCTAssertEqual(AppDefaults.suiteName(arguments: ["--share-image", "out.png"], environment: [:]), "kanjo-preview")
+        XCTAssertEqual(AppDefaults.suiteName(arguments: ["--share-image=out.png"], environment: [:]), "kanjo-preview")
+        XCTAssertEqual(AppDefaults.suiteName(
+            arguments: ["--share-image", "out.png", "--defaults-suite", "explicit-preview"],
+            environment: [:]
+        ), "explicit-preview")
+    }
+
+    func testProcessStoreStaysOnStandardOutsideTests() {
+        let store = AppDefaults.resolveProcessStore(arguments: [], environment: [:], runningTests: false)
+        XCTAssertEqual(store, UserDefaults.standard)
+        XCTAssertFalse(AppDefaults.isXCTestHost(environment: [:], xcTestLinked: false))
+    }
+
+    func testProcessStoreIsolatesWhenRunningTests() {
+        XCTAssertTrue(AppDefaults.isXCTestHost(
+            environment: ["XCTestConfigurationFilePath": "/tmp/x.xctestconfiguration"],
+            xcTestLinked: false
+        ))
+        let store = AppDefaults.resolveProcessStore(arguments: [], environment: [:], runningTests: true)
+        XCTAssertNotEqual(store, UserDefaults.standard)
+        // suiteName itself stays nil: only the process store moves off .standard.
+        XCTAssertNil(AppDefaults.suiteName(arguments: [], environment: [:]))
+    }
+
     func testReturnsNilWhenAbsent() {
         XCTAssertNil(AppDefaults.suiteName(arguments: [], environment: [:]))
         XCTAssertNil(AppDefaults.suiteName(arguments: ["--data", "/tmp/sample.json"], environment: [:]))

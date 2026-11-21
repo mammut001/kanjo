@@ -234,6 +234,10 @@ def scan_claude_desktop_cache(now: float, cache_dir: Optional[str] = None) -> Op
     if not cache_dir:
         cache_dir = os.environ.get("KANJO_CLAUDE_CACHE_DIR")
     if not cache_dir:
+        # ``KANJO_DATA_DIR`` is the test-isolation signal used by the log roots.
+        # Do not fall through to the real Claude Desktop cache in that case.
+        if os.environ.get("KANJO_DATA_DIR"):
+            return None
         cache_dir = default_cache_dir()
     cache_dir = os.path.expanduser(cache_dir)
 

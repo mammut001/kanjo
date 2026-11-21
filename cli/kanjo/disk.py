@@ -180,13 +180,16 @@ def default_roots() -> dict:
 
     opencode_default = (winsupport.join(winsupport.user_profile() or "", ".local", "share", "opencode")
                         if win else "~/.local/share/opencode")
-    claude_app_default = (winsupport.join(winsupport.app_data() or "", "Claude")
-                          if win else "~/Library/Application Support/Claude")
     devin_default = winsupport.join(winsupport.local_data_dir("devin"), "cli") if win else "~/.local/share/devin/cli"
     musecode_default = winsupport.local_data_dir("muse") if win else "~/.local/share/muse"
+    # Same isolation as ``_dir``: ``KANJO_DATA_DIR`` without the explicit override
+    # must not point at the real scratch dir or the real Claude app cache.
+    scratch = (winsupport.expanduser(os.environ["KANJO_SCRATCH_DIR"])
+               if os.environ.get("KANJO_SCRATCH_DIR")
+               else None if os.environ.get("KANJO_DATA_DIR") else _default_scratch())
     return {
         "claude_projects": env_dirs("KANJO_CLAUDE_DIR", ["~/.claude/projects"]),
-        "scratch": winsupport.expanduser(os.environ.get("KANJO_SCRATCH_DIR") or _default_scratch()),
+        "scratch": scratch,
         "codex_dirs": env_dirs("KANJO_CODEX_DIR", ["~/.codex/sessions", "~/.codex/archived_sessions"]),
         "antigravity_dirs": env_dirs("KANJO_ANTIGRAVITY_DIR", [
             "~/.gemini/antigravity-cli/conversations",
@@ -197,8 +200,11 @@ def default_roots() -> dict:
         "grok": _dir("KANJO_GROK_DIR", "~/.grok", "~/.grok"),
         "qwen": _dir("KANJO_QWEN_DIR", "~/.qwen", "~/.qwen"),
         "commandcode": _dir("KANJO_COMMANDCODE_DIR", "~/.commandcode", "~/.commandcode"),
-        "claude_app": winsupport.expanduser(
-            os.environ.get("KANJO_CLAUDE_APP_CACHE") or claude_app_default),
+        "claude_app": _dir(
+            "KANJO_CLAUDE_APP_CACHE",
+            "~/Library/Application Support/Claude",
+            winsupport.join(winsupport.app_data() or "", "Claude"),
+        ),
         "minimax": _dir("KANJO_MINIMAX_DIR", "~/.minimax", "~/.minimax"),
         "opencode": _dir("KANJO_OPENCODE_DIR", "~/.local/share/opencode", opencode_default),
         "copilot": _dir("KANJO_COPILOT_DIR", "~/.copilot", "~/.copilot"),

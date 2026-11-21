@@ -322,5 +322,71 @@ class QuotaTest(unittest.TestCase):
             shutil.rmtree(cache)
 
 
+class RealDataIsolationTest(unittest.TestCase):
+    def _under_home(self, path):
+        home = os.path.abspath(os.path.expanduser("~"))
+        absolute = os.path.abspath(os.path.expanduser(path))
+        return absolute == home or absolute.startswith(home + os.sep)
+
+    def test_harness_keeps_kanjo_dirs_off_home(self):
+        for var in (
+            "KANJO_DATA_DIR", "KANJO_CACHE_DIR", "KANJO_CONFIG_DIR", "KANJO_TOKEI_DIR",
+            "KANJO_SCRATCH_DIR", "KANJO_CLAUDE_APP_CACHE", "KANJO_TRASH_DIR",
+            "KANJO_CLAUDE_CONFIG", "KANJO_CODEX_AUTH", "KANJO_GROK_AUTH",
+        ):
+            val = os.environ.get(var, "")
+            self.assertTrue(val, var)
+            self.assertFalse(self._under_home(val), "%s=%s" % (var, val))
+
+    def test_tokei_dir_stays_inside_data_dir(self):
+        data = tempfile.mkdtemp(prefix="kanjo-tokei-iso-")
+        self.addCleanup(shutil.rmtree, data, True)
+        with mock.patch.dict(os.environ, {"KANJO_DATA_DIR": data}, clear=True):
+            self.assertEqual(quota.tokei_dir(), os.path.join(data, "no-tokei"))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(quota.tokei_dir(), os.path.expanduser(os.path.join("~", ".tokei")))
+
+    def test_source_fingerprint_does_not_stat_home(self):
+        from kanjo.export import source_fingerprint
+
+        data = tempfile.mkdtemp(prefix="kanjo-fp-iso-")
+        self.addCleanup(shutil.rmtree, data, True)
+        env = {
+            "KANJO_DATA_DIR": os.path.join(data, "data"),
+            "KANJO_CACHE_DIR": os.path.join(data, "cache"),
+            "KANJO_CONFIG_DIR": os.path.join(data, "config"),
+            "KANJO_NO_NETWORK": "1",
+        }
+        for name in ("data", "cache", "config"):
+            os.makedirs(os.path.join(data, name))
+        home = os.path.abspath(os.path.expanduser("~"))
+        touched = []
+        real_stat = os.stat
+        real_scandir = os.scandir
+
+        def tracking_stat(path, *args, **kwargs):
+            touched.append(os.path.abspath(os.fspath(path)))
+            return real_stat(path, *args, **kwargs)
+
+        def tracking_scandir(path, *args, **kwargs):
+            touched.append(os.path.abspath(os.fspath(path)))
+            return real_scandir(path, *args, **kwargs)
+
+        def forbid_subprocess(*args, **kwargs):
+            argv = args[0] if args else kwargs.get("args") or []
+            text = " ".join(str(part) for part in argv)
+            if "security" in text or "defaults" in text:
+                raise AssertionError(text)
+            raise AssertionError("unexpected subprocess: " + text)
+
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch("os.stat", tracking_stat), \
+                mock.patch("os.scandir", tracking_scandir), \
+                mock.patch("subprocess.run", forbid_subprocess):
+            source_fingerprint(dirs={"antigravity": []})
+        for path in touched:
+            self.assertFalse(path == home or path.startswith(home + os.sep), path)
+
+
 if __name__ == "__main__":
     unittest.main()

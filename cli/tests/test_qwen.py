@@ -1,5 +1,8 @@
 import os
+import shutil
+import tempfile
 import unittest
+from unittest import mock
 
 from kanjo.sources import qwen
 
@@ -45,6 +48,32 @@ class QwenSourceTest(unittest.TestCase):
         s1 = qwen.parse_file(path)
         s2 = qwen.parse_file(path)
         self.assertEqual([m.key for m in s1.messages], [m.key for m in s2.messages])
+
+    def test_stray_file_does_not_fall_back_to_home_qwen(self):
+        tmp = tempfile.mkdtemp(prefix="kanjo-qwen-stray-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        stray = os.path.join(tmp, "notes.txt")
+        data = os.path.join(tmp, "data")
+        seen = []
+
+        def tracking(path):
+            seen.append(os.path.abspath(os.fspath(path)))
+            return False
+
+        with mock.patch.dict(os.environ, {"KANJO_DATA_DIR": data, "KANJO_QWEN_DIR": ""}), \
+                mock.patch("os.path.isdir", tracking):
+            root = qwen._locate_qwen_root(stray)
+        self.assertEqual(os.path.abspath(root), os.path.abspath(os.path.join(data, "no-qwen")))
+        self.assertNotIn(os.path.abspath(os.path.expanduser("~/.qwen")), seen)
+
+    def test_stray_file_names_home_qwen_when_unisolated(self):
+        tmp = tempfile.mkdtemp(prefix="kanjo-qwen-stray-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        stray = os.path.join(tmp, "notes.txt")
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("os.path.isdir", return_value=False):
+            root = qwen._locate_qwen_root(stray)
+        self.assertEqual(root, os.path.expanduser("~/.qwen"))
 
 
 if __name__ == "__main__":

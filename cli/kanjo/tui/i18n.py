@@ -398,7 +398,12 @@ def app_language() -> Optional[str]:
     """
     if sys.platform != "darwin":
         return None
-    domain = os.environ.get(APP_DEFAULTS_SUITE_ENV, "").strip() or APP_DEFAULTS_DOMAIN
+    suite = os.environ.get(APP_DEFAULTS_SUITE_ENV, "").strip()
+    # Tests set KANJO_DATA_DIR and must not read the real app domain.
+    # An explicit suite (preview / tests) is still read.
+    if os.environ.get("KANJO_DATA_DIR") and not suite:
+        return None
+    domain = suite or APP_DEFAULTS_DOMAIN
     try:
         res = subprocess.run(
             ["defaults", "read", domain, APP_LANGUAGE_KEY],

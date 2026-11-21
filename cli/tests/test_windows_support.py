@@ -147,8 +147,20 @@ class FamilyTokenCliTest(unittest.TestCase):
 
 class ReportFamilyWindowsFallbackTest(unittest.TestCase):
     def test_report_family_reads_credential_when_env_unset(self):
+        # clear=True drops the harness isolation. Put Kanjo's own dirs back in
+        # this temp tree so config load and the TLS cache stay off the real home.
+        # KANJO_FAMILY_TOKEN stays unset: that is what the test is about.
+        tmp = tempfile.mkdtemp(prefix="kanjo-win-family-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        env = {
+            "KANJO_DATA_DIR": os.path.join(tmp, "data"),
+            "KANJO_CACHE_DIR": os.path.join(tmp, "cache"),
+            "KANJO_CONFIG_DIR": os.path.join(tmp, "config"),
+            "KANJO_TOKEI_DIR": os.path.join(tmp, "tokei"),
+            "KANJO_NO_NETWORK": "1",
+        }
         with mock.patch("kanjo.winsupport.is_windows", return_value=True), \
-             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.dict(os.environ, env, clear=True), \
              mock.patch("kanjo.winsupport.cred_read", return_value="token-from-credmgr"):
             captured_headers = {}
 
