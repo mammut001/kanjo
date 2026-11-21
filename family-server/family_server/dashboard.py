@@ -477,7 +477,7 @@ def generate_dashboard_html(
                 dev_plans = dev.get("plans") or merged.get("plans") or {}
                 ag_qw = qw.get("antigravity")
                 if isinstance(ag_qw, dict):
-                    pct = _as_float(ag_qw.get("weekly_used_percent")) or 0.0
+                    pct = _as_float(ag_qw.get("weekly_used_percent"))  # None = unknown
                     resets_at = ag_qw.get("weekly_resets_at")
                     plan_name = dev_plans.get("antigravity", "Google AI Ultra") if isinstance(dev_plans, dict) else "Google AI Ultra"
                     dev_quota = {
@@ -940,7 +940,8 @@ def generate_dashboard_html(
                 doc.append('      <div class="pool-note">按天统计，额度周起始当天的用量整天计入。</div>')
 
     # Per-member view only when members disagree (pool may not actually be shared).
-    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries]
+    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries
+                   if q["quota"]["weekly_used_percent"] is not None]
     show_per_member = len(weekly_vals) > 1 and (max(weekly_vals) - min(weekly_vals)) > 2.0
     if show_per_member:
         doc.append('      <h3 class="pool-subtitle">各成员上报的周额度（数值不一致，额度可能并非共用）</h3>')
@@ -953,7 +954,9 @@ def generate_dashboard_html(
             reset_dt = parse_iso(q["quota"]["weekly_resets_at"])
             reset_str = format_dt(reset_dt, tz) if reset_dt else "—"
 
-            if pct >= 95.0:
+            if pct is None:
+                bar_color = "var(--text-muted)"
+            elif pct >= 95.0:
                 bar_color = "var(--red)"
             elif pct >= 80.0:
                 bar_color = "var(--amber)"
@@ -965,11 +968,13 @@ def generate_dashboard_html(
             doc.append(f'            <span class="quota-user">{name}{lbl}</span>')
             doc.append(f'            <span class="quota-plan">{plan}</span>')
             doc.append('          </div>')
-            doc.append('          <div class="progress-bar">')
-            doc.append(f'            <div class="progress-fill" style="width: {min(100.0, pct):.1f}%; background: {bar_color};"></div>')
-            doc.append('          </div>')
+            if pct is not None:
+                doc.append('          <div class="progress-bar">')
+                doc.append(f'            <div class="progress-fill" style="width: {min(100.0, pct):.1f}%; background: {bar_color};"></div>')
+                doc.append('          </div>')
+            pct_str = "未知" if pct is None else f"{pct:.1f}%"
             doc.append('          <div class="quota-footer">')
-            doc.append(f'            <span>周额度已用：<strong>{pct:.1f}%</strong></span>')
+            doc.append(f'            <span>周额度已用：<strong>{pct_str}</strong></span>')
             doc.append(f'            <span>重置时间：{html.escape(reset_str)}</span>')
             doc.append('          </div>')
             doc.append('        </div>')

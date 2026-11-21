@@ -101,6 +101,26 @@ class DashboardPoolTests(unittest.TestCase):
         self.assertNotIn("50.00M", html)
         self.assertNotIn("$1,234.56", html)
 
+    def _ag_quota(self, weekly):
+        return {"antigravity": {"weekly_resets_at": "2026-11-24T12:00:00Z", "weekly_window_hours": 168,
+                                "weekly_used_percent": weekly}}
+
+    def test_unknown_weekly_percent_is_not_zero_and_not_a_disagreement(self):
+        self._add("Alice", self._payload("a", [], quota=self._ag_quota(45.0)))
+        self._add("Bob", self._payload("b", [], quota=self._ag_quota(None)))
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        self.assertNotIn("数值不一致", html)
+        self.assertNotIn("周额度已用：<strong>0.0%</strong>", html)
+
+    def test_unknown_weekly_percent_renders_as_unknown_in_member_grid(self):
+        self._add("Alice", self._payload("a", [], quota=self._ag_quota(45.0)))
+        self._add("Bob", self._payload("b", [], quota=self._ag_quota(None)))
+        self._add("Carol", self._payload("c", [], quota=self._ag_quota(10.0)))
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        self.assertIn("数值不一致", html)
+        self.assertIn("周额度已用：<strong>未知</strong>", html)
+        self.assertNotIn("周额度已用：<strong>0.0%</strong>", html)
+
 
 if __name__ == "__main__":
     unittest.main()
