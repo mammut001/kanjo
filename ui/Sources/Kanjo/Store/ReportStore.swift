@@ -44,6 +44,7 @@ final class ReportStore: ObservableObject {
     private var logWatcher: LogWatcher?
     private var scheduledTask: Task<Void, Never>?
     private let defaults: UserDefaults
+    private let backgroundWork: ReportBackgroundWork
     private var defaultsObserver: NSObjectProtocol?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var processObservers: [NSObjectProtocol] = []
@@ -52,8 +53,9 @@ final class ReportStore: ObservableObject {
     private var writeQueueTask: Task<Void, Never>?
     private var writingAccountEmail: String?
 
-    init(defaults: UserDefaults = AppDefaults.store) {
+    init(defaults: UserDefaults = AppDefaults.store, isSnapshot: Bool = AppDefaults.isRenderingMode()) {
         self.defaults = defaults
+        self.backgroundWork = ReportBackgroundWork(isSnapshot: isSnapshot)
         let override = DefaultPaths.dataOverride()
         self.dataOverride = override
 
@@ -85,7 +87,7 @@ final class ReportStore: ObservableObject {
         let shouldLoadCache = ReportLoader.shouldUseLastExportCache(
             sourceKind: initialKind,
             dataOverride: override,
-            isSnapshotMode: AppDefaults.isSnapshotMode()
+            isSnapshotMode: isSnapshot
         )
         let cacheLoader = Self.makeCacheLoader(shouldLoad: shouldLoadCache)
         self.loader = ReportLoader(
@@ -98,29 +100,33 @@ final class ReportStore: ObservableObject {
         loader.onStateChange = { [weak self] state in
             self?.apply(state)
         }
-        loader.onLiveReport = { r in
-            CloudSyncStore.shared.reportDidRefresh(r)
-            PublishStore.shared.reportDidRefresh(r)
-            FamilyReportStore.shared.reportDidRefresh(r)
+        loader.onLiveReport = { [backgroundWork] r in
+            backgroundWork.perform {
+                CloudSyncStore.shared.reportDidRefresh(r)
+                PublishStore.shared.reportDidRefresh(r)
+                FamilyReportStore.shared.reportDidRefresh(r)
+            }
         }
         loader.onCLIFailure = { [weak self] in
-            await self?.checkPython()
+            guard let self, self.backgroundWork.isEnabled else { return }
+            await self.checkPython()
         }
         loader.onFollowUpAction = { [weak self] action in
             self?.handleSchedulerAction(action)
         }
 
-        setupNotifications()
-        
         defaultsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: defaults, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.handleDefaultsChange() }
         }
 
-        Task { await checkPython() }
-        Task { await loadKnownPlans() }
+        backgroundWork.start(
+            checkPython: { Task { await checkPython() } },
+            loadKnownPlans: { Task { await loadKnownPlans() } },
+            restartTimer: { restartTimer() },
+            setupWatcher: { setupWatcher() },
+            setupNotifications: { setupNotifications() }
+        )
         loader.startInitialLoad()
-        restartTimer()
-        setupWatcher()
     }
 
     deinit {
@@ -312,6 +318,7 @@ final class ReportStore: ObservableObject {
     }
 
     func setupWatcher() {
+        guard backgroundWork.isEnabled else { return }
         guard dataOverride == nil else {
             logWatcher?.stop()
             logWatcher = nil
@@ -355,6 +362,7 @@ final class ReportStore: ObservableObject {
     }
 
     private func handleSchedulerAction(_ action: RefreshScheduler.Action) {
+        guard backgroundWork.isEnabled else { return }
         switch action {
         case .none:
             break
@@ -395,6 +403,7 @@ final class ReportStore: ObservableObject {
         if pendingReport == nil {
             prepare(rangeRaw: defaults.string(forKey: SettingsKeys.timeRange) ?? TimeRange.all.rawValue)
         }
+        guard backgroundWork.isEnabled else { return }
         let shouldRefresh = loader.scheduler.shouldRefreshOnOpen(isStaleReport: isStaleReport)
         let action = loader.scheduler.onPanelVisibilityChanged(visible: true)
         if shouldRefresh {
@@ -407,6 +416,7 @@ final class ReportStore: ObservableObject {
     }
 
     func onPanelClosed() {
+        guard backgroundWork.isEnabled else { return }
         let action = loader.scheduler.onPanelVisibilityChanged(visible: false)
         handleSchedulerAction(action)
     }
@@ -608,6 +618,7 @@ final class ReportStore: ObservableObject {
     }
 
     func restartTimer() {
+        guard backgroundWork.isEnabled else { return }
         timer?.invalidate()
         timer = nil
         var minutes = defaults.integer(forKey: SettingsKeys.refreshMinutes)
@@ -629,6 +640,7 @@ final class ReportStore: ObservableObject {
 
     /// 设置改动后调用：重建数据源、重排定时器。
     func applySettings() {
+        guard backgroundWork.isEnabled else { return }
         restartTimer()
         setupWatcher()
         DiskStore.shared.applySettings()

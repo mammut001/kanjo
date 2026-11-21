@@ -809,6 +809,7 @@ struct SettingsView: View {
 
 private struct SubscriptionSettingsRow: View {
     @EnvironmentObject var store: ReportStore
+    @Environment(\.isSnapshotMode) private var isSnapshotMode
     let agent: String
     let sub: Subscription?
     let label: String
@@ -908,7 +909,9 @@ private struct SubscriptionSettingsRow: View {
                 isEditingOverride = true
             }
             syncInputs()
-            Task { await store.loadKnownPlans() }
+            if !isSnapshotMode {
+                Task { await store.loadKnownPlans() }
+            }
         }
         .onChange(of: initiallyEditing) { editing in
             if editing {
