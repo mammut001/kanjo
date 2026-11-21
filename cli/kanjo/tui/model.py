@@ -18,6 +18,8 @@ from ..providers import provider_for, PROVIDER_LABELS
 from .i18n import t, normalize_lang
 from . import calendar_time as _cal
 from .range_engine import (
+    FilteredBucket as _FilteredBucket,
+    FilteredUsage as _FilteredUsage,
     aggregate_models,
     apportion as _apportion_tokens,
     build_range_helpers as _build_range_helpers,
@@ -606,8 +608,25 @@ def compute_agent_model_perf(doc: dict, agent: str, time_range: TimeRange = Time
     return _summarize_perf(doc, time_range, now, key_field="model", agent_filter=agent)
 
 
-def _filtered_project_dict(fp) -> dict:
+def _project_models_in_range(fp, spec) -> List[dict]:
+    """Per-model rows for one project in a non-All range, apportioned like the Models view."""
+    empty = _FilteredBucket(0.0, 0, 0, [], None, None)
+    one = _FilteredUsage(spec, [fp], empty, empty, fp.cost, fp.tokens, fp.sessions, None, None)
+    rows = [{
+        "model": m["model"],
+        "agent": m["agent"],
+        "cost": m["cost"],
+        "tokens": {"total": m["tokens"]},
+        "estimated": m.get("estimated", False),
+    } for m in aggregate_models(one)]
+    rows.sort(key=lambda m: (-m["cost"], -m["tokens"]["total"], m["model"]))
+    return rows
+
+
+def _filtered_project_dict(fp, spec=None) -> dict:
     p = dict(fp.project)
+    if spec is not None and not spec.is_all:
+        p["by_model"] = _project_models_in_range(fp, spec)
     p["cost"] = fp.cost
     p["tokens"] = {"total": fp.tokens}
     p["sessions"] = fp.sessions
@@ -715,7 +734,7 @@ def filter_report(doc: dict, time_range: TimeRange = TimeRange.ALL,
     fu = filtered_usage(doc, time_range, now=now)
     tz, now_dt, _, _, _, session_in_range_cost_tokens = _build_range_helpers(doc, time_range, now=now)
 
-    filtered_projects = [_filtered_project_dict(fp) for fp in fu.projects]
+    filtered_projects = [_filtered_project_dict(fp, fu.spec) for fp in fu.projects]
     filtered_projects.sort(key=lambda p: (-p.get("cost", 0.0), str(p.get("name", "")).lower()))
     filtered_unattr = _filtered_bucket_dict(fu.unattributed)
     filtered_excl = _filtered_bucket_dict(fu.excluded)

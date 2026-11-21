@@ -7,6 +7,8 @@ import unittest
 from datetime import datetime, timezone
 
 from kanjo.tui.model import TimeRange, filter_report
+from kanjo.tui.render import TUIState
+from kanjo.tui.term import ViewModelCache
 
 NOW = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -73,6 +75,51 @@ class DaysViewReconcilesTest(unittest.TestCase):
         days = {d["day"]: d["cost"] for d in filter_report(doc, TimeRange.ALL, now=NOW).by_day}
         self.assertAlmostEqual(days["2026-11-19"], 2.5, places=2)
         self.assertAlmostEqual(days["2026-11-20"], 2.5, places=2)
+
+
+def big_old_model_doc() -> dict:
+    """$100 of claude-opus-5-5 on 2026-10-01 and $1 today."""
+    doc = synthetic_doc()
+    p = doc["projects"][0]
+    p["cost"] = 101.0
+    p["tokens"] = {"total": 1010000}
+    p["sessions"] = 2
+    p["first_active"], p["last_active"] = "2026-10-01", "2026-11-20"
+    p["by_agent"] = [{"agent": "claude", "label": "Claude Code", "cost": 101.0,
+                      "tokens": {"total": 1010000}, "sessions": 2}]
+    p["by_day"] = [
+        {"day": "2026-10-01", "cost": 100.0, "tokens": 1000000,
+         "by_agent": {"claude": 100.0}, "by_agent_tokens": {"claude": 1000000}},
+        {"day": "2026-11-20", "cost": 1.0, "tokens": 10000,
+         "by_agent": {"claude": 1.0}, "by_agent_tokens": {"claude": 10000}},
+    ]
+    p["by_model"] = [{"model": "claude-opus-5-5", "agent": "claude", "cost": 101.0,
+                      "tokens": {"total": 1010000}}]
+    p["sessions_detail"] = [
+        {"id": "s0", "agent": "claude", "started": "2026-10-01T10:00:00Z", "ended": "2026-10-01T11:00:00Z",
+         "cost": 100.0, "tokens": {"total": 1000000}, "models": ["claude-opus-5-5"]},
+        {"id": "s1", "agent": "claude", "started": "2026-11-20T10:00:00Z", "ended": "2026-11-20T11:00:00Z",
+         "cost": 1.0, "tokens": {"total": 10000}, "models": ["claude-opus-5-5"]},
+    ]
+    doc["buckets"]["unattributed"] = {"cost": 0.0, "tokens": {"total": 0}, "sessions": 0, "sessions_detail": []}
+    doc["totals"] = {"cost": 101.0, "tokens": {"total": 1010000}, "sessions": 2}
+    return doc
+
+
+class ProjectDetailByModelRangeTest(unittest.TestCase):
+    def test_by_model_follows_selected_range(self):
+        doc = big_old_model_doc()
+        for tr in (TimeRange.TODAY, TimeRange.DAYS_7, TimeRange.DAYS_30):
+            state = TUIState(version="test", time_range=tr, detail_open=True, detail_project=doc["projects"][0])
+            vm = ViewModelCache().get_or_build(doc, state, now=NOW).detail_vm
+            self.assertEqual(vm.cost_str, "$1.00", msg=tr)
+            self.assertEqual([m[2] for m in vm.by_model], ["$1.00"], msg=tr)
+
+    def test_by_model_all_time_unchanged(self):
+        doc = big_old_model_doc()
+        state = TUIState(version="test", time_range=TimeRange.ALL, detail_open=True, detail_project=doc["projects"][0])
+        vm = ViewModelCache().get_or_build(doc, state, now=NOW).detail_vm
+        self.assertEqual([m[2] for m in vm.by_model], ["$101.00"])
 
 
 if __name__ == "__main__":
