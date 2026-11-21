@@ -143,14 +143,14 @@ struct KanjoMenuBarApp: App {
                 .environmentObject(store)
                 .environmentObject(disk)
         } label: {
-            MenuBarLabel(store: store, showAmount: showAmount)
+            MenuBarLabel(store: store.menuBarState, showAmount: showAmount)
         }
         .menuBarExtraStyle(.window)
     }
 }
 
 struct MenuBarLabel: View {
-    @ObservedObject var store: ReportStore
+    @ObservedObject var store: MenuBarState
     let showAmount: Bool
     @AppStorage(SettingsKeys.timeRange, store: AppDefaults.store) private var rangeRaw = TimeRange.all.rawValue
     @AppStorage(SettingsKeys.menuBarMode, store: AppDefaults.store) private var menuBarMode = MenuBarMode.cost.rawValue

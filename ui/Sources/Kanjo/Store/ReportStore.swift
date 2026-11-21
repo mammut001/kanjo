@@ -4,12 +4,20 @@ import KanjoCore
 import AppKit
 
 @MainActor
+final class MenuBarState: ObservableObject {
+    @Published var report: UsageReport?
+    @Published var panelData: PanelData?
+    @Published var error: String?
+}
+
+@MainActor
 final class ReportStore: ObservableObject {
     static let shared = ReportStore()
+    let menuBarState = MenuBarState()
 
     @Published private(set) var needsCommandLineTools = false
-    @Published private(set) var report: UsageReport?
-    @Published private(set) var panelData: PanelData?
+    @Published private(set) var report: UsageReport? { didSet { menuBarState.report = report } }
+    @Published private(set) var panelData: PanelData? { didSet { menuBarState.panelData = panelData } }
     private var panelGeneration: Int = 0
     private var reportRevision = 0
     private var panelCache: [String: PanelData] = [:]
@@ -17,7 +25,7 @@ final class ReportStore: ObservableObject {
     @Published private(set) var isStaleReport = false
     @Published private(set) var staleReportGeneratedAt: String?
     @Published private(set) var knownPlans: [String: [KnownPlan]]?
-    @Published private(set) var error: String?
+    @Published private(set) var error: String? { didSet { if menuBarState.error != error { menuBarState.error = error } } }
     @Published private(set) var isLoading = false
     @Published private(set) var loadingStartedAt: Date?
     @Published private(set) var lastRefresh: Date?
@@ -37,6 +45,8 @@ final class ReportStore: ObservableObject {
     private var scheduledTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var defaultsObserver: NSObjectProtocol?
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var processObservers: [NSObjectProtocol] = []
     private var pendingReport: (report: UsageReport, isStale: Bool, staleAt: String?)?
     private var writeQueue = WriteQueue()
     private var writeQueueTask: Task<Void, Never>?
@@ -117,6 +127,8 @@ final class ReportStore: ObservableObject {
         timer?.invalidate()
         busyCheckTimer?.invalidate()
         logWatcher?.stop()
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        processObservers.forEach { NotificationCenter.default.removeObserver($0) }
         if let observer = defaultsObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -223,26 +235,26 @@ final class ReportStore: ObservableObject {
 
     private func setupNotifications() {
         let wsCenter = NSWorkspace.shared.notificationCenter
-        wsCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
+        workspaceObservers.append(wsCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.onWillSleep()
             }
-        }
-        wsCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
+        })
+        workspaceObservers.append(wsCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.onDidWake()
             }
-        }
-        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: nil) { [weak self] _ in
+        })
+        processObservers.append(NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: nil) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.onPowerStateDidChange()
             }
-        }
-        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
+        })
+        processObservers.append(NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkBusy()
             }
-        }
+        })
     }
 
     private func onWillSleep() {
@@ -291,6 +303,7 @@ final class ReportStore: ObservableObject {
                         self?.checkBusy()
                     }
                 }
+                busyCheckTimer?.tolerance = 10
             }
         } else {
             busyCheckTimer?.invalidate()
@@ -329,7 +342,7 @@ final class ReportStore: ObservableObject {
 
     private func startLogWatcher(paths: [String]) {
         logWatcher?.stop()
-        logWatcher = LogWatcher(paths: paths) { [weak self] in
+        logWatcher = LogWatcher(paths: paths, interval: loader.scheduler.backgroundInterval) { [weak self] in
             Task { @MainActor [weak self] in
                 self?.handleFileEvent()
             }
@@ -610,6 +623,7 @@ final class ReportStore: ObservableObject {
                 self.handleSchedulerAction(action)
             }
         }
+        timer?.tolerance = TimeInterval(minutes * 60) * 0.1
     }
 
     /// 设置改动后调用：重建数据源、重排定时器。
@@ -623,8 +637,8 @@ final class ReportStore: ObservableObject {
 
     func applyBackgroundInterval(_ seconds: Int) {
         let interval = TimeInterval(BackgroundRefreshInterval.resolve(seconds).rawValue)
-        loader.scheduler.backgroundInterval = interval
         let action = loader.scheduler.onBackgroundIntervalChanged(interval)
+        logWatcher?.setCoalescingInterval(interval)
         handleSchedulerAction(action)
     }
 }
