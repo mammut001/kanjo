@@ -1706,18 +1706,6 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     sessions = dedupe(result.sessions)
     units = build_units(sessions)
 
-    if repo_cache is None and cache is not None:
-        repo_cache = getattr(cache, "repo_cache", None)
-    worktree_cache = getattr(cache, "worktree_cache", None) if cache is not None else None
-    attr_cache = getattr(cache, "attr_cache", None) if cache is not None else None
-
-    resolver = Resolver(aliases=config.aliases, home=home, fs_root=fs_root,
-                        repo_cache=repo_cache, worktree_cache=worktree_cache)
-    scratch = ScratchpadDecoder(fs_root=fs_root)
-    for s in sessions:
-        for path, remote in s.remote_hints.items():
-            resolver.add_remote_hint(path, remote)
-
     tz_name = local_timezone_name()
     tz = local_zone(tz_name)
 
@@ -1726,43 +1714,12 @@ def _aggregate_public_summary_data(config: Optional[Config] = None, dirs: Option
     weeks: Dict[str, PublicPeriodAgg] = {}
     days: Dict[str, PublicPeriodAgg] = {}
 
-    worktree_sig = hashlib.sha1(f"{sorted(resolver._worktrees.items())}".encode("utf-8")).hexdigest()
-    config_sig = hashlib.sha1(f"{config.dominant_threshold}:{sorted(config.aliases.items())}:{sorted(config.overrides.items())}:{sorted(config.exclude)}:{config.source}:{prices.sig}".encode("utf-8")).hexdigest()
-
-    def _unit_sig(unit) -> str:
-        s_list = [unit.top] + unit.subs
-        return ";".join("%s:%d:%s:%s" % (s.id, len(s.messages), s.started, s.ended) for s in s_list)
-
     for unit in units:
-        dec_data = attr_cache.get(unit.top, worktree_sig, config_sig) if attr_cache is not None else None
-        if dec_data is not None:
-            decision = attr.Decision(kind=dec_data["kind"],
-                                     shares=[tuple(x) for x in dec_data["shares"]],
-                                     scores=dec_data.get("scores", {}))
-            cached_paths = dec_data.get("paths")
-            if cached_paths:
-                for pid, paths in cached_paths.items():
-                    proj = resolver.project(pid)
-                    if proj is not None:
-                        for p in paths:
-                            proj.add_path(p)
-        else:
-            resolver._hint_paths_added = []
-            decision = attr.decide(unit.top, resolver, scratch, config)
-            added_paths = {}
-            if resolver._hint_paths_added:
-                for pid, p in resolver._hint_paths_added:
-                    added_paths.setdefault(pid, []).append(p)
-            resolver._hint_paths_added = None
-            if attr_cache is not None:
-                dec_data = {
-                    "kind": decision.kind,
-                    "shares": decision.shares,
-                    "scores": decision.scores,
-                    "paths": added_paths,
-                }
-                attr_cache.put(unit.top, dec_data, worktree_sig, config_sig)
-        if decision.kind == "excluded":
+        # Only exclusion matters here, and it depends on the cwd alone
+        # (attribution.decide). Project decisions belong to build_export, which
+        # makes them after prewarm; this path never reads or writes that cache.
+        rule = config.match_override(unit.top.cwd)
+        if rule is not None and rule[0] == "exclude":
             continue
 
         effective_filter_accounts = filter_accounts

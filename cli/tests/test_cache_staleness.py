@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from kanjo.cache import RepoCache, SessionCache
-from kanjo.export import ScanResult, build_export
+from kanjo.export import ScanResult, build_export, build_family_report, build_public_summary
 from kanjo.identity import Resolver
 from kanjo.sources.base import Message, Session
 from tests.support import ALICE, FakeFS
@@ -186,6 +186,54 @@ class RefreshedSignatureTest(unittest.TestCase):
         self.touch_db()
         self.assertEqual(self.scan(600), 600)
         self.assertEqual(self.scan(600), 0)
+
+
+class SummaryPathCacheTest(unittest.TestCase):
+    """Family reports and public summaries share the cache dir with exports."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="kanjo-stale-test-")
+        self.fs = FakeFS()
+
+    def tearDown(self):
+        self.fs.cleanup()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def kw(self, sessions, cached=True):
+        return dict(scan_result=ScanResult(list(sessions), [], {}),
+                    cache=SessionCache(self.tmp) if cached else None,
+                    home=ALICE, fs_root=self.fs.root)
+
+    def test_public_summary_first_does_not_leak_unprewarmed_decisions(self):
+        live, gone = ALICE + "/code/r", ALICE + "/code/r-old"
+        self.fs.repo(live, [("origin", "https://github.com/alice/r.git")])
+        self.fs.write(live + "/src/main.py", "")
+        s1 = make_session("s1", gone, [[gone + "/src/main.py"]], agent="codex")
+        s1.remote_hints = {gone: "git@github.com:alice/r.git"}
+        s2 = make_session("s2", live, [[live + "/src/main.py"]], t0=1790100000.0)
+        build_public_summary(**self.kw([s1, s2]))
+        cached = build_export(**self.kw([s1, s2]))
+        fresh = build_export(**self.kw([s1, s2], cached=False))
+        self.assertEqual(project_summary(cached), project_summary(fresh))
+        self.assertEqual([p["id"] for p in fresh["projects"]], ["github.com/alice/r"])
+
+    def test_family_report_keeps_export_cache_warm(self):
+        from unittest import mock
+        from kanjo import attribution as attr
+        app, wt = ALICE + "/code/app", ALICE + "/code/app-wt"
+        self.fs.repo(app, [("origin", "https://github.com/alice/app.git")])
+        self.fs.worktree(app, wt)
+        self.fs.write(app + "/src/a.py", "")
+        self.fs.write(wt + "/src/a.py", "")
+        sessions = [make_session("s1", app, [[app + "/src/a.py"]]),
+                    make_session("s2", wt, [[wt + "/src/a.py"]], t0=1790100000.0)]
+        build_export(**self.kw(sessions))
+        build_family_report(**self.kw(sessions))
+        with mock.patch.object(attr, "decide", wraps=attr.decide) as decide:
+            cached = build_export(**self.kw(sessions))
+        self.assertEqual(decide.call_count, 0)
+        fresh = build_export(**self.kw(sessions, cached=False))
+        self.assertEqual(project_summary(cached), project_summary(fresh))
 
 
 if __name__ == "__main__":
