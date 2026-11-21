@@ -1,4 +1,7 @@
 import os
+import json
+import shutil
+import tempfile
 import unittest
 
 from kanjo.pricing import default_book
@@ -60,6 +63,22 @@ class QwenWorkSourceTest(unittest.TestCase):
                 ["/Users/alice/Projects/demo/utils.py"],
             ],
         )
+
+    def test_malformed_response_does_not_hide_valid_requests(self):
+        session_dir = qwenwork.discover([FIXTURE_QWENWORK])[0][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = os.path.join(tmp, "session")
+            shutil.copytree(session_dir, copy)
+            segment = os.path.join(copy, "segments", "0000000001.jsonl")
+            with open(segment) as handle:
+                lines = handle.readlines()
+            bad = json.loads(lines[-2])
+            bad["data"]["input_tokens"] = "invalid"
+            with open(segment, "w") as handle:
+                handle.write(json.dumps(bad) + "\n")
+                handle.writelines(lines)
+            session = qwenwork.parse_file(copy)
+        self.assertEqual([m.input for m in session.messages], [1000, 1800])
 
     def test_no_double_counting_total_prompt_tokens(self):
         discovered = qwenwork.discover([FIXTURE_QWENWORK])
