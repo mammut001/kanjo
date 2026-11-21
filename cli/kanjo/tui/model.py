@@ -403,7 +403,7 @@ def get_accounts_window(quota_windows: Optional[dict], subscriptions: Optional[d
 
 # ---- HeatStrip & Sparkline ----
 
-_BLOCK_CHARS = " ▂▃▄▅▆▇█"
+_BLOCK_CHARS = "▁▂▃▄▅▆▇█"
 _ASCII_CHARS = " .:-=+*#%"
 
 

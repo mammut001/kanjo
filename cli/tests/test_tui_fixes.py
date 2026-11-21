@@ -13,7 +13,7 @@ try:
 except ImportError:  # Windows has no _curses.
     curses = None
 
-from kanjo.tui.model import TimeRange, filter_report
+from kanjo.tui.model import TimeRange, compute_30d_sparkline, compute_8w_strip, filter_report
 from kanjo.tui.render import TUIState
 from kanjo.tui.term import ViewModelCache, run_curses_tui
 
@@ -157,6 +157,23 @@ class FailedFirstRefreshTest(unittest.TestCase):
         last = frames[-1]
         self.assertIn("Refresh failed: boom", last)
         self.assertNotIn("Loading", last)
+
+
+class HeatLowestLevelTest(unittest.TestCase):
+    def test_8w_strip_draws_level_one(self):
+        # NOW is Friday 2026-11-20; this Monday is 2026-11-16, last Monday 2026-11-09.
+        by_day = [{"day": "2026-11-16", "cost": 100.0}, {"day": "2026-11-09", "cost": 10.0}]
+        strip = compute_8w_strip(by_day, NOW, timezone.utc)
+        self.assertEqual(strip[7][0], "\u2588")
+        self.assertNotEqual(strip[6][0], " ")
+        self.assertEqual(strip[5][0], " ")
+
+    def test_30d_sparkline_draws_level_one(self):
+        by_day = [{"day": "2026-11-20", "cost": 100.0}, {"day": "2026-11-19", "cost": 12.0}]
+        spark, peak = compute_30d_sparkline(by_day, NOW, timezone.utc)
+        self.assertEqual(peak, 100.0)
+        self.assertNotEqual(spark[-2], " ")
+        self.assertEqual(spark[-3], " ")
 
 
 if __name__ == "__main__":
