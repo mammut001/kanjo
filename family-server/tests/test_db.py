@@ -279,6 +279,18 @@ class TestDatabaseAndPrune(unittest.TestCase):
             self.assertEqual(removed, 2)
             self.assertEqual(len(db.get_member_latest_reports_by_device(conn, m1)), 1)
 
+    def test_latest_device_ties_and_out_of_order_inserts(self):
+        with db.get_connection(self.db_path) as conn:
+            _, member = db.add_member(conn, "Alice")
+            _, other = db.add_member(conn, "Bob")
+            db.insert_report(conn, member, "x", '{"v":1}', received_at="2026-01-02", device_id="")
+            winner = db.insert_report(conn, member, "x", '{"v":2}', received_at="2026-01-02", device_id="")
+            db.insert_report(conn, member, "x", '{"v":3}', received_at="2026-01-01", device_id="")
+            tagged = db.insert_report(conn, member, "x", '{"v":4}', received_at="2026-01-02", device_id="device")
+            db.insert_report(conn, other, "x", '{"v":5}', received_at="2026-01-03", device_id="device")
+            self.assertEqual([r["id"] for r in db.get_member_latest_reports_by_device(conn, member)],
+                             [tagged, winner])
+
     def test_token_rotation_rejects_old_token(self):
         with db.get_connection(self.db_path) as conn:
             old_token, m_id = db.add_member(conn, "Alice")

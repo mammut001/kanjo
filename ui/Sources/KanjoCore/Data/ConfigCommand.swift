@@ -61,7 +61,7 @@ public enum ConfigCommand {
     }
 
     public static func antigravityAccountPlanArguments(email: String, plan: String?) throws -> [String] {
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let allowedEmail = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-@")
         guard !trimmedEmail.isEmpty,
               trimmedEmail.contains("@"),

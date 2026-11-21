@@ -5,6 +5,7 @@ public struct PanelData: Equatable {
     public let filteredReport: FilteredReport
     public let subscriptionRows: [SubscriptionRow]
     public let reportGeneratedAt: String
+    public let subscriptionsFingerprint: String
     public let now: Date
     public var models: [ModelCost] = []
     public var agentSummary: AgentSummaryReport? = nil
@@ -35,6 +36,7 @@ public struct PanelData: Equatable {
             filteredReport: filtered,
             subscriptionRows: subscriptionRows,
             reportGeneratedAt: report.generatedAt,
+            subscriptionsFingerprint: Self.subscriptionsFingerprint(report),
             now: now,
             models: models,
             agentSummary: AgentSummary.build(report: report, filtered: filtered, now: now, quotaNow: AgentSummary.quotaReference(report: report, now: now, isSnapshot: isSnapshot), cycleUsage: cycleUsage, models: models),
@@ -49,5 +51,23 @@ public struct PanelData: Equatable {
                self.rangeSpec.start == spec.start &&
                self.rangeSpec.agentStarts == spec.agentStarts &&
                self.rangeSpec.calendar.timeZone == spec.calendar.timeZone
+    }
+
+    public static func subscriptionsFingerprint(_ report: UsageReport) -> String {
+        guard let subs = report.subscriptions, !subs.isEmpty else { return "" }
+        return subs.keys.sorted().map { agent in
+            let s = subs[agent]!
+            let price = s.monthlyPriceUsd.map { String($0) } ?? "nil"
+            let anchor = s.anchorDay.map(String.init) ?? "nil"
+            return "\(agent):\(s.plan):\(s.cycleStart):\(s.cycleEnd):\(anchor):\(price)"
+        }.joined(separator: "|")
+    }
+
+    /// Overview subscription rows: reuse panel cache only when subscriptions and time are still current.
+    public func canReuseSubscriptionRows(for report: UsageReport, now: Date, maxAge: TimeInterval = 60) -> Bool {
+        reportGeneratedAt == report.generatedAt &&
+        subscriptionsFingerprint == Self.subscriptionsFingerprint(report) &&
+        now.timeIntervalSince(self.now) >= 0 &&
+        now.timeIntervalSince(self.now) < maxAge
     }
 }

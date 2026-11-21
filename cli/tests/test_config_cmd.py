@@ -383,6 +383,16 @@ class ConfigCommandTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("does not accept --json", err)
 
+    def test_antigravity_account_email_dots_and_plus_round_trip(self):
+        key = "antigravity_accounts.first.last+tag@example.com.plan"
+        self.assertEqual(self.run_cli("config", "set", key, "google_ai_pro")[0], 0)
+        self.assert_line(("get", key), '%s = "google_ai_pro" (overrides)' % key)
+        data = self.read_overrides()["antigravity_accounts"]["first.last+tag@example.com"]
+        self.assertEqual(data["plan"], "google_ai_pro")
+        cfg = config.load()
+        self.assertEqual(cfg.antigravity_accounts["first.last+tag@example.com"]["plan"], "google_ai_pro")
+        self.assertEqual(self.run_cli("config", "unset", key)[0], 0)
+
     def test_family_scope_set_get_unset_and_validation(self):
         # Default get
         self.assert_line(("get", "family.since"), "family.since = unset (default)")

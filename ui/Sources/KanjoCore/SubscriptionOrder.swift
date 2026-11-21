@@ -110,4 +110,9 @@ public enum SubscriptionOrder {
     public static func visible(rows: [SubscriptionRow], expanded: Bool, limit: Int = 3) -> [SubscriptionRow] {
         visible(rows, expanded: expanded, limit: limit)
     }
+
+    /// User toggle or automatic expansion for a pinned quota row.
+    public static func showsAllRows(userExpanded: Bool, autoExpanded: Bool) -> Bool {
+        userExpanded || autoExpanded
+    }
 }

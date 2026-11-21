@@ -839,7 +839,7 @@ private struct SubscriptionSettingsRow: View {
         self.initiallyEditing = initiallyEditing
         self.antigravityAccounts = antigravityAccounts
         _isEditingOverride = State(initialValue: initiallyEditing ? true : nil)
-        _day = State(initialValue: min(28, max(1, sub?.anchorDay ?? 1)))
+        _day = State(initialValue: SubscriptionRenewalDay.stepperValue(anchorDay: sub?.anchorDay))
 
         let plans = KnownPlan.fallbackPlans[agent] ?? []
         if let currentPlan = sub?.plan, !currentPlan.isEmpty {
@@ -917,7 +917,7 @@ private struct SubscriptionSettingsRow: View {
             }
         }
         .onChange(of: sub?.anchorDay) { value in
-            day = min(28, max(1, value ?? 1))
+            day = SubscriptionRenewalDay.stepperValue(anchorDay: value)
         }
         .onChange(of: sub) { _ in
             if !isEditing {
@@ -960,7 +960,7 @@ private struct SubscriptionSettingsRow: View {
     /// 有还没体现在报告里的账号套餐选择时，按选择重算的合计；没有选择时为 nil，直接用报告。
     private var antigravityPendingSummary: AntigravityPendingSummary? {
         guard agent == "antigravity", let accounts = antigravityAccounts?.accounts,
-              accounts.contains(where: { store.pendingAntigravityAccountPlans[$0.email] != nil }) else { return nil }
+              accounts.contains(where: { store.pendingAntigravityAccountPlans[$0.email.lowercased()] != nil }) else { return nil }
         let known = store.knownPlans?["antigravity"] ?? KnownPlan.fallbackPlans["antigravity"] ?? []
         let applied = AntigravityAggregation.applyPending(accounts: accounts,
                                                           pending: store.pendingAntigravityAccountPlans,
@@ -996,25 +996,46 @@ private struct SubscriptionSettingsRow: View {
         if agent == "antigravity", let accounts = antigravityAccounts?.accounts, !accounts.isEmpty {
             antigravityAccountPickers(accounts)
         }
-        Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
-            .font(.system(size: 11)).monospacedDigit()
-            .lineLimit(1)
-            .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-            .hoverTip(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
-            .padding(.leading, 11)
-        HStack(spacing: 6) {
-            Spacer()
-            Button(L10n.tr("common.apply")) { saveAnchor(day) }
-            Button(L10n.tr("common.reset")) { resetAll() }
-            Button(L10n.tr("settings.edit")) {
-                syncInputs()
-                isEditingOverride = true
+        if SubscriptionRenewalDay.allowsManualStepper(sub) {
+            Stepper(L10n.tr("settings.renews_on_day", day), value: $day, in: 1...28)
+                .font(.system(size: 11)).monospacedDigit()
+                .lineLimit(1)
+                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+                .hoverTip(store.canEditSubscriptions ? L10n.tr("settings.renews_day_help") : L10n.tr("settings.renews_day_disabled_help"))
+                .padding(.leading, 11)
+            HStack(spacing: 6) {
+                Spacer()
+                Button(L10n.tr("common.apply")) { saveAnchor(day) }
+                Button(L10n.tr("common.reset")) { resetAll() }
+                Button(L10n.tr("settings.edit")) {
+                    syncInputs()
+                    isEditingOverride = true
+                }
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+            .padding(.leading, 11)
+        } else if let detected = sub.anchorDay {
+            let tz = store.report.map { RangeEngine.timezone(of: $0) } ?? .current
+            Text(L10n.tr("settings.renews_on_detected_day", detected))
+                .font(.system(size: 11)).monospacedDigit()
+                .padding(.leading, 11)
+            Text(Fmt.cycleCaption(sub, timezone: tz))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .padding(.leading, 11)
+            HStack(spacing: 6) {
+                Spacer()
+                Button(L10n.tr("settings.set_manual_renewal_day")) {
+                    syncInputs()
+                    isEditingOverride = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!store.canEditSubscriptions || saving || store.isLoading)
+            }
+            .padding(.leading, 11)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .disabled(!store.canEditSubscriptions || saving || store.isLoading)
-        .padding(.leading, 11)
         Text(saving ? L10n.tr("settings.saving") : SubscriptionValue.anchorSource(sub))
             .font(.system(size: 10)).foregroundStyle(.secondary)
             .padding(.leading, 11)
@@ -1122,12 +1143,13 @@ private struct SubscriptionSettingsRow: View {
         let plans = agentKnownPlans ?? []
         VStack(alignment: .leading, spacing: 5) {
             ForEach(accounts) { acc in
-                let currentSelection = store.pendingAntigravityAccountPlans[acc.email]
+                let emailKey = acc.email.lowercased()
+                let currentSelection = store.pendingAntigravityAccountPlans[emailKey]
                     ?? AntigravityAggregation.normalizedPlanKey(acc.plan?.plan)
                 let selection = Binding<String>(
                     get: { currentSelection },
                     set: { newValue in
-                        saveAntigravityAccountPlan(email: acc.email, planKey: newValue)
+                        saveAntigravityAccountPlan(email: emailKey, planKey: newValue)
                     }
                 )
                 HStack(spacing: 6) {
@@ -1171,12 +1193,13 @@ private struct SubscriptionSettingsRow: View {
     }
 
     private func saveAntigravityAccountPlan(email: String, planKey: String) {
-        let acc = antigravityAccounts?.accounts.first(where: { $0.email == email })
-        let current = store.pendingAntigravityAccountPlans[email]
+        let emailKey = email.lowercased()
+        let acc = antigravityAccounts?.accounts.first(where: { $0.email.lowercased() == emailKey })
+        let current = store.pendingAntigravityAccountPlans[emailKey]
             ?? AntigravityAggregation.normalizedPlanKey(acc?.plan?.plan)
         let new = AntigravityAggregation.normalizedPlanKey(planKey)
         guard new != current else { return }
-        store.setAntigravityAccountPlan(email: email, plan: new.isEmpty ? nil : new)
+        store.setAntigravityAccountPlan(email: emailKey, plan: new.isEmpty ? nil : new)
     }
 
     private func planMenuLabel(_ plan: KnownPlan) -> String {
@@ -1187,7 +1210,7 @@ private struct SubscriptionSettingsRow: View {
     }
 
     private func syncInputs() {
-        day = min(28, max(1, sub?.anchorDay ?? 1))
+        day = SubscriptionRenewalDay.stepperValue(anchorDay: sub?.anchorDay)
         let plans = agentKnownPlans ?? []
         if let currentPlan = sub?.plan, !currentPlan.isEmpty {
             if let matching = plans.first(where: { $0.key == currentPlan }) ?? plans.first(where: { $0.label == sub?.planLabel }) {
@@ -1224,7 +1247,7 @@ private struct SubscriptionSettingsRow: View {
         Task {
             do {
                 try await store.setAnchorDay(agent: agent, day: value)
-                if value == nil { day = min(28, max(1, sub?.anchorDay ?? 1)) }
+                if value == nil { day = SubscriptionRenewalDay.stepperValue(anchorDay: sub?.anchorDay) }
             } catch {
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

@@ -86,8 +86,12 @@ public enum AntigravityAggregation {
         guard !pending.isEmpty else { return pending }
         var remaining = pending
         for acc in accounts {
-            guard let wanted = pending[acc.email], !busy.contains(acc.email) else { continue }
+            let normEmail = acc.email.lowercased()
+            guard !busy.contains(normEmail), !busy.contains(acc.email) else { continue }
+            let wanted = pending[normEmail] ?? pending[acc.email]
+            guard let wanted else { continue }
             if normalizedPlanKey(acc.plan?.plan) == normalizedPlanKey(wanted) {
+                remaining.removeValue(forKey: normEmail)
                 remaining.removeValue(forKey: acc.email)
             }
         }
