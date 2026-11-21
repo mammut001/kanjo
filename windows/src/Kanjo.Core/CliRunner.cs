@@ -22,7 +22,8 @@ public static class ProcessRunner
         string? workingDirectory = null,
         TimeSpan? timeout = null,
         IReadOnlyDictionary<string, string>? extraEnvironment = null,
-        string? stdinText = null)
+        string? stdinText = null,
+        CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(workingDirectory) && !Directory.Exists(workingDirectory))
         {
@@ -37,6 +38,8 @@ public static class ProcessRunner
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory ?? string.Empty,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
         foreach (var arg in arguments) psi.ArgumentList.Add(arg);
 
@@ -47,9 +50,7 @@ public static class ProcessRunner
             foreach (var (k, v) in extraEnvironment) psi.Environment[k] = v;
         }
 
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-
+        cancellationToken.ThrowIfCancellationRequested();
         Process process;
         try
         {
@@ -61,55 +62,30 @@ public static class ProcessRunner
         }
 
         using (process)
+        using (ProcessLifetime.Shared.Track(process))
+        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
+            deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(300));
+            using var registration = deadline.Token.Register(() => ProcessLifetime.Kill(process));
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
-            try
-            {
-                if (stdinText is null)
-                {
-                    // stdin 关闭：CLI 里任何交互提示都不会挂住。
-                    process.StandardInput.Close();
-                }
-                else
-                {
-                    process.StandardInput.Write(stdinText);
-                    process.StandardInput.Close();
-                }
-            }
-            catch (IOException)
-            {
-                // 子进程可能已经退出。
-            }
-
-            var wait = timeout ?? TimeSpan.FromSeconds(300);
-            var exited = process.WaitForExit((int)Math.Min(wait.TotalMilliseconds, int.MaxValue));
-            if (!exited)
+            var inputTask = Task.Run(async () =>
             {
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    if (stdinText is not null) await process.StandardInput.WriteAsync(stdinText);
+                    process.StandardInput.Close();
                 }
-                catch (Exception)
+                catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
                 {
-                    // 已经退出。
+                    // The child can exit or be killed while input is being written.
                 }
-                process.WaitForExit(5000);
-                try
-                {
-                    Task.WaitAll([stdoutTask, stderrTask], TimeSpan.FromSeconds(5));
-                }
-                catch (AggregateException)
-                {
-                    // 流已被杀掉。
-                }
-                return new CliResult(-1, SafeResult(stdoutTask), SafeResult(stderrTask), true, fileName);
-            }
-
-            Task.WaitAll([stdoutTask, stderrTask], TimeSpan.FromSeconds(5));
-            stdout.Append(SafeResult(stdoutTask));
-            stderr.Append(SafeResult(stderrTask));
-            return new CliResult(process.ExitCode, stdout.ToString(), stderr.ToString(), false, fileName);
+            });
+            process.WaitForExit();
+            Task.WaitAll([stdoutTask, stderrTask, inputTask], TimeSpan.FromSeconds(5));
+            cancellationToken.ThrowIfCancellationRequested();
+            return new CliResult(deadline.IsCancellationRequested ? -1 : process.ExitCode,
+                SafeResult(stdoutTask), SafeResult(stderrTask), deadline.IsCancellationRequested, fileName);
         }
     }
 
@@ -141,6 +117,7 @@ public sealed class CliRunner : IReportCommandRunner
     /// </summary>
     public static string DefaultCliCommand => DefaultPaths.DefaultCliCommand;
 
+    public CancellationToken CancellationToken { get; init; }
     public string? PythonExecutable { get; init; }
     public IReadOnlyList<string> PythonPrefixArguments { get; init; } = [];
     public string? WorkingDirectory { get; init; }
@@ -217,7 +194,7 @@ public sealed class CliRunner : IReportCommandRunner
     }
 
     /// <summary>运行 `kanjo &lt;args...&gt;`。返回 stdout / stderr / 退出码。</summary>
-    public CliResult Run(IReadOnlyList<string> arguments)
+    public CliResult Run(IReadOnlyList<string> arguments, CancellationToken cancellationToken = default, string? stdinText = null)
     {
         var python = PythonExecutable is null ? ResolvePython() : (PythonExecutable, PythonPrefixArguments);
         if (python is not { } py)
@@ -231,14 +208,14 @@ public sealed class CliRunner : IReportCommandRunner
                 "Kanjo CLI directory not found: bundle <appdir>\\cli, repo cli/, or %LOCALAPPDATA%\\KanjoFamily\\cli.");
         }
         var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
-        return ProcessRunner.Run(py.Item1, fullArgs, cwd, Timeout, Environment);
+        return ProcessRunner.Run(py.Item1, fullArgs, cwd, Timeout, Environment, stdinText: stdinText, cancellationToken: cancellationToken.CanBeCanceled ? cancellationToken : CancellationToken);
     }
 
     /// <summary>运行并把失败 / 超时 / 空输出转成 <see cref="DataSourceError"/>。</summary>
-    public CliResult RunChecked(IReadOnlyList<string> arguments, string emptyWhat = "Command output")
+    public CliResult RunChecked(IReadOnlyList<string> arguments, string emptyWhat = "Command output", CancellationToken cancellationToken = default, string? stdinText = null)
     {
         var display = "python -m kanjo " + string.Join(" ", arguments);
-        var result = Run(arguments);
+        var result = Run(arguments, cancellationToken, stdinText);
         if (result.TimedOut)
         {
             throw DataSourceError.CommandTimedOut(display, (int)Timeout.TotalSeconds);
@@ -260,24 +237,34 @@ public sealed class CliRunner : IReportCommandRunner
         return ReportDecoder.Decode(result.StdoutBytes);
     }
 
-    public DiskReport Disk(bool rescan = false, TimeSpan? maxAge = null)
+    public DiskReport Disk(bool rescan = false, TimeSpan? maxAge = null, CancellationToken cancellationToken = default)
     {
         var args = new List<string> { "disk", "--json" };
         if (rescan) args.Add("--rescan");
         else if (maxAge is { } age) args.AddRange(["--max-age", ((int)age.TotalSeconds).ToString()]);
-        var result = RunChecked(args);
+        var result = RunChecked(args, cancellationToken: cancellationToken);
         return DiskDecoder.Decode(result.StdoutBytes);
     }
 
-    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed)
+    public CleanResult DiskClean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
+    {
+        var args = DiskCleanArguments(ids, olderThan, confirmed, onlyPaths);
+        var result = RunChecked(args, stdinText: DiskCleanInput(onlyPaths));
+        return DiskDecoder.DecodeClean(result.StdoutBytes);
+    }
+
+    public static List<string> DiskCleanArguments(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null)
     {
         var args = new List<string> { "disk", "clean" };
         args.AddRange(ids);
         if (!string.IsNullOrEmpty(olderThan)) args.AddRange(["--older-than", olderThan]);
+        if (onlyPaths is not null) args.AddRange(["--only-paths", "-"]);
         args.Add(confirmed ? "--yes" : "--dry-run");
-        var result = RunChecked(args);
-        return DiskDecoder.DecodeClean(result.StdoutBytes);
+        return args;
     }
+
+    public static string? DiskCleanInput(IReadOnlyList<string>? onlyPaths) =>
+        onlyPaths is null ? null : System.Text.Json.JsonSerializer.Serialize(onlyPaths);
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Paths()
     {
@@ -326,7 +313,7 @@ public sealed class CliRunner : IReportCommandRunner
         }
         var limit = timeout ?? Timeout;
         var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
-        var result = ProcessRunner.Run(py.Item1, fullArgs, cwd, limit, env);
+        var result = ProcessRunner.Run(py.Item1, fullArgs, cwd, limit, env, cancellationToken: CancellationToken);
         var display = "python -m kanjo " + string.Join(" ", arguments);
         if (result.TimedOut) throw DataSourceError.CommandTimedOut(display, (int)limit.TotalSeconds);
         if (result.ExitCode != 0) throw DataSourceError.CommandFailed(display, result.ExitCode, result.Stderr);
@@ -397,6 +384,6 @@ public sealed class CliRunner : IReportCommandRunner
             foreach (var (key, value) in extraEnvironment) env[key] = value;
         }
         var fullArgs = py.Item2.Concat(["-m", DefaultModule]).Concat(arguments).ToList();
-        return ProcessRunner.Run(py.Item1, fullArgs, cwd, timeout, env);
+        return ProcessRunner.Run(py.Item1, fullArgs, cwd, timeout, env, cancellationToken: CancellationToken);
     }
 }

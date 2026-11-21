@@ -1181,6 +1181,7 @@ class ProjectRowViewModel:
     heat_strip: List[Tuple[str, Optional[str]]]
     is_bucket: bool = False
     is_total: bool = False
+    project: Optional[dict] = None
 
 
 @dataclass
@@ -1705,6 +1706,7 @@ def build_project_rows(filtered: FilteredData, now: datetime, tz: datetime.tzinf
             agents=agents,
             last_active_str=str(last_act),
             heat_strip=heat,
+            project=p,
         ))
 
     return rows

@@ -13,6 +13,8 @@ COPY family_server/ /app/family_server/
 
 ENV PYTHONUNBUFFERED=1
 ENV FAMILY_DB=/data/family.db
+# The tunnel reaches the service over the private container network.
+ENV FAMILY_API_HOST=0.0.0.0 FAMILY_DASHBOARD_HOST=0.0.0.0
 
 USER nonroot
 

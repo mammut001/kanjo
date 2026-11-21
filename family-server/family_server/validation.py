@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import json
+import math
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -71,6 +72,29 @@ def check_privacy_backstop(raw_body_bytes: bytes) -> Optional[str]:
     return None
 
 
+def _validate_values(value: Any, depth: int = 0) -> Optional[str]:
+    """Bound untrusted values before any dashboard code consumes them."""
+    if depth > 40:
+        return "Payload nesting is too deep"
+    if isinstance(value, str):
+        if len(value) > 4096:
+            return "Payload string is too long"
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value < 0 or value > 10 ** 15 or (isinstance(value, float) and not math.isfinite(value)):
+            return "Payload contains an invalid number"
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            err = _validate_values(key, depth + 1) or _validate_values(item, depth + 1)
+            if err:
+                return err
+    elif isinstance(value, list):
+        for item in value:
+            err = _validate_values(item, depth + 1)
+            if err:
+                return err
+    return None
+
+
 def _validate_period(period_data: Any, context: str) -> Optional[str]:
     """Validate a Period structure per CONTRACT.md section 12."""
     if not isinstance(period_data, dict):
@@ -86,9 +110,50 @@ def _validate_period(period_data: Any, context: str) -> Optional[str]:
     if not isinstance(period_data["tokens"], dict):
         return f"{context}.tokens must be an object"
 
-    if not isinstance(period_data["cost_usd"], (int, float)):
+    if isinstance(period_data["cost_usd"], bool) or not isinstance(period_data["cost_usd"], (int, float)):
         return f"{context}.cost_usd must be a number"
 
+    for key in ("start", "first_day", "last_day"):
+        if key in period_data and period_data[key] is not None and not isinstance(period_data[key], str):
+            return f"{context}.{key} must be a string or null"
+
+    def valid_numbers(obj):
+        if not isinstance(obj, dict):
+            return False
+        for key, value in obj.items():
+            if key == "tokens":
+                if not valid_numbers(value):
+                    return False
+            elif key in ("input", "output", "cache_read", "cache_write", "total", "tokens_total", "cost_usd"):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    return False
+        return True
+
+    if not valid_numbers(period_data):
+        return f"{context} contains invalid numeric fields"
+    for key in ("by_provider", "by_agent", "top_models", "models_used"):
+        if key in period_data and not isinstance(period_data[key], list):
+            return f"{context}.{key} must be an array"
+    for provider in period_data.get("by_provider", []):
+        if not valid_numbers(provider) or not isinstance(provider.get("models", []), list):
+            return f"{context}.by_provider contains an invalid provider"
+        if any(not valid_numbers(model) for model in provider.get("models", [])):
+            return f"{context}.by_provider contains invalid models"
+    for key in ("by_agent", "top_models"):
+        if any(not valid_numbers(item) for item in period_data.get(key, [])):
+            return f"{context}.{key} contains invalid entries"
+    if any(not isinstance(model, str) for model in period_data.get("models_used", [])):
+        return f"{context}.models_used must contain strings"
+    for key, fields in (("by_provider", ("provider", "label")),
+                        ("by_agent", ("agent", "label")),
+                        ("top_models", ("model", "provider"))):
+        for item in period_data.get(key, []):
+            if any(field in item and not isinstance(item[field], str) for field in fields):
+                return f"{context}.{key} contains invalid strings"
+            if key == "by_provider":
+                for model in item.get("models", []):
+                    if "model" in model and not isinstance(model["model"], str):
+                        return f"{context}.by_provider contains an invalid model name"
     return None
 
 
@@ -98,6 +163,10 @@ def validate_report_payload(data: Any) -> Optional[str]:
     """
     if not isinstance(data, dict):
         return "Payload must be a JSON object"
+
+    err = _validate_values(data)
+    if err:
+        return err
 
     # Required top-level keys
     required_keys = ("kind", "schema_version", "generated_at", "timezone", "generated_by", "summary")
@@ -146,11 +215,11 @@ def validate_report_payload(data: Any) -> Optional[str]:
         if not isinstance(summary[list_key], list):
             return f"summary.{list_key} must be an array"
 
-    # Validate a sample of days if present
-    for idx, day_period in enumerate(summary["days"][:5]):
-        err = _validate_period(day_period, f"summary.days[{idx}]")
-        if err:
-            return err
+    for list_key in ("months", "weeks", "days"):
+        for idx, period in enumerate(summary[list_key]):
+            err = _validate_period(period, f"summary.{list_key}[{idx}]")
+            if err:
+                return err
 
     # quota_windows validation
     if "quota_windows" in data and not isinstance(data["quota_windows"], dict):
@@ -159,6 +228,34 @@ def validate_report_payload(data: Any) -> Optional[str]:
     # plans validation
     if "plans" in data and not isinstance(data["plans"], dict):
         return "plans must be an object"
+
+    if "cost_note" in data and not isinstance(data["cost_note"], str):
+        return "cost_note must be a string"
+    if any(not isinstance(k, str) or not isinstance(v, str) for k, v in data.get("plans", {}).items()):
+        return "plans must map strings to strings"
+    for agent, quota in data.get("quota_windows", {}).items():
+        if not isinstance(agent, str) or not isinstance(quota, dict):
+            return "quota_windows must map strings to objects"
+        for key in ("weekly_resets_at", "five_hour_resets_at", "source"):
+            if key in quota and quota[key] is not None and not isinstance(quota[key], str):
+                return f"quota_windows.{agent}.{key} must be a string or null"
+        for key in ("weekly_used_percent", "five_hour_used_percent", "weekly_window_hours", "five_hour_window_hours"):
+            value = quota.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                return f"quota_windows.{agent}.{key} must be a number or null"
+        if "extra_windows" in quota:
+            windows = quota["extra_windows"]
+            if not isinstance(windows, list):
+                return f"quota_windows.{agent}.extra_windows must be an array"
+            for window in windows:
+                if not isinstance(window, dict):
+                    return f"quota_windows.{agent}.extra_windows must contain objects"
+                for key in ("id", "label", "resets_at"):
+                    if key in window and window[key] is not None and not isinstance(window[key], str):
+                        return f"quota_windows.{agent}.extra_windows.{key} must be a string or null"
+                value = window.get("used_percent")
+                if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                    return f"quota_windows.{agent}.extra_windows.used_percent must be a number or null"
 
     # member_label validation
     if "member_label" in data and data["member_label"] is not None and not isinstance(data["member_label"], str):
@@ -196,7 +293,7 @@ def validate_report_payload(data: Any) -> Optional[str]:
             or not dev_name.isprintable()
         ):
             return "device.name must be 1 to 40 printable characters"
-        if dev.get("os") not in VALID_DEVICE_OS:
+        if not isinstance(dev.get("os"), str) or dev.get("os") not in VALID_DEVICE_OS:
             return "device.os must be one of 'macos', 'linux', 'windows'"
 
     return None

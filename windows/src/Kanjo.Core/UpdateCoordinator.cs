@@ -167,15 +167,20 @@ public sealed class UpdateCoordinator : IDisposable
                 CurrentVersion = CurrentVersion,
             });
             var lastReported = 0;
+            var progressGate = new object();
             try
             {
                 // Velopack 的进度回调是 0–100，可能从任何线程来；SetStatus 会切到 UI 线程。
-                // 只在跨过 5% 的档位时才通知：界面上每来一个百分点就重建一次页面太费了。
+                // 相同的百分点只通知一次，1–99 还要跨过 5% 的档位：否则 0% / 100% 会把设置页反复重建。
                 await manager.DownloadAsync(percent =>
                 {
                     if (IsDisposed) return;
-                    if (percent is > 0 and < 100 && percent - lastReported < 5) return;
-                    lastReported = percent;
+                    lock (progressGate)
+                    {
+                        if (percent == lastReported) return;
+                        if (percent is > 0 and < 100 && percent - lastReported < 5) return;
+                        lastReported = percent;
+                    }
                     SetStatus(new UpdateStatus(UpdateState.Downloading, version, percent, null,
                         DateTimeOffset.UtcNow) { CurrentVersion = CurrentVersion });
                 }, CancellationToken.None).ConfigureAwait(false);

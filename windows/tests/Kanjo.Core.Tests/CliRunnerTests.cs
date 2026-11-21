@@ -263,3 +263,66 @@ public sealed class CliRunnerTests : KanjoTestCase
         }
     }
 }
+
+public sealed class ProcessRegressionTests : KanjoTestCase
+{
+    [Fact]
+    public void TimeoutIncludesWritingStdin()
+    {
+        var python = CliRunner.ResolvePython();
+        Assert.NotNull(python);
+        var args = python.Value.Prefix.Concat(["-c", "import time; time.sleep(3)"]).ToArray();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = ProcessRunner.Run(python.Value.Executable, args, timeout: TimeSpan.FromMilliseconds(300), stdinText: new string('x', 2_000_000));
+        Assert.True(result.TimedOut);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2));
+    }
+}
+
+public sealed class ProcessLifetimeTests
+{
+    [Fact]
+    public void DisposingLifetimeKillsTrackedChild()
+    {
+        var python = CliRunner.ResolvePython();
+        Assert.NotNull(python);
+        var start = new System.Diagnostics.ProcessStartInfo(python.Value.Executable) { UseShellExecute = false };
+        foreach (var arg in python.Value.Prefix.Concat(["-c", "import time; time.sleep(30)"])) start.ArgumentList.Add(arg);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        using var lifetime = new ProcessLifetime();
+        using var registration = lifetime.Track(process);
+        lifetime.Dispose();
+        Assert.True(process.WaitForExit(5000));
+    }
+
+    [Fact]
+    public async Task CancellationKillsRunningChild()
+    {
+        var python = CliRunner.ResolvePython();
+        Assert.NotNull(python);
+        using var cancellation = new CancellationTokenSource();
+        var path = Path.Combine(Path.GetTempPath(), $"kanjo-process-{Guid.NewGuid():N}");
+        try
+        {
+            var args = python.Value.Prefix.Concat(["-c", "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(30)", path]).ToArray();
+            var run = Task.Run(() => ProcessRunner.Run(python.Value.Executable, args, cancellationToken: cancellation.Token));
+            Assert.True(SpinWait.SpinUntil(() => File.Exists(path), TimeSpan.FromSeconds(5)));
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await run.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void DrainsBothPipesAndPreservesArgumentsAndUnicode()
+    {
+        var python = CliRunner.ResolvePython();
+        Assert.NotNull(python);
+        var value = "路径 with spaces \"quote\"";
+        var args = python.Value.Prefix.Concat(["-c", "import sys; sys.stderr.write('é'*100000); print(sys.argv[1])", value]).ToArray();
+        var result = ProcessRunner.Run(python.Value.Executable, args, timeout: TimeSpan.FromSeconds(5));
+        Assert.False(result.TimedOut);
+        Assert.Equal(value, result.Stdout.Trim());
+        Assert.Equal(new string('é', 100000), result.Stderr);
+    }
+}

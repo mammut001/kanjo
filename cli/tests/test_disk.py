@@ -114,6 +114,16 @@ class DiskTest(unittest.TestCase):
             code = cli.main(list(argv))
         return code, out.getvalue(), err.getvalue()
 
+    def test_older_than_does_not_follow_symlinked_entry_root(self):
+        outside = os.path.join(self.tmp, "outside")
+        target = self.write(os.path.join(outside, "valuable"), "data")
+        os.makedirs(self.claude, exist_ok=True)
+        os.symlink(outside, self.shell)
+        old = time.time() - 10 * DAY
+        os.utime(target, (old, old))
+        self.clean(["claude:shell-snapshots"], older_than_days=5, yes=True)
+        self.assertTrue(os.path.exists(target))
+
     def test_sizes_counts_and_deletable_defaults(self):
         now = time.time()
         old = now - 3 * DAY

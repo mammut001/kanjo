@@ -112,6 +112,11 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     failed: List[str] = []
     stats: Dict[str, SourceStats] = {}
     ledger = ledger or Ledger()
+    if cache is not None:
+        # usage/accounts pass only antigravity. A later cache.save() (including
+        # the one at the end of this function and the one in build_export) must
+        # not treat every other agent's rows as deleted files.
+        cache._evict_agents = None if dirs is None else set(dirs)
     seen = set()
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}

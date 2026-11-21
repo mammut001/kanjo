@@ -19,6 +19,9 @@ namespace Kanjo.App.Views;
 /// </summary>
 public sealed class SettingsPage : ScrollPage
 {
+    /// <summary>构造次数。家庭上报 / 发布进度只该刷新这一页，不该换掉整个面板。</summary>
+    public static int ConstructionCount;
+
     private readonly AppServices _services;
     private readonly string? _anchor;
     private readonly string? _editingAgent;
@@ -41,6 +44,7 @@ public sealed class SettingsPage : ScrollPage
     public SettingsPage(AppServices services, string? anchor, string? editingAgent, bool snapshot, Action onBack)
         : base(snapshot)
     {
+        ConstructionCount++;
         _services = services;
         _anchor = anchor;
         _editingAgent = editingAgent;

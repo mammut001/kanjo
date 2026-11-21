@@ -493,6 +493,15 @@ class TestFirebaseAuth(unittest.TestCase):
     # CSRF Protection Tests
     # -----------------------------------------------------------------------
 
+    def test_csrf_failure_log_omits_untrusted_headers(self):
+        with self.assertLogs("family_server.dashboard", level="WARNING") as logs:
+            status, _, _ = self._dash_request(
+                "POST", "/auth/session", data=b"{}",
+                headers={"Origin": "https://attacker.example/marker", "Sec-Fetch-Site": "untrusted-marker"},
+            )
+        self.assertEqual(status, 403)
+        self.assertNotIn("marker", " ".join(logs.output))
+
     def test_csrf_protection_on_dashboard_posts(self):
         token = self._create_token()
         payload = json.dumps({"idToken": token}).encode("utf-8")
@@ -660,3 +669,14 @@ class TestFirebaseAuth(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestJWKLogging(unittest.TestCase):
+    def test_unknown_key_id_is_not_logged(self):
+        from family_server.auth import JWKManager
+        manager = JWKManager()
+        manager._cache = {'known': (1, 1)}
+        manager._expires_at = float('inf')
+        manager._fetch_keys = lambda now: None
+        with self.assertLogs('family_server.auth', level='INFO') as logs:
+            manager.get_jwk('private-token-value')
+        self.assertNotIn('private-token-value', '\n'.join(logs.output))

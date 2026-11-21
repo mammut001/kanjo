@@ -482,6 +482,10 @@ class SessionCache:
         self.attr_cache = AttributionCache(self.dir)
         self.entries: Dict[str, dict] = {}
         self.used = set()
+        # None: a full scan (or a save that did not come from scan) drops every
+        # unseen file. A set: only those agents were opened, so other agents stay.
+        # scan() sets this; build_export() saves again afterwards and must see it.
+        self._evict_agents: Optional[Set[str]] = None
         self.modified_keys: Set[str] = set()
         self.dirty = False
         self.dirty_keys: Set[str] = set()
@@ -581,7 +585,12 @@ class SessionCache:
         except OSError:
             pass
 
-        stale = set(self.entries) - self.used
+        unused = set(self.entries) - self.used
+        scope = self._evict_agents
+        if scope is None:
+            stale = unused
+        else:
+            stale = {key for key in unused if key.split("\0", 1)[0] in scope}
         for key in stale:
             del self.entries[key]
         if not (self.dirty or stale):

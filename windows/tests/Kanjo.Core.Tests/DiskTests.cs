@@ -328,9 +328,50 @@ public sealed class DiskTests : KanjoTestCase
         Assert.Equal(1, report.SchemaVersion);
     }
 
+    [Fact]
+    public void ConfirmArgumentsContainPreviewPaths()
+    {
+        var paths = new[] { @"C:\scratch\a b", @"C:\scratch\quote's" };
+        var args = CliRunner.DiskCleanArguments(["claude:scratch"], null, true, paths);
+        Assert.Equal(new[] { "disk", "clean", "claude:scratch", "--only-paths", "-", "--yes" }, args);
+        Assert.Equal(paths, System.Text.Json.JsonSerializer.Deserialize<string[]>(CliRunner.DiskCleanInput(paths)!));
+        Assert.Equal("[]", CliRunner.DiskCleanInput([]));
+        Assert.Null(CliRunner.DiskCleanInput(null));
+    }
+
     private static string DiskFixturePath()
     {
         var root = DefaultPaths.RepoRoot ?? throw new InvalidOperationException("repo root unavailable");
         return Path.Combine(root, "ui", "fixtures", "disk-sample.json");
+    }
+}
+
+public sealed class DiskCancellationTests
+{
+    private sealed class BlockingSource : ICancellableDiskSource
+    {
+        public readonly ManualResetEventSlim Started = new();
+        public readonly ManualResetEventSlim Cancelled = new();
+        public DiskReport Load() => throw new InvalidOperationException("Cancellation token was not passed");
+        public DiskReport Load(CancellationToken token)
+        {
+            Started.Set();
+            token.WaitHandle.WaitOne();
+            Cancelled.Set();
+            token.ThrowIfCancellationRequested();
+            throw new InvalidOperationException();
+        }
+        public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public void SettingsChangeCancelsSupersededDiskLoad()
+    {
+        var source = new BlockingSource();
+        var store = new DiskStore(_ => (source, "fake"));
+        store.Refresh();
+        Assert.True(source.Started.Wait(TimeSpan.FromSeconds(5)));
+        store.ApplySettings();
+        Assert.True(source.Cancelled.Wait(TimeSpan.FromSeconds(5)));
     }
 }

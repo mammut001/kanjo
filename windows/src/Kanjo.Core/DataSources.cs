@@ -31,18 +31,25 @@ public interface IDiskSource
 {
     DiskReport Load();
 
-    CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed);
+    CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null);
+}
+
+public interface ICancellableDiskSource : IDiskSource
+{
+    DiskReport Load(CancellationToken cancellationToken);
 }
 
 /// <summary>跑 `kanjo disk --json` 和 `kanjo disk clean`。</summary>
-public sealed class CliDiskSource(CliRunner runner) : IDiskSource
+public sealed class CliDiskSource(CliRunner runner) : ICancellableDiskSource
 {
     public DiskReport Load() => runner.Disk();
 
+    public DiskReport Load(CancellationToken cancellationToken) => runner.Disk(cancellationToken: cancellationToken);
+
     public DiskReport Load(bool rescan) => runner.Disk(rescan);
 
-    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed) =>
-        runner.DiskClean(ids, olderThan, confirmed);
+    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null) =>
+        runner.DiskClean(ids, olderThan, confirmed, onlyPaths);
 }
 
 /// <summary>`--disk-data` 指定的 JSON 文件。清理不会在这里动磁盘：没有 CLI 可调用，直接拒绝。</summary>
@@ -66,7 +73,7 @@ public sealed class FileDiskSource(string path) : IDiskSource
         return DiskDecoder.Decode(data);
     }
 
-    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed) =>
+    public CleanResult Clean(IReadOnlyList<string> ids, string? olderThan, bool confirmed, IReadOnlyList<string>? onlyPaths = null) =>
         throw DataSourceError.LaunchFailed(
             "Disk cleanup only runs through the kanjo CLI (disk clean). This report was loaded from a JSON file, so nothing was moved.");
 }
@@ -104,7 +111,7 @@ public sealed class DiskReportCache
         {
             var dir = Path.GetDirectoryName(FilePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(FilePath, DiskJson.Write(report));
+            AtomicFile.WriteAllText(FilePath, DiskJson.Write(report));
         }
         catch (Exception)
         {

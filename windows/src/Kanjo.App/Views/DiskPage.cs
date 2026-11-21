@@ -13,6 +13,9 @@ namespace Kanjo.App.Views;
 /// </summary>
 public sealed class DiskPage : Grid, ISnapshotPage
 {
+    /// <summary>构造次数。磁盘数据更新应在原页面上重建，选中和展开才不会丢。</summary>
+    public static int ConstructionCount;
+
     /// <summary>截图模式：交出页面内容（不含滚动容器），由面板按整页高度渲染。</summary>
     public Control SnapshotBody
     {
@@ -56,6 +59,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
 
     public DiskPage(AppServices services, bool expandAll, bool snapshot, Action onBack, Action onSettings)
     {
+        ConstructionCount++;
         _services = services;
         _expandAll = expandAll;
         _snapshot = snapshot;
@@ -593,7 +597,8 @@ public sealed class DiskPage : Grid, ISnapshotPage
     /// <summary>用户已经看过 dry-run 计划，这一步才带 --yes。</summary>
     private void Move()
     {
-        if (_applying) return;
+        if (_applying || _pending is null) return;
+        var paths = _pending.Moved.ToList();
         _applying = true;
         _actionError = null;
         Rebuild();
@@ -603,7 +608,7 @@ public sealed class DiskPage : Grid, ISnapshotPage
         {
             try
             {
-                var result = _services.Disk.Clean(ids, older, confirmed: true);
+                var result = _services.Disk.Clean(ids, older, confirmed: true, onlyPaths: paths);
                 _pending = null;
                 _finished = result;
                 _selected.Clear();

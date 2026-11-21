@@ -279,6 +279,35 @@ final class DiskTests: KanjoTestCase {
         XCTAssertNil(DefaultPaths.diskDataOverride(arguments: ["Kanjo", "--data", "/tmp/a.json"]))
     }
 
+    func testConfirmCommandIncludesPreviewPaths() {
+        let command = DiskCommand.clean(from: "kanjo export", ids: [], olderThan: nil, confirmed: true,
+                                        mergedWorktrees: true, onlyPaths: ["/tmp/a b", "/tmp/other"])
+        XCTAssertTrue(command.contains("--only-paths - --yes"))
+        let paths = ["/tmp/a b", "/tmp/other"]
+        XCTAssertEqual(try? JSONDecoder().decode([String].self, from: DiskCommand.cleanInput(paths)!), paths)
+        XCTAssertEqual(try? JSONDecoder().decode([String].self, from: DiskCommand.cleanInput([])!), [])
+        XCTAssertNil(DiskCommand.cleanInput(nil))
+    }
+
+    #if os(macOS)
+    func testProcessRunnerWritesAndClosesStdin() throws {
+        let paths = (0..<5000).map { "/tmp/path \($0)" }
+        let input = DiskCommand.cleanInput(paths)!
+        let (status, output, _, timedOut) = try CLIDataSource.run(command: "cat", cwd: nil, timeout: 10, stdin: input)
+        XCTAssertFalse(timedOut)
+        XCTAssertEqual(status, 0)
+        XCTAssertEqual(try JSONDecoder().decode([String].self, from: output), paths)
+    }
+
+    func testProcessRunnerSurvivesChildExitingBeforeReadingStdin() throws {
+        let input = Data(repeating: 0x61, count: 8 * 1024 * 1024)
+        let (status, _, _, timedOut) = try CLIDataSource.run(
+            command: "/bin/sh -c 'exit 0'", cwd: nil, timeout: 10, stdin: input)
+        XCTAssertFalse(timedOut)
+        XCTAssertEqual(status, 0)
+    }
+    #endif
+
     func testFileDiskSourceLoadsFixture() async throws {
         let r = try await FileDiskSource(url: try fixtureURL()).load()
         XCTAssertEqual(r.agents.count, 10)

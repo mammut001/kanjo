@@ -32,6 +32,9 @@ public sealed class PanelView : Grid
 
     public AppRoute Route { get; private set; }
 
+    /// <summary>当前内容页实例（测试用来确认数据刷新没有把整页换掉）。</summary>
+    public object? CurrentPage => _page;
+
     /// <summary>截图模式：内容不滚动、按整页高度展开。</summary>
     public bool SnapshotMode { get; }
 
@@ -74,7 +77,9 @@ public sealed class PanelView : Grid
         // 所以这里把整块面板重建一次，而不是指望它们自己跟着变。
         // 弱引用订阅：面板会被丢弃重建，静态事件不能让旧面板活着。
         Appearance.Watch(this, p => p.OnAppearanceChanged());
-        DetachedFromVisualTree += (_, _) => Appearance.Unwatch(this);
+        // 磁盘扫描只改底栏，不走 Changed，否则总览 / 设置会被整页拆掉。
+        _services.Disk.Changed += OnDiskChanged;
+        DetachedFromVisualTree += (_, _) => Detach();
         Rebuild();
         _services.Changed += OnChanged;
         // 更新状态（检查中 / 下载进度 / 已下载）只重建顶部横幅，不重建整页：
@@ -169,26 +174,7 @@ public sealed class PanelView : Grid
         if (animate) Motion.SwapContent(_contentHost, content);
         else _contentHost.Child = content;
 
-        _refreshButton.Opacity = _services.IsLoading || _services.Disk.IsLoading ? 0.45 : 1;
-        // 状态文字：正常运行时是真实时钟；--snapshot 时固定在报告时间（截图可复现，见 README）。
-        if (Route.Kind == AppRouteKind.Disk)
-        {
-            _statusText.Text = _services.Disk.IsLoading
-                ? L10n.Tr("menu.refreshing")
-                : _services.Disk.LastRefresh is not null
-                    ? L10n.TrL(null, "menu.updated_at", ShortDate.Clock(_services.Now))
-                    : L10n.Tr("menu.not_refreshed_yet");
-            ToolTip.SetTip(_statusText, _services.Disk.SourceDescription);
-        }
-        else
-        {
-            _statusText.Text = _services.IsLoading
-                ? L10n.Tr("menu.refreshing")
-                : _services.LastRefresh is not null
-                    ? L10n.TrL(null, "menu.updated_at", ShortDate.Clock(_services.Now))
-                    : L10n.Tr("menu.not_refreshed_yet");
-            ToolTip.SetTip(_statusText, _services.DescribeSource());
-        }
+        UpdateChrome();
 
         // 底栏不随路由重建，分享按钮的显隐在这里切（总览 / 项目 / 桶，且已经有报告）。
         if (_shareButton is not null) _shareButton.IsVisible = ShareButtonVisible();
@@ -319,11 +305,11 @@ public sealed class PanelView : Grid
         _refreshButton = Ui.IconButton(Icons.Refresh(12, Palette.Secondary), () =>
         {
             // 刷新可能跑 CLI（几秒），放后台线程；用户主动刷新（取消待触发的防抖任务）。
+            // 刷新自己会发 Changed / Disk.Changed，这里不再额外通知，否则整页多重建一次。
             Task.Run(() =>
             {
                 if (Route.Kind == AppRouteKind.Disk) _services.Disk.Refresh(rescan: true);
                 else _services.RequestUserRefresh();
-                _services.NotifyChanged();
             });
         }, L10n.Tr("menu.refresh_now"));
         _statusText = Ui.Text("", 12, null, Palette.Secondary);
@@ -456,6 +442,51 @@ public sealed class PanelView : Grid
         else
         {
             Environment.Exit(0);
+        }
+    }
+
+    /// <summary>面板离开视觉树：退订全部事件，关掉的窗口不能再被刷新拽起来重建。</summary>
+    private void Detach()
+    {
+        Appearance.Unwatch(this);
+        _services.Changed -= OnChanged;
+        _services.UpdatesChanged -= RebuildBannersThreadSafe;
+        _services.NavigateRequested -= Navigate;
+        _services.Disk.Changed -= OnDiskChanged;
+    }
+
+    /// <summary>磁盘扫描只改底栏（按钮透明度、状态文字），不重建内容页。</summary>
+    private void OnDiskChanged()
+    {
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(UpdateChrome);
+            return;
+        }
+        UpdateChrome();
+    }
+
+    /// <summary>状态文字：正常运行时是真实时钟；--snapshot 时固定在报告时间（截图可复现，见 README）。</summary>
+    private void UpdateChrome()
+    {
+        _refreshButton.Opacity = _services.IsLoading || _services.Disk.IsLoading ? 0.45 : 1;
+        if (Route.Kind == AppRouteKind.Disk)
+        {
+            _statusText.Text = _services.Disk.IsLoading
+                ? L10n.Tr("menu.refreshing")
+                : _services.Disk.LastRefresh is not null
+                    ? L10n.TrL(null, "menu.updated_at", ShortDate.Clock(_services.Now))
+                    : L10n.Tr("menu.not_refreshed_yet");
+            ToolTip.SetTip(_statusText, _services.Disk.SourceDescription);
+        }
+        else
+        {
+            _statusText.Text = _services.IsLoading
+                ? L10n.Tr("menu.refreshing")
+                : _services.LastRefresh is not null
+                    ? L10n.TrL(null, "menu.updated_at", ShortDate.Clock(_services.Now))
+                    : L10n.Tr("menu.not_refreshed_yet");
+            ToolTip.SetTip(_statusText, _services.DescribeSource());
         }
     }
 

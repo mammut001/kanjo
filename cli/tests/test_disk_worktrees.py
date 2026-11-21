@@ -346,6 +346,21 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.trash), [])
         self.assertFalse(os.path.exists(disk_cache.cache_path()))
 
+    def test_changes_after_report_block_removal(self):
+        for name, contents in (("README", "modified\n"), ("new.txt", "untracked\n")):
+            with self.subTest(name=name):
+                path = self.worktree("p/s/scratchpad/" + name.replace(".", "-"),
+                                     "feature-" + name.replace(".", "-"))
+                self.idle(path)
+                entry = self.entries(self.report())[self.wt_id(
+                    os.path.relpath(path, self.scratch).replace(os.sep, "/"))]
+                self.assertEqual(entry["blocked"], [])
+                self.write(os.path.join(path, name), contents)
+                moved, _, reason, _ = disk._clean_worktree(entry, None, time.time(), True)
+                self.assertEqual(moved, [])
+                self.assertEqual(reason, "uncommitted_changes")
+                self.assertTrue(os.path.isdir(path))
+
     def test_remove_refused_by_git_is_reported(self):
         path = self.worktree("p/s/scratchpad/wt", "feature")
         self.idle(path)
@@ -368,6 +383,40 @@ class MergedWorktreeTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(path))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.main(["disk", "clean"]), 2)
+
+    def test_cli_confirmation_restricts_new_worktrees(self):
+        first = self.worktree("p/s/scratchpad/first", "first")
+        self.idle(first)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["disk", "clean", "--merged-worktrees", "--dry-run"]), 0)
+        preview = json.loads(out.getvalue())["moved"]
+        self.assertEqual(preview, [first])
+        later = self.worktree("p/s/scratchpad/later", "later")
+        self.idle(later)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["disk", "clean", "--merged-worktrees", "--yes", "--only-paths", json.dumps(preview)]), 0)
+        result = json.loads(out.getvalue())
+        self.assertEqual(result["moved"], [first])
+        self.assertTrue(os.path.isdir(later))
+        self.assertTrue(any(s["reason"] == "changed" for s in result["skipped"]))
+
+    def test_cli_reads_large_preview_from_stdin(self):
+        paths = [f"/tmp/preview path {i}" for i in range(5000)]
+        with mock.patch("sys.stdin", io.StringIO(json.dumps(paths))), \
+             mock.patch.object(cli, "disk_clean", return_value={}) as clean, \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["disk", "clean", "claude:scratch", "--yes", "--only-paths", "-"]), 0)
+        self.assertEqual(clean.call_args.kwargs["only_paths"], paths)
+
+    def test_cli_empty_and_invalid_preview_lists(self):
+        path = self.worktree("p/s/scratchpad/wt", "feature")
+        self.idle(path)
+        for value, expected in (("[]", 0), ("null", 2), ('[1]', 2)):
+            with self.subTest(value=value), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(cli.main(["disk", "clean", "--merged-worktrees", "--yes", "--only-paths", value]), expected)
+                self.assertTrue(os.path.isdir(path))
 
     def test_scratch_clean_leaves_worktrees_inside_in_place(self):
         path = self.worktree("p/s/scratchpad/wt", "feature")

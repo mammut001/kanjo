@@ -173,7 +173,12 @@ class Ledger:
                                 line = line.strip()
                                 if not line:
                                     continue
-                                row = json.loads(line)
+                                try:
+                                    row = json.loads(line)
+                                except ValueError:
+                                    continue
+                                if not isinstance(row, dict):
+                                    continue
                                 k = row.get("k")
                                 if not k:
                                     continue
@@ -228,7 +233,12 @@ class Ledger:
                         line = line.strip()
                         if not line:
                             continue
-                        row = json.loads(line)
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue
+                        if not isinstance(row, dict):
+                            continue
                         k = row.get("k")
                         if not k:
                             continue
@@ -550,7 +560,14 @@ class Ledger:
             try:
                 j_size = os.path.getsize(self.journal_path) if os.path.isfile(self.journal_path) else 0
                 if j_size < 5 * 1024 * 1024:
+                    needs_newline = False
+                    if j_size:
+                        with open(self.journal_path, "rb") as handle:
+                            handle.seek(-1, os.SEEK_END)
+                            needs_newline = handle.read(1) != b"\n"
                     with open(self.journal_path, "a", encoding="utf-8") as handle:
+                        if needs_newline:
+                            handle.write("\n")
                         for key in sorted(self.dirty_keys):
                             if key in self._entries:
                                 handle.write(json.dumps({"k": key, "v": self._entries[key], "u": stamp}, ensure_ascii=False) + "\n")

@@ -595,7 +595,7 @@ struct DiskView: View {
 
     /// 用户已经看过 dry-run 计划，这一步才带 `--yes`。
     private func move() {
-        guard !applying else { return }
+        guard !applying, let preview = pending else { return }
         applying = true
         actionError = nil
         let ids = selected.sorted()
@@ -604,8 +604,8 @@ struct DiskView: View {
         Task {
             do {
                 let result = merged
-                    ? try await disk.cleanMergedWorktrees(confirmed: true)
-                    : try await disk.clean(ids: ids, olderThan: older, confirmed: true)
+                    ? try await disk.cleanMergedWorktrees(confirmed: true, onlyPaths: preview.moved)
+                    : try await disk.clean(ids: ids, olderThan: older, confirmed: true, onlyPaths: preview.moved)
                 pending = nil
                 finished = result
                 if !merged { selected.removeAll() }

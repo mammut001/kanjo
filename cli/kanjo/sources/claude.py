@@ -174,7 +174,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 continue
             if isinstance(uid, str) and ts is not None:
                 when[uid] = ts
-            cwd = obj.get("cwd") if isinstance(obj.get("cwd"), str) else None
+            cwd = obj.get("cwd")
+            if not isinstance(cwd, str):
+                cwd = None
             if kind == "custom-title":
                 ct = obj.get("customTitle")
                 if isinstance(ct, str):
@@ -208,7 +210,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             # tool calls: content blocks plus the wire-level inputs (which keep
             # the real "cd /abs/path && ..." prefix the transcript strips)
             content = msg.get("content")
-            wire = obj.get("wireToolInputs") if isinstance(obj.get("wireToolInputs"), dict) else {}
+            wire = obj.get("wireToolInputs")
+            if not isinstance(wire, dict):
+                wire = {}
             if isinstance(content, list):
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "tool_use":
@@ -226,19 +230,22 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             mid = msg.get("id") or obj.get("uuid")
             details = usage.get("output_tokens_details") or {}
             cache = usage.get("cache_creation") or {}
-            m = Message(
-                ts=ts,
-                model=msg.get("model") or "unknown",
-                input=int(usage.get("input_tokens") or 0),
-                output=int(usage.get("output_tokens") or 0),
-                cache_read=int(usage.get("cache_read_input_tokens") or 0),
-                cache_write=int(usage.get("cache_creation_input_tokens") or 0),
-                cache_write_1h=int(cache.get("ephemeral_1h_input_tokens") or 0) if isinstance(cache, dict) else 0,
-                thinking=int(details.get("thinking_tokens") or 0) if isinstance(details, dict) else 0,
-                cwd=cwd,
-                branch=branch,
-                key="claude:%s" % mid if mid else None,
-            )
+            try:
+                m = Message(
+                    ts=ts,
+                    model=msg.get("model") or "unknown",
+                    input=int(usage.get("input_tokens") or 0),
+                    output=int(usage.get("output_tokens") or 0),
+                    cache_read=int(usage.get("cache_read_input_tokens") or 0),
+                    cache_write=int(usage.get("cache_creation_input_tokens") or 0),
+                    cache_write_1h=int(cache.get("ephemeral_1h_input_tokens") or 0) if isinstance(cache, dict) else 0,
+                    thinking=int(details.get("thinking_tokens") or 0) if isinstance(details, dict) else 0,
+                    cwd=cwd,
+                    branch=branch,
+                    key="claude:%s" % mid if mid else None,
+                )
+            except (TypeError, ValueError, OverflowError):
+                continue
             k = mid or "line:%d" % len(order)
             if k not in messages:
                 order.append(k)

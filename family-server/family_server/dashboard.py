@@ -1483,7 +1483,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     jwk_manager: Optional[auth.JWKManager] = None
 
     def log_message(self, format: str, *args) -> None:
-        logger.info("%s - %s", self.address_string(), format % args)
+        logger.info("%s - request handled", self.address_string())
 
     def _send_response_with_headers(
         self,
@@ -1691,12 +1691,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         # 1. CSRF validation on all dashboard POSTs
         if not self._check_csrf():
-            logger.warning(
-                "CSRF check failed on %s (Origin: %s, Sec-Fetch-Site: %s)",
-                self.path,
-                self.headers.get("Origin"),
-                self.headers.get("Sec-Fetch-Site"),
-            )
+            logger.warning("CSRF check failed on dashboard POST")
             self._send_response_with_headers(
                 HTTPStatus.FORBIDDEN,
                 "application/json; charset=utf-8",
@@ -1746,6 +1741,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         b'{"error":"Invalid Content-Length"}',
                     )
                     return
+                if content_length < 0:
+                    self._send_response_with_headers(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", b'{"error":"Invalid Content-Length"}')
+                    return
                 if content_length > MAX_SESSION_BYTES:
                     self._send_response_with_headers(
                         HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
@@ -1754,7 +1752,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     )
                     return
             else:
-                content_length = None
+                self._send_response_with_headers(HTTPStatus.LENGTH_REQUIRED, "application/json; charset=utf-8", b'{"error":"Content-Length required"}')
+                return
 
             if content_length is not None:
                 body_bytes = self.rfile.read(content_length)
@@ -1811,7 +1810,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             if not ok:
                 # Log reason without the token
-                logger.warning("Session authentication rejected for IP %s: %s", client_ip, err_msg)
+                logger.warning("Session authentication rejected for IP %s", client_ip)
                 if claims and "not in authorized admin emails" in err_msg:
                     status_code = HTTPStatus.FORBIDDEN
                     resp_body = b'{"error":"Forbidden: Email not in admin allowlist"}'
