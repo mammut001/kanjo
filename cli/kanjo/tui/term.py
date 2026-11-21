@@ -553,7 +553,7 @@ class ViewModelCache:
         agent_rows = build_agent_rows(filtered, filter_query=query, lang=lang)
         day_rows = build_day_rows(filtered, filter_query=query, lang=lang)
 
-        if state.view_mode == ViewMode.PROJECTS and state.sort_column != "cost":
+        if state.view_mode == ViewMode.PROJECTS and (state.sort_column != "cost" or not state.sort_descending):
             sorted_projects = iter(sorted(
                 (r for r in proj_rows if r.project is not None),
                 key=lambda r: _project_sort_key(r, state.sort_column),
@@ -1246,6 +1246,7 @@ def run_curses_tui(
                     cols = ["cost", "tokens", "sessions", "name"]
                     c_idx = cols.index(state.sort_column) if state.sort_column in cols else 0
                     state.sort_column = cols[(c_idx + 1) % len(cols)]
+                    state.sort_descending = state.sort_column != "name"
                     state.selected_index = 0
                     state.scroll_top = 0
                 continue

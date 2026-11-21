@@ -20,7 +20,7 @@ from kanjo.tui.model import (
 from kanjo.tui.render import SELECTED_ROW_BG, Style, TUIState
 from kanjo.tui.term import ColorManager, ViewModelCache, run_curses_tui
 
-from tests.test_tui import FakeStdscr, screen_frames
+from tests.test_tui import FakeStdscr, screen_frames, screen_text
 
 NOW = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -252,6 +252,42 @@ class TotalLastActiveTest(unittest.TestCase):
         self.assertEqual(filter_report(doc, TimeRange.ALL, now=NOW).last_active, "2026-11-20")
         self.assertEqual(filter_report(doc, TimeRange.TODAY, now=NOW).last_active, "2026-11-20")
         self.assertEqual(filter_report(doc, TimeRange.DAYS_7, now=NOW).first_active, "2026-11-18")
+
+
+def three_project_doc() -> dict:
+    doc = synthetic_doc()
+    base = doc["projects"][0]
+    projects = []
+    for i, (name, cost) in enumerate((("bravo", 30.0), ("alpha", 20.0), ("charlie", 10.0))):
+        p = copy.deepcopy(base)
+        p["id"], p["name"], p["cost"] = "p%d" % i, name, cost
+        p["tokens"] = {"total": int(cost * 100)}
+        p["by_day"][0]["cost"] = cost
+        projects.append(p)
+    doc["projects"] = projects
+    doc["totals"]["cost"] = 65.0
+    return doc
+
+
+class SortDirectionTest(unittest.TestCase):
+    def _names(self, **state_kw):
+        state = TUIState(version="test", **state_kw)
+        rows = ViewModelCache().get_or_build(three_project_doc(), state, now=NOW).project_rows
+        return [r.name for r in rows if r.project is not None]
+
+    def test_cost_ascending_sorts_cheapest_first(self):
+        self.assertEqual(self._names(sort_column="cost", sort_descending=False), ["charlie", "alpha", "bravo"])
+        self.assertEqual(self._names(sort_column="cost", sort_descending=True), ["bravo", "alpha", "charlie"])
+
+    @unittest.skipIf(curses is None, "requires curses")
+    def test_keyboard_name_sort_is_a_to_z(self):
+        scr = FakeStdscr(width=120, height=30, keys=[ord("s"), ord("s"), ord("s"), ord("q")])
+        rc = run_curses_tui(scr, initial_doc=three_project_doc(), data_path="fake.json",
+                            no_color=True, mouse=False)
+        self.assertEqual(rc, 0)
+        text = screen_text(scr)
+        self.assertLess(text.index("alpha"), text.index("bravo"))
+        self.assertLess(text.index("bravo"), text.index("charlie"))
 
 
 if __name__ == "__main__":
