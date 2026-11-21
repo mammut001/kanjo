@@ -56,6 +56,7 @@ class QwenSourceTest(unittest.TestCase):
             record.update(id="req-2", sessionId="qwen-sess-2")
             with open(usage, "a") as handle:
                 handle.write(json.dumps(record) + "\n")
+                handle.write("[]\n")
             sessions = [qwen.parse_file(path, parent) for path, parent in qwen.discover([tmp])]
             by_id = {s.id: s for s in sessions}
             self.assertEqual(set(by_id), {"qwen-sess-1", "qwen-sess-2"})
