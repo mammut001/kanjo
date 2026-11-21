@@ -71,7 +71,7 @@ struct ProjectDetailView: View {
                     Text(L10n.tr("project.last_8_weeks"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    ProjectHeatStrip(weeks: project.heatWeeks(endingOn: report.heatEndDate))
+                    ProjectHeatStrip(weeks: project.heatWeeks(endingOn: report.heatEndDate, timezone: RangeEngine.timezone(of: report)))
                 }
                 .padding(.bottom, 4)
             }
