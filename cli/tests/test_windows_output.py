@@ -2,6 +2,8 @@
 import io
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -31,6 +33,35 @@ class WindowsOutputTests(unittest.TestCase):
                 output = self.run_output(["usage", "--once", "--no-color", "--data", sample, "--lang", lang])
                 self.assertTrue(any(b >= 128 for b in output))
                 output.decode("utf-8")
+
+    def test_interactive_usage_without_curses_prints_snapshot(self):
+        # A fresh interpreter ensures term.py actually sees the missing import.
+        sample = str(Path(__file__).resolve().parents[2] / "ui/fixtures/sample.json")
+        script = """
+import io
+import sys
+from unittest import mock
+sys.modules['curses'] = None
+from kanjo import cli
+class Terminal(io.StringIO):
+    def isatty(self):
+        return True
+out = Terminal()
+with mock.patch('kanjo.winsupport.is_windows', return_value=True), \
+     mock.patch('kanjo.cli._config', return_value=None), \
+     mock.patch('kanjo.cli._cache', return_value=None), \
+     mock.patch('sys.stdout', out):
+    rc = cli.main(['usage', '--data', sys.argv[1], '--no-color', '--lang', 'en'])
+sys.__stdout__.write(out.getvalue())
+sys.exit(rc)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, sample], capture_output=True,
+            text=True, encoding="utf-8", timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.strip())
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_export_redirected_non_ascii(self):
         with mock.patch("kanjo.cli.build_export", return_value={"name": "项目"}), \
