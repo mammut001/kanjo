@@ -11,6 +11,8 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.money(1234.5), "$1,234.50")
         XCTAssertEqual(Fmt.money(-1.5), "-$1.50")
         XCTAssertEqual(Fmt.money(3, currency: "EUR"), "EUR 3.00")
+        XCTAssertEqual(Fmt.money(.nan), "—")
+        XCTAssertEqual(Fmt.money(.infinity), "—")
     }
 
     func testMenuBarMoney() {
@@ -183,6 +185,8 @@ final class FormattingTests: KanjoTestCase {
         XCTAssertEqual(Fmt.percent(1), "100%")
         XCTAssertEqual(Fmt.percent(0.6), "60%")
         XCTAssertEqual(Fmt.percent(0.004), "0.4%")
+        XCTAssertEqual(Fmt.percent(.nan), "—")
+        XCTAssertEqual(Fmt.percent(.infinity), "—")
     }
 
     func testDay() {

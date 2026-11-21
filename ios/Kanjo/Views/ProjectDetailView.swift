@@ -142,14 +142,18 @@ struct ProjectDetailView: View {
             (tokens.cacheWrite, IOSPalette.tokenCacheWrite),
         ]
         let visible = parts.filter { $0.tokens > 0 }
-        let total = max(visible.reduce(0) { $0 + $1.tokens }, 1)
         return GeometryReader { geo in
-            let available = max(geo.size.width - CGFloat(max(visible.count - 1, 0)), 0)
+            let widths = LayoutMath.segmentWidths(
+                available: geo.size.width,
+                weights: visible.map { Double($0.tokens) },
+                gap: 1,
+                minWidth: 2
+            )
             HStack(spacing: 1) {
-                ForEach(Array(visible.enumerated()), id: \.offset) { _, part in
+                ForEach(Array(visible.enumerated()), id: \.offset) { index, part in
                     Rectangle()
                         .fill(part.color)
-                        .frame(width: max(available * CGFloat(part.tokens) / CGFloat(total), 2))
+                        .frame(width: widths[index])
                 }
             }
             .clipShape(Capsule())
@@ -216,7 +220,10 @@ struct ProjectDetailView: View {
                                 Capsule().fill(Color.primary.opacity(0.06))
                                 Capsule()
                                     .fill(IOSPalette.agent(agent.agent))
-                                    .frame(width: max(2, geo.size.width * CGFloat(maxCost > 0 ? agent.cost / maxCost : 0)))
+                                    .frame(width: LayoutMath.barWidth(
+                                        available: geo.size.width,
+                                        fraction: maxCost > 0 ? agent.cost / maxCost : 0
+                                    ))
                             }
                         }
                         .frame(height: 8)

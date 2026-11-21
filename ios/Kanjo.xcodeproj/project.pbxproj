@@ -10,9 +10,11 @@
 		0978145B5A388F9DD6BA518E /* HeatStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */; };
 		101BE5C17F2CE1C09B39B552 /* SnapshotSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC30710793234C731B0DE10 /* SnapshotSource.swift */; };
 		1A33068AA6BB530A7CE8E4E2 /* MobileExportDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0641B166439367B45388B34 /* MobileExportDecodeTests.swift */; };
+		1CE0E2B45F357A13BF7051E8 /* StressRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073AF8EB1EE8E9134B76022C /* StressRenderTests.swift */; };
 		2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E829F6655E532133018832 /* IOSPalette.swift */; };
 		2869CF7F6B710CA75B877D33 /* MosaicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3465A7114B6763F70C034E43 /* MosaicView.swift */; };
 		3A5E091849903F5B059F1926 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 39D4773DEC1DD1A811985E85 /* PrivacyInfo.xcprivacy */; };
+		484FCF9AB82D9E14950BFC4A /* LayoutMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA53B40D117D6890C866B22D /* LayoutMath.swift */; };
 		4B1C06207740050EBA332631 /* ByModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C46E10884DB3956B665DC7 /* ByModelView.swift */; };
 		68DFE3A7D3853CB5CD738F9A /* KanjoAvatarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4C917DEC7EA914B04DE6C0 /* KanjoAvatarIcon.swift */; };
 		6EFE2DCF6E15AFED768174E9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6942A238E68DF45A2BF1878A /* RootView.swift */; };
@@ -39,6 +41,7 @@
 
 /* Begin PBXFileReference section */
 		044E994AE39AB51A03189673 /* KanjoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = KanjoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		073AF8EB1EE8E9134B76022C /* StressRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StressRenderTests.swift; sourceTree = "<group>"; };
 		11501081076B36A53170935D /* Kanjo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kanjo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		2D3BCBEFE7170B43A61B18A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -59,6 +62,7 @@
 		D70329043E5CE090994ECBC9 /* KanjoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanjoApp.swift; sourceTree = "<group>"; };
 		E19E89018E4E065FC1F44B46 /* Kanjo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kanjo.entitlements; sourceTree = "<group>"; };
 		E3C46E10884DB3956B665DC7 /* ByModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByModelView.swift; sourceTree = "<group>"; };
+		FA53B40D117D6890C866B22D /* LayoutMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutMath.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +157,7 @@
 			children = (
 				B0641B166439367B45388B34 /* MobileExportDecodeTests.swift */,
 				6234BE9DD1F6402C9969216B /* SnapshotStoreTests.swift */,
+				073AF8EB1EE8E9134B76022C /* StressRenderTests.swift */,
 			);
 			path = KanjoTests;
 			sourceTree = "<group>";
@@ -162,6 +167,7 @@
 			children = (
 				90EE56787B5D8F5630C8F324 /* CommonViews.swift */,
 				8B09DCD778998D8AE9F7C4EC /* HeatStripView.swift */,
+				FA53B40D117D6890C866B22D /* LayoutMath.swift */,
 				3465A7114B6763F70C034E43 /* MosaicView.swift */,
 			);
 			path = Components;
@@ -279,6 +285,7 @@
 			files = (
 				1A33068AA6BB530A7CE8E4E2 /* MobileExportDecodeTests.swift in Sources */,
 				BE8F206916111521EDF4530A /* SnapshotStoreTests.swift in Sources */,
+				1CE0E2B45F357A13BF7051E8 /* StressRenderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +299,7 @@
 				2362F3EEF839055AC06CE31A /* IOSPalette.swift in Sources */,
 				FD45AEB6FBD3348CD9B5CC16 /* KanjoApp.swift in Sources */,
 				68DFE3A7D3853CB5CD738F9A /* KanjoAvatarIcon.swift in Sources */,
+				484FCF9AB82D9E14950BFC4A /* LayoutMath.swift in Sources */,
 				2869CF7F6B710CA75B877D33 /* MosaicView.swift in Sources */,
 				C41C7B6697DD2DCF7AD44397 /* OverviewView.swift in Sources */,
 				93834F74B71FBF6C52095BCB /* ProjectDetailView.swift in Sources */,
