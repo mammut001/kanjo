@@ -64,6 +64,33 @@ public sealed class NullPowerMonitor : IPowerMonitor
 }
 
 /// <summary>
+/// 把电源事件按到达顺序放到线程池上执行（不借用调用方的 SynchronizationContext）。
+/// </summary>
+internal sealed class PowerEventQueue
+{
+    private readonly object _lock = new();
+    private Task _tail = Task.CompletedTask;
+
+    public void Post(Action action)
+    {
+        lock (_lock)
+        {
+            _tail = _tail.ContinueWith(_ =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception e)
+                {
+                    System.Diagnostics.Trace.WriteLine($"kanjo: power event handler failed: {e.Message}");
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
+    }
+}
+
+/// <summary>
 /// Windows 电源事件：挂 <c>Microsoft.Win32.SystemEvents.PowerModeChanged</c>（挂之前要先有消息循环，
 /// 见 <see cref="SystemEvents"/>），节电模式用 <c>GetSystemPowerStatus</c> 的
 /// <c>SystemStatusFlag</c>（1 = 节电模式开启）轮询。
@@ -75,6 +102,7 @@ public sealed class WindowsPowerMonitor : IPowerMonitor
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
 
     private readonly object _lock = new();
+    private readonly PowerEventQueue _events = new();
     private System.Threading.Timer? _poll;
     private bool _started;
     private bool _isLowPower;
@@ -114,11 +142,13 @@ public sealed class WindowsPowerMonitor : IPowerMonitor
     {
         switch (e.Mode)
         {
+            // SystemEvents 经由订阅时（UI 线程）的 SynchronizationContext 回调：唤醒后的刷新会同步跑
+            // kanjo export，放到后台按顺序转发，别卡住托盘和面板。
             case Microsoft.Win32.PowerModes.Suspend:
-                WillSuspend?.Invoke(this, EventArgs.Empty);
+                _events.Post(() => WillSuspend?.Invoke(this, EventArgs.Empty));
                 return;
             case Microsoft.Win32.PowerModes.Resume:
-                DidResume?.Invoke(this, EventArgs.Empty);
+                _events.Post(() => DidResume?.Invoke(this, EventArgs.Empty));
                 return;
             default:
                 return;
