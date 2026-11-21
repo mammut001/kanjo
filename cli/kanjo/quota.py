@@ -4,7 +4,7 @@ Sources, per agent, highest priority first:
 
 1. ``[quota_windows.<agent>]`` in the user config (``source: "manual"``),
    either ``weekly_reset = "tue 05:00"`` or ``weekly_resets_at = <ISO 8601>``.
-2. Kanjo's direct live quota fetcher (:mod:`kanjo.quota_fetch`), ``source: "tokei"``:
+2. Kanjo's direct live quota fetcher (:mod:`kanjo.quota_fetch`), ``source: "live"``:
    - Antigravity: local LanguageServerService on 127.0.0.1 (Gemini 5h/weekly +
      Claude/GPT group as ``extra_windows``).
    - Codex: ChatGPT usage API (5h and weekly).
@@ -19,9 +19,8 @@ Sources, per agent, highest priority first:
 A Tokei cache older than ``MAX_AGE_DAYS`` is ignored. Anything missing or malformed
 just leaves that agent out; this module never raises.
 
-Reset points that are already past are moved forward: the weekly reset by whole
-windows (the cadence is fixed), the 5-hour reset becomes null (the next 5-hour
-window only starts with the next use). The used percent of a window that already ended
+Past periodic reset points are advanced by whole windows; past 5-hour resets
+become null. The used percent of a window that already ended
 is null too: the cache only knows the old window. ``five_hour_window_hours`` stays set
 for an ended 5-hour window (null only when the agent has none), so the UI can say so.
 """
@@ -245,7 +244,7 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
         from .quota_fetch import fetch_all_quotas
         fetched = fetch_all_quotas(now=now, no_network=no_network)
         for agent, entry in (fetched or {}).items():
-            if isinstance(entry, dict) and entry.get("weekly_resets_at"):
+            if isinstance(entry, dict) and entry:
                 contract_entry = {
                     "weekly_resets_at": entry.get("weekly_resets_at"),
                     "weekly_window_hours": entry.get("weekly_window_hours", DEFAULT_WEEKLY_HOURS),
@@ -257,6 +256,40 @@ def quota_windows(manual: Optional[Dict[str, dict]] = None, directory: Optional[
                 }
                 if "extra_windows" in entry and entry["extra_windows"]:
                     contract_entry["extra_windows"] = entry["extra_windows"]
+                from .quota_fetch import _timestamp
+                for prefix in ("weekly", "five_hour"):
+                    key = prefix + "_resets_at"
+                    ts = _timestamp(contract_entry[key])
+                    pct_key = prefix + "_used_percent"
+                    if ts is not None and ts <= now:
+                        contract_entry[pct_key] = None
+                        hours = contract_entry.get("weekly_window_hours")
+                        if prefix == "weekly" and isinstance(hours, (int, float)) and not isinstance(hours, bool) and math.isfinite(hours) and hours > 0:
+                            period = hours * 3600
+                            ts += period * (math.floor((now - ts) / period) + 1)
+                        else:
+                            ts = None
+                    contract_entry[key] = iso_utc(ts) if ts is not None else None
+                    contract_entry[pct_key] = _pct(contract_entry[pct_key]) if contract_entry[key] else None
+                if "extra_windows" in contract_entry:
+                    cleaned = []
+                    for extra in contract_entry["extra_windows"]:
+                        if not isinstance(extra, dict):
+                            continue
+                        extra = dict(extra)
+                        ts = _timestamp(extra.get("resets_at"))
+                        if ts is not None and ts <= now:
+                            extra["used_percent"] = None
+                            hours = extra.get("window_hours")
+                            if isinstance(hours, (int, float)) and not isinstance(hours, bool) and math.isfinite(hours) and hours > 0 and hours != 5:
+                                period = hours * 3600
+                                ts += period * (math.floor((now - ts) / period) + 1)
+                            else:
+                                ts = None
+                        extra["resets_at"] = iso_utc(ts) if ts is not None else None
+                        extra["used_percent"] = _pct(extra.get("used_percent")) if extra["resets_at"] else None
+                        cleaned.append(extra)
+                    contract_entry["extra_windows"] = cleaned
                 out[agent] = contract_entry
     except Exception:
         pass
