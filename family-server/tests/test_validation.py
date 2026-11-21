@@ -105,3 +105,28 @@ class TestDeviceValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestUntrustedReports(unittest.TestCase):
+    def test_rejects_unsafe_numbers_and_nested_shapes(self):
+        with open(os.path.join(os.path.dirname(__file__), 'fixtures', 'report.json'), encoding='utf-8') as f:
+            base = json.load(f)
+        for change in ('nan', 'negative', 'huge', 'sixth_day', 'month', 'provider', 'numeric_string', 'provider_tokens'):
+            payload = copy.deepcopy(base)
+            if change == 'nan':
+                payload['summary']['all_time']['tokens']['total'] = float('nan')
+            elif change == 'negative':
+                payload['summary']['all_time']['cost_usd'] = -1
+            elif change == 'huge':
+                payload['summary']['all_time']['tokens']['total'] = 10 ** 400
+            elif change == 'sixth_day':
+                payload['summary']['days'][5] = {'period': 'x', 'tokens': {}, 'cost_usd': 'bad'}
+            elif change == 'month':
+                payload['summary']['months'][0] = {'period': 'x', 'tokens': {}, 'cost_usd': 'bad'}
+            elif change == 'provider':
+                payload['summary']['all_time']['by_provider'] = 5
+            elif change == 'numeric_string':
+                payload['summary']['all_time']['tokens']['total'] = 'bad'
+            else:
+                payload['summary']['all_time']['by_provider'][0]['tokens'] = 'bad'
+            with self.subTest(change=change):
+                self.assertIsNotNone(validate_report_payload(payload))

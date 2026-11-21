@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import json
+import math
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -71,6 +72,29 @@ def check_privacy_backstop(raw_body_bytes: bytes) -> Optional[str]:
     return None
 
 
+def _validate_values(value: Any, depth: int = 0) -> Optional[str]:
+    """Bound untrusted values before any dashboard code consumes them."""
+    if depth > 40:
+        return "Payload nesting is too deep"
+    if isinstance(value, str):
+        if len(value) > 4096:
+            return "Payload string is too long"
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value < 0 or value > 10 ** 15 or (isinstance(value, float) and not math.isfinite(value)):
+            return "Payload contains an invalid number"
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            err = _validate_values(key, depth + 1) or _validate_values(item, depth + 1)
+            if err:
+                return err
+    elif isinstance(value, list):
+        for item in value:
+            err = _validate_values(item, depth + 1)
+            if err:
+                return err
+    return None
+
+
 def _validate_period(period_data: Any, context: str) -> Optional[str]:
     """Validate a Period structure per CONTRACT.md section 12."""
     if not isinstance(period_data, dict):
@@ -89,6 +113,31 @@ def _validate_period(period_data: Any, context: str) -> Optional[str]:
     if not isinstance(period_data["cost_usd"], (int, float)):
         return f"{context}.cost_usd must be a number"
 
+    def valid_numbers(obj):
+        if not isinstance(obj, dict):
+            return False
+        for key, value in obj.items():
+            if key == "tokens":
+                if not valid_numbers(value):
+                    return False
+            elif key in ("input", "output", "cache_read", "cache_write", "total", "tokens_total", "cost_usd"):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    return False
+        return True
+
+    if not valid_numbers(period_data):
+        return f"{context} contains invalid numeric fields"
+    for key in ("by_provider", "by_agent", "top_models", "models_used"):
+        if key in period_data and not isinstance(period_data[key], list):
+            return f"{context}.{key} must be an array"
+    for provider in period_data.get("by_provider", []):
+        if not valid_numbers(provider) or not isinstance(provider.get("models", []), list):
+            return f"{context}.by_provider contains an invalid provider"
+        if any(not valid_numbers(model) for model in provider.get("models", [])):
+            return f"{context}.by_provider contains invalid models"
+    for key in ("by_agent", "top_models"):
+        if any(not valid_numbers(item) for item in period_data.get(key, [])):
+            return f"{context}.{key} contains invalid entries"
     return None
 
 
@@ -98,6 +147,10 @@ def validate_report_payload(data: Any) -> Optional[str]:
     """
     if not isinstance(data, dict):
         return "Payload must be a JSON object"
+
+    err = _validate_values(data)
+    if err:
+        return err
 
     # Required top-level keys
     required_keys = ("kind", "schema_version", "generated_at", "timezone", "generated_by", "summary")
@@ -146,11 +199,11 @@ def validate_report_payload(data: Any) -> Optional[str]:
         if not isinstance(summary[list_key], list):
             return f"summary.{list_key} must be an array"
 
-    # Validate a sample of days if present
-    for idx, day_period in enumerate(summary["days"][:5]):
-        err = _validate_period(day_period, f"summary.days[{idx}]")
-        if err:
-            return err
+    for list_key in ("months", "weeks", "days"):
+        for idx, period in enumerate(summary[list_key]):
+            err = _validate_period(period, f"summary.{list_key}[{idx}]")
+            if err:
+                return err
 
     # quota_windows validation
     if "quota_windows" in data and not isinstance(data["quota_windows"], dict):

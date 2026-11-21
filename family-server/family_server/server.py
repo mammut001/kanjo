@@ -16,9 +16,9 @@ logger = logging.getLogger("family_server.server")
 
 def start_servers(
     db_path: str,
-    api_host: str = "0.0.0.0",
+    api_host: str = "127.0.0.1",
     api_port: int = 8788,
-    dashboard_host: str = "0.0.0.0",
+    dashboard_host: str = "127.0.0.1",
     dashboard_port: int = 8787,
     rate_limiter: Optional[RateLimiter] = None,
     session_rate_limiter: Optional[RateLimiter] = None,

@@ -111,3 +111,11 @@ class TestServerConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestListenerDefaults(unittest.TestCase):
+    def test_server_listeners_default_to_loopback(self):
+        import inspect
+        from family_server.server import start_servers
+        defaults = inspect.signature(start_servers).parameters
+        self.assertEqual(defaults['api_host'].default, '127.0.0.1')
+        self.assertEqual(defaults['dashboard_host'].default, '127.0.0.1')

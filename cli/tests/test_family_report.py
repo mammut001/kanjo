@@ -884,3 +884,13 @@ class TestFamilyReportDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestReportRedirects(unittest.TestCase):
+    def test_authorization_is_not_forwarded_on_redirect(self):
+        from kanjo.report_family import _report_request
+        import urllib.request
+        request = _report_request('https://family.example/api/report', b'{}', 'secret')
+        redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+            request, None, 302, 'Found', {}, 'https://other.example/')
+        self.assertNotIn('Authorization', redirected.headers)
+        self.assertNotIn('Authorization', redirected.unredirected_hdrs)
