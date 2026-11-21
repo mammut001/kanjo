@@ -201,6 +201,44 @@ public sealed class RefreshEngineTests : KanjoTestCase
         Assert.Equal(TimeSpan.FromSeconds(110), timers.LastPending!.Delay);
     }
 
+    /// <summary>防抖刷新已经排好、电脑睡了：唤醒后要补刷（Suspend 取消了计时器，不能就此丢掉）。</summary>
+    [Fact]
+    public void TestScheduledRefreshSurvivesSleep()
+    {
+        var (engine, timers, watchers, power, clock, refreshes) = NewEngine();
+        using var _engine = engine;
+        engine.StartWatcher(["/tmp/kanjo-logs"]);
+
+        watchers.RaiseFileEvent();
+        Assert.True(engine.HasScheduledRefresh);
+        power.RaiseSuspend();
+        Assert.False(engine.HasScheduledRefresh);
+
+        clock.Advance(30 * 60);
+        power.RaiseResume();
+        Assert.Equal([RefreshTrigger.Background], refreshes);
+    }
+
+    /// <summary>打开节电模式：已排好的防抖刷新要取消，关掉节电后再补。</summary>
+    [Fact]
+    public void TestLowPowerCancelsArmedRefresh()
+    {
+        var (engine, timers, watchers, power, clock, refreshes) = NewEngine();
+        using var _engine = engine;
+        engine.StartWatcher(["/tmp/kanjo-logs"]);
+
+        watchers.RaiseFileEvent();
+        var armed = timers.LastPending!;
+        engine.SetLowPowerMode(true);
+        Assert.False(engine.HasScheduledRefresh);
+        Assert.True(armed.WasCancelled);
+        Assert.Empty(refreshes);
+
+        clock.Advance(600);
+        engine.SetLowPowerMode(false);
+        Assert.Equal([RefreshTrigger.Background], refreshes);
+    }
+
     [Fact]
     public void TestLowPowerModeSuppressesAndResumes()
     {

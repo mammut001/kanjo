@@ -97,6 +97,71 @@ public sealed class RefreshSchedulerTests : KanjoTestCase
             scheduler.OnLowPowerModeChanged(false, At(3100)).Kind);
     }
 
+    /// <summary>节电模式下睡眠再唤醒：仍在节电，不能立刻跑一次完整导出（Mac：onWake 在低电量时返回 none）。</summary>
+    [Fact]
+    public void TestWakeDuringLowPowerModeDefers()
+    {
+        var scheduler = new RefreshScheduler(lastRefreshTime: At(0));
+        scheduler.OnLowPowerModeChanged(true, At(100));
+        scheduler.OnFileEvent(At(200));
+        scheduler.OnSleep();
+
+        Assert.Equal(RefreshActionKind.None, scheduler.OnWake(At(800)).Kind);
+        Assert.True(scheduler.PendingWakeRefresh);
+        Assert.Equal(RefreshActionKind.RefreshNow, scheduler.OnLowPowerModeChanged(false, At(900)).Kind);
+    }
+
+    /// <summary>已安排的防抖刷新遇到睡眠：唤醒后要补上，而不是丢掉。</summary>
+    [Fact]
+    public void TestSleepKeepsScheduledRefreshForWake()
+    {
+        var scheduler = new RefreshScheduler(lastRefreshTime: At(0));
+        Assert.Equal(RefreshActionKind.ScheduleRefresh, scheduler.OnFileEvent(At(1000)).Kind);
+        scheduler.OnSleep();
+
+        Assert.Equal(RefreshActionKind.RefreshNow, scheduler.OnWake(At(2800)).Kind);
+    }
+
+    /// <summary>开启节电时已安排的刷新：转成「恢复后再刷」，关掉节电时补上。</summary>
+    [Fact]
+    public void TestLowPowerKeepsScheduledRefreshForResume()
+    {
+        var scheduler = new RefreshScheduler(lastRefreshTime: At(0));
+        Assert.Equal(RefreshActionKind.ScheduleRefresh, scheduler.OnFileEvent(At(1000)).Kind);
+        Assert.Equal(RefreshActionKind.None, scheduler.OnLowPowerModeChanged(true, At(1010)).Kind);
+        Assert.True(scheduler.PendingWakeRefresh);
+
+        Assert.Equal(RefreshActionKind.RefreshNow, scheduler.OnLowPowerModeChanged(false, At(2000)).Kind);
+    }
+
+    /// <summary>睡眠 / 节电中结束的刷新带着补刷：记成唤醒后刷新，而不是丢掉。</summary>
+    [Fact]
+    public void TestFollowUpFinishedWhileAsleepIsKeptForWake()
+    {
+        var scheduler = new RefreshScheduler(lastRefreshTime: At(0));
+        scheduler.OnRefreshStarted(At(1000));
+        scheduler.OnFileEvent(At(1005));
+        scheduler.OnSleep();
+        Assert.Equal(RefreshActionKind.None, scheduler.OnRefreshFinished(At(1010)).Kind);
+        Assert.True(scheduler.PendingWakeRefresh);
+
+        Assert.Equal(RefreshActionKind.RefreshNow, scheduler.OnWake(At(2000)).Kind);
+    }
+
+    /// <summary>唤醒时还有刷新在跑：补刷留给 OnRefreshFinished，不直接丢掉。</summary>
+    [Fact]
+    public void TestWakeWhileRefreshingKeepsFollowUp()
+    {
+        var scheduler = new RefreshScheduler(lastRefreshTime: At(0));
+        scheduler.OnSleep();
+        scheduler.OnFileEvent(At(500));
+        scheduler.OnRefreshStarted(At(900));
+
+        Assert.Equal(RefreshActionKind.None, scheduler.OnWake(At(1000)).Kind);
+        Assert.True(scheduler.HasPendingEventWhileRefreshing);
+        Assert.Equal(RefreshActionKind.ScheduleRefresh, scheduler.OnRefreshFinished(At(1010)).Kind);
+    }
+
     [Fact]
     public void TestFallbackTimerFiresWhenDue()
     {

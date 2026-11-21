@@ -35,6 +35,8 @@ public sealed class RefreshScheduler
     public bool IsAsleep { get; private set; }
     public bool IsLowPowerMode { get; private set; }
     public bool PendingWakeRefresh { get; private set; }
+    /// <summary>引擎已经按本调度器的结果挂了一个防抖计时器（睡眠 / 节电时要转成 <see cref="PendingWakeRefresh"/>）。</summary>
+    public bool HasScheduledRefresh { get; private set; }
     public int FallbackMinutes { get; set; }
 
     public RefreshScheduler(int fallbackMinutes = DefaultFallbackMinutes, DateTimeOffset? lastRefreshTime = null)
@@ -73,13 +75,14 @@ public sealed class RefreshScheduler
         var minIntervalTarget = (LastRefreshTime ?? DateTimeOffset.MinValue) + MinimumRefreshInterval;
         var scheduledTarget = effectiveTarget > minIntervalTarget ? effectiveTarget : minIntervalTarget;
         var delay = scheduledTarget - date;
-        return RefreshAction.Schedule(delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+        return Scheduled(delay);
     }
 
     public void OnRefreshStarted(DateTimeOffset? at = null)
     {
         IsRefreshing = true;
         HasPendingEventWhileRefreshing = false;
+        HasScheduledRefresh = false;
         FirstUnhandledEventTime = null;
     }
 
@@ -88,12 +91,19 @@ public sealed class RefreshScheduler
         var date = at ?? DateTimeOffset.UtcNow;
         IsRefreshing = false;
         LastRefreshTime = date;
+        var followUp = HasPendingEventWhileRefreshing;
+        HasPendingEventWhileRefreshing = false;
 
-        if (IsAsleep || IsLowPowerMode) return RefreshAction.None;
-
-        if (HasPendingEventWhileRefreshing)
+        if (IsAsleep || IsLowPowerMode)
         {
-            HasPendingEventWhileRefreshing = false;
+            // 结果已经过时，但要等唤醒 / 退出节电才能再刷（Mac 同款）。
+            if (followUp) PendingWakeRefresh = true;
+            return RefreshAction.None;
+        }
+
+        PendingWakeRefresh = false;
+        if (followUp)
+        {
             var firstEvent = FirstUnhandledEventTime ?? (LastEventTime ?? date);
             var deadline = firstEvent + MaxDebounceWait;
             var debounceTarget = (LastEventTime ?? date) + DebounceInterval;
@@ -101,7 +111,7 @@ public sealed class RefreshScheduler
             var minIntervalTarget = date + MinimumRefreshInterval;
             var scheduledTarget = effectiveTarget > minIntervalTarget ? effectiveTarget : minIntervalTarget;
             var delay = scheduledTarget - date;
-            return RefreshAction.Schedule(delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+            return Scheduled(delay);
         }
         return RefreshAction.None;
     }
@@ -114,35 +124,66 @@ public sealed class RefreshScheduler
         return (at ?? DateTimeOffset.UtcNow) - last > MinimumRefreshInterval;
     }
 
-    public void OnSleep() => IsAsleep = true;
+    /// <summary>系统将要睡眠：引擎会取消已挂的计时器，这里记住唤醒后要补刷（Mac <c>onSleep</c>）。</summary>
+    public void OnSleep()
+    {
+        IsAsleep = true;
+        DeferScheduledRefresh();
+    }
 
     public RefreshAction OnWake(DateTimeOffset? at = null)
     {
         var date = at ?? DateTimeOffset.UtcNow;
         IsAsleep = false;
-        if (!PendingWakeRefresh) return RefreshAction.None;
-        PendingWakeRefresh = false;
-        if (IsRefreshing) return RefreshAction.None;
-        var minIntervalTarget = (LastRefreshTime ?? DateTimeOffset.MinValue) + MinimumRefreshInterval;
-        if (date >= minIntervalTarget) return RefreshAction.RefreshNow;
-        var delay = minIntervalTarget - date;
-        return RefreshAction.Schedule(delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+        if (IsLowPowerMode) return RefreshAction.None;
+        return ResumeIfIdle(date);
     }
 
+    /// <summary>节电模式开关：打开时把已挂的刷新转成恢复后补刷（引擎负责取消计时器）。</summary>
     public RefreshAction OnLowPowerModeChanged(bool enabled, DateTimeOffset? at = null)
     {
         var date = at ?? DateTimeOffset.UtcNow;
         IsLowPowerMode = enabled;
-        if (!enabled && PendingWakeRefresh)
+        if (enabled)
         {
-            PendingWakeRefresh = false;
-            if (IsRefreshing) return RefreshAction.None;
-            var minIntervalTarget = (LastRefreshTime ?? DateTimeOffset.MinValue) + MinimumRefreshInterval;
-            if (date >= minIntervalTarget) return RefreshAction.RefreshNow;
-            var delay = minIntervalTarget - date;
-            return RefreshAction.Schedule(delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+            DeferScheduledRefresh();
+            return RefreshAction.None;
         }
-        return RefreshAction.None;
+        return ResumeIfIdle(date);
+    }
+
+    private void DeferScheduledRefresh()
+    {
+        if (HasScheduledRefresh || HasPendingEventWhileRefreshing) PendingWakeRefresh = true;
+        HasScheduledRefresh = false;
+    }
+
+    /// <summary>睡眠、节电都解除后补上推迟的刷新；正在刷新时把补刷留给 <see cref="OnRefreshFinished"/>。</summary>
+    private RefreshAction ResumeIfIdle(DateTimeOffset date)
+    {
+        if (!PendingWakeRefresh && !HasPendingEventWhileRefreshing) return RefreshAction.None;
+        if (IsAsleep || IsLowPowerMode)
+        {
+            PendingWakeRefresh = true;
+            return RefreshAction.None;
+        }
+        if (IsRefreshing)
+        {
+            HasPendingEventWhileRefreshing = true;
+            PendingWakeRefresh = false;
+            return RefreshAction.None;
+        }
+        PendingWakeRefresh = false;
+        HasPendingEventWhileRefreshing = false;
+        var minIntervalTarget = (LastRefreshTime ?? DateTimeOffset.MinValue) + MinimumRefreshInterval;
+        if (date >= minIntervalTarget) return RefreshAction.RefreshNow;
+        return Scheduled(minIntervalTarget - date);
+    }
+
+    private RefreshAction Scheduled(TimeSpan delay)
+    {
+        HasScheduledRefresh = true;
+        return RefreshAction.Schedule(delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
     }
 
     public RefreshAction OnFallbackTimerFired(DateTimeOffset? at = null)
