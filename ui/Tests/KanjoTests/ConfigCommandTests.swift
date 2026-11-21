@@ -111,6 +111,12 @@ final class ConfigCommandTests: KanjoTestCase {
         )
         XCTAssertEqual(cmd, "python3 -m kanjo config set 'antigravity_accounts.alex@example.com.plan' google_ai_pro")
 
+        let dotted = try ConfigCommand.antigravityAccountPlanArguments(
+            email: "first.last+tag@example.com", plan: "google_ai_pro")
+        XCTAssertEqual(dotted, ["config", "set", "antigravity_accounts.first.last+tag@example.com.plan", "google_ai_pro"])
+        let dottedCmd = try ConfigCommand.command(from: CLIDataSource.defaultCommand, arguments: dotted)
+        XCTAssertEqual(dottedCmd, "python3 -m kanjo config set 'antigravity_accounts.first.last+tag@example.com.plan' google_ai_pro")
+
         for bad in ["", "not-an-email", "bad;email@example.com", "a b@example.com"] {
             XCTAssertThrowsError(try ConfigCommand.antigravityAccountPlanArguments(email: bad, plan: "google_ai_pro"))
         }

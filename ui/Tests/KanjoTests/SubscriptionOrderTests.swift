@@ -121,4 +121,10 @@ final class SubscriptionOrderTests: KanjoTestCase {
         XCTAssertEqual(SubscriptionOrder.visible(emptyRows, expanded: false, limit: 3), [])
         XCTAssertEqual(SubscriptionOrder.visible(emptyRows, expanded: true, limit: 3), [])
     }
+
+    func testShowsAllRowsWhenAutoExpandedEvenIfUserCollapsed() {
+        XCTAssertTrue(SubscriptionOrder.showsAllRows(userExpanded: false, autoExpanded: true))
+        XCTAssertFalse(SubscriptionOrder.showsAllRows(userExpanded: false, autoExpanded: false))
+        XCTAssertTrue(SubscriptionOrder.showsAllRows(userExpanded: true, autoExpanded: false))
+    }
 }

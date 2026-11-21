@@ -544,10 +544,11 @@ final class ReportStore: ObservableObject {
     /// `plan` 为 nil / "" / "none" 时写入显式的 "none"，免得 unset 后又回落到 attribution.toml 里的套餐。
     func setAntigravityAccountPlan(email: String, plan: String?) {
         guard canEditSubscriptions else { return }
+        let normEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let key = AntigravityAggregation.normalizedPlanKey(plan)
-        pendingAntigravityAccountPlans[email] = key
+        pendingAntigravityAccountPlans[normEmail] = key
         accountPlanError = nil
-        writeQueue.enqueue(WriteQueue.Write(email: email, plan: key.isEmpty ? "none" : key))
+        writeQueue.enqueue(WriteQueue.Write(email: normEmail, plan: key.isEmpty ? "none" : key))
         startWriteQueueIfNeeded()
     }
 
