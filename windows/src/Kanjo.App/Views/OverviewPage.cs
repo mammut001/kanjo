@@ -87,7 +87,7 @@ public sealed class OverviewPage : ScrollPage
         var report = Report;
         var root = Ui.V(Metrics.SectionSpacing);
 
-        // Hero 卡片：标题 + 范围胶囊 + 大号金额 + 摘要 + 范围说明。
+        // Hero 卡片：标题 + 范围胶囊 + 大号金额 + 本周 token + 摘要 + 范围说明。
         var heroBlock = Ui.V(10);
         heroBlock.Children.Add(Hero(report, ctx, filtered, arranged.Visible, arranged.Hidden.Count));
         root.Children.Add(Chrome.Card(heroBlock, Metrics.RowInset, 14));
@@ -194,6 +194,7 @@ public sealed class OverviewPage : ScrollPage
         box.Children.Add(picker);
 
         box.Children.Add(Widgets.HeroAmount(Fmt.Money(filtered.Cost, report.Currency), 36));
+        box.Children.Add(ThisWeekLine(report));
 
         var rangeText = filtered.FirstActive is null && !ctx.IsAll
             ? L10n.Tr("overview.no_usage")
@@ -206,6 +207,18 @@ public sealed class OverviewPage : ScrollPage
             box.Children.Add(new RangeCaptionLine(caption));
         }
         return box;
+    }
+
+    /// <summary>
+    /// 金额正下方的「本周 token」。生成时间比现在旧就用生成时间（样本 / 过期导出），否则用现在。
+    /// 周一 00:00 按用户时区。
+    /// </summary>
+    private Control ThisWeekLine(UsageReport report)
+    {
+        var reference = WeeklyTokens.Reference(_services.Now, ReportDates.ParseTimestamp(report.GeneratedAt));
+        var tokens = WeeklyTokens.Since(reference, report.Projects, TimeZoneInfo.Local);
+        return Ui.Text(L10n.TrL(null, "overview.this_week_tokens", Fmt.Tokens(tokens)),
+            Type.CaptionSize, null, Palette.Secondary, maxLines: 1);
     }
 
     /// <summary>
