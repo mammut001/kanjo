@@ -174,7 +174,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 continue
             if isinstance(uid, str) and ts is not None:
                 when[uid] = ts
-            cwd = obj.get("cwd") if isinstance(obj.get("cwd"), str) else None
+            cwd = obj.get("cwd")
+            if not isinstance(cwd, str):
+                cwd = None
             if kind == "custom-title":
                 ct = obj.get("customTitle")
                 if isinstance(ct, str):
@@ -208,7 +210,9 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
             # tool calls: content blocks plus the wire-level inputs (which keep
             # the real "cd /abs/path && ..." prefix the transcript strips)
             content = msg.get("content")
-            wire = obj.get("wireToolInputs") if isinstance(obj.get("wireToolInputs"), dict) else {}
+            wire = obj.get("wireToolInputs")
+            if not isinstance(wire, dict):
+                wire = {}
             if isinstance(content, list):
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "tool_use":

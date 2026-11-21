@@ -41,6 +41,7 @@ _TRIGGER_FAST = {
     (b"event_msg", b"task_started"),
 }
 _OUTPUT_ITEM = re.compile(rb'"item"\s*:\s*\{\s*"type"\s*:\s*"(Reasoning|AgentMessage)"')
+_USAGE_ENCODER = json.JSONEncoder(sort_keys=True, separators=(",", ":"))
 _ITEM_STARTED = re.compile(rb'"started_at_ms"\s*:\s*(\d+)')
 
 
@@ -67,7 +68,7 @@ def _usage_key(info) -> Optional[str]:
     last = info.get("last_token_usage")
     if not isinstance(last, dict):
         return None
-    return "codex:" + json.dumps([total, last], sort_keys=True, separators=(",", ":"))
+    return "codex:" + _USAGE_ENCODER.encode([total, last])
 
 
 def _tool_paths(payload, cwd) -> List[str]:
