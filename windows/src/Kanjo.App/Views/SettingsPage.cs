@@ -148,9 +148,11 @@ public sealed class SettingsPage : ScrollPage
 
         if (_services.DataOverride is { } overridePath)
         {
+            // 截图模式只露文件名：完整路径会随生成目录变化，还会把开发机的目录写进公开截图。
+            var shownPath = _snapshot ? Path.GetFileName(overridePath) : overridePath;
             // WinUI 的 InfoBar：只有一条说明，不再重复页面标题当标题。
             var bar = new InfoBar(
-                L10n.TrL(null, "settings.data_override", overridePath),
+                L10n.TrL(null, "settings.data_override", shownPath),
                 InfoBar.Level.Warning)
             {
                 Margin = new Thickness(Metrics.PagePadding - 2, 12, Metrics.PagePadding - 2, 0),
