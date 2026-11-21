@@ -56,6 +56,19 @@ public sealed class ShareSummaryTests : KanjoTestCase
     }
 
     [Fact]
+    public void TestTinyProjectShareUsesActualTotal()
+    {
+        var report = MakeReport();
+        report = report with
+        {
+            Projects = new RoList<Project>([report.Projects[0] with { Cost = 0.005 }]),
+            Totals = report.Totals with { Cost = 0.005 },
+        };
+        var summary = ShareSummary.Build(report, "all");
+        Assert.Equal(1, summary.TopProjects[0].Share, 9);
+    }
+
+    [Fact]
     public void TestBuild()
     {
         var summary = ShareSummary.Build(MakeReport(), "all");

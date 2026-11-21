@@ -64,18 +64,19 @@ struct ShareImage: View {
 
 struct ShareProportionBar: View {
     let rows: [ShareSummary.AgentRow]
-    let totalTokens: Int
-
     var body: some View {
         GeometryReader { geo in
             let gap: CGFloat = 1.5
             let count = rows.count
             let avail = max(geo.size.width - CGFloat(max(count - 1, 0)) * gap, 0)
+            let base = count > 0 ? min(2, avail / CGFloat(count)) : 0
+            let remainder = max(0, avail - CGFloat(count) * base)
+            let sum = rows.reduce(0.0) { $0 + Double(max(0, $1.tokens)) }
             
             HStack(spacing: gap) {
                 ForEach(rows, id: \.agent) { row in
-                    let share = totalTokens > 0 ? Double(row.tokens) / Double(totalTokens) : 0
-                    let w = max(avail * CGFloat(share), 2)
+                    let share = sum > 0 ? Double(max(0, row.tokens)) / sum : 0
+                    let w = base + remainder * CGFloat(share)
                     Rectangle()
                         .fill(AgentPalette.color(for: row.agent))
                         .frame(width: w)
@@ -104,8 +105,14 @@ struct MultiImageView: View {
                 // Left: Mosaic
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("share.top_projects")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                    ShareMosaic(projects: summary.mosaicProjects, size: CGSize(width: mosaicW, height: mosaicH))
-                        .frame(width: mosaicW, height: mosaicH)
+                    if summary.mosaicProjects.isEmpty {
+                        Text(L10n.tr("overview.projects.no_usage_range"))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .frame(width: mosaicW, height: mosaicH, alignment: .topLeading)
+                    } else {
+                        ShareMosaic(projects: summary.mosaicProjects, currency: summary.currency, size: CGSize(width: mosaicW, height: mosaicH))
+                            .frame(width: mosaicW, height: mosaicH)
+                    }
                 }
                 .frame(width: mosaicW, alignment: .leading)
                 
@@ -113,9 +120,12 @@ struct MultiImageView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("share.agents")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                     
-                    ShareProportionBar(rows: summary.agentRows, totalTokens: summary.totals.tokens)
+                    if summary.agentRows.isEmpty {
+                        Text(L10n.tr("agents.empty")).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    ShareProportionBar(rows: summary.agentRows)
                     
-                    Grid(alignment: .center, horizontalSpacing: 6, verticalSpacing: 8) {
+                    Grid(alignment: .center, horizontalSpacing: 4, verticalSpacing: 8) {
                         let maxShown = 7
                         let shown = Array(summary.agentRows.prefix(maxShown))
                         let overflow = max(0, summary.agentRows.count - maxShown)
@@ -127,7 +137,7 @@ struct MultiImageView: View {
                                     Text(row.label)
                                         .font(.system(size: 13))
                                         .lineLimit(1)
-                                        .fixedSize(horizontal: true, vertical: false)
+                                        .frame(width: 73, alignment: .leading)
                                 }
                                 .gridColumnAlignment(.leading)
                                 .layoutPriority(1)
@@ -136,20 +146,23 @@ struct MultiImageView: View {
                                     .font(.system(size: 13, design: .monospaced))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
+                                    .minimumScaleFactor(0.7)
+                                    .frame(width: 43, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
 
-                                Text(Fmt.money(row.cost))
+                                Text(Fmt.money(row.cost, currency: summary.currency))
                                     .font(.system(size: 13, design: .monospaced))
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
+                                    .minimumScaleFactor(0.6)
+                                    .frame(width: 95, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
 
                                 Text(multiplierText(row))
                                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                                     .foregroundStyle(multiplierColor(row))
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
+                                    .minimumScaleFactor(0.6)
+                                    .frame(width: 47, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
                             }
                         }
@@ -163,17 +176,18 @@ struct MultiImageView: View {
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
-                                        .fixedSize(horizontal: true, vertical: false)
+                                        .frame(width: 73, alignment: .leading)
                                 }
                                 .gridColumnAlignment(.leading)
 
                                 Text(verbatim: " ")
                                     .font(.system(size: 13, design: .monospaced))
                                     .gridColumnAlignment(.trailing)
-                                Text(Fmt.money(overflowCost))
+                                Text(Fmt.money(overflowCost, currency: summary.currency))
                                     .font(.system(size: 13, design: .monospaced))
                                     .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
+                                    .minimumScaleFactor(0.6)
+                                    .frame(width: 95, alignment: .trailing)
                                     .gridColumnAlignment(.trailing)
                                 Text(verbatim: " ")
                                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
@@ -239,7 +253,7 @@ struct MultiImageView: View {
             }
             Spacer()
             VStack(alignment: .trailing) {
-                HeroAmount(value: Fmt.money(summary.totals.cost), size: 24)
+                HeroAmount(value: Fmt.money(summary.totals.cost, currency: summary.currency), size: 24)
                 Text(L10n.tr("share.tokens_sessions", Fmt.tokens(summary.totals.tokens), summary.totals.sessions))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
@@ -259,6 +273,7 @@ struct MultiImageView: View {
 
 struct ShareMosaic: View {
     let projects: [Project]
+    let currency: String
     let size: CGSize
     
     var body: some View {
@@ -267,10 +282,16 @@ struct ShareMosaic: View {
             ForEach(tiles) { tile in
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 4).fill(tile.color)
-                    if tile.rect.width >= 56 && tile.rect.height >= 30 {
+                    if tile.rect.width >= 56 && tile.rect.height >= 40 {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(name(for: tile)).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                            Text(Fmt.money(tile.cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                            ViewThatFits(in: .horizontal) {
+                                Text(Fmt.money(tile.cost, currency: currency))
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .fixedSize()
+                                Color.clear.frame(width: 0, height: 0)
+                            }
                         }
                         .padding(6)
                     }

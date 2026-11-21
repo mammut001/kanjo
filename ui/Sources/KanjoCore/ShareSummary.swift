@@ -107,7 +107,7 @@ public struct ShareSummary: Equatable {
         
         let sortedProjects = projectCosts.values.sorted { $0.cost > $1.cost }.prefix(5)
         let topProjects = sortedProjects.map { p in
-            ProjectShare(name: p.name, cost: p.cost, share: p.cost / max(1, agentSummary.totalCost))
+            ProjectShare(name: p.name, cost: p.cost, share: agentSummary.totalCost > 0 ? p.cost / agentSummary.totalCost : 0)
         }
         
         let mosaicProjects = filtered.projects.filter { $0.cost > 0 && !hiddenProjects.contains($0.id) }.map { $0.projected }
@@ -118,7 +118,7 @@ public struct ShareSummary: Equatable {
             totals: totals,
             topProjects: Array(topProjects),
             mosaicProjects: mosaicProjects,
-            rangeLabel: RangeCaptionBuilder.caption(for: resolved.range, report: report)?.text ?? resolved.range.longLabel,
+            rangeLabel: RangeCaptionBuilder.caption(for: resolved.range, report: report, now: now)?.text ?? resolved.range.longLabel,
             currency: report.currency,
             updated: ReportDates.parseTimestamp(report.generatedAt) ?? now
         )

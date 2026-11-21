@@ -39,7 +39,8 @@ enum ShareImageRunner {
         let store = AppDefaults.resolveStore(arguments: args + ["--snapshot"])
         let rangeRaw = args.firstIndex(of: "--share-range").flatMap { i in i + 1 < args.count ? args[i+1] : nil } ?? store.string(forKey: SettingsKeys.timeRange) ?? "all"
         
-        let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw)
+        let now = ReportDates.parseTimestamp(report.generatedAt) ?? Date()
+        let summary = ShareSummary.build(report: report, rangeRaw: rangeRaw, now: now)
         
         if let agentId = agentId {
             if !summary.agentRows.contains(where: { $0.agent == agentId }) {

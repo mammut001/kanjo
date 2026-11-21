@@ -50,7 +50,7 @@ public sealed class ShareImageView : Border
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
 
-        var left = Ui.H(8);
+        var left = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 8 };
         if (AppIcon() is { } icon)
         {
             left.Children.Add(new Image
@@ -64,7 +64,8 @@ public sealed class ShareImageView : Border
 
         var titles = Ui.V(1);
         titles.Children.Add(Ui.Text("Kanjo", 15, FontWeight.SemiBold, ink));
-        titles.Children.Add(Ui.Text(summary.RangeLabel, 11, null, secondary, maxLines: 1));
+        titles.Children.Add(Ui.Text(summary.RangeLabel, 11, null, secondary, wrap: true));
+        Grid.SetColumn(titles, 1);
         left.Children.Add(titles);
         grid.Children.Add(left);
 
@@ -93,17 +94,22 @@ public sealed class ShareImageView : Border
         var left = Ui.V(8);
         left.Width = mosaicW;
         left.Children.Add(Ui.Text(L10n.Tr("share.top_projects"), 11, FontWeight.SemiBold, secondary));
-        left.Children.Add(Mosaic(summary.MosaicProjects, mosaicW, summary.Currency, ink, costInk));
+        if (summary.MosaicProjects.Count == 0)
+            left.Children.Add(new Border { Height = MosaicHeight, Child = Ui.Text(L10n.Tr("overview.projects.no_usage_range"), 11, null, secondary, wrap: true), VerticalAlignment = VerticalAlignment.Top });
+        else
+            left.Children.Add(Mosaic(summary.MosaicProjects, mosaicW, summary.Currency, ink, costInk));
 
         var right = Ui.V(8);
         right.Width = agentsW;
         right.Children.Add(Ui.Text(L10n.Tr("share.agents"), 11, FontWeight.SemiBold, secondary));
+        if (summary.AgentRows.Count == 0)
+            right.Children.Add(Ui.Text(L10n.Tr("agents.empty"), 11, null, secondary, wrap: true));
         right.Children.Add(new Border
         {
             Height = 6,
             CornerRadius = new CornerRadius(3),
             ClipToBounds = true,
-            Child = new ShareProportionBar(summary.AgentRows, summary.Totals.Tokens),
+            Child = new ShareProportionBar(summary.AgentRows),
         });
         right.Children.Add(AgentTable(summary, ink, secondary));
 
@@ -112,7 +118,7 @@ public sealed class ShareImageView : Border
         return row;
     }
 
-    /// <summary>和总览同一套方块，但标签规则是分享图自己的：宽 ≥ 56 且高 ≥ 30 才画名字 + 金额。</summary>
+    /// <summary>和总览同一套方块，但标签规则是分享图自己的：宽 ≥ 56 且高 ≥ 40 才画名字 + 金额。</summary>
     private static Control Mosaic(
         IReadOnlyList<Project> projects, double width, string currency, IBrush ink, IBrush costInk)
     {
@@ -138,7 +144,7 @@ public sealed class ShareImageView : Border
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
             };
-            if (tile.Rect.Width >= 56 && tile.Rect.Height >= 30)
+            if (tile.Rect.Width >= 56 && tile.Rect.Height >= 40)
             {
                 var name = tile.Project?.Name ?? $"+{tile.Merged.Count}";
                 var box = new StackPanel
@@ -147,8 +153,13 @@ public sealed class ShareImageView : Border
                     Spacing = 0,
                     Margin = new Thickness(6),
                 };
-                box.Children.Add(Ui.Text(name, 11, FontWeight.SemiBold, ink, maxLines: 1));
-                box.Children.Add(Ui.Text(Fmt.Money(tile.Cost, currency), 10, null, costInk, mono: true, maxLines: 1));
+                var nameText = Ui.Text(name, 11, FontWeight.SemiBold, ink, maxLines: 1);
+                nameText.TextTrimming = TextTrimming.CharacterEllipsis;
+                var costText = Ui.Text(Fmt.Money(tile.Cost, currency), 10, null, costInk, mono: true, maxLines: 1);
+                costText.Measure(Size.Infinity);
+                box.Children.Add(nameText);
+                if (costText.DesiredSize.Width <= tile.Rect.Width - 12)
+                    box.Children.Add(costText);
                 shape.Child = box;
             }
             host.Children.Add(shape);
@@ -161,9 +172,9 @@ public sealed class ShareImageView : Border
         const int maxShown = 7;
         var grid = new Grid
         {
-            ColumnSpacing = 6,
+            ColumnSpacing = 4,
             RowSpacing = 8,
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,43,95,47"),
         };
         var shown = summary.AgentRows.Take(maxShown).ToList();
         for (var i = 0; i < shown.Count; i++)
@@ -173,8 +184,8 @@ public sealed class ShareImageView : Border
             var multiplierBrush = row.Multiplier is > 0 ? AgentBrush(row.Agent) : Brushes.Transparent;
             AddRow(grid, i,
                 DotLabel(row.Label, AgentBrush(row.Agent), ink),
-                Ui.Text(Fmt.Tokens(row.Tokens), 13, null, secondary, mono: true, maxLines: 1),
-                Ui.Text(Fmt.Money(row.Cost, summary.Currency), 13, null, ink, mono: true, maxLines: 1),
+                Ui.Text(Fmt.Tokens(row.Tokens), 11, null, secondary, mono: true, maxLines: 1),
+                Ui.Text(Fmt.Money(row.Cost, summary.Currency), 11, null, ink, mono: true, maxLines: 1),
                 Ui.Text(multiplier, 13, FontWeight.SemiBold, multiplierBrush, mono: true, maxLines: 1));
         }
 
@@ -193,7 +204,7 @@ public sealed class ShareImageView : Border
             AddRow(grid, shown.Count,
                 DotLabel(L10n.Tr("share.more_agents", overflow), null, secondary, dot),
                 Ui.Text(" ", 13, null, secondary, mono: true),
-                Ui.Text(Fmt.Money(cost, summary.Currency), 13, null, ink, mono: true, maxLines: 1),
+                Ui.Text(Fmt.Money(cost, summary.Currency), 11, null, ink, mono: true, maxLines: 1),
                 Ui.Text(" ", 13, FontWeight.SemiBold, Brushes.Transparent, mono: true));
         }
         return grid;
@@ -201,7 +212,7 @@ public sealed class ShareImageView : Border
 
     private static Control DotLabel(string text, IBrush? dotFill, IBrush foreground, Ellipse? dot = null)
     {
-        var row = Ui.H(6);
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("6,*"), ColumnSpacing = 6 };
         row.Children.Add(dot ?? new Ellipse
         {
             Width = 6,
@@ -209,7 +220,10 @@ public sealed class ShareImageView : Border
             Fill = dotFill,
             VerticalAlignment = VerticalAlignment.Center,
         });
-        row.Children.Add(Ui.Text(text, 13, null, foreground, maxLines: 1));
+        var label = Ui.Text(text, 13, null, foreground, maxLines: 1);
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
+        Grid.SetColumn(label, 1);
+        row.Children.Add(label);
         return row;
     }
 
@@ -291,19 +305,19 @@ public sealed class ShareImageView : Border
         return _icon;
     }
 
-    /// <summary>6pt 的比例条：每个 agent 一段，间距 1.5，最短 2，圆角由外层裁切。</summary>
+    /// <summary>6pt 的比例条：每个 agent 一段，间距 1.5，尽量保留 2pt 最小宽度，圆角由外层裁切。</summary>
     private sealed class ShareProportionBar : Panel
     {
         private readonly double[] _shares;
 
-        public ShareProportionBar(IReadOnlyList<ShareSummary.AgentRow> rows, long totalTokens)
+        public ShareProportionBar(IReadOnlyList<ShareSummary.AgentRow> rows)
         {
             Height = 6;
             ClipToBounds = true;
             _shares = new double[rows.Count];
             for (var i = 0; i < rows.Count; i++)
             {
-                _shares[i] = totalTokens > 0 ? rows[i].Tokens / (double)totalTokens : 0;
+                _shares[i] = Math.Max(0, rows[i].Tokens);
                 Children.Add(new Border
                 {
                     Background = AgentBrush(rows[i].Agent),
@@ -324,10 +338,13 @@ public sealed class ShareImageView : Border
             const double gap = 1.5;
             var count = Children.Count;
             var avail = Math.Max(finalSize.Width - Math.Max(count - 1, 0) * gap, 0);
+            var minimum = count > 0 ? Math.Min(2, avail / count) : 0;
+            var remainder = Math.Max(0, avail - minimum * count);
+            var sum = _shares.Sum();
             var x = 0.0;
             for (var i = 0; i < count; i++)
             {
-                var width = Math.Max(avail * _shares[i], count > 0 ? 2 : 0);
+                var width = minimum + (sum > 0 ? remainder * _shares[i] / sum : 0);
                 Children[i].Arrange(new Rect(x, 0, width, 6));
                 x += width + gap;
             }

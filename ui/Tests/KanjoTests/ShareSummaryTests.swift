@@ -40,6 +40,22 @@ final class ShareSummaryTests: KanjoTestCase {
         return try JSONDecoder().decode(UsageReport.self, from: json.data(using: .utf8)!)
     }
 
+    func testTinyProjectShareUsesActualTotal() throws {
+        var report = try makeReport()
+        report.projects = [report.projects[0]]
+        report.projects[0].cost = 0.005
+        report.totals.cost = 0.005
+        let summary = ShareSummary.build(report: report, rangeRaw: "all")
+        XCTAssertEqual(summary.topProjects[0].share, 1, accuracy: 1e-9)
+    }
+
+    func testResetCaptionUsesSummaryReferenceTime() throws {
+        let report = try ReportDecoder.decode(Data(contentsOf: DefaultPaths.sampleFixture))
+        let now = ReportDates.parseTimestamp("2026-10-23T02:00:00Z")!
+        let expected = RangeCaptionBuilder.caption(for: .sinceReset, report: report, now: now)!.text
+        XCTAssertEqual(ShareSummary.build(report: report, rangeRaw: "sinceReset", now: now).rangeLabel, expected)
+    }
+
     func testBuild() throws {
         let report = try makeReport()
         let summary = ShareSummary.build(report: report, rangeRaw: "all")
