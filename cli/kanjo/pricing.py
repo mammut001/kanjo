@@ -158,7 +158,7 @@ class PriceBook:
     def sig(self) -> str:
         if not hasattr(self, "_sig"):
             import hashlib
-            self._sig = hashlib.sha1(json.dumps(["resolver-v3", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
+            self._sig = hashlib.sha1(json.dumps(["resolver-v6", sorted(self.prices.items()), sorted(self.aliases.items()), sorted(LONG_PROMPT_TIERS.items())]).encode("utf-8")).hexdigest()
         return self._sig
 
     # ---- catalog helpers -------------------------------------------------
@@ -254,6 +254,7 @@ class PriceBook:
         m = re.sub(r"-trial$", "", m)
         if m.startswith("grok") or m.startswith("x-ai/grok") or m.startswith("xai/grok"):
             m = re.sub(r"-(?:build-fast|build)$", "", m)
+        m = re.sub(r"(^|/)claude-(\d+)-(\d)-(opus|sonnet|haiku)(?=-|$)", r"\1claude-\2.\3-\4", m)
         seg = m.rsplit("/", 1)[-1]
         if seg.startswith("muse-"):
             return "meta/" + seg
@@ -304,9 +305,10 @@ class PriceBook:
         clean = re.sub(r"^(?:(?:us|eu|ap|global)\.)?anthropic\.", "", clean)
         clean = re.sub(r"-v\d+:\d+$", "", clean)
         clean = re.sub(r"@\d{8}$", "", clean)
-        clean = re.sub(r"(?:-(?:latest|thinking|high|medium|low|\d{8}))+$", "", clean)
+        clean = re.sub(r"(?:-(?:latest|thinking|high|medium|low|\d{8}|\d{4}-\d{2}-\d{2}|\d{4}))+$", "", clean)
+        clean = re.sub(r"(^|/)claude-(\d+)-(\d)-(opus|sonnet|haiku)(?=-|$)", r"\1claude-\2.\3-\4", clean)
         # Only interpret a dashed version as a decimal for these model families.
-        clean = re.sub(r"((?:claude-(?:opus|sonnet|haiku)|gpt)-\d+)-(\d+)(?=-|$)", r"\1.\2", clean)
+        clean = re.sub(r"((?:claude-(?:opus|sonnet|haiku)|gpt)-\d+)-(\d{1,2})(?=-|$)", r"\1.\2", clean)
         normalized = self.aliases.get(clean) or self.normalize(clean)
         if self.known(normalized):
             return normalized, False
@@ -352,16 +354,23 @@ class PriceBook:
         if tiers:
             vendor, _, name = (norm or "").rpartition("/")
             family = name.split("-")[0]
+            requested_tokens = set(re.findall(r"[a-z]+", name))
+            modalities = {"image", "audio", "search", "realtime", "tts", "transcribe", "embedding"}
             matches = [model_id for model_id in self.prices
                        if model_id.startswith(vendor + "/" + family)
-                       and self._tiers(model_id) == tiers and ":" not in model_id]
+                       and self._tiers(model_id) == tiers and ":" not in model_id
+                       and not ((set(re.findall(r"[a-z]+", model_id.rpartition("/")[2]))
+                                 & modalities) - requested_tokens)]
             if matches:
                 requested = self._model_line(name)
                 def rank(model_id):
                     line = self._model_line(model_id.rpartition("/")[2])
                     version = line[1] if line else (0, 0)
                     target = requested[1] if requested else (0, 0)
-                    return (version <= target, version if version <= target else (-version[0], -version[1]))
+                    tokens = set(re.findall(r"[a-z]+", model_id.rpartition("/")[2]))
+                    extra = tokens - requested_tokens
+                    return (version <= target, version if version <= target else (-version[0], -version[1]),
+                            not extra, -len(extra), model_id)
                 return max(matches, key=rank), True
         # family keyword fallback
         for keyword, representative in FAMILY_FALLBACK:

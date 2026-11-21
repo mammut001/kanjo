@@ -23,6 +23,26 @@ class PricingCorrectness(unittest.TestCase):
                 with self.subTest(name=name):
                     self.assertEqual(self.book.resolve(name), (expected, False))
 
+    def test_dated_openai_snapshots(self):
+        for name, expected in [('gpt-5-2025-08-07', 'openai/gpt-5'),
+                               ('openai/gpt-5-2025-08-07', 'openai/gpt-5'),
+                               ('gpt-5-mini-2025-08-07', 'openai/gpt-5-mini'),
+                               ('gpt-4-0613', 'openai/gpt-4'),
+                               ('gpt-4.1-2025-04-14', 'openai/gpt-4.1')]:
+            with self.subTest(name=name):
+                self.assertEqual(self.book.resolve(name), (expected, False))
+        self.assertAlmostEqual(self.book.cost('gpt-5-2025-08-07', 'codex',
+                                              1000000, 100000, 10000000)[0], 3.5)
+
+    def test_legacy_dashed_claude_versions(self):
+        self.assertEqual(self.book.resolve('claude-3-5-haiku-20241022'),
+                         ('anthropic/claude-3.5-haiku', False))
+        for dashed, dotted in [('claude-3-7-sonnet-20250219', 'claude-3.7-sonnet'),
+                               ('anthropic.claude-3-5-sonnet-20241022-v2:0', 'claude-3.5-sonnet'),
+                               ('anthropic/claude-3-5-haiku-20241022', 'claude-3.5-haiku')]:
+            with self.subTest(dashed=dashed):
+                self.assertEqual(self.book.resolve(dashed), self.book.resolve(dotted))
+
     def test_fallback_preserves_tier(self):
         for name, tier in [('gpt-5.1-ultra-mini', 'mini'), ('gpt-4.0-mini', 'mini'),
                            ('gpt-99-nano', 'nano'), ('gpt-99-pro', 'pro'),
@@ -33,6 +53,16 @@ class PricingCorrectness(unittest.TestCase):
                 self.assertTrue(estimated)
                 self.assertIn(tier, model)
                 self.assertTrue(self.book.known(model))
+
+    def test_named_tier_fallback_avoids_unrequested_modalities(self):
+        for reverse in (False, True):
+            book = PriceBook()
+            if reverse:
+                book.prices = dict(reversed(list(book.prices.items())))
+            with self.subTest(reverse=reverse):
+                model, estimated = book.resolve('gpt-5-codex-mini', 'codex')
+                self.assertEqual((model, estimated), ('openai/gpt-5-mini', True))
+                self.assertEqual(book.price(model)['in'], 0.25)
 
     def test_cache_and_precision(self):
         p = self.book.price('anthropic/claude-opus-4.5')
