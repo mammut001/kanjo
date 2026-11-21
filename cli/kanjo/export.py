@@ -136,12 +136,14 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             except ParseError as exc:
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             except Exception as exc:  # unknown format change: count it, never abort the scan
                 st.failed += 1
                 failed.append(path)
-                ledger.note_unparsed(agent, path, error=_error_text(exc))
+                if not cache or path in getattr(cache, "modified_keys", set()) or not ledger.is_known_key(marker_key(agent, path)):
+                    ledger.note_unparsed(agent, path, error=_error_text(exc))
                 continue
             if not session.messages:
                 m_key = marker_key(agent, path)
