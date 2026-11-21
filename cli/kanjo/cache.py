@@ -58,6 +58,22 @@ def _signature(path: str) -> Optional[list]:
             wal_sig = [st_wal.st_size, st_wal.st_mtime_ns]
         except OSError:
             wal_sig = None
+    elif stat.S_ISDIR(st.st_mode):
+        # A session directory (QwenWork): its own stat does not change when
+        # segment files grow or appear, so fold in every segment's stat.
+        wal_sig = []
+        for sub in ("segments", ""):
+            seg_dir = os.path.join(stat_path, sub) if sub else stat_path
+            try:
+                names = sorted(n for n in os.listdir(seg_dir) if n.endswith(".jsonl"))
+            except OSError:
+                continue
+            for name in names:
+                try:
+                    st_seg = os.stat(os.path.join(seg_dir, name))
+                except OSError:
+                    continue
+                wal_sig.append([sub, name, st_seg.st_size, st_seg.st_mtime_ns])
     else:
         wal_sig = None
     return [main_sig, wal_sig]

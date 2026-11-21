@@ -213,8 +213,16 @@ def parse_file(path: str, subagent_of: Optional[str] = None, agent: str = "pi") 
             thinking = min(reasoning, out) if out else reasoning
 
             model = msg.get("model") or current_model or "unknown"
-            mid = msg.get("responseId") or msg.get("id") or obj.get("id") or f"line_{idx}"
-            key = f"{agent}:{session.id}:{mid}" if mid else None
+            # /fork copies entries unchanged into a new session id, so keys
+            # must not include the session id when the entry can be identified.
+            response_id = msg.get("responseId")
+            entry_id = msg.get("id") or obj.get("id")
+            if response_id:
+                key = f"{agent}:resp:{response_id}"
+            elif entry_id:
+                key = f"{agent}:entry:{entry_id}:{obj.get('timestamp') or msg.get('timestamp') or ''}"
+            else:
+                key = f"{agent}:{session.id}:line_{idx}"
 
             messages.append(
                 Message(

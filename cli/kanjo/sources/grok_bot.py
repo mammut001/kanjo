@@ -71,6 +71,33 @@ def _is_roster_blob(data: dict) -> bool:
     return False
 
 
+# realpath -> (size, mtime_ns, kind, roster rows). One process loads each blob
+# once per change to classify it, instead of once per transcript parse.
+_BLOB_INFO: Dict[str, Tuple[int, int, Optional[str], Optional[List[dict]]]] = {}
+
+
+def _blob_info(path: str) -> Tuple[Optional[str], Optional[List[dict]]]:
+    real = os.path.realpath(path)
+    try:
+        st = os.stat(real)
+    except OSError:
+        _BLOB_INFO.pop(real, None)
+        return None, None
+    cached = _BLOB_INFO.get(real)
+    if cached is not None and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
+        return cached[2], cached[3]
+    data = _load_blob(real)
+    kind: Optional[str] = None
+    rows: Optional[List[dict]] = None
+    if data is not None and _is_transcript_blob(data):
+        kind = "transcript"
+    elif data is not None and _is_roster_blob(data):
+        kind = "roster"
+        rows = _roster_rows(data)
+    _BLOB_INFO[real] = (st.st_size, st.st_mtime_ns, kind, rows)
+    return kind, rows
+
+
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
     """[(transcript_blob_path, parent_session_id)]"""
     found: List[Tuple[str, Optional[str]]] = []
@@ -86,38 +113,43 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
             real = os.path.realpath(path)
             if real in seen:
                 continue
-            data = _load_blob(real)
-            if data is not None and _is_transcript_blob(data):
+            if _blob_info(real)[0] == "transcript":
                 seen.add(real)
                 found.append((path, None))
     return found
 
 
+def _roster_rows(data: dict) -> List[dict]:
+    rows: List[dict] = []
+    val = data.get("value") or {}
+    for r in val.get("rows", []):
+        if isinstance(r, dict):
+            markers = []
+            for c in (r.get("lastMessageId"), r.get("newestEntryId")):
+                if isinstance(c, str) and c:
+                    markers.append(c)
+            le = r.get("lastEntry")
+            if isinstance(le, dict):
+                for c in (le.get("id"), le.get("requestId")):
+                    if isinstance(c, str) and c:
+                        markers.append(c)
+            row_id = r.get("id")
+            if isinstance(row_id, str) and row_id:
+                rows.append({
+                    "id": row_id,
+                    "path": r.get("path"),
+                    "title": r.get("title") or r.get("name"),
+                    "markers": set(markers),
+                })
+    return rows
+
+
 def _find_roster_rows(directory: str) -> List[dict]:
     rows: List[dict] = []
     for path in glob.glob(os.path.join(directory, "*.blob")):
-        data = _load_blob(path)
-        if data is not None and _is_roster_blob(data):
-            val = data.get("value") or {}
-            for r in val.get("rows", []):
-                if isinstance(r, dict):
-                    markers = []
-                    for c in (r.get("lastMessageId"), r.get("newestEntryId")):
-                        if isinstance(c, str) and c:
-                            markers.append(c)
-                    le = r.get("lastEntry")
-                    if isinstance(le, dict):
-                        for c in (le.get("id"), le.get("requestId")):
-                            if isinstance(c, str) and c:
-                                markers.append(c)
-                    row_id = r.get("id")
-                    if isinstance(row_id, str) and row_id:
-                        rows.append({
-                            "id": row_id,
-                            "path": r.get("path"),
-                            "title": r.get("title") or r.get("name"),
-                            "markers": set(markers),
-                        })
+        kind, blob_rows = _blob_info(path)
+        if kind == "roster" and blob_rows:
+            rows.extend(blob_rows)
     return rows
 
 

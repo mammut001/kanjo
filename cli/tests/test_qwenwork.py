@@ -106,6 +106,40 @@ class QwenWorkSourceTest(unittest.TestCase):
             self.assertGreater(cost, 0.0)
             self.assertFalse(estimated, f"Model {msg.model} should not be estimated")
 
+    def test_parse_cache_sees_growing_segments(self):
+        from kanjo.cache import SessionCache
+
+        def event(n):
+            return json.dumps({
+                "type": "model.response.completed", "ts": "2026-11-09T10:00:%02dZ" % n,
+                "request_id": "req-%d" % n,
+                "data": {"model": "qwork-advanced", "input_tokens": 10, "output_tokens": 5},
+            }) + "\n"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = os.path.join(tmp, "cache")
+            session_dir = os.path.join(tmp, "sessions", "-enc", "sess-1")
+            seg_dir = os.path.join(session_dir, "segments")
+            os.makedirs(seg_dir)
+            seg1 = os.path.join(seg_dir, "0000000001.jsonl")
+            with open(seg1, "w") as handle:
+                handle.write(event(1))
+            path, parent = qwenwork.discover([os.path.join(tmp, "sessions")])[0]
+
+            def cached_count():
+                cache = SessionCache(cache_dir)
+                session = cache.get("qwenwork", path, parent, qwenwork.parse_file)
+                cache.save()
+                return len(session.messages)
+
+            self.assertEqual(cached_count(), 1)
+            with open(seg1, "a") as handle:
+                handle.write(event(2))
+            self.assertEqual(cached_count(), 2)
+            with open(os.path.join(seg_dir, "0000000002.jsonl"), "w") as handle:
+                handle.write(event(3))
+            self.assertEqual(cached_count(), 3)
+
     def test_env_roots(self):
         old_env = os.environ.get("KANJO_QWENWORK_DIR")
         try:
