@@ -14,6 +14,12 @@ This ensures:
    in ``cache.py``, rather than invalidating the entire month of sessions.
 3. Accurate repository and git branch attribution from per-message transcript
    headers.
+
+A session with no chat transcript is also discovered as
+``<newest usage file holding it>::<sessionId>`` (the shape the SQLite sources
+use), so every such session in a monthly file is billed, not just the first.
+The plain usage-file and ``<sid>.runtime.json`` entries are still emitted and
+parse as before, so existing parse-cache entries and ledger ids are untouched.
 """
 
 from __future__ import annotations
@@ -30,6 +36,8 @@ AGENT = "qwen"
 
 # In-memory cache for parsed token-usage files: (filepath, mtime_ns, size) -> [records]
 _USAGE_CACHE: Dict[Tuple[str, int, int], List[dict]] = {}
+# filepath -> (records list it was built from, {sessionId: [records in file order]})
+_USAGE_BY_SID: Dict[str, Tuple[List[dict], Dict[str, List[dict]]]] = {}
 
 
 def roots() -> List[str]:
@@ -73,6 +81,20 @@ def _read_usage_records(path: str) -> List[dict]:
     return records
 
 
+def _usage_by_sid(path: str) -> Dict[str, List[dict]]:
+    """``_read_usage_records`` grouped by sessionId, built once per file version."""
+    records = _read_usage_records(path)
+    cached = _USAGE_BY_SID.get(path)
+    if cached is not None and cached[0] is records:
+        return cached[1]
+    by_sid: Dict[str, List[dict]] = {}
+    for rec in records:
+        if isinstance(rec, dict) and isinstance(rec.get("sessionId"), str):
+            by_sid.setdefault(rec["sessionId"], []).append(rec)
+    _USAGE_BY_SID[path] = (records, by_sid)
+    return by_sid
+
+
 def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]]:
     """[(session_file_path, parent session id)]"""
     found = []
@@ -100,13 +122,20 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                 found.append((path, None))
 
         # 2. Check token-usage files for any session not having a chat file
+        newest: Dict[str, str] = {}  # sessionId -> last usage file that has it
         for u_path in _find_usage_files(root):
             for rec in _read_usage_records(u_path):
                 if not isinstance(rec, dict):
                     continue
                 sid = rec.get("sessionId")
-                if isinstance(sid, str) and sid and sid not in seen_sids:
+                if isinstance(sid, str) and sid in newest:
+                    newest[sid] = u_path
+                elif isinstance(sid, str) and sid and sid not in seen_sids:
                     seen_sids.add(sid)
+                    # Also bills runtime-only sessions (their runtime.json entry
+                    # parses to an empty "<sid>.runtime"); move this line into the
+                    # else branch below to leave them unbilled.
+                    newest[sid] = u_path
                     # Check if a runtime.json file exists for this session
                     r_candidates = glob.glob(os.path.join(root, "projects", "*", "chats", f"{sid}.runtime.json"))
                     if r_candidates:
@@ -119,6 +148,14 @@ def discover(dirs: Optional[List[str]] = None) -> List[Tuple[str, Optional[str]]
                         if real not in seen:
                             seen.add(real)
                             found.append((u_path, None))
+
+        # Every session above is billed by "<newest usage file with it>::<sessionId>",
+        # the shape the SQLite sources use. The entries above are unchanged, so the
+        # caches and ledger rows they own keep their identity; a plain usage file
+        # still parses to one adopted session, which merges by id with this one.
+        for sid, u_path in newest.items():
+            if "::" not in u_path:
+                found.append(("%s::%s" % (u_path, sid), None))
 
     return found
 
@@ -142,15 +179,19 @@ def _locate_qwen_root(path: str) -> str:
 
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
-    root = _locate_qwen_root(path)
-    base_name = os.path.basename(path)
-    sid = os.path.splitext(base_name)[0]
+    file_path, usage_sid = path, None
+    head, sep, tail = path.partition("::")
+    if sep and tail and os.path.basename(head).startswith("token-usage-"):
+        file_path, usage_sid = head, tail  # "<usage file>::<sessionId>" from discover()
+    root = _locate_qwen_root(file_path)
+    base_name = os.path.basename(file_path)
+    sid = usage_sid or os.path.splitext(base_name)[0]
 
     session = Session(id=sid, agent=AGENT, file=path, subagent_of=subagent_of)
 
     # 1. Parse chat transcript if this is a chat file or one exists
     chat_path = None
-    if path.endswith(".jsonl") and not base_name.startswith("token-usage-"):
+    if usage_sid is None and path.endswith(".jsonl") and not base_name.startswith("token-usage-"):
         chat_path = path
     else:
         candidates = glob.glob(os.path.join(root, "projects", "*", "chats", f"{sid}.jsonl"))
@@ -233,17 +274,17 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     # 3. Read billed token requests from usage/token-usage-*.jsonl
     usage_files = _find_usage_files(root)
     # If path itself is a token-usage file, make sure it is included
-    if base_name.startswith("token-usage-") and path not in usage_files:
-        usage_files.append(path)
+    if base_name.startswith("token-usage-") and file_path not in usage_files:
+        usage_files.append(file_path)
 
     for u_path in usage_files:
-        records = _read_usage_records(u_path)
+        records = _read_usage_records(u_path) if usage_sid is None else _usage_by_sid(u_path).get(usage_sid, [])
         for rec in records:
             if not isinstance(rec, dict):
                 continue
             rec_sid = rec.get("sessionId")
             # If path was a token-usage file and we didn't have a specific sid, adopt first sid
-            if base_name.startswith("token-usage-") and sid.startswith("token-usage-") and rec_sid:
+            if usage_sid is None and base_name.startswith("token-usage-") and sid.startswith("token-usage-") and rec_sid:
                 sid = rec_sid
                 session.id = sid
 
@@ -280,4 +321,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                 )
             )
 
+    if usage_sid is not None and not session.messages:
+        # As in the SQLite sources: an error row keeps the session's ledger history;
+        # an empty row would detach this path from it.
+        raise ParseError("session %s not found in Qwen usage logs" % usage_sid)
     return session
