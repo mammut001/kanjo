@@ -11,7 +11,7 @@ namespace Kanjo.Core.Tests;
 /// <summary>设置页配置写入（额度重置、Antigravity 账号套餐）回归测试。</summary>
 public sealed class SettingsConfigTests : KanjoTestCase
 {
-    private static (AppServices Services, string ConfigLog) NewCliServices()
+    private static (AppServices Services, string ConfigLog) NewCliServices(bool failConfig = false)
     {
         var settings = AppSettings.InMemory();
         settings.Set(SettingsKeys.AppLanguage, "en");
@@ -24,7 +24,7 @@ public sealed class SettingsConfigTests : KanjoTestCase
         var cli = Path.Combine(dir, "cli");
         Directory.CreateDirectory(Path.Combine(cli, "kanjo"));
         File.WriteAllText(Path.Combine(cli, "kanjo", "__init__.py"), "");
-        var python = ConfigPython(dir, log);
+        var python = ConfigPython(dir, log, failConfig);
 
         var services = new AppServices(settings, ["--snapshot"], dir,
             new FakeBackgroundScheduler(), new FakeLogWatcherFactory(), new FakePowerMonitor());
@@ -37,7 +37,7 @@ public sealed class SettingsConfigTests : KanjoTestCase
         return (services, log);
     }
 
-    private static string ConfigPython(string dir, string log)
+    private static string ConfigPython(string dir, string log, bool failConfig = false)
     {
         var fixture = FixturePath;
         if (OperatingSystem.IsWindows())
@@ -52,8 +52,8 @@ public sealed class SettingsConfigTests : KanjoTestCase
                  )
                  if "%~3"=="config" (
                    echo %*>>"{log}"
-                   echo ok
-                   exit /b 0
+                   {(failConfig ? "echo boom 1>&2" : "echo ok")}
+                   exit /b {(failConfig ? 1 : 0)}
                  )
                  echo unknown 1>&2
                  exit /b 9
@@ -71,8 +71,8 @@ public sealed class SettingsConfigTests : KanjoTestCase
              fi
              if [ "$3" = "config" ]; then
                echo "$*" >> "{log}"
-               echo ok
-               exit 0
+               {(failConfig ? "echo boom >&2" : "echo ok")}
+               exit {(failConfig ? 1 : 0)}
              fi
              echo unknown >&2
              exit 9
@@ -116,6 +116,58 @@ public sealed class SettingsConfigTests : KanjoTestCase
                 Dispatcher.UIThread.RunJobs();
             }
             Assert.Equal(1, ConfigCallCount(log));
+            window.Close();
+        });
+    }
+
+    /// <summary>写额度重置失败：面板重建设置页之后，错误仍然要显示在那一行上。</summary>
+    [Fact]
+    public void TestQuotaResetSaveErrorIsShown()
+    {
+        OnUi(() =>
+        {
+            var (services, log) = NewCliServices(failConfig: true);
+            var panel = new PanelView(services, AppRoute.Settings);
+            var window = TestWindows.Show(panel, Metrics.PanelWidth, Metrics.PanelHeight);
+            Dispatcher.UIThread.RunJobs();
+
+            var row = panel.GetVisualDescendants().OfType<QuotaResetRow>().First();
+            var apply = row.GetVisualDescendants().OfType<Button>()
+                .First(b => Equals(b.Content, L10n.Tr("common.apply")));
+            apply.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            bool ErrorShown() => panel.GetVisualDescendants().OfType<QuotaResetRow>()
+                .SelectMany(r => r.GetVisualDescendants().OfType<TextBlock>())
+                .Any(t => t.Text?.Contains("boom", StringComparison.Ordinal) == true);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline && !ErrorShown())
+            {
+                Thread.Sleep(20);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(1, ConfigCallCount(log));
+            Assert.True(ErrorShown());
+            window.Close();
+        });
+    }
+
+    /// <summary>订阅续费日写入失败：同样要在重建后的那一行上看到错误。</summary>
+    [Fact]
+    public void TestSubscriptionSaveErrorSurvivesRebuild()
+    {
+        OnUi(() =>
+        {
+            var (services, _) = NewCliServices(failConfig: true);
+            var agent = services.Report!.Subscriptions!.Keys.First();
+            services.RecordConfigWriteError(ConfigWriteKind.Subscription, agent, "boom");
+            var page = new SettingsPage(services, null, null, snapshot: false, onBack: () => { });
+            var window = TestWindows.Show(page, Metrics.PanelWidth, Metrics.PanelHeight);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains(page.GetVisualDescendants().OfType<SubscriptionSettingsRow>()
+                    .SelectMany(r => r.GetVisualDescendants().OfType<TextBlock>()),
+                t => t.Text?.Contains("boom", StringComparison.Ordinal) == true);
             window.Close();
         });
     }

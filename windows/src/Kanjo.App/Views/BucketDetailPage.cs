@@ -117,6 +117,12 @@ public static class ProjectActions
 {
     /// <summary>Optional launch override for isolated hosts.</summary>
     public static Action<string, IReadOnlyList<string>>? LaunchOverride { get; set; }
+
+    /// <summary>一次启动请求（程序、参数、工作目录）。</summary>
+    public sealed record LaunchRequest(string File, IReadOnlyList<string> Arguments, string? WorkingDirectory);
+
+    /// <summary>带工作目录的启动覆盖（测试 / 隔离宿主）；优先于 <see cref="LaunchOverride"/>。</summary>
+    public static Action<LaunchRequest>? LaunchRequestOverride { get; set; }
     /// <summary>第一个仍然存在的路径（主路径优先）。</summary>
     public static string? ExistingPath(Project project) =>
         PathKinds.SplitPaths(project.Paths.ToList()).Primary
@@ -131,16 +137,21 @@ public static class ProjectActions
         return split.Primary.FirstOrDefault() ?? project.Paths.FirstOrDefault();
     }
 
-    /// <summary>打开终端：优先 Windows Terminal（`wt -d &lt;path&gt;`），否则 PowerShell。</summary>
+    /// <summary>打开终端：优先 Windows Terminal，否则 PowerShell。</summary>
     public static void OpenInTerminal(string path)
     {
-        if (OperatingSystem.IsWindows() && WhichOnPath("wt.exe") is not null)
-        {
-            Launch("wt.exe", ["-d", path]);
-            return;
-        }
-        Launch("powershell.exe", ["-NoExit", "-Command", $"Set-Location -LiteralPath '{path.Replace("'", "''")}'"]);
+        var command = TerminalCommand(path, OperatingSystem.IsWindows() && WhichOnPath("wt.exe") is not null);
+        Launch(command.File, command.Arguments, command.WorkingDirectory);
     }
+
+    /// <summary>
+    /// 路径只当工作目录传：拼进 PowerShell 脚本会被弯引号（’ 等）提前闭合，
+    /// 放进 wt 的参数里每个 ';' 又会被拆成新的 wt 子命令。
+    /// </summary>
+    public static LaunchRequest TerminalCommand(string path, bool hasWindowsTerminal) =>
+        hasWindowsTerminal
+            ? new LaunchRequest("wt.exe", ["-d", "."], path)
+            : new LaunchRequest("powershell.exe", ["-NoExit"], path);
 
     /// <summary>在资源管理器里选中该项目路径。</summary>
     public static void ShowInExplorer(string path)
@@ -184,8 +195,9 @@ public static class ProjectActions
         }
     }
 
-    private static void Launch(string file, IReadOnlyList<string> args)
+    private static void Launch(string file, IReadOnlyList<string> args, string? workingDirectory = null)
     {
+        if (LaunchRequestOverride is { } request) { request(new LaunchRequest(file, args, workingDirectory)); return; }
         if (LaunchOverride is { } launch) { launch(file, args); return; }
         try
         {
@@ -194,6 +206,7 @@ public static class ProjectActions
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            if (workingDirectory is not null) psi.WorkingDirectory = workingDirectory;
             foreach (var arg in args) psi.ArgumentList.Add(arg);
             Process.Start(psi);
         }
