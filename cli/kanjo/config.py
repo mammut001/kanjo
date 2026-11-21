@@ -110,7 +110,7 @@ class Config:
             if _prefix_match(path, prefix) and (best is None or len(prefix) > len(best[0])):
                 best = (prefix, "override", target)
         for prefix in self.exclude:
-            if _prefix_match(path, prefix) and (best is None or len(prefix) > len(best[0])):
+            if _prefix_match(path, prefix) and (best is None or len(prefix) >= len(best[0])):
                 best = (prefix, "exclude", None)
         return (best[1], best[2]) if best else None
 
