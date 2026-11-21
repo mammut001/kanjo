@@ -26,8 +26,7 @@ public sealed class ShareImageRenderTests : KanjoTestCase
 
             var summary = ShareSummary.Build(LoadFixture(), "all", Ts("2026-01-01T00:00:00Z"));
             var view = new ShareImageView(summary);
-            var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
-            window.Show();
+            var window = TestWindows.ShowSizedToContent(view);
             try
             {
                 view.Measure(Size.Infinity);

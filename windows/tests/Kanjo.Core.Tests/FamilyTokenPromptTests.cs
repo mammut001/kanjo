@@ -227,7 +227,13 @@ public sealed class FamilyTokenPromptTests : KanjoTestCase
             tokens.SaveToken("token");
             services.Settings.Set(SettingsKeys.FamilyReportUrl, "");
             // 点「Report now」会真的发起上报：换成假运行器，测试不起进程。
-            services.UseReportRunner(new FakeReportRunner());
+            var runner = new FakeReportRunner();
+            services.UseReportRunner(runner);
+            var reported = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            services.Changed += () =>
+            {
+                if (!services.Family.Activity.IsBusy && runner.Calls.Count > 0) reported.TrySetResult(true);
+            };
 
             var page = new SettingsPage(services, null, null, snapshot: false, onBack: () => { });
             var window = Show(page);
@@ -252,6 +258,11 @@ public sealed class FamilyTokenPromptTests : KanjoTestCase
             Click(FindButton(page, L10n.Tr("settings.family.now"))!);
             Assert.Equal("https://family.example.com",
                 services.Settings.Str(SettingsKeys.FamilyReportUrl, ""));
+            // 等后台 ReportNow() 跑完并把排队的 UI 重建清掉，避免后台任务游离到下一条用例。
+            Assert.True(reported.Task.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(runner.Calls,
+                c => c.Kind == "report-family" && c.Arguments.Contains("https://family.example.com"));
 
             window.Close();
         });

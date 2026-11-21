@@ -90,7 +90,8 @@ public sealed class SourceResolutionTests : KanjoTestCase
     {
         var settings = AppSettings.InMemory();
         settings.Set(SettingsKeys.AppLanguage, "en");
-        var services = new AppServices(settings, [], TempDir());
+        var services = new AppServices(settings, [], TempDir(), powerMonitor: NullPowerMonitor.Shared);
+        using var _ = services.Background;
         Assert.StartsWith("Command:", services.DescribeSource());
         Assert.DoesNotContain("sample.json", services.DescribeSource());
     }
@@ -101,7 +102,8 @@ public sealed class SourceResolutionTests : KanjoTestCase
         var settings = AppSettings.InMemory();
         settings.Set(SettingsKeys.AppLanguage, "en");
         settings.Set(SettingsKeys.SourceKind, "file");
-        var services = new AppServices(settings, [], TempDir());
+        var services = new AppServices(settings, [], TempDir(), powerMonitor: NullPowerMonitor.Shared);
+        using var _ = services.Background;
         Assert.Equal($"File: {DefaultPaths.SampleFixture}", services.DescribeSource());
     }
 

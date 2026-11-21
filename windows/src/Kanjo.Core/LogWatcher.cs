@@ -79,13 +79,13 @@ internal sealed class FileSystemLogWatcher : ILogWatcher
                                    NotifyFilters.DirectoryName | NotifyFilters.Size |
                                    NotifyFilters.CreationTime,
                     InternalBufferSize = 64 * 1024,
-                    EnableRaisingEvents = true,
                 };
                 watcher.Changed += OnChanged;
                 watcher.Created += OnChanged;
                 watcher.Deleted += OnChanged;
                 watcher.Renamed += OnRenamed;
                 watcher.Error += OnError;
+                watcher.EnableRaisingEvents = true;
                 _watchers.Add(watcher);
             }
             catch (Exception)

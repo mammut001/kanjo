@@ -36,6 +36,7 @@ public sealed class SettingsPage : ScrollPage
     private string _tokenInput = "";
     private bool _familyAdvanced;
     private bool _showAllSubscriptions;
+    private bool _detached;
 
     public SettingsPage(AppServices services, string? anchor, string? editingAgent, bool snapshot, Action onBack)
         : base(snapshot)
@@ -56,6 +57,7 @@ public sealed class SettingsPage : ScrollPage
         {
             _services.Config.BeginLoadKnownPlans(() =>
             {
+                if (_detached) return;
                 foreach (var row in _subscriptionRows.Values.OfType<SubscriptionSettingsRow>()) row.PlansLoaded();
             });
         }
@@ -65,6 +67,7 @@ public sealed class SettingsPage : ScrollPage
         _services.UpdatesChanged += OnExternalChange;
         DetachedFromVisualTree += (_, _) =>
         {
+            _detached = true;
             _services.Family.Activity.Changed -= OnExternalChange;
             _services.Publish.Activity.Changed -= OnExternalChange;
             _services.UpdatesChanged -= OnExternalChange;
@@ -99,9 +102,13 @@ public sealed class SettingsPage : ScrollPage
 
     private void OnExternalChange()
     {
+        if (_detached) return;
         if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(Rebuild);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_detached) Rebuild();
+            });
             return;
         }
         Rebuild();
