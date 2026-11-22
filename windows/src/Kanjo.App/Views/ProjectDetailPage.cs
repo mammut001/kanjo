@@ -80,7 +80,7 @@ public sealed class ProjectDetailPage : ScrollPage
             Header(ctx, filtered),
             TokensSection(filtered, ctx.IsAll),
             AgentsSection(filtered),
-            ModelsSection(ctx.IsAll),
+            ModelsSection(ModelAggregation.Aggregate(filtered, ctx.Spec)),
             ByDaySection(filtered),
             BranchesSection(ctx.IsAll),
             SessionsSection(filtered),
@@ -436,10 +436,10 @@ public sealed class ProjectDetailPage : ScrollPage
 
     // MARK: - By model
 
-    private Control ModelsSection(bool isAll)
+    private Control ModelsSection(IReadOnlyList<ModelCost> models)
     {
-        // 和 Mac 一样按数据里的顺序（契约里已经按花费排好），不重新排序。
-        var all = _project.ByModel.ToList();
+        // 和 Mac 一样：All 用 by_model 的原顺序，其余范围按范围内会话分摊（ModelAggregation）。
+        var all = models.ToList();
         var content = Ui.V(6);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         var row = 0;
@@ -509,8 +509,7 @@ public sealed class ProjectDetailPage : ScrollPage
             }));
         }
 
-        return Section(L10n.Tr("project.section.by_model"), content,
-            isAll ? null : AllTimeBadge(L10n.Tr("project.noun.models")));
+        return Section(L10n.Tr("project.section.by_model"), content, null);
     }
 
     private const int CollapsedLimit = 8;

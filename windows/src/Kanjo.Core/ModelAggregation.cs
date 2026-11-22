@@ -7,6 +7,19 @@ namespace Kanjo.Core;
 /// </summary>
 public static class ModelAggregation
 {
+    /// <summary>
+    /// 单个项目在当前范围内的模型。All 范围直接用项目 by_model（精确值）；
+    /// 其余范围只算该项目范围内的会话，分摊方法与全局「按模型」视图相同。
+    /// </summary>
+    public static IReadOnlyList<ModelCost> Aggregate(FilteredProject fp, RangeSpec spec)
+    {
+        if (spec.IsAll) return fp.Project.ByModel;
+        var empty = new FilteredBucket(0, 0, 0, RoList<Session>.Empty, null, null);
+        var single = new FilteredReport(spec, new RoList<FilteredProject>(new[] { fp }), empty, empty,
+            fp.Cost, fp.Tokens, fp.Sessions, fp.FirstActive, fp.LastActive);
+        return Aggregate(single);
+    }
+
     public static IReadOnlyList<ModelCost> Aggregate(FilteredReport report)
     {
         var map = new Dictionary<string, ModelCost>(StringComparer.Ordinal);
