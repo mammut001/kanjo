@@ -132,7 +132,7 @@ struct ProjectDetailView: View {
     }
 
     // 范围下：金额、tokens（只有 total）、By agent、By day、热力条、Sessions 按范围；
-    // By model / By branch 没有按天数据，不过滤，标题旁标「All time」。
+    // By model 按范围内会话分摊；By branch 没有按天数据，不过滤，标题旁标「All time」。
     var body: some View {
         let ctx = RangeContext(report: report, raw: rangeRaw)
         let f = ctx.filter(project)
@@ -141,7 +141,7 @@ struct ProjectDetailView: View {
             header(ctx, shown)
             tokensSection(shown, isAll: ctx.isAll)
             agentsSection(shown)
-            modelsSection(isAll: ctx.isAll)
+            modelsSection(ModelAggregation.aggregate(project: f, spec: ctx.spec))
             PanelSection(L10n.tr("project.section.by_day"), inset: true) {
                 DayChart(
                     days: shown.byDay,
@@ -459,12 +459,9 @@ struct ProjectDetailView: View {
         share == 0 ? "0%" : Fmt.percent(share)
     }
 
-    private func modelsSection(isAll: Bool) -> some View {
-        let all = project.byModel
+    private func modelsSection(_ all: [ModelCost]) -> some View {
         let shown = showAllModels ? all : Array(all.prefix(collapsedLimit))
         return PanelSection(L10n.tr("project.section.by_model"), inset: true) {
-            if !isAll { AllTimeBadge(what: L10n.tr("project.noun.models")) }
-        } content: {
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                 GridRow {
                     Text(L10n.tr("project.model")).frame(maxWidth: .infinity, alignment: .leading); Text(L10n.tr("project.section.tokens")).gridColumnAlignment(.trailing); Text(L10n.tr("project.cost")).gridColumnAlignment(.trailing)

@@ -225,4 +225,30 @@ public sealed class ModelAggregationTests : KanjoTestCase
         Assert.Empty(ModelAggregation.Apportion(10, []));
         Assert.Equal([0, 0], ModelAggregation.Apportion(0, [1.0, 2.0]).ToArray());
     }
+
+    /// <summary>项目页：非 All 范围只列该项目范围内会话用到的模型，All 原样返回 by_model。</summary>
+    [Fact]
+    public void TestProjectRangeListsOnlyInRangeModels()
+    {
+        RoList<ModelCost> allTime =
+        [
+            new ModelCost("opus", "claude", 500.0, Tokens.WithTotal(100_000), false),
+            new ModelCost("grok", "grok", 50.0, Tokens.WithTotal(10_000), false),
+        ];
+        var s = new Session("s1", "claude", "Claude Code",
+            "2026-10-22T10:00:00Z", "2026-10-22T10:30:00Z", null, null, ["opus"], 3.0,
+            MakeTokens(100, 200, 300, 400), 1, "dominant", 0, null, null);
+        var fp = new FilteredProject(MakeProject("p", allTime, [s]), 3.0, 1000, 1, [], [], [s], null, null);
+
+        var ranged = ModelAggregation.Aggregate(fp,
+            new RangeSpec(TimeRange.Days7, TimeZoneInfo.Utc, null, null, new Dictionary<string, DateTimeOffset>()));
+        Assert.Single(ranged);
+        Assert.Equal("opus", ranged[0].Model);
+        Assert.Equal(1000, ranged[0].Tokens.Total);
+        Assert.Equal(3.0, ranged[0].Cost, 9);
+
+        var all = ModelAggregation.Aggregate(fp,
+            new RangeSpec(TimeRange.All, TimeZoneInfo.Utc, null, null, new Dictionary<string, DateTimeOffset>()));
+        Assert.Equal(allTime, all);
+    }
 }

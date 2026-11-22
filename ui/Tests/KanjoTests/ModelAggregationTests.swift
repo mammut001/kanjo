@@ -445,4 +445,29 @@ final class ModelAggregationTests: KanjoTestCase {
         XCTAssertEqual(row?.cost ?? 0, 140, accuracy: 1e-9)
         XCTAssertEqual(row?.tokens.total, 1400)
     }
+
+    /// 项目页：非 All 范围只列该项目范围内会话用到的模型，不带出全部时间的 by_model。
+    func testProjectRangeListsOnlyInRangeModels() {
+        let allTime = [
+            ModelCost(model: "opus", agent: "claude", cost: 500, tokens: makeTokens(input: 100_000)),
+            ModelCost(model: "grok", agent: "grok", cost: 50, tokens: makeTokens(input: 10_000)),
+            ModelCost(model: "gpt", agent: "codex", cost: 20, tokens: makeTokens(input: 5_000)),
+        ]
+        let s = Session(
+            id: "s1", agent: "claude", label: "Claude Code", started: "2026-10-22T08:00:00Z",
+            ended: "2026-10-22T08:10:00Z", cwd: nil, branch: nil, models: ["opus"],
+            cost: 3.0, tokens: makeTokens(input: 100, output: 200, cacheRead: 300, cacheWrite: 400),
+            share: 1, attribution: "dominant", subagents: 0, title: nil
+        )
+        let fp = FilteredProject(project: makeProject(id: "p1", models: allTime, sessions: [s]),
+                                 cost: 3.0, tokens: 1000, sessions: 1,
+                                 byAgent: [], byDay: [], sessionsDetail: [s])
+        let ranged = ModelAggregation.aggregate(project: fp, spec: RangeSpec(range: .days7, calendar: Calendar(identifier: .gregorian)))
+        XCTAssertEqual(ranged.map(\.model), ["opus"])
+        XCTAssertEqual(ranged.first?.tokens.total, 1000)
+        XCTAssertEqual(ranged.first?.cost ?? 0, 3.0, accuracy: 1e-9)
+
+        let all = ModelAggregation.aggregate(project: fp, spec: RangeSpec(range: .all, calendar: Calendar(identifier: .gregorian)))
+        XCTAssertEqual(all, allTime)
+    }
 }

@@ -2,6 +2,17 @@ import Foundation
 
 /// 模型聚合工具：纯函数，负责聚合报告或项目中的模型用量。
 public enum ModelAggregation {
+    /// 单个项目在当前范围内的模型。All 范围直接用项目 by_model（精确值）；
+    /// 其余范围只算该项目范围内的会话，分摊方法与全局「按模型」视图相同。
+    public static func aggregate(project fp: FilteredProject, spec: RangeSpec) -> [ModelCost] {
+        if spec.isAll { return fp.project.byModel }
+        let empty = FilteredBucket(cost: 0, tokens: 0, sessions: 0, sessionsDetail: [], firstActive: nil, lastActive: nil)
+        let single = FilteredReport(spec: spec, projects: [fp], unattributed: empty, excluded: empty,
+                                    cost: fp.cost, tokens: fp.tokens, sessions: fp.sessions,
+                                    firstActive: fp.firstActive, lastActive: fp.lastActive)
+        return aggregate(in: single)
+    }
+
     /// 聚合当前范围下的所有模型，按总 token 数降序排列。
     /// - All 范围：直接从各项目的 by_model 汇总（精确值）；
     /// - 非 All 范围：仅从范围内的会话（sessionsDetail，已按范围过滤）汇总：
