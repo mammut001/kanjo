@@ -170,7 +170,8 @@ class TestDashboard(unittest.TestCase):
                 received_at=now_iso,
             )
 
-        status, html = self._dash_request("/")
+        # The fixture's usage is dated before this week, so look at the "all" range.
+        status, html = self._dash_request("/?range=all")
         self.assertEqual(status, 200)
 
         # 1. Quota pool section
@@ -180,19 +181,17 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("数据来自 Alice 的最新上报", html)
         self.assertIn("本额度周", html)
 
-        # 2. Who used the quota pool
-        self.assertIn("本周期谁用掉了额度池", html)
+        # 2. Ranking table
+        self.assertIn("成员排行", html)
         self.assertIn("Alice", html)
 
-        # 3. 30-day SVG bar chart
+        # 3. Trend SVG bar chart
         self.assertIn("<svg", html)
         self.assertIn("class=\"chart-svg\"", html)
         self.assertIn("<rect", html)
 
-        # 4. Member card
-        self.assertIn("本周期", html)
-        self.assertIn("上周期", html)
-        self.assertIn("剩余天数", html)
+        # 4. Model breakdown (ranking row detail and analysis)
+        self.assertIn("模型排行", html)
         self.assertIn("gemini-3.8-pro", html)
         self.assertIn("claude-opus-5.5", html)
 
@@ -223,7 +222,8 @@ class TestDashboard(unittest.TestCase):
                 received_at=now_iso,
             )
 
-        status, html = self._dash_request("/")
+        # The fixture's usage (and the hostile model name) is dated before this week.
+        status, html = self._dash_request("/?range=all")
         self.assertEqual(status, 200)
 
         # Must NOT contain raw unescaped HTML tags
@@ -237,7 +237,7 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("&lt;img src=x onerror=alert(2)&gt;", html)
 
     def test_dashboard_stale_indicator(self):
-        """Reports older than 24 hours must show stale badge."""
+        """Reports older than 2 hours must show stale badge."""
         with db.get_connection(self.db_path) as conn:
             _, m_fresh = db.add_member(conn, "FreshUser")
             _, m_stale = db.add_member(conn, "StaleUser")
@@ -264,7 +264,7 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("badge-active", html)
         self.assertIn("badge-stale", html)
-        self.assertIn("未更新", html)
+        self.assertIn("超过 2 小时未上报", html)
 
     def test_dashboard_shows_scope_at_top_and_on_card(self):
         payload = copy.deepcopy(self.fixture_data)

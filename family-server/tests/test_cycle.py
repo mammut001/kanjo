@@ -159,7 +159,7 @@ class TestTrackingStartFiltering(unittest.TestCase):
             db.set_setting(conn, "timezone", "America/Toronto")
 
         fixed_now = datetime(2026, 11, 9, 20, 0, 0, tzinfo=timezone.utc)
-        html = generate_dashboard_html(self.db_path, now=fixed_now)
+        html = generate_dashboard_html(self.db_path, now=fixed_now, range_key="cycle")
 
         # Check cycle tokens: 7.0k tokens ($0.70)
         self.assertIn("7.0k", html)
@@ -456,11 +456,13 @@ class TestDashboardCycleRendering(unittest.TestCase):
         self.assertNotIn("尚未设置计费周期起始日", html)
         # Cycle header displays "本周期 11/09 – 12/08"
         self.assertIn("本周期 11/09 – 12/08", html)
-        # Member card displays cycle metrics
-        self.assertIn("本周期", html)
-        self.assertIn("上周期", html)
-        self.assertIn("剩余天数", html)
+        # Header pill shows the days left and the reset date
+        self.assertIn("剩余 30 天", html)
         self.assertIn("至 12/09 重置", html)
+        # The cycle range compares against the previous cycle
+        cycle_html = generate_dashboard_html(self.db_path, now=fixed_now, range_key="cycle")
+        self.assertIn("周期 · 11/09 – 12/08", cycle_html)
+        self.assertIn("较上周期", cycle_html)
         # Header has settings link
         self.assertIn('<a href="/settings" class="settings-btn">设置</a>', html)
 

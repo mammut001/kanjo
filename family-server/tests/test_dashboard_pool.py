@@ -70,13 +70,14 @@ class DashboardPoolTests(unittest.TestCase):
 
     def test_pool_share_ignores_days_without_antigravity_usage(self):
         self._add("Alice", self._payload(
-            "a", [_day("2026-11-20", "antigravity", "google", "gemini-3.8-pro", 100000)]))
+            "a", [_day("2026-11-20", "antigravity", "google", "gemini-3.8-pro", 100000)],
+            quota=self._ag_quota(45.0)))
         self._add("Bob", self._payload(
             "b", [_day("2026-11-20", "claude", "anthropic", "claude-opus-5.5", 900000)],
             scope={"agents": ["all"]}))
 
         html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
-        share = self._section(html, "本周期谁用掉了额度池")
+        share = self._section(html, "重置以来谁用掉了额度池")
         self.assertNotIn("Bob", share)
         self.assertIn("100.0k tokens (100.0%)", share)
 
@@ -96,8 +97,8 @@ class DashboardPoolTests(unittest.TestCase):
             db.set_setting(conn, "cycle_anchor_day", "9")
             db.set_setting(conn, "tracking_start", "2026-11-09")
 
-        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
-        self.assertIn("本周期暂无模型用量明细", html)
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW, range_key="cycle")
+        self.assertIn("该时段暂无模型用量明细", html)
         self.assertNotIn("50.00M", html)
         self.assertNotIn("$1,234.56", html)
 
