@@ -86,7 +86,7 @@ class DashboardV2RenderTests(unittest.TestCase):
         self.assertIn('href="?range=this_week" data-range="this_week" aria-current="page"', default)
         self.assertIn("本周 · 11/16 – 11/22", default)
         self.assertIn("另有 1 人无用量", default)
-        self.assertIn("较上周", default)
+        self.assertIn("较上周同期", default)
         self.assertEqual(_dash_json(default)["range"], "this_week")
 
         titles = {
@@ -107,6 +107,36 @@ class DashboardV2RenderTests(unittest.TestCase):
         self.assertIn("额度池预计用量", since)
         bogus = dashboard.generate_dashboard_html(self.db_path, now=NOW, range_key="nope")
         self.assertIn('data-range="this_week" aria-current="page"', bogus)
+
+    def test_in_progress_and_single_day_overview(self):
+        monday = datetime(2026, 11, 23, 15, 0, tzinfo=timezone.utc)
+        self._add("Alice", [_day("2026-11-16", 1000), _day("2026-11-17", 99000), _day("2026-11-22", 7000),
+                            _day("2026-11-23", 1200)], received=monday)
+        week = dashboard.generate_dashboard_html(self.db_path, now=monday)
+        overview = week[week.index('<div id="view-overview">'):week.index('<section class="card pool">')]
+        self.assertIn("较上周同期", overview)
+        self.assertIn("+20.0%", overview)
+        self.assertIn("上周同期 1.0k", overview)
+        self.assertNotIn("峰值日", overview)
+        self.assertNotIn("日均 token", overview)
+        today = dashboard.generate_dashboard_html(self.db_path, now=monday, range_key="today")
+        overview = today[today.index('<div id="view-overview">'):today.index('<section class="card pool">')]
+        self.assertIn('<div class="stat-label">昨天全天</div><div class="stat-value">7.0k</div>', overview)
+        self.assertNotIn("%", overview)
+        main = today[today.index('<div id="view-main">'):]
+        self.assertIn('<div class="cell cell-num c-change">—</div>', main)
+        self.assertIn("计费周期 11/01 – 11/30", today)
+
+    def test_heatmap_fills_width_with_month_labels(self):
+        self._add("Alice", [_day("2026-11-20", 1000)])
+        page = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        heat = page[page.index("近 62 天热力日历"):]
+        # 62 days from 2026-09-21 (a Monday) to 2026-11-21: 9 week columns, Sep / Oct / Nov labels.
+        self.assertIn('grid-template-columns: repeat(9, minmax(0, 1fr));', heat)
+        self.assertIn('<span style="grid-column: 1;">9月</span>', heat)
+        self.assertIn('<span style="grid-column: 2;">10月</span>', heat)
+        self.assertIn('<span style="grid-column: 6;">11月</span>', heat)
+        self.assertIn("1 天有用量", heat)
 
     def test_since_reset_without_pool_shows_empty_state(self):
         self._add("Alice", [_day("2026-11-20", 1000)])

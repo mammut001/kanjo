@@ -55,10 +55,29 @@ class RangeBoundsTests(unittest.TestCase):
             with self.subTest(today=today):
                 b = ranges.range_bounds("this_week", today, self.cycle)
                 self.assertEqual((b["start"], b["end"]), (date(2026, 11, 16), date(2026, 11, 22)))
-                self.assertEqual(b["prev"], (date(2026, 11, 9), date(2026, 11, 15)))
-                self.assertEqual(b["compare_label"], "较上周")
                 lw = ranges.range_bounds("last_week", today, self.cycle)
                 self.assertEqual((lw["start"], lw["end"]), (date(2026, 11, 9), date(2026, 11, 15)))
+                # A finished week compares with the whole week before it.
+                self.assertEqual(lw["prev"], (date(2026, 11, 2), date(2026, 11, 8)))
+                self.assertEqual(lw["compare_mode"], "full")
+
+    def test_in_progress_ranges_compare_same_elapsed_days(self):
+        # This week on Monday: Monday vs last Monday only; on Thursday: Mon-Thu vs Mon-Thu.
+        b = ranges.range_bounds("this_week", date(2026, 11, 16), self.cycle)
+        self.assertEqual(b["prev"], (date(2026, 11, 9), date(2026, 11, 9)))
+        self.assertEqual((b["compare_label"], b["compare_mode"]), ("较上周同期", "same_elapsed"))
+        b = ranges.range_bounds("this_week", date(2026, 11, 19), self.cycle)
+        self.assertEqual(b["prev"], (date(2026, 11, 9), date(2026, 11, 12)))
+        # Cycle day 3 vs the first 3 days of the previous cycle.
+        b = ranges.range_bounds("cycle", date(2026, 11, 11), self.cycle)
+        self.assertEqual(b["prev"], (date(2026, 10, 9), date(2026, 10, 11)))
+        self.assertEqual(b["compare_label"], "较上周期同期")
+        # A shorter previous cycle (February) caps at its last day.
+        cycle = compute_cycle_boundaries(1, date(2026, 3, 31))
+        b = ranges.range_bounds("cycle", date(2026, 3, 31), cycle)
+        self.assertEqual(b["prev"], (date(2026, 2, 1), date(2026, 2, 28)))
+        # 7 / 30 days stay full-period comparisons.
+        self.assertEqual(ranges.range_bounds("7d", date(2026, 11, 16), self.cycle)["compare_mode"], "full")
 
     def test_month_crossing(self):
         today = date(2026, 12, 2)  # Wednesday
@@ -73,7 +92,7 @@ class RangeBoundsTests(unittest.TestCase):
     def test_today_compares_with_yesterday_and_all_has_no_comparison(self):
         b = ranges.range_bounds("today", date(2026, 11, 1), self.cycle)
         self.assertEqual(b["prev"], (date(2026, 10, 31), date(2026, 10, 31)))
-        self.assertEqual(b["compare_label"], "较昨天")
+        self.assertEqual((b["compare_label"], b["compare_mode"]), ("昨天全天", "reference"))
         a = ranges.range_bounds("all", date(2026, 11, 1), self.cycle)
         self.assertIsNone(a["prev"])
         self.assertEqual(a["bucket"], "month")
@@ -82,7 +101,7 @@ class RangeBoundsTests(unittest.TestCase):
         cycle = compute_cycle_boundaries(9, date(2026, 11, 22))
         b = ranges.range_bounds("cycle", date(2026, 11, 22), cycle)
         self.assertEqual((b["start"], b["end"]), (date(2026, 11, 9), date(2026, 12, 8)))
-        self.assertEqual(b["prev"], (date(2026, 10, 9), date(2026, 11, 8)))
+        self.assertEqual(b["prev"], (date(2026, 10, 9), date(2026, 10, 22)))  # 14 elapsed days
 
     def test_dst_changes_use_local_dates(self):
         # 2026-11-01 04:30Z is 23:30 EST on Sunday Nov 1 (DST ended that morning).
@@ -102,8 +121,9 @@ class RangeBoundsTests(unittest.TestCase):
         self.assertIsNone(ranges.range_bounds("since_reset", date(2026, 11, 22), self.cycle, None))
         b = ranges.range_bounds("since_reset", date(2026, 11, 22), self.cycle, date(2026, 11, 18))
         self.assertEqual((b["start"], b["end"]), (date(2026, 11, 18), date(2026, 11, 22)))
-        self.assertEqual(b["prev"], (date(2026, 11, 13), date(2026, 11, 17)))
-        self.assertEqual(b["compare_label"], "较前 5 天")
+        # Same 5 days at the start of the previous quota week.
+        self.assertEqual(b["prev"], (date(2026, 11, 11), date(2026, 11, 15)))
+        self.assertEqual(b["compare_label"], "较上次重置同期")
 
     def test_parse_range_key(self):
         self.assertEqual(ranges.parse_range_key("last_week"), "last_week")
@@ -204,10 +224,10 @@ class AggregationTests(unittest.TestCase):
     def test_comparison_present_and_omitted(self):
         days = [_day("2026-11-10", 1000), _day("2026-11-17", 3000)]
         out = _build([_member(1, "A", _summary(days))], self.today)["ranges"]
-        tw = out["this_week"]
+        tw = out["this_week"]  # Sunday: the full 7 days on both sides
         self.assertEqual(tw["total"]["prev_tokens"], 1000)
         self.assertAlmostEqual(tw["total"]["change_pct"], 200.0)
-        self.assertEqual(tw["compare_label"], "较上周")
+        self.assertEqual(tw["compare_label"], "较上周同期")
         self.assertEqual(tw["members"][0]["prev_tokens"], 1000)
         self.assertIsNone(out["all"]["compare_label"])
         self.assertIsNone(out["all"]["total"]["prev_tokens"])
@@ -225,6 +245,30 @@ class AggregationTests(unittest.TestCase):
         out = _build([_member(1, "A", _summary(days))], self.today, tracking_start=date(2026, 11, 12))["ranges"]
         self.assertIsNone(out["this_week"]["compare_label"])
         self.assertEqual(out["this_week"]["total"]["tokens"]["total"], 3000)
+
+    def test_monday_compares_with_last_monday_only(self):
+        monday = date(2026, 11, 23)
+        days = [_day("2026-11-16", 1000), _day("2026-11-17", 50000), _day("2026-11-23", 1500)]
+        out = _build([_member(1, "A", _summary(days))], monday)["ranges"]
+        tw = out["this_week"]
+        self.assertEqual(tw["total"]["prev_tokens"], 1000)
+        self.assertAlmostEqual(tw["total"]["change_pct"], 50.0)
+        self.assertAlmostEqual(tw["members"][0]["change_pct"], 50.0)
+        self.assertEqual(tw["elapsed_days"], 1)
+        self.assertNotIn("peak", [i["key"] for i in tw["insights"]])
+        # Last week is complete: compared with the whole week before.
+        self.assertEqual(out["last_week"]["compare_mode"], "full")
+
+    def test_today_shows_yesterday_as_reference_only(self):
+        days = [_day("2026-11-21", 8000, 2.0), _day("2026-11-22", 2000, 0.5)]
+        r = _build([_member(1, "A", _summary(days))], self.today)["ranges"]["today"]
+        self.assertEqual(r["compare_mode"], "reference")
+        self.assertEqual(r["compare_label"], "昨天全天")
+        self.assertEqual(r["total"]["prev_tokens"], 8000)
+        self.assertEqual(r["total"]["prev_cost"], 2.0)
+        self.assertIsNone(r["total"]["change_pct"])
+        self.assertIsNone(r["members"][0]["prev_tokens"])
+        self.assertIsNone(r["members"][0]["change_pct"])
 
     def test_all_range_uses_all_time_and_monthly_trend(self):
         months = [

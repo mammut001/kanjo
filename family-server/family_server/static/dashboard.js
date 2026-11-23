@@ -113,12 +113,16 @@
     var tokens = tot.tokens.total;
     stat("总 token", fmtTokens(tokens), "折算 " + fmtCost(tot.cost));
     if (r.compare_label && tot.prev_tokens !== null) {
-      var ch = formatChange(tot.change_pct, tokens, tot.prev_tokens);
-      stat(r.compare_label, ch[0], r.compare_label.slice(1) + " " + fmtTokens(tot.prev_tokens), ch[1]);
+      if (r.compare_mode === "reference") {
+        stat(r.compare_label, fmtTokens(tot.prev_tokens), "折算 " + fmtCost(tot.prev_cost || 0));
+      } else {
+        var ch = formatChange(tot.change_pct, tokens, tot.prev_tokens);
+        stat(r.compare_label, ch[0], r.compare_label.slice(1) + " " + fmtTokens(tot.prev_tokens), ch[1]);
+      }
     }
     stat("活跃成员", r.active_members + "/" + r.member_count, "该时段有用量");
     if (r.elapsed_days > 1) stat("日均 token", fmtTokens(r.daily_avg), "按 " + r.elapsed_days + " 天");
-    if (r.peak && r.chart.buckets.length > 1) stat(r.bucket === "day" ? "峰值日" : "峰值月", fmtTokens(r.peak.tokens), md(r.peak.key));
+    if (r.peak && r.elapsed_days > 1 && r.peak.tokens < tokens) stat(r.bucket === "day" ? "峰值日" : "峰值月", fmtTokens(r.peak.tokens), md(r.peak.key));
     return sec;
   }
 

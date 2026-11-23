@@ -350,7 +350,7 @@ def generate_dashboard_html(
     cycle = compute_cycle_boundaries(cycle_anchor_day, local_today, tz)
     prev_start, current_start, next_start = cycle
     cycle_last_day = next_start - timedelta(days=1)
-    cycle_range_str = f"本周期 {current_start.strftime('%m/%d')} – {cycle_last_day.strftime('%m/%d')}"
+    cycle_range_str = f"计费周期 {current_start.strftime('%m/%d')} – {cycle_last_day.strftime('%m/%d')}"
     days_remaining = max(0, (next_start - local_today).days)
 
     # Process member data

@@ -82,22 +82,31 @@ def range_bounds(
     today: date,
     cycle: Tuple[date, date, date],
     reset_day: Optional[date] = None,
+    reset_window_days: int = 7,
 ) -> Optional[dict]:
     """Date bounds for a range, inclusive. None when the range cannot be computed.
 
     ``cycle`` is (prev_start, current_start, next_start) from compute_cycle_boundaries.
-    The comparison period is the previous period of the same length (for "cycle", the
-    previous billing cycle); "all" has none.
+    ``compare_mode`` says how ``prev`` relates to the range:
+    - "full": the whole previous period of the same length (7/30 days, last week);
+    - "same_elapsed": ranges still in progress (this week, cycle, since reset) are
+      compared with the same number of elapsed days at the start of the previous period;
+    - "reference": today shows yesterday's full total only, without a percentage.
+    "all" has no comparison.
     """
     week_start = today - timedelta(days=today.weekday())
+    mode = "full"
     if key == "today":
         start = end = today
         prev = (today - timedelta(days=1), today - timedelta(days=1))
-        label = "较昨天"
+        label = "昨天全天"
+        mode = "reference"
     elif key == "this_week":
         start, end = week_start, week_start + timedelta(days=6)
-        prev = (start - timedelta(days=7), start - timedelta(days=1))
-        label = "较上周"
+        prev_start = start - timedelta(days=7)
+        prev = (prev_start, prev_start + (today - start))
+        label = "较上周同期"
+        mode = "same_elapsed"
     elif key == "last_week":
         start = week_start - timedelta(days=7)
         end = start + timedelta(days=6)
@@ -112,19 +121,24 @@ def range_bounds(
         if reset_day is None or reset_day > today:
             return None
         start, end = reset_day, today
-        n = (end - start).days + 1
-        prev = (start - timedelta(days=n), start - timedelta(days=1))
-        label = f"较前 {n} 天"
+        prev_start = start - timedelta(days=max(1, reset_window_days))
+        prev = (prev_start, min(prev_start + (today - start), start - timedelta(days=1)))
+        label = "较上次重置同期"
+        mode = "same_elapsed"
     elif key == "cycle":
         prev_start, cur_start, next_start = cycle
         start, end = cur_start, next_start - timedelta(days=1)
-        prev = (prev_start, cur_start - timedelta(days=1))
-        label = "较上周期"
+        # A shorter previous cycle (e.g. February) caps the matching span at its end.
+        prev = (prev_start, min(prev_start + (today - cur_start), cur_start - timedelta(days=1)))
+        label = "较上周期同期"
+        mode = "same_elapsed"
     elif key == "all":
-        return {"start": None, "end": None, "prev": None, "compare_label": None, "bucket": "month"}
+        return {"start": None, "end": None, "prev": None, "compare_label": None, "compare_mode": None,
+                "bucket": "month"}
     else:
         return None
-    return {"start": start, "end": end, "prev": prev, "compare_label": label, "bucket": "day"}
+    return {"start": start, "end": end, "prev": prev, "compare_label": label, "compare_mode": mode,
+            "bucket": "day"}
 
 
 class _Acc:
@@ -347,16 +361,18 @@ def build_ranges(
     """
     window_start = today - timedelta(days=DAY_WINDOW - 1)
     reset_day = None
+    reset_window_days = 7
     if pool and pool.get("reset_start") is not None:
         rs = pool["reset_start"]
         reset_day = (rs.astimezone(tz) if tz is not None else rs).date()
+        reset_window_days = max(1, int(round((_as_float(pool.get("window_hours")) or 168.0) / 24.0)))
 
     member_days = [_valid_days(m.get("summary"), tracking_start) for m in members]
     device_days = [[_valid_days(s, tracking_start) for s in (m.get("devices") or [])] for m in members]
 
     ranges: Dict[str, Optional[dict]] = {}
     for key in RANGE_ORDER:
-        bounds = range_bounds(key, today, cycle, reset_day)
+        bounds = range_bounds(key, today, cycle, reset_day, reset_window_days)
         if bounds is None:
             ranges[key] = None
             continue
@@ -402,6 +418,7 @@ def _finish_range(
             if e["tokens"] > 0:
                 model_users[name] = model_users.get(name, 0) + 1
     total_tokens = family.tokens["total"]
+    reference = meta.get("compare_mode") == "reference"
 
     member_rows = []
     for i, m in enumerate(members):
@@ -409,7 +426,8 @@ def _finish_range(
         tok = acc.tokens["total"]
         models = model_rows(acc)
         top_model = next((r["model"] for r in models if not r.get("other")), None)
-        prev = prev_tokens[i] if prev_tokens is not None else None
+        # "reference" (today vs all of yesterday) is not a like-for-like comparison: no row %.
+        prev = prev_tokens[i] if prev_tokens is not None and not reference else None
         member_rows.append({
             "id": m["id"],
             "tokens": tok,
@@ -475,7 +493,7 @@ def _finish_range(
     active = sum(1 for r in member_rows if r["tokens"] > 0)
 
     models = model_rows(family, model_users)
-    meta = dict(meta, bucket_count=len(buckets))
+    meta = dict(meta, elapsed_days=elapsed_days)
     insights = _insights(key, bucket, family, models, member_rows, members, peak, meta)
     return {
         "key": key,
@@ -485,13 +503,14 @@ def _finish_range(
         "end": meta.get("end"),
         "note": meta.get("note"),
         "compare_label": meta.get("compare_label") if prev_tokens is not None else None,
+        "compare_mode": meta.get("compare_mode") if prev_tokens is not None else None,
         "elapsed_days": elapsed_days,
         "total": {
             "tokens": family.tokens,
             "cost": round(family.cost, 2),
             "prev_tokens": prev_total,
             "prev_cost": round(sum(prev_costs), 2) if prev_costs is not None else None,
-            "change_pct": _change_pct(total_tokens, prev_total),
+            "change_pct": None if reference else _change_pct(total_tokens, prev_total),
         },
         "active_members": active,
         "member_count": len(members),
@@ -554,6 +573,7 @@ def _build_day_range(
         "end": end.isoformat(),
         "note": note,
         "compare_label": bounds["compare_label"],
+        "compare_mode": bounds["compare_mode"],
         "pool": pool,
         "now": now,
     }
@@ -641,7 +661,7 @@ def _insights(
         top = max(priced, key=lambda r: (r["cost"], r["tokens"]))
         out.append({"key": "priciest", "label": "最贵的模型", "value": top["model"],
                     "detail": f"${top['cost']:,.2f}", "cost": top["cost"]})
-    if peak is not None and meta.get("bucket_count", 0) > 1:
+    if peak is not None and meta.get("elapsed_days", 0) > 1:
         out.append({"key": "peak", "label": "用量最多的一天" if bucket == "day" else "用量最多的月份",
                     "value": peak["key"], "tokens": peak["tokens"]})
     if member_rows and member_rows[0]["tokens"] > 0:

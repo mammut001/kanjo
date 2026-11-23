@@ -189,7 +189,7 @@ CSS = """
         .rank-table { font-size: 0.86rem; }
         .rank-line, .rank-head {
           display: grid; align-items: center; gap: 0.5rem;
-          grid-template-columns: minmax(130px, 1.5fr) 82px 78px minmax(90px, 1fr) 64px minmax(100px, 1.1fr) 112px 128px;
+          grid-template-columns: minmax(120px, 1.4fr) 76px 76px minmax(118px, 1fr) 64px minmax(96px, 1.1fr) 112px 128px;
           padding: 0.55rem 0.5rem;
         }
         .rank-head { font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--card-border); padding-top: 0; }
@@ -204,6 +204,7 @@ CSS = """
         .rank-row > summary:hover, .rank-row[open] > summary { background: var(--panel); }
         .rank-row > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
         .cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell.share-cell { overflow: visible; }
         .cell-name { display: flex; align-items: center; gap: 0.45rem; }
         .member-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
         .member-label { font-size: 0.75rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
@@ -211,7 +212,7 @@ CSS = """
         .share-cell { display: flex; align-items: center; gap: 0.4rem; }
         .share-bar-bg { flex: 1; height: 6px; background: var(--badge-bg); border-radius: 3px; overflow: hidden; min-width: 30px; }
         .share-bar-fill { height: 100%; border-radius: 3px; }
-        .share-pct { font-size: 0.75rem; color: var(--text-secondary); width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+        .share-pct { font-size: 0.75rem; color: var(--text-secondary); min-width: 3.6em; flex-shrink: 0; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
         .cell-small { font-size: 0.78rem; color: var(--text-secondary); }
         .badge { font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 500; white-space: nowrap; }
         .badge-active { background: #dcfce7; color: #15803d; }
@@ -250,7 +251,7 @@ CSS = """
         .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; margin-bottom: 0.4rem; }
         .insight { background: var(--panel); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.65rem 0.8rem; min-width: 0; }
         .insight-label { font-size: 0.75rem; color: var(--text-muted); }
-        .insight-value { font-size: 1.05rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .insight-value { font-size: 1.05rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
         .insight-detail { font-size: 0.75rem; color: var(--text-secondary); }
         .bar-list { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.84rem; }
         .bar-row {
@@ -264,9 +265,11 @@ CSS = """
         .split-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 1.5rem; }
 
         /* Heatmap */
-        .heat-wrap { display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.25rem; }
-        .heat-days { display: grid; align-items: center; grid-template-rows: repeat(7, 22px); gap: 4px; font-size: 0.68rem; color: var(--text-muted); }
-        .heat-grid { display: grid; grid-template-rows: repeat(7, 22px); grid-auto-flow: column; grid-auto-columns: 22px; gap: 4px; }
+        .heat { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; }
+        .heat-months { display: grid; gap: 4px; font-size: 0.72rem; color: var(--text-muted); }
+        .heat-months span { white-space: nowrap; }
+        .heat-days { display: grid; align-items: center; grid-template-rows: repeat(7, 26px); gap: 4px; font-size: 0.68rem; color: var(--text-muted); }
+        .heat-grid { display: grid; grid-template-rows: repeat(7, 26px); grid-auto-flow: column; gap: 4px; }
         .heat-cell { border-radius: 4px; background: var(--heat-0); }
         .heat-cell.l1 { background: var(--heat-1); }
         .heat-cell.l2 { background: var(--heat-2); }
@@ -274,7 +277,9 @@ CSS = """
         .heat-cell.l4 { background: var(--heat-4); }
         .heat-cell.blank { background: transparent; }
         .heat-cell.today { outline: 2px solid var(--text-secondary); outline-offset: 1px; }
-        .heat-legend { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.6rem; }
+        .heat-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.75rem; }
+        .heat-legend { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--text-muted); }
+        .heat-summary { font-size: 0.78rem; color: var(--text-secondary); }
         .heat-legend .heat-cell { width: 12px; height: 12px; display: inline-block; }
 
         @media (max-width: 760px) {
@@ -287,6 +292,9 @@ CSS = """
           .stat-value { font-size: 1.2rem; }
           .insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
           .insight-value { font-size: 0.95rem; }
+          .heat-days, .heat-grid { grid-template-rows: repeat(7, 16px); gap: 3px; }
+          .heat-months { gap: 3px; }
+          .heat-cell { border-radius: 3px; }
           .rank-head { display: none; }
           .rank-line {
             grid-template-columns: minmax(0, 1fr) auto auto;
@@ -372,12 +380,16 @@ def render_overview(rng: Optional[dict], key: str) -> str:
 
     stat("总 token", format_tokens(tokens), "折算 " + format_cost(tot["cost"]))
     if rng.get("compare_label") and tot.get("prev_tokens") is not None:
-        text, cls = format_change(tot["change_pct"], tokens, tot["prev_tokens"])
-        stat(rng["compare_label"], text, f'{rng["compare_label"][1:]} {format_tokens(tot["prev_tokens"])}', cls)
+        if rng.get("compare_mode") == "reference":
+            stat(rng["compare_label"], format_tokens(tot["prev_tokens"]), "折算 " + format_cost(tot["prev_cost"] or 0.0))
+        else:
+            text, cls = format_change(tot["change_pct"], tokens, tot["prev_tokens"])
+            stat(rng["compare_label"], text, f'{rng["compare_label"][1:]} {format_tokens(tot["prev_tokens"])}', cls)
     stat("活跃成员", f'{rng["active_members"]}/{rng["member_count"]}', "该时段有用量")
     if rng["elapsed_days"] > 1:
         stat("日均 token", format_tokens(rng["daily_avg"]), f'按 {rng["elapsed_days"]} 天')
-    if rng.get("peak") and len(rng["chart"]["buckets"]) > 1:
+    # The peak only says something when usage is spread over more than one day/month.
+    if rng.get("peak") and rng["elapsed_days"] > 1 and rng["peak"]["tokens"] < tokens:
         peak = rng["peak"]
         stat("峰值日" if rng["bucket"] == "day" else "峰值月", format_tokens(peak["tokens"]), _md(peak["key"]))
     out.append('</div></section>')
@@ -739,28 +751,59 @@ def render_pool(ctx: dict) -> str:
 
 
 def render_heatmap(heatmap: dict, today_iso: str) -> str:
+    """Week columns (Monday on top) stretched to the card width, month labels above."""
+    from datetime import date as _date
+
     days = heatmap["days"]
     vmax = heatmap["max"]
     out = ['<section class="card"><div class="section-head"><h2 class="section-title">近 62 天热力日历</h2>'
-           '<span class="section-sub">全家每日用量，颜色越深用得越多</span></div><div class="heat-wrap">'
-           '<div class="heat-days"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div>'
-           '<div class="heat-grid">']
-    if days:
-        from datetime import date as _date
-        first = _date.fromisoformat(days[0]["date"])
-        for _ in range(first.weekday()):
-            out.append('<div class="heat-cell blank"></div>')
+           '<span class="section-sub">全家每日用量，颜色越深用得越多</span></div>']
+    if not days:
+        out.append('<div class="empty-state">暂无数据</div></section>')
+        return "".join(out)
+    first = _date.fromisoformat(days[0]["date"])
+    lead = first.weekday()
+    n_cols = (lead + len(days) + 6) // 7
+    cols_style = f'grid-template-columns: repeat({n_cols}, minmax(0, 1fr));'
+
+    months = []
+    for i, d in enumerate(days):
+        day = _date.fromisoformat(d["date"])
+        col = (lead + i) // 7
+        if i == 0 or day.day == 1:
+            if months and months[-1][0] == col:
+                months[-1] = (col, day.month)
+            else:
+                months.append((col, day.month))
+    out.append('<div class="heat"><div></div>')
+    out.append(f'<div class="heat-months" style="{cols_style}">')
+    for col, month in months:
+        out.append(f'<span style="grid-column: {col + 1};">{month}月</span>')
+    out.append('</div><div class="heat-days"><span>一</span><span></span><span>三</span><span></span>'
+               '<span>五</span><span></span><span>日</span></div>')
+    out.append(f'<div class="heat-grid" style="{cols_style}">')
+    for _ in range(lead):
+        out.append('<div class="heat-cell blank"></div>')
+    total = 0
+    active = 0
     for d in days:
+        total += d["tokens"]
         level = 0
         if vmax > 0 and d["tokens"] > 0:
+            active += 1
             level = min(4, max(1, math.ceil(d["tokens"] / vmax * 4)))
         cls = f"heat-cell l{level}" + (" today" if d["date"] == today_iso else "")
         title = f'{d["date"]} · {format_tokens(d["tokens"])} tokens · {format_cost(d["cost"])}'
         out.append(f'<div class="{cls}" title="{_e(title)}"></div>')
-    out.append('</div></div><div class="heat-legend">少')
+    out.append('</div></div><div class="heat-foot"><div class="heat-legend">少')
     for lv in range(5):
         out.append(f'<span class="heat-cell l{lv}"></span>')
-    out.append('多</div></section>')
+    out.append('多</div>')
+    summary = f"合计 {format_tokens(total)} · {active} 天有用量"
+    if vmax > 0:
+        peak = max(days, key=lambda d: d["tokens"])
+        summary += f' · 最高 {_md(peak["date"])} {format_tokens(peak["tokens"])}'
+    out.append(f'<div class="heat-summary">{_e(summary)}</div></div></section>')
     return "".join(out)
 
 
