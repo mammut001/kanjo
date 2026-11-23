@@ -7,9 +7,12 @@ two must produce the same markup. Every client-supplied string goes through
 """
 
 from datetime import datetime, timezone
+import functools
+import hashlib
 import html
 import json
 import math
+import os
 from typing import List, Optional
 
 from . import ranges
@@ -348,6 +351,17 @@ def range_title(rng: dict) -> str:
     if start == end:
         return f"{label} · {_md(start)}"
     return f"{label} · {_md(start)} – {_md(end)}"
+
+
+@functools.lru_cache(maxsize=1)
+def dashboard_js_version() -> str:
+    """Content hash for the script URL, so a CDN never serves a stale or cached-404 copy."""
+    path = os.path.join(os.path.dirname(__file__), "static", "dashboard.js")
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()[:12]
+    except OSError:
+        return "0"
 
 
 def embed_json(obj) -> str:
@@ -904,7 +918,7 @@ def render_page(ctx: dict) -> str:
     }
     doc.append(f'    <script type="application/json" id="dash-data">{embed_json(payload)}</script>')
     doc.append('  </div>')
-    doc.append('  <script src="/static/dashboard.js" defer></script>')
+    doc.append(f'  <script src="/static/dashboard.js?v={dashboard_js_version()}" defer></script>')
     doc.append('</body>')
     doc.append('</html>')
     return "\n".join(doc)
