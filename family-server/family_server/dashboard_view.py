@@ -156,6 +156,16 @@ CSS = """
         .quota-plan { font-size: 0.78rem; color: var(--text-secondary); }
         .progress-bar { width: 100%; height: 8px; background: var(--badge-bg); border-radius: 4px; overflow: hidden; margin-bottom: 0.4rem; }
         .progress-fill { height: 100%; border-radius: 4px; }
+        .reset-pill {
+          display: inline-flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; margin: 0.35rem 0 0 0.4rem;
+          font-size: 0.85rem; font-weight: 600; color: var(--text-primary);
+          background: var(--badge-bg); padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid var(--card-border);
+        }
+        .cd-pill { color: var(--accent); font-variant-numeric: tabular-nums; }
+        .reset-countdown { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.15rem; }
+        .cd-label { font-size: 0.78rem; color: var(--text-secondary); }
+        .cd-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .cd-at { font-size: 0.75rem; color: var(--text-muted); margin-left: auto; }
         .quota-footer { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary); }
         .seg-bar { display: flex; width: 100%; height: 14px; border-radius: 7px; overflow: hidden; background: var(--badge-bg); }
         .seg { height: 100%; min-width: 2px; }
@@ -671,15 +681,48 @@ def render_main(rng: Optional[dict], member_meta: dict, mode: str = "person") ->
 
 # ---------------------------------------------------------------- static sections
 
-def _countdown(target: datetime, now: datetime) -> str:
+def countdown_text(target: datetime, now: datetime) -> str:
+    """Time left until ``target``; mirrored by countdownText() in static/dashboard.js."""
     secs = int((target - now).total_seconds())
+    if secs <= 0:
+        return "已到重置时间"
     days, rem = divmod(secs, 86400)
     hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
     if days > 0:
-        return f"还剩 {days} 天 {hours} 小时"
+        return f"{days} 天 {hours} 小时 {minutes} 分"
     if hours > 0:
-        return f"还剩 {hours} 小时 {rem // 60} 分"
-    return f"还剩 {max(1, rem // 60)} 分钟"
+        return f"{hours} 小时 {minutes} 分"
+    if minutes > 0:
+        return f"{minutes} 分钟"
+    return "不到 1 分钟"
+
+
+def _countdown_html(target: datetime, now: datetime, cls: str) -> str:
+    """A countdown the script keeps ticking; the server-rendered text is right at page load."""
+    iso = target.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f'<span class="{cls}" data-reset-at="{_e(iso)}">{_e(countdown_text(target, now))}</span>'
+
+
+def _window_reset(w: dict) -> Optional[datetime]:
+    reset_dt = parse_iso(w.get("resets_at"))
+    if reset_dt is not None and reset_dt.tzinfo is None:
+        reset_dt = reset_dt.replace(tzinfo=timezone.utc)
+    return reset_dt
+
+
+def next_pool_reset(ctx: dict) -> Optional[tuple]:
+    """(label, reset time) of the soonest upcoming reset in the latest pool report, or None."""
+    latest = ctx.get("pool_latest") or {}
+    upcoming = []
+    for w in latest.get("windows") or []:
+        reset_dt = _window_reset(w)
+        if reset_dt is not None and reset_dt > ctx["now"]:
+            upcoming.append((reset_dt, w["label"]))
+    if not upcoming:
+        return None
+    reset_dt, label = min(upcoming, key=lambda item: item[0])
+    return label, reset_dt
 
 
 def _pct_color(pct: Optional[float]) -> str:
@@ -707,20 +750,20 @@ def render_pool(ctx: dict) -> str:
     out.append('<div class="pool-windows">')
     for w in latest["windows"]:
         pct = max(0.0, min(100.0, w["used_percent"]))
-        reset_dt = parse_iso(w.get("resets_at"))
-        if reset_dt is not None and reset_dt.tzinfo is None:
-            reset_dt = reset_dt.replace(tzinfo=timezone.utc)
+        reset_dt = _window_reset(w)
         if reset_dt is None:
-            reset_str, left = "重置时间未知", ""
+            footer = '<div class="quota-footer"><span>重置时间未知</span></div>'
         elif reset_dt <= now:
-            reset_str, left = "已到重置时间，等待新的上报", ""
+            footer = '<div class="quota-footer"><span>已到重置时间，等待新的上报</span></div>'
         else:
-            reset_str, left = "重置：" + format_dt(reset_dt, tz), _countdown(reset_dt, now)
+            footer = ('<div class="reset-countdown"><span class="cd-label">距下次重置</span>'
+                      + _countdown_html(reset_dt, now, "cd-value")
+                      + f'<span class="cd-at">{_e(format_dt(reset_dt, tz))}</span></div>')
         out.append('<div class="pool-window"><div class="quota-header">'
                    f'<span class="quota-user">{_e(w["label"])}</span>'
                    f'<span class="quota-plan">已用 <strong>{pct:.1f}%</strong> · 剩余 {100.0 - pct:.1f}%</span></div>'
                    f'<div class="progress-bar"><div class="progress-fill" style="width: {pct:.1f}%; background: {_pct_color(pct)};"></div></div>'
-                   f'<div class="quota-footer"><span>{_e(reset_str)}</span><span>{_e(left)}</span></div></div>')
+                   f'{footer}</div>')
     out.append('</div>')
 
     week_start = ctx["pool_week_start"]
@@ -875,8 +918,14 @@ def render_page(ctx: dict) -> str:
         "        <div>",
         "          <h1>家庭用量汇总</h1>",
         f'          <div class="cycle-pill">{_e(ctx["cycle_range_str"])} · 剩余 {ctx["days_remaining"]} 天 · 至 {ctx["next_start"].strftime("%m/%d")} 重置</div>',
-        f'          <div class="cost-notice">注：{_e(COST_NOTE)}</div>',
     ]
+    nxt = next_pool_reset(ctx)
+    if nxt is not None:
+        label, reset_dt = nxt
+        doc.append(f'          <div class="reset-pill">额度重置倒计时 · {_e(label)} · '
+                   + _countdown_html(reset_dt, ctx["now"], "cd-pill")
+                   + f' · {_e(format_dt(reset_dt, ctx["tz"]))}</div>')
+    doc.append(f'          <div class="cost-notice">注：{_e(COST_NOTE)}</div>')
     if ctx["top_scope_str"]:
         doc.append(f'          <div class="scope-notice">{_e(ctx["top_scope_str"])}</div>')
     doc.extend([

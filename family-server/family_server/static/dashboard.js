@@ -6,6 +6,29 @@
 (function () {
   "use strict";
 
+  // Reset countdowns tick even if the data block is missing; same text as countdown_text() in Python.
+  function countdownText(ms) {
+    var secs = Math.floor(ms / 1000);
+    if (secs <= 0) return "已到重置时间";
+    var days = Math.floor(secs / 86400);
+    var hours = Math.floor((secs % 86400) / 3600);
+    var minutes = Math.floor((secs % 3600) / 60);
+    if (days > 0) return days + " 天 " + hours + " 小时 " + minutes + " 分";
+    if (hours > 0) return hours + " 小时 " + minutes + " 分";
+    if (minutes > 0) return minutes + " 分钟";
+    return "不到 1 分钟";
+  }
+  function tickCountdowns() {
+    var now = Date.now();
+    var els = document.querySelectorAll("[data-reset-at]");
+    for (var i = 0; i < els.length; i++) {
+      var at = Date.parse(els[i].getAttribute("data-reset-at"));
+      if (!isNaN(at)) els[i].textContent = countdownText(at - now);
+    }
+  }
+  tickCountdowns();
+  setInterval(tickCountdowns, 15000);
+
   var dataEl = document.getElementById("dash-data");
   if (!dataEl) return;
   var DATA;

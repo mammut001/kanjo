@@ -140,3 +140,31 @@ class DashboardPoolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResetCountdownTests(DashboardPoolTests):
+    def test_countdown_text_formats(self):
+        from datetime import timedelta
+        from family_server.dashboard_view import countdown_text
+        self.assertEqual(countdown_text(NOW + timedelta(days=2, hours=19, minutes=5), NOW), "2 天 19 小时 5 分")
+        self.assertEqual(countdown_text(NOW + timedelta(hours=3, minutes=7), NOW), "3 小时 7 分")
+        self.assertEqual(countdown_text(NOW + timedelta(minutes=12), NOW), "12 分钟")
+        self.assertEqual(countdown_text(NOW + timedelta(seconds=30), NOW), "不到 1 分钟")
+        self.assertEqual(countdown_text(NOW - timedelta(minutes=1), NOW), "已到重置时间")
+
+    def test_header_and_pool_show_live_countdown_to_next_reset(self):
+        quota = self._ag_quota(45.0)
+        # Weekly reset 2026-11-24 12:00Z is 2 d 19 h away; the 5-hour window resets sooner.
+        quota["antigravity"].update({"five_hour_resets_at": "2026-11-21T19:30:00Z",
+                                     "five_hour_window_hours": 5, "five_hour_used_percent": 10.0})
+        self._add("Alice", self._payload("a", [], quota=quota))
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        self.assertIn('class="reset-pill"', html)
+        self.assertIn('data-reset-at="2026-11-24T12:00:00Z">2 天 19 小时 0 分</span>', html)
+        self.assertIn('class="cd-value"', html)
+        self.assertIn("距下次重置", html)
+
+    def test_no_reset_pill_without_upcoming_reset(self):
+        self._add("Alice", self._payload("a", [], quota={}))
+        html = dashboard.generate_dashboard_html(self.db_path, now=NOW)
+        self.assertNotIn('class="reset-pill"', html)

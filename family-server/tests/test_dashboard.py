@@ -155,7 +155,7 @@ class TestDashboard(unittest.TestCase):
         from zoneinfo import ZoneInfo
         reset_dt = datetime.strptime(reset, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         local = reset_dt.astimezone(ZoneInfo("America/Toronto")).strftime("%Y-%m-%d %H:%M")
-        self.assertIn("重置：" + local, html)
+        self.assertIn('<span class="cd-at">' + local, html)
 
     def test_dashboard_renders_with_fixture_report(self):
         # Add members and reports
