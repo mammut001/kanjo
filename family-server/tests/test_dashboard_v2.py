@@ -173,8 +173,9 @@ class DashboardV2RenderTests(unittest.TestCase):
         self.assertEqual(data["ranges"]["this_week"]["models"][0]["model"], HOSTILE)
         # Only two script elements: the inert JSON block and the external file.
         scripts = re.findall(r"<script[^>]*>", page)
-        self.assertEqual(scripts, ['<script type="application/json" id="dash-data">',
-                                   '<script src="/static/dashboard.js" defer>'])
+        self.assertEqual(len(scripts), 2)
+        self.assertEqual(scripts[0], '<script type="application/json" id="dash-data">')
+        self.assertRegex(scripts[1], r'^<script src="/static/dashboard\.js\?v=[0-9a-f]{12}" defer>$')
 
     def test_embed_json_escapes_breakout_characters(self):
         text = dashboard_view.embed_json({"n": "</script>& "})
