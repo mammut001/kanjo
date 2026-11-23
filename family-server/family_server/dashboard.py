@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from . import auth
 from . import db
+from . import ranges
 from .aggregate import merge_member_reports
 from .rate_limit import RateLimiter
 
@@ -272,80 +273,6 @@ def pool_windows_from_quota(qw: dict) -> List[dict]:
     return rows
 
 
-def render_svg_chart(dates: List[str], member_data: List[dict], max_tokens: int) -> str:
-    """Render a handwritten, responsive SVG stacked bar chart."""
-    width = 900
-    height = 250
-    margin_left = 65
-    margin_right = 20
-    margin_top = 25
-    margin_bottom = 35
-
-    plot_width = width - margin_left - margin_right
-    plot_height = height - margin_top - margin_bottom
-    n_days = max(1, len(dates))
-    slot_width = plot_width / n_days
-    bar_width = max(4.0, slot_width * 0.65)
-    bar_offset = (slot_width - bar_width) / 2.0
-
-    # Upper bound rounded nicely
-    y_max = max_tokens if max_tokens > 0 else 1000
-    magnitude = 10 ** max(0, len(str(int(y_max))) - 1)
-    y_max = int(((y_max + magnitude - 1) // magnitude) * magnitude)
-
-    lines = []
-    lines.append(
-        f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
-        'class="chart-svg" style="width: 100%; height: auto; display: block;" role="img" '
-        'aria-label="近 30 天每日用量趋势图">'
-    )
-
-    # Grid lines and Y axis labels (0%, 50%, 100%)
-    for frac in (0.0, 0.5, 1.0):
-        y_pos = margin_top + plot_height * (1.0 - frac)
-        token_val = int(y_max * frac)
-        label_text = format_tokens(token_val)
-        lines.append(
-            f'<line x1="{margin_left}" y1="{y_pos:.1f}" x2="{width - margin_right}" y2="{y_pos:.1f}" '
-            'class="grid-line" stroke="var(--bar-grid)" stroke-width="1" stroke-dasharray="3,3" />'
-        )
-        lines.append(
-            f'<text x="{margin_left - 8}" y="{y_pos + 4:.1f}" class="axis-text" '
-            f'text-anchor="end" fill="var(--text-muted)" font-size="11">{html.escape(label_text)}</text>'
-        )
-
-    # Bars
-    for day_idx, d_str in enumerate(dates):
-        x = margin_left + day_idx * slot_width + bar_offset
-        y_cursor = margin_top + plot_height
-
-        for m in member_data:
-            tok = m["daily_tokens"].get(d_str, 0)
-            if tok <= 0:
-                continue
-            bar_h = (tok / y_max) * plot_height
-            y = y_cursor - bar_h
-            escaped_mname = html.escape(m["name"])
-            lines.append(
-                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_h:.1f}" '
-                f'fill="{m["color"]}" rx="2">'
-                f'<title>{escaped_mname}: {tok:,} tokens ({d_str})</title>'
-                '</rect>'
-            )
-            y_cursor = y
-
-        # X-axis label every 3 days or for first/last
-        if day_idx % 3 == 0 or day_idx == n_days - 1:
-            label = d_str[5:]  # MM-DD
-            lines.append(
-                f'<text x="{x + bar_width / 2:.1f}" y="{height - 12}" class="axis-text" '
-                f'text-anchor="middle" fill="var(--text-muted)" font-size="10">{html.escape(label)}</text>'
-            )
-
-    lines.append('</svg>')
-    return "\n".join(lines)
-
-
 _OS_LABELS = {
     "macos": "macOS",
     "linux": "Linux",
@@ -370,17 +297,22 @@ def _cached_dashboard_merge(report_rows: tuple, member_names: tuple) -> Optional
     return merge_member_reports([dict(row) for row in report_rows], dict(member_names))
 
 
+STALE_SECONDS = 2 * 3600.0
+
+
 def generate_dashboard_html(
     db_path: str,
     now: Optional[datetime] = None,
     user_email: Optional[str] = None,
+    range_key: Optional[str] = None,
 ) -> str:
-    """Render the full single-page dashboard HTML."""
+    """Render the full single-page dashboard HTML (server-rendered for ``range_key``)."""
     with db.get_connection(db_path) as conn:
         records = db.get_all_latest_device_reports(conn)
         all_members = db.list_members(conn, include_merged=True)
         server_settings = db.get_all_settings(conn)
     member_names = {m["id"]: m["name"] for m in all_members}
+    name_items = tuple(sorted(member_names.items()))
 
     tz_name = server_settings.get("timezone") or os.environ.get("FAMILY_TIMEZONE", "America/Toronto")
     try:
@@ -394,7 +326,6 @@ def generate_dashboard_html(
 
     local_now = now.astimezone(tz)
     local_today = local_now.date()
-    today_str = local_today.isoformat()
 
     cycle_anchor_day_raw = server_settings.get("cycle_anchor_day")
     cycle_anchor_day = None
@@ -409,16 +340,18 @@ def generate_dashboard_html(
             pass
 
     tracking_start_str = (server_settings.get("tracking_start") or "").strip() or None
+    tracking_start = None
+    if tracking_start_str:
+        try:
+            tracking_start = date.fromisoformat(tracking_start_str)
+        except ValueError:
+            tracking_start = None
 
-    prev_start, current_start, next_start = compute_cycle_boundaries(cycle_anchor_day, local_today, tz)
-    current_start_str = current_start.isoformat()
-    next_start_str = next_start.isoformat()
-    prev_start_str = prev_start.isoformat()
+    cycle = compute_cycle_boundaries(cycle_anchor_day, local_today, tz)
+    prev_start, current_start, next_start = cycle
     cycle_last_day = next_start - timedelta(days=1)
-    cycle_range_str = f"本周期 {current_start.strftime('%m/%d')} – {cycle_last_day.strftime('%m/%d')}"
+    cycle_range_str = f"计费周期 {current_start.strftime('%m/%d')} – {cycle_last_day.strftime('%m/%d')}"
     days_remaining = max(0, (next_start - local_today).days)
-
-    dates_30 = [(local_today - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
 
     # Process member data
     members_processed = []
@@ -436,44 +369,48 @@ def generate_dashboard_html(
             "has_report": False,
             "label": None,
             "received_at": None,
-            "is_stale": True,
-            "cycle_tokens": 0,
-            "cycle_cost": 0.0,
-            "prev_cycle_tokens": 0,
-            "prev_cycle_cost": 0.0,
-            "top_models": [],
-            "daily_tokens": {},
+            "status": "never",
             "daily_pool_tokens": {},
-            "antigravity_quota": None,
-            "cycle_pool_tokens": 0,
-            "scope": None,
             "scope_str": None,
             "devices": [],
-            "legacy_excluded": False,
+            "device_summaries": [],
+            "summary": None,
             "legacy_excluded_count": 0,
         }
 
         merged = _cached_dashboard_merge(
             tuple(tuple(report.items()) for report in reports),
-            tuple(sorted(member_names.items())),
+            name_items,
         )
         if merged is not None:
             meta = merged["_meta"]
             member_info["has_report"] = True
             rec_dt = meta.get("latest_received_at")
             member_info["received_at"] = rec_dt
-            if rec_dt:
-                diff_sec = (now - rec_dt).total_seconds()
-                member_info["is_stale"] = diff_sec > 86400.0
+            member_info["status"] = "stale"
+            if rec_dt and (now - rec_dt).total_seconds() <= STALE_SECONDS:
+                member_info["status"] = "ok"
 
             member_info["label"] = merged.get("member_label")
-            member_info["scope"] = merged.get("scope")
             member_info["scope_str"] = format_scope(merged.get("scope"))
             member_info["devices"] = meta.get("devices", [])
-            member_info["legacy_excluded"] = bool(meta.get("legacy_excluded"))
             member_info["legacy_excluded_count"] = int(
-                meta.get("legacy_excluded_count") or (1 if member_info["legacy_excluded"] else 0)
+                meta.get("legacy_excluded_count") or (1 if meta.get("legacy_excluded") else 0)
             )
+            summary = merged.get("summary", {})
+            member_info["summary"] = summary
+
+            # Per-device summaries for the expanded ranking row; one device is the merge itself.
+            if len(member_info["devices"]) == 1:
+                member_info["device_summaries"] = [summary]
+            else:
+                by_id = {str(r.get("device_id") or ""): r for r in reports}
+                for dev in member_info["devices"]:
+                    row = by_id.get(str(dev.get("device_id") or ""))
+                    single = None
+                    if row is not None:
+                        single = _cached_dashboard_merge((tuple(row.items()),), name_items)
+                    member_info["device_summaries"].append(single.get("summary") if single else None)
 
             # Quota windows: feed per-device entries into the pool logic
             for dev in member_info["devices"]:
@@ -489,8 +426,6 @@ def generate_dashboard_html(
                         "weekly_resets_at": resets_at,
                         "plan": plan_name,
                     }
-                    if member_info["antigravity_quota"] is None:
-                        member_info["antigravity_quota"] = dev_quota
 
                     dev_label = member_info["label"]
                     if len(member_info["devices"]) > 1 and dev.get("device_name"):
@@ -504,60 +439,21 @@ def generate_dashboard_html(
                         "quota": dev_quota,
                         "windows": pool_windows_from_quota(ag_qw),
                         "weekly_resets_at": resets_at,
+                        "weekly_window_hours": ag_qw.get("weekly_window_hours"),
                         "received_at": dev.get("received_at") or rec_dt,
                     })
 
-            summary = merged.get("summary", {})
-            days = summary.get("days", [])
-            cycle_models = {}
-
-            for d in days:
+            for d in summary.get("days", []):
                 if not isinstance(d, dict):
                     continue
                 p_str = d.get("period")
                 if not p_str or not isinstance(p_str, str):
                     continue
-
                 # Tracking start filtering: usage before tracking_start is ignored everywhere on the dashboard
                 if tracking_start_str and p_str < tracking_start_str:
                     continue
-
-                tok_cnt = d.get("tokens", {}).get("total", 0)
-                cost_val = d.get("cost_usd", 0.0)
-
-                member_info["daily_tokens"][p_str] = tok_cnt
-                pool_tok = pool_tokens_for_day(d, tok_cnt)
-                member_info["daily_pool_tokens"][p_str] = pool_tok
-
-                # Current cycle: [current_start_str, next_start_str)
-                if current_start_str <= p_str < next_start_str:
-                    member_info["cycle_tokens"] += tok_cnt
-                    member_info["cycle_cost"] += cost_val
-
-                    # Antigravity / pool tokens for ranking
-                    member_info["cycle_pool_tokens"] += pool_tok
-
-                    # Model breakdown in current cycle
-                    for tm in d.get("top_models", []):
-                        if isinstance(tm, dict):
-                            mod_name = tm.get("model")
-                            if mod_name:
-                                if mod_name not in cycle_models:
-                                    cycle_models[mod_name] = {"tokens_total": 0, "cost_usd": 0.0}
-                                cycle_models[mod_name]["tokens_total"] += tm.get("tokens_total", 0)
-                                cycle_models[mod_name]["cost_usd"] += tm.get("cost_usd", 0.0)
-
-                # Previous cycle: [prev_start_str, current_start_str)
-                elif prev_start_str <= p_str < current_start_str:
-                    member_info["prev_cycle_tokens"] += tok_cnt
-                    member_info["prev_cycle_cost"] += cost_val
-
-            sorted_models = [
-                {"model": mod, "tokens_total": data["tokens_total"], "cost_usd": round(data["cost_usd"], 2)}
-                for mod, data in cycle_models.items()
-            ]
-            sorted_models.sort(key=lambda x: (-x["tokens_total"], -x["cost_usd"], x["model"]))
-            member_info["top_models"] = sorted_models[:5]
+                tok_cnt = (d.get("tokens") or {}).get("total", 0)
+                member_info["daily_pool_tokens"][p_str] = pool_tokens_for_day(d, tok_cnt)
 
         members_processed.append(member_info)
 
@@ -572,587 +468,86 @@ def generate_dashboard_html(
     if pool_latest is None and quota_pool_entries:
         pool_latest = quota_pool_entries[0]
 
-    # This quota week = [weekly reset - 7 days, weekly reset), counted per local day.
+    # This quota week = [last weekly reset, next reset), counted per local day.
+    pool_info = None
     pool_week_start = None
     pool_week_users = []
     pool_week_total = 0
     if pool_latest is not None:
         week_reset = parse_iso(pool_latest.get("weekly_resets_at"))
-        if week_reset is not None:
-            if week_reset.tzinfo is None:
-                week_reset = week_reset.replace(tzinfo=timezone.utc)
-            pool_week_start = (week_reset - timedelta(days=7)).astimezone(tz)
+        reset_start = ranges.last_reset_start(week_reset, pool_latest.get("weekly_window_hours"), now)
+        if reset_start is not None:
+            pool_week_start = reset_start.astimezone(tz)
+            pool_info = {
+                "reset_start": reset_start,
+                "window_hours": _as_float(pool_latest.get("weekly_window_hours")) or 168.0,
+                "weekly_pct": pool_latest["quota"]["weekly_used_percent"],
+            }
             week_start_str = pool_week_start.date().isoformat()
+            today_str = local_today.isoformat()
             for m in members_processed:
-                t = sum(v for k, v in m["daily_pool_tokens"].items() if k >= week_start_str)
+                # Same days as the "since reset" range, so both read the same totals.
+                t = sum(v for k, v in m["daily_pool_tokens"].items() if week_start_str <= k <= today_str)
                 pool_week_total += t
                 pool_week_users.append({"name": m["name"], "label": m["label"], "color": m["color"], "tokens": t})
             pool_week_users = [u for u in pool_week_users if u["tokens"] > 0]
             pool_week_users.sort(key=lambda u: u["tokens"], reverse=True)
 
-    # Compute quota pool share within the cycle
-    total_cycle_pool_tokens = sum(m["cycle_pool_tokens"] for m in members_processed)
-    pool_cycle_users = []
-    for m in members_processed:
-        t = m["cycle_pool_tokens"]
-        pct = (t / total_cycle_pool_tokens * 100.0) if total_cycle_pool_tokens > 0 else 0.0
-        pool_cycle_users.append({
-            "name": m["name"],
-            "label": m["label"],
-            "color": m["color"],
-            "tokens": t,
-            "pct": pct,
-        })
-    pool_cycle_users.sort(key=lambda x: x["tokens"], reverse=True)
+    # Per-member view only when members disagree (pool may not actually be shared).
+    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries
+                   if q["quota"]["weekly_used_percent"] is not None]
+    show_per_member = len(weekly_vals) > 1 and (max(weekly_vals) - min(weekly_vals)) > 2.0
 
-    # Max tokens on any day for chart scaling
-    max_day_tokens = 0
-    for d_str in dates_30:
-        day_sum = sum(m["daily_tokens"].get(d_str, 0) for m in members_processed)
-        if day_sum > max_day_tokens:
-            max_day_tokens = day_sum
-
-    svg_chart_html = render_svg_chart(dates_30, members_processed, max_day_tokens)
+    range_data = ranges.build_ranges(
+        [
+            {
+                "id": m["id"],
+                "name": m["name"],
+                "color": m["color"],
+                "summary": m["summary"],
+                "devices": m["device_summaries"],
+            }
+            for m in members_processed
+        ],
+        today=local_today,
+        now=now,
+        cycle=cycle,
+        tracking_start=tracking_start,
+        pool=pool_info,
+        tz=tz,
+    )
 
     unique_scopes = []
     for m in members_processed:
         s = m.get("scope_str")
         if s and s not in unique_scopes:
             unique_scopes.append(s)
-    top_scope_str = " · ".join(unique_scopes) if unique_scopes else None
 
-    # HTML building
-    doc = [
-        "<!DOCTYPE html>",
-        '<html lang="zh-CN">',
-        "<head>",
-        '  <meta charset="utf-8">',
-        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-        "  <title>家庭用量面板 · Kanjo</title>",
-        "  <style>",
-        """
-        :root {
-          --bg: #f8fafc;
-          --card-bg: #ffffff;
-          --card-border: #e2e8f0;
-          --text-primary: #0f172a;
-          --text-secondary: #475569;
-          --text-muted: #94a3b8;
-          --accent: #2563eb;
-          --bar-grid: #e2e8f0;
-          --badge-bg: #f1f5f9;
-          --green: #10b981;
-          --amber: #f59e0b;
-          --red: #ef4444;
-          --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-        }
-        @media (prefers-color-scheme: dark) {
-          :root {
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --card-border: #334155;
-            --text-primary: #f8fafc;
-            --text-secondary: #cbd5e1;
-            --text-muted: #64748b;
-            --accent: #3b82f6;
-            --bar-grid: #334155;
-            --badge-bg: #334155;
-            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
-          }
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-          background: var(--bg);
-          color: var(--text-primary);
-          line-height: 1.5;
-          padding: 1.5rem 1rem 3rem 1rem;
-        }
-        .container { max-width: 1100px; margin: 0 auto; }
-        header { margin-bottom: 2rem; }
-        .header-title-row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; }
-        h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
-        .meta-time { font-size: 0.82rem; color: var(--text-muted); }
-        .cost-notice { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
-        .header-right { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-        .user-email { font-size: 0.82rem; color: var(--text-secondary); background: var(--badge-bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
-        .logout-btn { background: transparent; border: 1px solid var(--card-border); color: var(--text-secondary); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.15s ease; }
-        .logout-btn:hover { background: var(--badge-bg); color: var(--text-primary); }
-        .settings-btn {
-          background: transparent;
-          border: 1px solid var(--card-border);
-          color: var(--text-secondary);
-          padding: 0.25rem 0.6rem;
-          border-radius: 6px;
-          font-size: 0.8rem;
-          text-decoration: none;
-          transition: all 0.15s ease;
-          display: inline-flex;
-          align-items: center;
-        }
-        .settings-btn:hover { background: var(--badge-bg); color: var(--text-primary); }
-        .cycle-pill {
-          display: inline-block;
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: var(--accent);
-          background: var(--badge-bg);
-          padding: 0.2rem 0.6rem;
-          border-radius: 6px;
-          margin-top: 0.35rem;
-          border: 1px solid var(--card-border);
-        }
-        .settings-prompt-banner {
-          background: var(--badge-bg);
-          border-left: 4px solid var(--amber);
-          padding: 1rem 1.25rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-        }
-        .settings-prompt-link {
-          background: var(--accent);
-          color: #ffffff;
-          padding: 0.35rem 0.85rem;
-          border-radius: 6px;
-          font-size: 0.82rem;
-          font-weight: 600;
-          text-decoration: none;
-          white-space: nowrap;
-        }
-        .settings-prompt-link:hover { opacity: 0.9; }
+    from . import dashboard_view
 
-        .card {
-          background: var(--card-bg);
-          border: 1px solid var(--card-border);
-          border-radius: 12px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-          box-shadow: var(--shadow);
-        }
-        .section-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; }
-
-        /* Quota Grid */
-        .quota-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-        .quota-item {
-          background: var(--bg);
-          border: 1px solid var(--card-border);
-          border-left-width: 4px;
-          border-radius: 8px;
-          padding: 1rem;
-        }
-        .quota-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
-        .quota-user { font-weight: 600; font-size: 0.95rem; }
-        .quota-plan { font-size: 0.75rem; color: var(--text-muted); background: var(--badge-bg); padding: 0.15rem 0.4rem; border-radius: 4px; }
-        .progress-bar { width: 100%; height: 8px; background: var(--badge-bg); border-radius: 4px; overflow: hidden; margin-bottom: 0.5rem; }
-        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
-        .pool-source { font-size: 0.8rem; color: var(--text-secondary); margin: -0.25rem 0 0.75rem 0; }
-        .pool-windows { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 0.5rem; }
-        .pool-window { padding: 0.75rem; border: 1px solid var(--card-border); border-radius: 8px; }
-        .pool-subtitle { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.5rem 0; }
-        .pool-note { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; }
-        .quota-footer { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); }
-
-        /* Members Grid */
-        .members-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; }
-        .member-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
-        .member-name-row { display: flex; align-items: center; gap: 0.5rem; }
-        .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .member-title { font-size: 1.1rem; font-weight: 600; }
-        .member-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem; }
-        .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 500; }
-        .badge-active { background: #dcfce7; color: #15803d; }
-        .badge-stale { background: #fee2e2; color: #b91c1c; }
-        @media (prefers-color-scheme: dark) {
-          .badge-active { background: #14532d; color: #86efac; }
-          .badge-stale { background: #7f1d1d; color: #fca5a5; }
-        }
-
-        .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1.25rem; background: var(--bg); padding: 0.75rem; border-radius: 8px; }
-        .metric-cell { text-align: center; }
-        .metric-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.2rem; }
-        .metric-tokens { font-size: 1rem; font-weight: 600; }
-        .metric-cost { font-size: 0.75rem; color: var(--text-secondary); }
-
-        .models-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-        .models-table th, .models-table td { padding: 0.35rem 0.25rem; text-align: left; }
-        .models-table th { color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--card-border); }
-        .models-table td { border-bottom: 1px dashed var(--card-border); }
-        .models-table tr:last-child td { border-bottom: none; }
-        .text-right { text-align: right !important; }
-
-        /* Devices collapsible list */
-        .legacy-note {
-          font-size: 0.78rem;
-          color: var(--amber);
-          margin-top: 0.2rem;
-        }
-        .devices-details {
-          margin-top: 0.85rem;
-          border-top: 1px solid var(--card-border);
-          padding-top: 0.6rem;
-        }
-        .devices-summary {
-          cursor: pointer;
-          font-size: 0.8rem;
-          color: var(--text-secondary);
-          user-select: none;
-        }
-        .devices-summary:hover { color: var(--text-primary); }
-        .device-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          margin-top: 0.55rem;
-        }
-        .device-item {
-          background: var(--bg);
-          border: 1px solid var(--card-border);
-          border-radius: 6px;
-          padding: 0.5rem 0.65rem;
-          font-size: 0.78rem;
-        }
-        .device-item-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-        .device-name { font-weight: 600; color: var(--text-primary); }
-        .device-totals { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
-        .device-item-meta {
-          color: var(--text-muted);
-          margin-top: 0.15rem;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.45rem;
-        }
-
-        /* Pool Share Bar */
-        .share-list { display: flex; flex-direction: column; gap: 0.75rem; }
-        .share-row { display: flex; flex-direction: column; gap: 0.25rem; }
-        .share-info { display: flex; justify-content: space-between; font-size: 0.88rem; }
-        .share-bar-bg { width: 100%; height: 8px; background: var(--badge-bg); border-radius: 4px; overflow: hidden; }
-        .share-bar-fill { height: 100%; border-radius: 4px; }
-
-        /* Legend */
-        .chart-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; font-size: 0.82rem; }
-        .legend-item { display: flex; align-items: center; gap: 0.4rem; }
-
-        .empty-state { text-align: center; color: var(--text-muted); padding: 2rem 1rem; font-size: 0.9rem; }
-        </style>
-        """,
-        "</head>",
-        "<body>",
-        '  <div class="container">',
-        "    <header>",
-        '      <div class="header-title-row">',
-        "        <div>",
-        "          <h1>家庭用量汇总</h1>",
-        f'          <div class="cycle-pill">{html.escape(cycle_range_str)} · 剩余 {days_remaining} 天</div>',
-        f'          <div class="cost-notice">注：{html.escape(COST_NOTE)}</div>',
-    ]
-    if top_scope_str:
-        doc.append(f'          <div class="scope-notice" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">{html.escape(top_scope_str)}</div>')
-    doc.extend([
-        "        </div>",
-        '        <div class="header-right">',
-        f'          <span class="meta-time">刷新时间：{html.escape(format_dt(local_now))} ({html.escape(tz_name)})</span>',
-        '          <a href="/settings" class="settings-btn">设置</a>',
-    ])
-
-    if user_email:
-        doc.append(f'          <span class="user-email">{html.escape(user_email)}</span>')
-        doc.append('          <form method="POST" action="/auth/logout" style="margin: 0; display: inline;">')
-        doc.append('            <button type="submit" class="logout-btn">退出</button>')
-        doc.append('          </form>')
-
-    doc.extend([
-        "        </div>",
-        "      </div>",
-        "    </header>",
-    ])
-
-    # Admin prompt banner if no settings yet
-    if not has_cycle_setting:
-        doc.append('    <div class="card settings-prompt-banner">')
-        doc.append('      <div class="prompt-text">')
-        doc.append('        <strong>提示：</strong>尚未设置计费周期起始日，当前按自然月展示。请前往设置以匹配 Google AI Ultra 续费日。')
-        doc.append('      </div>')
-        doc.append('      <a href="/settings" class="settings-prompt-link">设置周期起始日 →</a>')
-        doc.append('    </div>')
-
-    # 1. Quota Pool Card
-    doc.append('    <section class="card">')
-    doc.append('      <h2 class="section-title">Google AI Ultra 额度池（全家共用）</h2>')
-    if not quota_pool_entries:
-        doc.append('      <div class="empty-state">暂无成员上报 Google AI Ultra 额度数据</div>')
-    else:
-        src_name = html.escape(pool_latest["member_name"])
-        src_dev = f"（{html.escape(pool_latest['device_name'])}）" if pool_latest.get("device_name") else ""
-        src_time = format_dt(pool_latest["received_at"], tz) if pool_latest.get("received_at") else "—"
-        doc.append(f'      <div class="pool-source">数据来自 {src_name} 的最新上报{src_dev} · {html.escape(src_time)}</div>')
-        doc.append('      <div class="pool-windows">')
-        for w in pool_latest["windows"]:
-            pct = max(0.0, min(100.0, w["used_percent"]))
-            bar_color = "var(--red)" if pct >= 95.0 else ("var(--amber)" if pct >= 80.0 else "var(--green)")
-            reset_dt = parse_iso(w.get("resets_at"))
-            if reset_dt is not None and reset_dt.tzinfo is None:
-                reset_dt = reset_dt.replace(tzinfo=timezone.utc)
-            if reset_dt is None:
-                reset_str = "重置时间未知"
-            elif reset_dt <= now:
-                reset_str = "已到重置时间，等待新的上报"
-            else:
-                reset_str = "重置：" + format_dt(reset_dt, tz)
-            doc.append('        <div class="pool-window">')
-            doc.append('          <div class="quota-header">')
-            doc.append(f'            <span class="quota-user">{html.escape(w["label"])}</span>')
-            doc.append(f'            <span class="quota-plan">已用 <strong>{pct:.1f}%</strong> · 剩余 {100.0 - pct:.1f}%</span>')
-            doc.append('          </div>')
-            doc.append('          <div class="progress-bar">')
-            doc.append(f'            <div class="progress-fill" style="width: {pct:.1f}%; background: {bar_color};"></div>')
-            doc.append('          </div>')
-            doc.append(f'          <div class="quota-footer"><span>{html.escape(reset_str)}</span></div>')
-            doc.append('        </div>')
-        doc.append('      </div>')
-
-        if pool_week_start is not None:
-            start_str = pool_week_start.strftime("%m/%d %H:%M")
-            doc.append(f'      <h3 class="pool-subtitle">本额度周（{html.escape(start_str)} 起）各成员用量</h3>')
-            if not pool_week_users:
-                doc.append('      <div class="empty-state">本额度周暂无用量记录</div>')
-            else:
-                doc.append('      <div class="share-list">')
-                for u in pool_week_users:
-                    share = (u["tokens"] / pool_week_total * 100.0) if pool_week_total > 0 else 0.0
-                    name = html.escape(u["name"])
-                    lbl = f" ({html.escape(u['label'])})" if u["label"] else ""
-                    doc.append('        <div class="share-row">')
-                    doc.append('          <div class="share-info">')
-                    doc.append(f'            <span><strong>{name}</strong>{lbl}</span>')
-                    doc.append(f'            <span>{format_tokens(u["tokens"])} tokens ({share:.1f}%)</span>')
-                    doc.append('          </div>')
-                    doc.append('          <div class="share-bar-bg">')
-                    doc.append(f'            <div class="share-bar-fill" style="width: {min(100.0, share):.1f}%; background: {u["color"]};"></div>')
-                    doc.append('          </div>')
-                    doc.append('        </div>')
-                doc.append('      </div>')
-                doc.append('      <div class="pool-note">按天统计，额度周起始当天的用量整天计入。</div>')
-
-    # Per-member view only when members disagree (pool may not actually be shared).
-    weekly_vals = [q["quota"]["weekly_used_percent"] for q in quota_pool_entries
-                   if q["quota"]["weekly_used_percent"] is not None]
-    show_per_member = len(weekly_vals) > 1 and (max(weekly_vals) - min(weekly_vals)) > 2.0
-    if show_per_member:
-        doc.append('      <h3 class="pool-subtitle">各成员上报的周额度（数值不一致，额度可能并非共用）</h3>')
-        doc.append('      <div class="quota-grid">')
-        for q in quota_pool_entries:
-            name = html.escape(q["member_name"])
-            lbl = f" ({html.escape(q['member_label'])})" if q["member_label"] else ""
-            plan = html.escape(q["quota"]["plan"])
-            pct = q["quota"]["weekly_used_percent"]
-            reset_dt = parse_iso(q["quota"]["weekly_resets_at"])
-            reset_str = format_dt(reset_dt, tz) if reset_dt else "—"
-
-            if pct is None:
-                bar_color = "var(--text-muted)"
-            elif pct >= 95.0:
-                bar_color = "var(--red)"
-            elif pct >= 80.0:
-                bar_color = "var(--amber)"
-            else:
-                bar_color = "var(--green)"
-
-            doc.append('        <div class="quota-item" style="border-left-color: ' + q["color"] + ';">')
-            doc.append('          <div class="quota-header">')
-            doc.append(f'            <span class="quota-user">{name}{lbl}</span>')
-            doc.append(f'            <span class="quota-plan">{plan}</span>')
-            doc.append('          </div>')
-            if pct is not None:
-                doc.append('          <div class="progress-bar">')
-                doc.append(f'            <div class="progress-fill" style="width: {min(100.0, pct):.1f}%; background: {bar_color};"></div>')
-                doc.append('          </div>')
-            pct_str = "未知" if pct is None else f"{pct:.1f}%"
-            doc.append('          <div class="quota-footer">')
-            doc.append(f'            <span>周额度已用：<strong>{pct_str}</strong></span>')
-            doc.append(f'            <span>重置时间：{html.escape(reset_str)}</span>')
-            doc.append('          </div>')
-            doc.append('        </div>')
-        doc.append('      </div>')
-    doc.append('    </section>')
-
-    # 2. Who Used the Quota Pool This Cycle
-    doc.append('    <section class="card">')
-    doc.append('      <h2 class="section-title">本周期谁用掉了额度池</h2>')
-    if total_cycle_pool_tokens == 0:
-        doc.append('      <div class="empty-state">本周期暂无额度池用量记录</div>')
-    else:
-        doc.append('      <div class="share-list">')
-        for u in pool_cycle_users:
-            if u["tokens"] <= 0:
-                continue
-            name = html.escape(u["name"])
-            lbl = f" ({html.escape(u['label'])})" if u["label"] else ""
-            tok_fmt = format_tokens(u["tokens"])
-            doc.append('        <div class="share-row">')
-            doc.append('          <div class="share-info">')
-            doc.append(f'            <span><strong>{name}</strong>{lbl}</span>')
-            doc.append(f'            <span>{tok_fmt} tokens ({u["pct"]:.1f}%)</span>')
-            doc.append('          </div>')
-            doc.append('          <div class="share-bar-bg">')
-            doc.append(f'            <div class="share-bar-fill" style="width: {min(100.0, u["pct"]):.1f}%; background: {u["color"]};"></div>')
-            doc.append('          </div>')
-            doc.append('        </div>')
-        doc.append('      </div>')
-    doc.append('    </section>')
-
-    # 3. 30-Day SVG Chart
-    doc.append('    <section class="card">')
-    doc.append('      <h2 class="section-title">近 30 天每日用量趋势 (按人分色)</h2>')
-    doc.append('      <div class="chart-legend">')
-    for m in members_processed:
-        escaped_name = html.escape(m["name"])
-        doc.append(
-            f'        <div class="legend-item">'
-            f'          <span class="color-dot" style="background: {m["color"]};"></span>'
-            f'          <span>{escaped_name}</span>'
-            '        </div>'
-        )
-    doc.append('      </div>')
-    doc.append(svg_chart_html)
-    doc.append('    </section>')
-
-    # 4. Member Cards
-    doc.append('    <section>')
-    doc.append(f'      <h2 class="section-title">成员概览 ({html.escape(cycle_range_str)})</h2>')
-    if not members_processed:
-        doc.append('      <div class="card"><div class="empty-state">尚未添加任何成员</div></div>')
-    else:
-        doc.append('      <div class="members-grid">')
-        for m in members_processed:
-            name = html.escape(m["name"])
-            lbl = f" · {html.escape(m['label'])}" if m["label"] else ""
-            rec_str = format_dt(m["received_at"], tz) if m["received_at"] else "从未上报"
-
-            if not m["has_report"]:
-                badge_html = '<span class="badge badge-stale">未上报</span>'
-            elif m["is_stale"]:
-                badge_html = '<span class="badge badge-stale">未更新</span>'
-            else:
-                badge_html = '<span class="badge badge-active">正常</span>'
-
-            # Change percentage
-            curr_t = m["cycle_tokens"]
-            prev_t = m["prev_cycle_tokens"]
-            if prev_t > 0:
-                diff_pct = (curr_t - prev_t) / prev_t * 100.0
-                if abs(diff_pct) < 0.05:
-                    change_str = "0.0%"
-                else:
-                    change_str = f"{diff_pct:+.1f}%"
-            elif curr_t > 0:
-                change_str = "+100%"
-            else:
-                change_str = "—"
-
-            doc.append('        <div class="card" style="margin-bottom: 0;">')
-            doc.append('          <div class="member-card-header">')
-            doc.append('            <div>')
-            doc.append('              <div class="member-name-row">')
-            doc.append(f'                <span class="color-dot" style="background: {m["color"]};"></span>')
-            doc.append(f'                <span class="member-title">{name}</span>')
-            doc.append('              </div>')
-            doc.append(f'              <div class="member-label">上次上报：{html.escape(rec_str)}{lbl}</div>')
-            if m.get("scope_str"):
-                doc.append(f'              <div class="member-scope" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem;">{html.escape(m["scope_str"])}</div>')
-            legacy_cnt = m.get("legacy_excluded_count") or (1 if m.get("legacy_excluded") else 0)
-            if legacy_cnt > 0:
-                doc.append(f'              <div class="legacy-note">{legacy_cnt} 台电脑使用旧版 Kanjo 未计入 — 请更新客户端以合并统计</div>')
-            doc.append('            </div>')
-            doc.append(f'            {badge_html}')
-            doc.append('          </div>')
-
-            # Metrics
-            doc.append('          <div class="metrics-grid">')
-            doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">本周期</div>')
-            doc.append(f'              <div class="metric-tokens">{format_tokens(m["cycle_tokens"])}</div>')
-            doc.append(f'              <div class="metric-cost">{format_cost(m["cycle_cost"])}</div>')
-            doc.append('            </div>')
-            doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">上周期</div>')
-            doc.append(f'              <div class="metric-tokens">{format_tokens(m["prev_cycle_tokens"])}</div>')
-            doc.append(f'              <div class="metric-cost">{html.escape(change_str)}</div>')
-            doc.append('            </div>')
-            doc.append('            <div class="metric-cell">')
-            doc.append('              <div class="metric-label">剩余天数</div>')
-            doc.append(f'              <div class="metric-tokens">{days_remaining} 天</div>')
-            doc.append(f'              <div class="metric-cost">至 {next_start.strftime("%m/%d")} 重置</div>')
-            doc.append('            </div>')
-            doc.append('          </div>')
-
-            # Top Models Table
-            if m["top_models"]:
-                doc.append('          <table class="models-table">')
-                doc.append('            <thead>')
-                doc.append('              <tr><th>本周期模型 (前 5)</th><th class="text-right">Token</th><th class="text-right">折算金额</th></tr>')
-                doc.append('            </thead>')
-                doc.append('            <tbody>')
-                for tm in m["top_models"]:
-                    mod_name = html.escape(str(tm.get("model", "—")))
-                    t_tot = tm.get("tokens_total", 0)
-                    c_tot = tm.get("cost_usd", 0.0)
-                    doc.append('              <tr>')
-                    doc.append(f'                <td>{mod_name}</td>')
-                    doc.append(f'                <td class="text-right">{format_tokens(t_tot)}</td>')
-                    doc.append(f'                <td class="text-right">{format_cost(c_tot)}</td>')
-                    doc.append('              </tr>')
-                doc.append('            </tbody>')
-                doc.append('          </table>')
-            else:
-                doc.append('          <div class="empty-state" style="padding: 1rem 0 0.5rem 0;">本周期暂无模型用量明细</div>')
-
-            devices = m.get("devices") or []
-            if devices:
-                doc.append('          <details class="devices-details">')
-                doc.append(f'            <summary class="devices-summary">{len(devices)} 台电脑</summary>')
-                doc.append('            <div class="device-list">')
-                for dev in devices:
-                    d_name = html.escape(str(dev.get("device_name") or "—"))
-                    d_os = html.escape(format_os(str(dev.get("os") or "")))
-                    d_ver = html.escape(str(dev.get("generated_by") or "—"))
-                    d_tz = html.escape(str(dev.get("timezone") or "—"))
-                    d_rec = html.escape(format_dt(dev.get("received_at"), tz))
-                    d_tok = format_tokens(int(dev.get("all_time_tokens") or 0))
-                    d_cost = format_cost(float(dev.get("all_time_cost") or 0.0))
-                    doc.append('              <div class="device-item">')
-                    doc.append('                <div class="device-item-top">')
-                    doc.append(f'                  <span class="device-name">{d_name}</span>')
-                    doc.append(f'                  <span class="device-totals">{d_tok} ({d_cost})</span>')
-                    doc.append('                </div>')
-                    doc.append('                <div class="device-item-meta">')
-                    doc.append(f'                  <span>{d_os}</span>')
-                    doc.append(f'                  <span>{d_ver}</span>')
-                    doc.append(f'                  <span>{d_tz}</span>')
-                    doc.append(f'                  <span>上次上报：{d_rec}</span>')
-                    doc.append('                </div>')
-                    doc.append('              </div>')
-                doc.append('            </div>')
-                doc.append('          </details>')
-
-            doc.append('        </div>')
-        doc.append('      </div>')
-    doc.append('    </section>')
-
-    doc.append('  </div>')
-    doc.append('</body>')
-    doc.append('</html>')
-
-    return "\n".join(doc)
+    return dashboard_view.render_page({
+        "range_key": ranges.parse_range_key(range_key),
+        "ranges": range_data["ranges"],
+        "heatmap": range_data["heatmap"],
+        "members": members_processed,
+        "tz": tz,
+        "tz_name": tz_name,
+        "now": now,
+        "local_now": local_now,
+        "today": local_today,
+        "user_email": user_email,
+        "has_cycle_setting": has_cycle_setting,
+        "cycle_range_str": cycle_range_str,
+        "days_remaining": days_remaining,
+        "next_start": next_start,
+        "top_scope_str": " · ".join(unique_scopes) if unique_scopes else None,
+        "pool_entries": quota_pool_entries,
+        "pool_latest": pool_latest,
+        "pool_week_start": pool_week_start,
+        "pool_week_users": pool_week_users,
+        "pool_week_total": pool_week_total,
+        "show_per_member": show_per_member,
+    })
 
 
 def render_settings_html(
@@ -1674,7 +1069,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/" or self.path.startswith("/?"):
-            html_content = generate_dashboard_html(self.db_path, user_email=session["email"])
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            html_content = generate_dashboard_html(
+                self.db_path,
+                user_email=session["email"],
+                range_key=(query.get("range") or [None])[0],
+            )
             self._send_response_with_headers(
                 HTTPStatus.OK,
                 "text/html; charset=utf-8",
