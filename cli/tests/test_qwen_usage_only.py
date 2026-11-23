@@ -20,16 +20,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CHAT = "projects/-Users-alice-proj/chats"
 
 
+# The last release before usage-only Qwen sessions were billed per session. Pinned to a tag:
+# origin/main already contains the change, so comparing against it tests the code against itself.
+OLD_REF = "v0.6.11"
+
+
 def old_qwen():
-    """origin/main's qwen.py as a module, like test_ledger_scaling's old_ledger()."""
+    """OLD_REF's qwen.py as a module, like test_ledger_scaling's old_ledger()."""
     try:
-        source = subprocess.check_output(["git", "show", "origin/main:cli/kanjo/sources/qwen.py"],
+        source = subprocess.check_output(["git", "show", f"{OLD_REF}:cli/kanjo/sources/qwen.py"],
                                          cwd=HERE, stderr=subprocess.DEVNULL)
     except (OSError, subprocess.CalledProcessError):
-        raise unittest.SkipTest("origin/main is not available")
+        raise unittest.SkipTest(f"{OLD_REF} is not available")
     module = types.ModuleType("kanjo.sources.old_qwen")
     module.__package__ = "kanjo.sources"
-    exec(compile(source, "origin/main:cli/kanjo/sources/qwen.py", "exec"), module.__dict__)
+    exec(compile(source, f"{OLD_REF}:cli/kanjo/sources/qwen.py", "exec"), module.__dict__)
     return module
 
 
@@ -196,7 +201,7 @@ class QwenUsageOnlyTest(unittest.TestCase):
         nocache, _ = self.run_scan(cache=False)
         self.assertEqual(nocache["totals"], cold["totals"])
 
-    # --- upgrade from a ledger and cache written by origin/main ---------------
+    # --- upgrade from a ledger and cache written by OLD_REF -------------------
 
     def test_old_paths_parse_identically_and_stay_cache_hits(self):
         old = old_qwen()
