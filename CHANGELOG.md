@@ -6,12 +6,36 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.6.12] - 2026-11-21
+## [0.6.12] - 2026-11-22
+
+### Changed
+
+- Mac and Windows: a project's By model table follows the selected range instead of always showing all-time models.
+- Qwen: every session in the usage logs is billed, including runtime-only sessions.
 
 ### Fixed
 
 - The app could show a data-contract error and stop syncing to iPhone when a provider reported no weekly quota reset.
 - Windows: usage days were bucketed with the wrong clock.
+- Claude usage of 1% or less is no longer shown as 100%.
+- An explicit `TZ` such as `TZ=UTC` sets the report time zone as well as the day buckets.
+- An out-of-range weekly reset time in the config is reported as a config error instead of breaking every export.
+- Dated OpenAI model names, `gpt-5-codex-mini` and dashed legacy Claude names get the right prices.
+- Disk cleanup never moves Claude memory folders or a tool's home folder, and re-imports changed logs before moving them.
+- Windows: disk cleanup asks before permanently deleting.
+- `kanjo publish-usage` recovers from its own stuck commits and refuses to push commits it did not make.
+- Sessions deleted inside an app's database stay in the ledger, and ledger files are readable only by you.
+- Caches are refreshed correctly for nested repositories, newly added remotes, rewritten token counts and changed session titles.
+- Pi, OMP and Prime fork copies are billed once, and Command Code sessions no longer collide.
+- `kanjo usage`: the Days view includes all sessions, project details show models for the selected range, and colours and alignment are fixed on basic terminals.
+- Mac: a superseded refresh stops its `kanjo export` process, and a late cache after a failed refresh is still applied.
+- Mac: the All range includes every session, and share percentages exclude hidden projects.
+- Windows: power events no longer block the interface, and settings write errors are shown.
+- Windows: refreshes keep the current page, and the update status no longer flickers.
+- iOS: CloudKit errors and day counts are reported correctly.
+- iOS: an unknown weekly percent stays unknown.
+- Family server: only admins can manage the family.
+- Family server: rate limits apply per device, and revoking a merged member's token works.
 
 ## [0.6.11] - 2026-11-21
 
