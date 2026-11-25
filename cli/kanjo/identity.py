@@ -22,6 +22,7 @@ import ntpath
 import os
 import posixpath
 import re
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
@@ -31,6 +32,9 @@ from . import winsupport
 
 # Directories that never become a project on their own (missing-path fallback).
 _TEMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
+# Home subdirectories that hold application and agent data, never projects
+# (dot directories are excluded separately).
+_TOOL_HOME_DIRS = frozenset({"library", "appdata"})
 # "name.ext": treated as a file, so it is not itself checked for a .git entry
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
@@ -804,6 +808,42 @@ class Resolver:
         first_comp = rel.replace("\\", "/").split("/")[0] if _is_win_path(p) or "\\" in rel else rel.split("/")[0]
         if first_comp.startswith("."):
             return False  # agent state dirs (~/.claude, ~/.codex, ~/.gemini ...)
+        return True
+
+    def folder_project(self, path: str) -> Optional[Project]:
+        """Rule 4 (ATTRIBUTION.md 4.3): an existing working directory that no
+        git repository contains is a project of its own, identified by its
+        absolute path like a remote-less repo (and like the same folder once it
+        is deleted), named after the folder. Callers try this only after
+        ``resolve`` found nothing. Not for the home directory, temporary
+        directories, tool/state directories (``~/.*``, ``~/Library``,
+        ``~/AppData``), paths outside home or missing directories."""
+        p = self.clean(path)
+        if not p or not self._folder_ok(p):
+            return None
+        key = p + "\0f"
+        if key in self._resolve_cache:
+            pid = self._resolve_cache[key]
+            return self.projects.get(pid) if pid else None
+        project = None
+        if os.path.isdir(self._fs(p)) and self._repo_for_path(p, True) is None:
+            project = self._get_project(p, _path_basename(p) or p, None, [p])
+        self._resolve_cache[key] = project.id if project else None
+        return project
+
+    def _folder_ok(self, p: str) -> bool:
+        if not self._missing_ok(p):
+            return False
+        try:
+            tmp = os.path.realpath(tempfile.gettempdir())
+        except Exception:
+            tmp = ""
+        if tmp and not self.fs_root and (winsupport.is_subpath(p, tmp) or winsupport.is_subpath(_private_alias(p), tmp)):
+            return False
+        rel = winsupport.relpath(p, self.home).replace("\\", "/")
+        first_comp = rel.split("/")[0]
+        if first_comp.lower() in _TOOL_HOME_DIRS:
+            return False
         return True
 
     @staticmethod

@@ -1,6 +1,10 @@
 """Antigravity (CLI & App): ``~/.gemini/antigravity-cli/conversations/<id>.db``
 and ``~/.gemini/antigravity/conversations/<id>.db`` (SQLite).
 
+``Session.source`` is ``app`` for the desktop app's directories
+(``antigravity``, ``antigravity-ide``) and ``agy`` for the CLI. Sub-agents take
+their parent's source after the scan (``antigravity_accounts.follow_parents``).
+
 All content is protobuf without a published schema. Field numbers were
 reverse engineered (the token layout follows Tokei's ``_antigravity_gen_step``,
 MIT License; the rest was mapped from local databases):
@@ -46,6 +50,36 @@ _MAX_TOKENS = 100_000_000      # larger values mean the decoder is misaligned
 _MIN_TS = 1_577_836_800        # 2020-01-01
 _MAX_TS = 1 << 34
 _USER_INPUT_STEP = 14
+
+
+# Directories (the parent of ``conversations``) written by the desktop app;
+# every other root, including ``antigravity-cli`` and test directories, is agy.
+_APP_DIRS = frozenset({"antigravity", "antigravity-ide"})
+SOURCE_APP = "app"
+SOURCE_AGY = "agy"
+
+
+def source_for_path(path: Optional[str]) -> Optional[str]:
+    """``app`` for a database in ``antigravity/conversations`` or
+    ``antigravity-ide/conversations``, ``agy`` for any other
+    ``.../conversations`` directory, None when the path says nothing (no
+    ``conversations`` parent). Only the two directory names are compared, so a
+    ``KANJO_ANTIGRAVITY_DIR`` test root behaves like the real one it mimics."""
+    if not path or not isinstance(path, str):
+        return None
+    db = path.split("::", 1)[0]
+    parts = [p for p in re.split(r"[\\/]+", db) if p]
+    if len(parts) < 3 or parts[-2].lower() != "conversations":
+        return None
+    return SOURCE_APP if parts[-3].lower() in _APP_DIRS else SOURCE_AGY
+
+
+def session_source(session: Session) -> str:
+    """The session's recorded source, else the one its database path implies,
+    else ``agy`` (rows recorded before sources existed: never guessed as app)."""
+    if session.source in (SOURCE_APP, SOURCE_AGY):
+        return session.source
+    return source_for_path(session.file) or SOURCE_AGY
 
 
 def roots() -> List[str]:
@@ -297,7 +331,7 @@ def _open(path: str):
 
 def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
     sid = os.path.splitext(os.path.basename(path))[0]
-    session = Session(id=sid, agent=AGENT, file=path)
+    session = Session(id=sid, agent=AGENT, file=path, source=source_for_path(path) or SOURCE_AGY)
     with open_sqlite_ro(path) as conn:
         # trajectory metadata: workspace, remote, branch
         workspace = remote = branch = None
@@ -403,8 +437,8 @@ def parse_file(path: str, subagent_of: Optional[str] = None) -> Session:
                         continue
                     acc = None
                     try:
-                        from ..antigravity_accounts import get_account_index
-                        acc = get_account_index().attribute(sid, float(rec["ts"]))
+                        from ..antigravity_accounts import attribute_message
+                        acc = attribute_message(sid, float(rec["ts"]), session.source)
                     except Exception:
                         pass
                     session.messages.append(Message(

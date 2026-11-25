@@ -80,7 +80,7 @@ def _signature(path: str) -> Optional[list]:
 
 
 def _dump_session(s: Session) -> dict:
-    return {
+    out = {
         "id": s.id,
         "agent": s.agent,
         "file": s.file,
@@ -131,6 +131,9 @@ def _dump_session(s: Session) -> dict:
         "cwd_counts": dict(s.cwd_counts),
         "remote_hints": dict(s.remote_hints),
     }
+    if s.source:
+        out["source"] = s.source  # only agents with several front ends; others dump as before
+    return out
 
 
 def _load_session(d: dict) -> Session:
@@ -149,6 +152,7 @@ def _load_session(d: dict) -> Session:
         title=d.get("title", ""),
         cwd_counts=d.get("cwd_counts") or {},
         remote_hints=d.get("remote_hints") or {},
+        source=d.get("source") if isinstance(d.get("source"), str) else None,
     )
     try:
         s.messages = [Message(*row) for row in msgs]
@@ -432,7 +436,7 @@ class WorktreeCache:
                     pass
 
 
-ATTRIBUTION_CACHE_VERSION = 2
+ATTRIBUTION_CACHE_VERSION = 3  # 3: per-source Antigravity labels, non-git folder projects
 
 
 def _session_attribution_sig(session: Session) -> str:
@@ -514,6 +518,13 @@ class AttributionCache:
             del data
             os.replace(tmp, self.path)
             self.dirty = False
+            current = os.path.basename(self.path)
+            for fname in os.listdir(self.dir):
+                if fname.startswith("attribution-cache-v") and fname.endswith(".json") and fname != current:
+                    try:
+                        os.unlink(os.path.join(self.dir, fname))
+                    except OSError:
+                        pass
         except OSError:
             pass
         finally:
@@ -622,10 +633,8 @@ class SessionCache:
 
     def _apply_antigravity_accounts(self, session: Session) -> None:
         try:
-            from .antigravity_accounts import get_account_index
-            idx = get_account_index()
-            for m in session.messages:
-                m.account = idx.attribute(session.id, m.ts)
+            from .antigravity_accounts import apply_accounts
+            apply_accounts(session)
         except Exception:
             pass
 

@@ -53,7 +53,7 @@ class FixtureExportTest(unittest.TestCase):
         focus = self.by_id[FOCUS]
         self.assertEqual((focus["name"], focus["remote"], focus["path_missing"]), ("FocusApp", FOCUS, False))
         self.assertEqual({a["agent"] for a in focus["by_agent"]}, {"claude", "antigravity", "codex"})
-        self.assertEqual({a["label"] for a in focus["by_agent"]}, {"Claude Code", "Antigravity CLI", "Codex CLI"})
+        self.assertEqual({a["label"] for a in focus["by_agent"]}, {"Claude Code", "Antigravity", "Codex CLI"})
         tcf = self.by_id[TCF]
         self.assertEqual((tcf["name"], tcf["remote"]), ("tcf-canada", None))
 
@@ -251,7 +251,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("Not actual subscription spend", out)
         code, out, _ = self.run_cli("doctor", "--no-cache")
         self.assertEqual(code, 0)
-        for label in ("Claude Code", "Antigravity CLI", "Codex CLI"):
+        for label in ("Claude Code", "Antigravity", "Codex CLI"):
             self.assertIn(label, out)
 
     def test_bad_config_and_threshold(self):

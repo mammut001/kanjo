@@ -114,7 +114,8 @@ public enum AgentSummary {
             agentCost[s.agent, default: 0] += c
             agentTokens[s.agent, default: 0] += t
             if agentLabels[s.agent] == nil || agentLabels[s.agent] == s.agent {
-                agentLabels[s.agent] = s.label
+                // 会话的 label 可能是来源名（如 Antigravity 的 "agy" / "Antigravity App"），agent 行优先用 agent 的显示名
+                agentLabels[s.agent] = AgentColors.defaultLabels[s.agent] ?? s.label
             }
         }
 

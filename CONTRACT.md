@@ -80,7 +80,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
   "antigravity_accounts": {                   // 可选：Antigravity 账号使用量与登录状态；无历史账号且无保存登录时不出现；--mobile / --family-report / --public-summary 导出不含该字段
     "window_start": "2026-11-06T10:00:00Z",   // 本额度周起点（优先取 live quota window 下 weekly_resets_at - weekly_window_hours；无有效额度周则取 subscriptions 账期起点；否则为 now - 7 天）
     "window_kind": "quota_week",              // "quota_week" | "billing_cycle" | "last_7_days"
-    "current": "alex@example.com",            // 最新 launch span 检测到的当前账号，或 null
+    "current": "alex@example.com",            // 最新 launch span 检测到的当前 agy 账号，或 null
     "accounts": [                             // 所有历史记录中见过的账号（全周期），加上已保存登录的账号；用量指标覆盖 [window_start, now]
       {
         "email": "alex@example.com",
@@ -112,11 +112,15 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
         "messages": 142
       }
     ],
-    "unknown": {                              // 本窗口未归属到账号的 Antigravity 消息用量（桌面版等）
+    "unknown": {                              // 本窗口未归属到账号的 Antigravity 消息用量
       "tokens": 12000,
       "cost_usd": 0.096
     }
   },
+  // 账号归属：agy 会话按 agy 启动日志归属；桌面客户端会话只按 Kanjo 自己的登录记录
+  // （数据目录下的 antigravity-app-logins.jsonl，每次扫描读一次客户端 app_storage.json 的
+  // agy.onboarding.lastLoginUsername）归属：消息前后最近两条记录账号相同则归该账号，
+  // 晚于最后一条记录 2 小时内归最后一条的账号，其余（含开始记录之前）为未知。
   "totals": { /* Aggregate */ },
   "projects": [ /* Project */ ],              // 按 cost 降序
   "perf_by_day": [ /* PerfByDay */ ],         // 可选：按 day × agent × model 累加的输出速度与 TTFT 直方图；无样本时不出现；--mobile / --family-report / --public-summary 不含
@@ -177,7 +181,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 | agent | label |
 |---|---|
 | `claude` | Claude Code |
-| `antigravity` | Antigravity CLI |
+| `antigravity` | Antigravity |
 | `codex` | Codex CLI |
 | `grok` | Grok CLI |
 | `qwen` | Qwen Code |
@@ -208,13 +212,24 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 
 后续接入的 agent 在此表追加。UI 对未知 key 要能正常显示（用 label 兜底）。
 
+上表是 agent 级的 label（`by_agent`、合计、额度、套餐都用它）。同一个 agent 有多个来源时，**会话**（Session）的 `label` 用来源名，`agent` 不变：
+
+| agent | 来源 | 会话 label |
+|---|---|---|
+| `antigravity` | 桌面客户端（`~/.gemini/antigravity/conversations`、`~/.gemini/antigravity-ide/conversations`） | Antigravity App |
+| `antigravity` | CLI（`~/.gemini/antigravity-cli/conversations` 及其他目录） | agy |
+
+- 子代理对话跟随主对话的来源。
+- 来源随会话存进账本；没记来源的老账本行按它记录的数据库路径判断，路径也判断不了的标 `agy`。
+- UI 汇总到 agent 一级时（含只出现在桶里的会话）用 agent 级 label，不用会话的来源名。
+
 ---
 
 ## 4. Project
 
 ```jsonc
 {
-  "id": "github.com/cclank/tokei",     // 规范化 remote，或无 remote 时的绝对路径
+  "id": "github.com/cclank/tokei",     // 规范化 remote，或无 remote 时的绝对路径（无 remote 的仓库根目录，或不在 git 仓库里的工作目录本身）
   "name": "tokei",                      // 显示名：remote 最后一段或目录名
   "remote": "github.com/cclank/tokei",  // 无 remote 时为 null
   "paths": [                            // 映射到此项目的所有本地路径，含 worktree
@@ -284,7 +299,7 @@ UI 是 macOS 菜单栏 SwiftUI 应用。它有两种取数方式：
 |---|---|
 | `dominant` | 文件操作信号 ≥ 阈值，整个会话归此项目 |
 | `split` | 多项目按比例拆分，`share < 1` |
-| `cwd` | 零文件信号，按 cwd 归属 |
+| `cwd` | 零文件信号，按 cwd 归属（含不在 git 仓库里的文件夹自成的项目，见 ATTRIBUTION.md 4.3） |
 | `scratchpad` | 零文件信号，按 scratchpad 路径归属 |
 | `override` | 用户配置强制归属 |
 

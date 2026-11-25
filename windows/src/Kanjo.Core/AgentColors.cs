@@ -79,7 +79,7 @@ public static class AgentColors
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["claude"] = "Claude Code",
-            ["antigravity"] = "Antigravity CLI",
+            ["antigravity"] = "Antigravity",
             ["codex"] = "Codex CLI",
             ["grok"] = "Grok CLI",
             ["qwen"] = "Qwen Code",

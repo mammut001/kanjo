@@ -36,7 +36,7 @@ from .sources import (
 )
 from . import __version__
 from .sources.base import (AGENT_LABELS, Message, ParseError, Session, iso_utc, local_day,
-                           local_timezone_name, local_zone)
+                           local_timezone_name, local_zone, session_label)
 
 SCHEMA_VERSION = 1
 COST_NOTE = "API-equivalent cost estimated from public API prices. Not actual subscription spend."
@@ -122,6 +122,8 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
     grouped: Dict[str, List[Session]] = {}
     grouped_paths: Dict[str, List[str]] = {}
     scope = ScanScope()
+    if dirs is None or "antigravity" in dirs:
+        _record_app_login()
     for agent, module in SOURCES.items():
         if dirs is not None:
             roots = dirs.get(agent, [])
@@ -168,6 +170,7 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
         if callable(skipped):
             for path in skipped():
                 scope.note_path(agent, path)
+    _follow_parents(sessions)
     if hasattr(ledger, "set_scan_scope"):
         ledger.set_scan_scope(scope)
     modified_keys = getattr(cache, "modified_keys", None) if cache else None
@@ -190,10 +193,8 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             continue
         if session.agent == "antigravity":
             try:
-                from .antigravity_accounts import get_account_index
-                idx = get_account_index()
-                for m in session.messages:
-                    m.account = idx.attribute(session.id, m.ts) or m.account
+                from .antigravity_accounts import apply_accounts
+                apply_accounts(session, keep_known=True)
             except Exception:
                 pass
         sessions.append(session)
@@ -205,10 +206,29 @@ def scan(dirs: Optional[Dict[str, List[str]]] = None, cache=None, ledger: Option
             st.subagents += 1
         else:
             st.sessions += 1
+    _follow_parents(sessions)
     ledger.save()
     if cache:
         cache.save()
     return ScanResult(sessions=sessions, failed_files=failed, stats=stats, ledger=ledger.summary())
+
+
+def _record_app_login() -> None:
+    """Antigravity desktop app: note the signed-in account (rule 3 login record)."""
+    try:
+        from .antigravity_accounts import record_app_login
+        record_app_login()
+    except Exception:
+        pass
+
+
+def _follow_parents(sessions: List[Session]) -> None:
+    """Antigravity sub-agents take their parent's source (app or agy)."""
+    try:
+        from .antigravity_accounts import follow_parents
+        follow_parents(sessions)
+    except Exception:
+        pass
 
 
 def _error_text(exc: BaseException) -> str:
@@ -254,6 +274,7 @@ def _merge_same_id(sessions: List[Session]) -> List[Session]:
                 title=first.title,
                 cwd_counts=dict(first.cwd_counts),
                 remote_hints=dict(first.remote_hints),
+                source=first.source,
             )
             by_key[key] = first
             out[out_indices[key]] = first
@@ -270,6 +291,7 @@ def _merge_same_id(sessions: List[Session]) -> List[Session]:
         first.title = first.title or s.title
         first.branch = first.branch or s.branch
         first.subagent_of = first.subagent_of or s.subagent_of
+        first.source = first.source or s.source
     return out
 
 
@@ -1038,7 +1060,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
             detail = {
                 "id": unit.top.id,
                 "agent": agent,
-                "label": AGENT_LABELS.get(agent, agent),
+                "label": session_label(agent, unit.top.source),
                 "started": iso_utc(unit_started if unit_started is not None else unit.started),
                 "ended": iso_utc(unit_ended if unit_ended is not None else unit.ended),
                 "cwd": unit.top.cwd,
@@ -1146,7 +1168,7 @@ def build_export(config: Optional[Config] = None, dirs: Optional[Dict[str, List[
                 agg.details.append({
                     "id": unit.top.id,
                     "agent": agent,
-                    "label": AGENT_LABELS.get(agent, agent),
+                    "label": session_label(agent, unit.top.source),
                     "started": iso_utc(unit_started if unit_started is not None else unit.started),
                     "ended": iso_utc(unit_ended if unit_ended is not None else unit.ended),
                     "cwd": unit.top.cwd,
@@ -1398,6 +1420,19 @@ def source_fingerprint(dirs: Optional[Dict[str, List[str]]] = None,
                        config: Optional[Config] = None) -> str:
     """Stat fingerprint of all source log files/dbs + config files."""
     items = []
+    if dirs is None or "antigravity" in dirs:
+        # The record decides app accounts: note the current login first, then
+        # fingerprint the file so a new line invalidates cached exports.
+        _record_app_login()
+        try:
+            from .antigravity_accounts import app_logins_path
+            rec = app_logins_path()
+            st_rec = os.stat(rec)
+            items.append((rec, st_rec.st_size, st_rec.st_mtime_ns))
+        except OSError:
+            items.append(("__agy_app_logins__", None, None))
+        except Exception:
+            pass
     for agent, module in SOURCES.items():
         if dirs is not None:
             roots = dirs.get(agent, [])

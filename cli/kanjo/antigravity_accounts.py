@@ -19,15 +19,30 @@ a. launches that used this conversation and whose [start-60s, end+60s] covers ts
 b. else all launches whose [start-60s, end+60s] covers ts (regardless of conversation evidence)
    -> if exactly one distinct email among them, return it;
 c. else None (unknown). Never guess between two different emails.
+
+Rules a-c apply to agy (CLI) sessions only. The desktop app never appears in
+those logs; its sessions (``Session.source == "app"``) use Kanjo's own login
+record instead (docs/antigravity-app-accounts.md, rule 3):
+
+- Every scan reads ``agy.onboarding.lastLoginUsername`` from the app's
+  ``app_storage.json`` (nothing else: no keychain, cookies or tokens) and
+  appends ``{"ts", "email"}`` to ``<data dir>/antigravity-app-logins.jsonl``
+  (0600) when the email differs from the last line or an hour has passed.
+- A message at ``t`` gets the email of the nearest records before (A) and
+  after (B) it when both name the same email, or the last record's email when
+  ``t`` is after it by at most two hours; otherwise it is unknown (including
+  everything before the first record).
 """
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
 import re
+import sys
 import tempfile
 import time
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -428,6 +443,229 @@ class AntigravityAccountIndex:
         return None
 
 
+# ---- desktop app login record (rule 3) ---------------------------------------
+APP_LOGIN_KEY = "agy.onboarding.lastLoginUsername"
+APP_LOGINS_FILE = "antigravity-app-logins.jsonl"
+APP_RECORD_INTERVAL = 3600.0     # same email: at most one new line per hour
+APP_TRAILING_WINDOW = 7200.0     # after the last record: its email for two hours
+_APP_STORAGE_MAX_BYTES = 8 * 1024 * 1024
+_PLAIN_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
+
+def app_storage_path() -> Optional[str]:
+    """The desktop app's ``app_storage.json``. ``KANJO_ANTIGRAVITY_APP_STORAGE``
+    overrides it; with ``KANJO_DATA_DIR`` set and no override (tests, throwaway
+    data dirs) the real file is never read."""
+    explicit = os.environ.get("KANJO_ANTIGRAVITY_APP_STORAGE")
+    if explicit:
+        return os.path.expanduser(explicit)
+    if os.environ.get("KANJO_DATA_DIR"):
+        return None
+    from . import winsupport
+    if winsupport.is_windows():
+        return winsupport.join(winsupport.app_data() or "", "Antigravity", "app_storage.json")
+    if sys.platform == "darwin":
+        return os.path.expanduser(os.path.join("~", "Library", "Application Support",
+                                               "Antigravity", "app_storage.json"))
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(os.path.join("~", ".config"))
+    return os.path.join(base, "Antigravity", "app_storage.json")
+
+
+def app_logins_path() -> str:
+    from .ledger import data_dir
+    return os.path.join(data_dir(), APP_LOGINS_FILE)
+
+
+def normalize_email(raw) -> Optional[str]:
+    """Lower-case address, or None when ``raw`` is not a plain email."""
+    if not isinstance(raw, str):
+        return None
+    clean = raw.strip().strip('"').strip().lower()
+    return clean if _PLAIN_EMAIL_RE.match(clean) else None
+
+
+def read_app_login(path: Optional[str] = None) -> Optional[str]:
+    """``lastLoginUsername`` from the app's storage file, or None (missing,
+    unreadable, not JSON, no such key, not an email). Never raises."""
+    path = path if path is not None else app_storage_path()
+    if not path:
+        return None
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(_APP_STORAGE_MAX_BYTES + 1)
+        if len(raw) > _APP_STORAGE_MAX_BYTES:
+            return None
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get(APP_LOGIN_KEY)
+    if value is None:
+        node = data
+        for part in APP_LOGIN_KEY.split("."):
+            node = node.get(part) if isinstance(node, dict) else None
+        value = node
+    return normalize_email(value)
+
+
+class _Records(list):
+    """Sorted ``(ts, email)`` records plus their timestamps for bisection."""
+
+    def __init__(self, rows=()):
+        super().__init__(rows)
+        self.times = [r[0] for r in self]
+
+
+def _read_app_records(path: str) -> List[Tuple[float, str]]:
+    records: List[Tuple[float, str]] = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                ts = row.get("ts")
+                email = normalize_email(row.get("email"))
+                if isinstance(ts, (int, float)) and not isinstance(ts, bool) and email:
+                    records.append((float(ts), email))
+    except OSError:
+        return []
+    records.sort(key=lambda r: r[0])  # stable: same-second lines keep file order
+    return records
+
+
+def _file_sig(path: str) -> Optional[Tuple[int, int]]:
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_size, st.st_mtime_ns)
+
+
+# path -> (size/mtime signature, records). Re-read whenever the file changes, so
+# attribution always matches what is on disk.
+_APP_RECORDS: Dict[str, Tuple[Optional[Tuple[int, int]], List[Tuple[float, str]]]] = {}
+
+
+def app_login_records(path: Optional[str] = None) -> List[Tuple[float, str]]:
+    """Sorted ``(ts, email)`` records of the login record file."""
+    path = path or app_logins_path()
+    sig = _file_sig(path)
+    cached = _APP_RECORDS.get(path)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    records = _Records(_read_app_records(path) if sig is not None else [])
+    _APP_RECORDS[path] = (sig, records)
+    return records
+
+
+def record_app_login(now: Optional[float] = None, storage_path: Optional[str] = None,
+                     record_path: Optional[str] = None) -> bool:
+    """Append the app's current login to the record file when it changed or an
+    hour has passed. True when a line was written. Never raises."""
+    try:
+        email = read_app_login(storage_path)
+        if not email:
+            return False
+        path = record_path or app_logins_path()
+        now = time.time() if now is None else float(now)
+        _APP_RECORDS.pop(path, None)
+        records = _read_app_records(path)
+        if records:
+            last_ts, last_email = records[-1]
+            if last_email == email and now - last_ts < APP_RECORD_INTERVAL:
+                return False
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        line = json.dumps({"ts": int(now), "email": email}, separators=(",", ":")) + "\n"
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+        try:
+            if os.stat(path).st_mode & 0o077:
+                os.chmod(path, 0o600)
+        except OSError:
+            pass
+        _APP_RECORDS.pop(path, None)
+        return True
+    except Exception:
+        return False
+
+
+def attribute_app(ts: float, records: Optional[List[Tuple[float, str]]] = None) -> Optional[str]:
+    """Rule 3: the email of the records around ``ts`` when they agree, the last
+    record's email up to two hours after it, else None."""
+    recs = app_login_records() if records is None else records
+    if not recs:
+        return None
+    times = getattr(recs, "times", None)
+    if times is None:
+        times = [r[0] for r in recs]
+    i = bisect.bisect_right(times, ts)       # recs[:i] have ts <= t
+    before = recs[i - 1] if i > 0 else None
+    j = bisect.bisect_left(times, ts)        # recs[j:] have ts >= t
+    after = recs[j] if j < len(recs) else None
+    if before is None:
+        return None
+    if after is None:
+        return before[1] if ts - before[0] <= APP_TRAILING_WINDOW else None
+    return before[1] if before[1] == after[1] else None
+
+
+def attribute_message(conversation_id: str, ts: float, source: Optional[str]) -> Optional[str]:
+    """Account of one message: rule 3 for app sessions, rules a-c otherwise."""
+    if source == "app":
+        return attribute_app(ts)
+    return get_account_index().attribute(conversation_id, ts)
+
+
+def apply_accounts(session: Session, keep_known: bool = False) -> None:
+    """Fill in ``session.source`` if missing and re-attribute every message.
+    ``keep_known`` keeps an agy message's stored account when the logs no
+    longer say anything (ledger rows whose logs are gone). App messages always
+    follow the login record, so an account an older build guessed from the CLI
+    logs is dropped."""
+    from .sources.antigravity import session_source
+    source = session_source(session)
+    session.source = source
+    records = app_login_records() if source == "app" else None
+    for m in session.messages:
+        if records is not None:
+            acc = attribute_app(m.ts, records)
+        else:
+            acc = get_account_index().attribute(session.id, m.ts)
+        if acc is None and keep_known and source != "app":
+            acc = m.account
+        m.account = acc
+
+
+def follow_parents(sessions: Iterable[Session]) -> None:
+    """Sub-agent conversations take their parent's source (and are
+    re-attributed when that changes it)."""
+    from .sources.antigravity import session_source
+    sessions = [s for s in sessions if s.agent == "antigravity"]
+    parents = {s.id: session_source(s) for s in sessions if not s.subagent_of}
+    for s in sessions:
+        if not s.subagent_of:
+            continue
+        want = parents.get(s.subagent_of)
+        if want is None or want == session_source(s):
+            continue
+        s.source = want
+        try:
+            apply_accounts(s)
+        except Exception:
+            pass
+
+
 def list_accounts(sessions: Iterable[Session]) -> List[dict]:
     """Aggregate Antigravity sessions/messages by account.
 
@@ -502,6 +740,7 @@ def reset_account_index() -> None:
     """Reset the process-level account index (useful for tests)."""
     global _INDEX
     _INDEX = None
+    _APP_RECORDS.clear()
 
 
 def attribute(conversation_id: str, ts: float) -> Optional[str]:

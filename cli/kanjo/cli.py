@@ -717,7 +717,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kanjo",
         description="How much AI money did each git repo cost? Scans local Claude Code, "
-                    "Antigravity CLI and Codex CLI logs and attributes every session to a project.")
+                    "Antigravity and Codex CLI logs and attributes every session to a project.")
     parser.add_argument("--version", action="version", version="kanjo " + __version__)
     sub = parser.add_subparsers(dest="command")
 

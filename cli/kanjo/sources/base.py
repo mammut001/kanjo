@@ -20,7 +20,7 @@ from .. import winsupport
 
 AGENT_LABELS = {
     "claude": "Claude Code",
-    "antigravity": "Antigravity CLI",
+    "antigravity": "Antigravity",
     "codex": "Codex CLI",
     "grok": "Grok CLI",
     "qwen": "Qwen Code",
@@ -49,6 +49,23 @@ AGENT_LABELS = {
     "omp": "OMP",
     "deepseek_harness": "DeepSeek Harness",
 }
+
+# Session-level labels for agents with more than one front end. The agent key
+# (and every agent-level total) stays the same; only session rows differ.
+SOURCE_LABELS = {
+    ("antigravity", "app"): "Antigravity App",
+    ("antigravity", "agy"): "agy",
+}
+# Source assumed for sessions that carry none (ledger rows written before sources existed).
+DEFAULT_SOURCES = {"antigravity": "agy"}
+
+
+def session_label(agent: str, source: Optional[str] = None) -> str:
+    """Display label of one session: the source's label, else the agent's."""
+    src = source or DEFAULT_SOURCES.get(agent)
+    if src and (agent, src) in SOURCE_LABELS:
+        return SOURCE_LABELS[(agent, src)]
+    return AGENT_LABELS.get(agent, agent)
 
 
 @dataclass
@@ -93,6 +110,9 @@ class Session:
     cwd_counts: Dict[str, int] = field(default_factory=dict)
     # path -> git remote URL recorded by the agent itself
     remote_hints: Dict[str, str] = field(default_factory=dict)
+    # front end that wrote the session when an agent has several (Antigravity:
+    # "app" or "agy"); None for every other agent
+    source: Optional[str] = None
 
     def note_time(self, ts: Optional[float]) -> None:
         if ts is None:
