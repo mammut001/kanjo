@@ -72,143 +72,38 @@ class PublishUsageTest(unittest.TestCase):
             code = cli.main(list(args))
         return code, out.getvalue(), err.getvalue()
 
-    def test_first_publish_success(self):
-        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code, 0, err)
-        res = json.loads(out.strip())
-        self.assertEqual(res["status"], "pushed")
-        self.assertEqual(res["file"], "src/data/token-usage.json")
-        self.assertTrue(res["commit"])
-        self.assertTrue(res["period"])
-
-        target_file = os.path.join(self.work_repo, "src/data/token-usage.json")
-        self.assertTrue(os.path.isfile(target_file))
-
-        # Check commit message format
-        log_res = subprocess.run(["git", "-C", self.work_repo, "log", "-1", "--pretty=%s"],
-                                 capture_output=True, text=True, check=True)
-        expected_msg = "chore: update AI token usage (%s)" % res["period"]
-        self.assertEqual(log_res.stdout.strip(), expected_msg)
-
-    def test_second_publish_unchanged(self):
-        # First publish
-        code1, _, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code1, 0)
-
-        # Get commit sha
-        sha1 = subprocess.run(["git", "-C", self.work_repo, "rev-parse", "HEAD"],
+    # ------------------------------------------------------------ helpers
+    def _git_out(self, repo, *args):
+        return subprocess.run(["git", "-C", repo] + list(args),
                               capture_output=True, text=True, check=True).stdout.strip()
-
-        # Second publish without changing logs
-        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code2, 0)
-        res2 = json.loads(out2.strip())
-        self.assertEqual(res2["status"], "unchanged")
-
-        # Confirm no new commit
-        sha2 = subprocess.run(["git", "-C", self.work_repo, "rev-parse", "HEAD"],
-                              capture_output=True, text=True, check=True).stdout.strip()
-        self.assertEqual(sha1, sha2)
-
-    def test_commit_does_not_commit_unrelated_staged_or_unstaged_changes(self):
-        # Create an unrelated file and stage it
-        staged_file = os.path.join(self.work_repo, "unrelated_staged.txt")
-        with open(staged_file, "w", encoding="utf-8") as f:
-            f.write("I am staged\n")
-        subprocess.run(["git", "-C", self.work_repo, "add", "unrelated_staged.txt"],
-                       check=True, capture_output=True)
-
-        # Create an unstaged change
-        unstaged_file = os.path.join(self.work_repo, "README.md")
-        with open(unstaged_file, "a", encoding="utf-8") as f:
-            f.write("An unstaged edit\n")
-
-        # Run publish-usage
-        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code, 0, err)
-
-        # Verify git status
-        status_res = subprocess.run(["git", "-C", self.work_repo, "status", "--porcelain"],
-                                    capture_output=True, text=True, check=True)
-        lines = [line.strip() for line in status_res.stdout.splitlines() if line.strip()]
-
-        # unrelated_staged.txt should still be staged (starts with 'A ')
-        self.assertTrue(any(line == "A  unrelated_staged.txt" for line in lines),
-                        "Expected unrelated_staged.txt to remain staged, got: %s" % lines)
-        # README.md should still be unstaged modified (starts with ' M ')
-        self.assertTrue(any(line == "M README.md" or line == " M README.md" for line in lines),
-                        "Expected README.md to remain unstaged, got: %s" % lines)
-
-        # Confirm token-usage.json is NOT in status (it was committed)
-        self.assertFalse(any("token-usage.json" in line for line in lines))
-
-    def test_wrong_branch_and_non_git_repo(self):
-        # Non-git repo
-        non_git = os.path.join(self.tmp, "not_git")
-        os.makedirs(non_git, exist_ok=True)
-        code1, out1, _ = self._run_cli("publish-usage", "--repo", non_git)
-        self.assertNotEqual(code1, 0)
-        res1 = json.loads(out1.strip())
-        self.assertEqual(res1["status"], "error")
-        self.assertIn("not a git repository", res1["message"])
-
-        # Wrong branch
-        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo, "--branch", "develop")
-        self.assertNotEqual(code2, 0)
-        res2 = json.loads(out2.strip())
-        self.assertEqual(res2["status"], "error")
-        self.assertIn("does not match required branch", res2["message"])
-
-    def test_dry_run_does_not_commit_or_push(self):
-        target_file = os.path.join(self.work_repo, "src/data/token-usage.json")
-        self.assertFalse(os.path.exists(target_file))
-
-        sha_before = subprocess.run(["git", "-C", self.work_repo, "rev-parse", "HEAD"],
-                                    capture_output=True, text=True, check=True).stdout.strip()
-
-        code, out, _ = self._run_cli("publish-usage", "--repo", self.work_repo, "--dry-run")
-        self.assertEqual(code, 0)
-
-        # Output should be the JSON document
-        doc = json.loads(out)
-        self.assertEqual(doc["kind"], "kanjo-public-summary")
-
-        # File must not exist on disk
-        self.assertFalse(os.path.exists(target_file))
-
-        # HEAD commit must be unchanged
-        sha_after = subprocess.run(["git", "-C", self.work_repo, "rev-parse", "HEAD"],
-                                   capture_output=True, text=True, check=True).stdout.strip()
-        self.assertEqual(sha_before, sha_after)
-
-    def test_push_retry_on_remote_update(self):
-        # Another clone pushes a commit to origin
-        second_clone = os.path.join(self.tmp, "clone2")
-        subprocess.run(["git", "clone", self.bare_remote, second_clone],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
-                       check=True, capture_output=True)
-
-        with open(os.path.join(second_clone, "remote_edit.txt"), "w", encoding="utf-8") as f:
-            f.write("edit on origin\n")
-        subprocess.run(["git", "-C", second_clone, "add", "remote_edit.txt"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "commit", "-m", "remote update"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "push", "origin", "main"], check=True, capture_output=True)
-
-        # Now running publish-usage on work_repo should pull origin and push successfully
-        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code, 0, err)
-        res = json.loads(out.strip())
-        self.assertEqual(res["status"], "pushed")
-
-        # Check that remote_edit.txt was pulled in
-        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "remote_edit.txt")))
 
     def _head(self, repo):
-        return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
-                              capture_output=True, text=True, check=True).stdout.strip()
+        return self._git_out(repo, "rev-parse", "HEAD")
+
+    def _remote_file(self, path="src/data/token-usage.json"):
+        res = subprocess.run(["git", "-C", self.bare_remote, "show", "main:" + path],
+                             capture_output=True, text=True)
+        return res.stdout if res.returncode == 0 else None
+
+    def _remote_has(self, path):
+        return self._remote_file(path) is not None
+
+    def _clone2(self):
+        second_clone = os.path.join(self.tmp, "clone2")
+        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
+                       check=True, capture_output=True)
+        return second_clone
+
+    def _remote_commit(self, clone, name, content, message):
+        full = os.path.join(clone, name)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(content)
+        subprocess.run(["git", "-C", clone, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", clone, "commit", "-m", message], check=True, capture_output=True)
+        subprocess.run(["git", "-C", clone, "push", "origin", "main"], check=True, capture_output=True)
 
     def _set_push_rejected(self, rejected):
         hook = os.path.join(self.bare_remote, "hooks", "pre-receive")
@@ -219,137 +114,151 @@ class PublishUsageTest(unittest.TestCase):
         elif os.path.exists(hook):
             os.remove(hook)
 
-    def test_commit_left_by_failed_push_is_pushed_on_next_run(self):
+    # ------------------------------------------------------------ tests
+    def test_first_publish_success(self):
+        head_before = self._head(self.work_repo)
+        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, err)
+        res = json.loads(out.strip())
+        self.assertEqual(res["status"], "pushed")
+        self.assertEqual(res["file"], "src/data/token-usage.json")
+        self.assertTrue(res["period"])
+        self.assertEqual(self._head(self.bare_remote), res["commit"])
+
+        doc = json.loads(self._remote_file())
+        self.assertEqual(doc["kind"], "kanjo-public-summary")
+        self.assertEqual(self._git_out(self.bare_remote, "log", "-1", "--pretty=%s", "main"),
+                         "chore: update AI token usage (%s)" % res["period"])
+        # Only the data file changed, on top of the previous remote commit.
+        self.assertEqual(self._git_out(self.bare_remote, "diff-tree", "--no-commit-id", "--name-only", "-r", "main"),
+                         "src/data/token-usage.json")
+        # The website checkout itself is not touched.
+        self.assertEqual(self._head(self.work_repo), head_before)
+        self.assertFalse(os.path.exists(os.path.join(self.work_repo, "src/data/token-usage.json")))
+        self.assertEqual(self._git_out(self.work_repo, "status", "--porcelain"), "")
+
+    def test_second_publish_unchanged(self):
+        code1, _, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code1, 0)
+        sha1 = self._head(self.bare_remote)
+
+        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code2, 0)
+        self.assertEqual(json.loads(out2.strip())["status"], "unchanged")
+        self.assertEqual(self._head(self.bare_remote), sha1)
+
+    def test_publishes_while_another_branch_with_uncommitted_work_is_checked_out(self):
+        subprocess.run(["git", "-C", self.work_repo, "checkout", "-b", "feature-x"], check=True, capture_output=True)
+        with open(os.path.join(self.work_repo, "staged.txt"), "w", encoding="utf-8") as f:
+            f.write("staged\n")
+        subprocess.run(["git", "-C", self.work_repo, "add", "staged.txt"], check=True, capture_output=True)
+        with open(os.path.join(self.work_repo, "README.md"), "a", encoding="utf-8") as f:
+            f.write("unstaged edit\n")
+        head_before = self._head(self.work_repo)
+        status_before = self._git_out(self.work_repo, "status", "--porcelain")
+
+        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(json.loads(out.strip())["status"], "pushed")
+        self.assertTrue(self._remote_has("src/data/token-usage.json"))
+        self.assertFalse(self._remote_has("staged.txt"))
+        self.assertNotIn("unstaged edit", self._remote_file("README.md"))
+
+        self.assertEqual(self._git_out(self.work_repo, "branch", "--show-current"), "feature-x")
+        self.assertEqual(self._head(self.work_repo), head_before)
+        self.assertEqual(self._git_out(self.work_repo, "status", "--porcelain"), status_before)
+
+    def test_missing_remote_branch_and_non_git_repo(self):
+        non_git = os.path.join(self.tmp, "not_git")
+        os.makedirs(non_git, exist_ok=True)
+        code1, out1, _ = self._run_cli("publish-usage", "--repo", non_git)
+        self.assertNotEqual(code1, 0)
+        res1 = json.loads(out1.strip())
+        self.assertEqual(res1["status"], "error")
+        self.assertIn("not a git repository", res1["message"])
+
+        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo, "--branch", "develop")
+        self.assertNotEqual(code2, 0)
+        self.assertEqual(json.loads(out2.strip())["status"], "error")
+
+    def test_dry_run_does_not_commit_or_push(self):
+        sha_before = self._head(self.work_repo)
+        remote_before = self._head(self.bare_remote)
+        code, out, _ = self._run_cli("publish-usage", "--repo", self.work_repo, "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["kind"], "kanjo-public-summary")
+        self.assertFalse(os.path.exists(os.path.join(self.work_repo, "src/data/token-usage.json")))
+        self.assertEqual(self._head(self.work_repo), sha_before)
+        self.assertEqual(self._head(self.bare_remote), remote_before)
+
+    def test_publishes_on_top_of_remote_changes(self):
+        self._remote_commit(self._clone2(), "remote_edit.txt", "edit on origin\n", "remote update")
+        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out.strip())["status"], "pushed")
+        self.assertTrue(self._remote_has("remote_edit.txt"))
+        self.assertTrue(self._remote_has("src/data/token-usage.json"))
+
+    def test_failed_push_leaves_nothing_behind_and_next_run_publishes(self):
+        head_before = self._head(self.work_repo)
+        remote_before = self._head(self.bare_remote)
         self._set_push_rejected(True)
         code1, out1, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
         self.assertNotEqual(code1, 0)
         self.assertEqual(json.loads(out1.strip())["status"], "error")
-        local_sha = self._head(self.work_repo)
-        self.assertNotEqual(local_sha, self._head(self.bare_remote))
+        self.assertEqual(self._head(self.bare_remote), remote_before)
+        self.assertEqual(self._head(self.work_repo), head_before)
+        self.assertEqual(self._git_out(self.work_repo, "status", "--porcelain"), "")
 
-        # Same data, push works again: the pending commit must reach the remote.
         self._set_push_rejected(False)
         code2, out2, err2 = self._run_cli("publish-usage", "--repo", self.work_repo)
         self.assertEqual(code2, 0, err2)
-        res2 = json.loads(out2.strip())
-        self.assertEqual(res2["status"], "pushed")
-        self.assertTrue(res2["pending"])
-        self.assertEqual(res2["commit"], local_sha)
-        self.assertEqual(self._head(self.bare_remote), local_sha)
-
-        # Nothing left to push: a plain no-op.
-        code3, out3, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code3, 0)
-        self.assertEqual(json.loads(out3.strip())["status"], "unchanged")
-
-    def test_pending_commit_survives_the_remote_moving_on(self):
-        self._set_push_rejected(True)
-        code1, out1, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(json.loads(out1.strip())["status"], "error")
-        self._set_push_rejected(False)
-
-        second_clone = os.path.join(self.tmp, "clone2")
-        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
-                       check=True, capture_output=True)
-        with open(os.path.join(second_clone, "dependabot.txt"), "w", encoding="utf-8") as f:
-            f.write("bump\n")
-        subprocess.run(["git", "-C", second_clone, "add", "dependabot.txt"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "commit", "-m", "remote: dependabot"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "push", "origin", "main"], check=True, capture_output=True)
-
-        code2, out2, err2 = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code2, 0, out2 + err2)
         self.assertEqual(json.loads(out2.strip())["status"], "pushed")
-        self.assertEqual(self._head(self.work_repo), self._head(self.bare_remote))
-        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "dependabot.txt")))
-        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "src/data/token-usage.json")))
+        self.assertTrue(self._remote_has("src/data/token-usage.json"))
 
-    def test_failed_rebase_does_not_leave_the_repo_mid_rebase(self):
-        self._set_push_rejected(True)
-        self._run_cli("publish-usage", "--repo", self.work_repo)
-        self._set_push_rejected(False)
-        # Another machine publishes different numbers to the same file: the rebase conflicts.
-        second_clone = os.path.join(self.tmp, "clone2")
-        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
-                       check=True, capture_output=True)
-        os.makedirs(os.path.join(second_clone, "src", "data"), exist_ok=True)
-        with open(os.path.join(second_clone, "src", "data", "token-usage.json"), "w", encoding="utf-8") as f:
-            f.write("{}\n")
-        subprocess.run(["git", "-C", second_clone, "add", "-A"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "commit", "-m", "other machine"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "push", "origin", "main"], check=True, capture_output=True)
-
-        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(json.loads(out2.strip())["status"], "error")
-        branch = subprocess.run(["git", "-C", self.work_repo, "branch", "--show-current"],
-                                capture_output=True, text=True, check=True).stdout.strip()
-        self.assertEqual(branch, "main")
-
-    def _commit_local(self, name, message):
-        with open(os.path.join(self.work_repo, name), "w", encoding="utf-8") as f:
-            f.write("draft\n")
-        subprocess.run(["git", "-C", self.work_repo, "add", name], check=True, capture_output=True)
-        subprocess.run(["git", "-C", self.work_repo, "commit", "-m", message], check=True, capture_output=True)
+    def test_other_machine_numbers_are_replaced_not_conflicted(self):
+        self._remote_commit(self._clone2(), "src/data/token-usage.json", "{}\n", "other machine")
+        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(json.loads(out.strip())["status"], "pushed")
+        self.assertEqual(json.loads(self._remote_file())["kind"], "kanjo-public-summary")
+        self.assertEqual(self._git_out(self.work_repo, "branch", "--show-current"), "main")
 
     def test_users_own_unpushed_commit_is_never_pushed(self):
-        code1, _, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertEqual(code1, 0)
-        remote_sha = self._head(self.bare_remote)
-        self._commit_local("draft.md", "WIP: draft post (not ready)")
+        with open(os.path.join(self.work_repo, "draft.md"), "w", encoding="utf-8") as f:
+            f.write("draft\n")
+        subprocess.run(["git", "-C", self.work_repo, "add", "draft.md"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.work_repo, "commit", "-m", "WIP: draft post (not ready)"],
+                       check=True, capture_output=True)
+        local_sha = self._head(self.work_repo)
 
-        # Same numbers: nothing of ours to push.
-        code2, out2, _ = self._run_cli("publish-usage", "--repo", self.work_repo)
-        self.assertNotEqual(json.loads(out2.strip()).get("pending"), True)
-        self.assertEqual(self._head(self.bare_remote), remote_sha)
+        code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(json.loads(out.strip())["status"], "pushed")
+        self.assertFalse(self._remote_has("draft.md"))
+        self.assertEqual(self._head(self.work_repo), local_sha)
 
-        # A file that changes: the usage commit must not carry the draft along either.
-        code3, out3, _ = self._run_cli("publish-usage", "--repo", self.work_repo,
-                                       "--file", "src/data/other-usage.json")
-        self.assertEqual(json.loads(out3.strip())["status"], "error")
-        self.assertEqual(self._head(self.bare_remote), remote_sha)
-
-    def test_push_retry_rebases_with_unrelated_uncommitted_changes(self):
+    def test_push_retry_rebuilds_on_the_new_remote_tip(self):
         # Another clone pushes right before our first push, so that push is rejected and
-        # the retry has to rebase while README.md has an unrelated unstaged edit.
-        second_clone = os.path.join(self.tmp, "clone2")
-        subprocess.run(["git", "clone", self.bare_remote, second_clone], check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.name", "Clone 2"],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", second_clone, "config", "user.email", "clone2@example.com"],
-                       check=True, capture_output=True)
-
-        with open(os.path.join(self.work_repo, "README.md"), "a", encoding="utf-8") as f:
-            f.write("local unstaged edit\n")
-
+        # the retry has to rebuild the commit on the new remote tip.
+        second_clone = self._clone2()
         from kanjo import publish
         real_git = publish._git
         state = {"moved": False}
 
-        def git_moving_remote_before_first_push(repo, *args):
+        def git_moving_remote_before_first_push(repo, *args, **kwargs):
             if args[:1] == ("push",) and not state["moved"]:
                 state["moved"] = True
-                with open(os.path.join(second_clone, "remote_edit.txt"), "w", encoding="utf-8") as f:
-                    f.write("edit on origin\n")
-                subprocess.run(["git", "-C", second_clone, "add", "remote_edit.txt"],
-                               check=True, capture_output=True)
-                subprocess.run(["git", "-C", second_clone, "commit", "-m", "remote update"],
-                               check=True, capture_output=True)
-                subprocess.run(["git", "-C", second_clone, "push", "origin", "main"],
-                               check=True, capture_output=True)
-            return real_git(repo, *args)
+                self._remote_commit(second_clone, "remote_edit.txt", "edit on origin\n", "remote update")
+            return real_git(repo, *args, **kwargs)
 
         with mock.patch.object(publish, "_git", side_effect=git_moving_remote_before_first_push):
             code, out, err = self._run_cli("publish-usage", "--repo", self.work_repo)
         self.assertEqual(code, 0, out + err)
+        self.assertTrue(state["moved"])
         self.assertEqual(json.loads(out.strip())["status"], "pushed")
-        self.assertEqual(self._head(self.work_repo), self._head(self.bare_remote))
-        self.assertTrue(os.path.isfile(os.path.join(self.work_repo, "remote_edit.txt")))
-        with open(os.path.join(self.work_repo, "README.md"), encoding="utf-8") as f:
-            self.assertIn("local unstaged edit", f.read())
+        self.assertTrue(self._remote_has("remote_edit.txt"))
+        self.assertTrue(self._remote_has("src/data/token-usage.json"))
 
 
 if __name__ == "__main__":
