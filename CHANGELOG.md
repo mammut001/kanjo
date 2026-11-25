@@ -6,6 +6,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.13] - 2026-11-25
+
+### Added
+
+- Antigravity desktop app sessions are labelled "Antigravity App" and agy CLI sessions "agy"; the agent itself is shown as "Antigravity".
+- Antigravity desktop app usage is attributed to the Google account signed in to the app. Kanjo records the app's signed-in account as it refreshes, so app usage from before the first record stays under an unknown account.
+- Sessions started in a folder that is not a git repository count as a project named after that folder. Home, temporary and tool folders, including the Codex app's per-chat folders, still count as unattributed.
+- Family server: the dashboard has time ranges (today, this week, last week, 7 days, 30 days, since reset, billing cycle, all), comparisons with the previous period, a member ranking, model, provider and agent breakdowns, insights and a 62-day heatmap; redeploy the server to apply these changes.
+- Family server: a live countdown to the next quota reset.
+
+### Fixed
+
+- Publishing usage to a website repository works while that repository is on another branch or has uncommitted changes, and never touches the checkout.
+- Antigravity desktop app usage is no longer attributed to the account of an agy CLI session running at the same time.
+
 ## [0.6.12] - 2026-11-22
 
 ### Changed
