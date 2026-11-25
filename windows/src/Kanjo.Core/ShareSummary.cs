@@ -74,7 +74,8 @@ public sealed record ShareSummary(
             var (cost, tokens) = filtered.Spec.InRangeCostAndTokens(session);
             agentCost[session.Agent] = agentCost.GetValueOrDefault(session.Agent) + cost;
             agentTokens[session.Agent] = agentTokens.GetValueOrDefault(session.Agent) + tokens;
-            RememberLabel(labels, session.Agent, session.Label);
+            // 会话的 Label 可能是来源名（如 Antigravity 的 "agy" / "Antigravity App"），agent 行优先用 agent 的显示名
+            RememberLabel(labels, session.Agent, AgentColors.DefaultLabels.GetValueOrDefault(session.Agent) ?? session.Label);
         }
 
         var active = agentTokens.Keys

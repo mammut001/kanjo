@@ -78,7 +78,7 @@ fork 的 remote 是 `github.com/<you>/tokei`，上游是 `github.com/cclank/toke
 ### 3.1 什么算「文件操作」
 
 - Claude Code：`tool_use` 块中 `file_path`、`path`、`notebook_path` 等字段；`Bash` 命令文本中匹配到的绝对路径。
-- Antigravity CLI：步骤 (step) 载荷中的文件路径和 workspace。
+- Antigravity（CLI 与桌面客户端）：步骤 (step) 载荷中的文件路径和 workspace。
 - Codex CLI：函数调用参数中的路径和 `cwd`。
 - 其他 agent 按同样思路实现，接入时在本节补充。
 
@@ -108,7 +108,15 @@ fork 的 remote 是 `github.com/<you>/tokei`，上游是 `github.com/cclank/toke
 
 1. cwd 映射到某个项目 → 归该项目。
 2. scratchpad 路径映射到某个项目 → 归该项目。
-3. 都没有 → 进「未归属」桶。
+3. cwd 已被删除 → 按路径本身归属（见第 9 节）。
+4. cwd 存在、不在任何 git 仓库里、也没被排除 → 这个文件夹自成一个项目：标识是它的绝对路径（与无 remote 的仓库、已删除目录同一种标识，文件夹以后被删除时项目不变），显示名是文件夹名（例如 `~/Documents/校招` 是项目「校招」），没有 remote，`attribution` 为 `cwd`。会话有多个 cwd 时取用得最多的那个。以下情况不算，仍进「未归属」：
+   - 主目录本身，以及主目录之外的路径；
+   - 临时目录（`/tmp`、`/private/tmp`、`/var/folders/…`、系统临时目录、Windows 的 `%TEMP%`）；
+   - 工具和应用自己的目录：主目录下以 `.` 开头的目录（`~/.gemini`、`~/.claude`、`~/.codex`、`~/.cursor`、`~/.local` 等）、`~/Library`、`~/AppData`，以及应用为每次对话自动建的文件夹：Codex 桌面版的 `~/Documents/Codex/…`（如 `~/Documents/Codex/2026-11-19/new-chat`）；
+   - 已经不存在的目录（走第 3 步）；
+   - 没有工作目录。
+   这一步对所有 agent 生效。文件操作信号仍只认 git 项目：工具调用碰到这类文件夹里的文件不计分。
+5. 都没有 → 进「未归属」桶。
 
 ### 4.4 阈值可配置
 
@@ -190,6 +198,7 @@ Python 3.11 以下没有 `tomllib`，可以改用同结构的 `attribution.json`
 | 项目目录已删除 | 路径映射失败时回退到路径本身作为标识，显示名用目录名，标记「路径不存在」 |
 | 日志中的路径带尾部标点（如 `tokei;`、`tokei\n`） | 路径解析在遇到空白、引号、分号、反引号时截断 |
 | 会话只做了 web 搜索或纯问答，没碰文件 | 走 4.3，通常按 cwd 归属 |
+| 工作目录不是 git 仓库（如 `~/Documents/校招`） | 走 4.3 第 4 步，文件夹自成项目；主目录、临时目录、工具目录（含 `~/Documents/Codex`）除外 |
 | agent 的日志格式升级 | 解析失败的会话计入「解析失败」桶，显示数量，不中断统计 |
 | 同一会话被 Tokei 和本工具同时统计 | 互不影响，两者都只读日志 |
 
@@ -200,7 +209,7 @@ Python 3.11 以下没有 `tomllib`，可以改用同结构的 `attribution.json`
 统计结果永远包含以下几行，即使为 0：
 
 - 各项目（按花费降序）
-- **未归属**：零信号且无 cwd 的会话
+- **未归属**：零信号、cwd 也映射不到项目（没有 cwd，或 cwd 是主目录、临时目录、工具目录）的会话
 - **已排除**：命中 exclude 的会话
 - **解析失败**：日志格式无法识别的会话
 

@@ -6,7 +6,9 @@
 * A project with >= ``dominant_threshold`` of the points takes the whole
   session (``dominant``); otherwise the session is split by points (``split``).
 * With no points: the cwd's project (``cwd``), then the project encoded in a
-  scratchpad path (``scratchpad``), else the unattributed bucket (``none``).
+  scratchpad path (``scratchpad``), then a deleted cwd, then an existing
+  non-git cwd as a folder project (``cwd``, rule 4), else the unattributed
+  bucket (``none``).
 * User overrides and excludes (section 8) are checked first, on the session's
   working directory.
 * Sub-agents follow their parent's decision (section 5); that is applied by
@@ -121,4 +123,16 @@ def decide(session: Session, resolver: Resolver, scratch: ScratchpadDecoder, con
     pid = _cwd_project(session, resolver, allow_missing=True)
     if pid:
         return Decision("cwd", [(pid, 1.0)])
+    pid = _folder_project(session, resolver)
+    if pid:
+        return Decision("cwd", [(pid, 1.0)])
     return Decision("none", [(UNATTRIBUTED, 1.0)])
+
+
+def _folder_project(session: Session, resolver: Resolver) -> Optional[str]:
+    """Rule 4: the most used existing non-git working directory as its own project."""
+    for cwd in _ranked_cwds(session):
+        project = resolver.folder_project(cwd)
+        if project is not None:
+            return project.id
+    return None

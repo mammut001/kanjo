@@ -63,7 +63,7 @@ class AttributionRules(unittest.TestCase):
             ('files beat cwd', B, [[A + '/x']], {}, 'dominant', [(IA, 1.0)]),
             ('cwd beats scratch', B, [[scratch + '/x']], {}, 'cwd', [(IB, 1.0)]),
             ('scratch fallback', scratch, [], {}, 'scratchpad', [(IA, 1.0)]),
-            ('no signals', ALICE + '/Downloads', [], {}, 'none', [(attr.UNATTRIBUTED, 1.0)]),
+            ('no signals', ALICE, [], {}, 'none', [(attr.UNATTRIBUTED, 1.0)]),
             ('80 percent', B, [[A + '/x']]*8 + [[B + '/y']]*2, {}, 'dominant', [(IA, 1.0)]),
             ('proportional', B, [[A + '/x']]*6 + [[B + '/y']]*4, {}, 'split', [(IA, .6), (IB, .4)]),
             ('threshold one', B, [[A + '/x']]*9 + [[B + '/y']], {'dominant_threshold': 1.0}, 'split', [(IA, .9), (IB, .1)]),
@@ -125,7 +125,7 @@ class AttributionRules(unittest.TestCase):
             self.assertEqual(self.resolver.resolve(A + suffix).id, IA)
 
     def test_10_buckets_and_reconciliation(self):
-        doc = self.export([session('a', cwd=A), session('u', cwd=ALICE + '/Downloads'),
+        doc = self.export([session('a', cwd=A), session('u', cwd=ALICE + '/.claude'),
                            session('x', cwd=B)], config=Config(exclude=[B]))
         self.assertIn('API-equivalent', doc['cost_note'])
         self.assertIn('subscription', doc['cost_note'])
@@ -135,6 +135,81 @@ class AttributionRules(unittest.TestCase):
         total = sum(p['cost'] for p in doc['projects'])
         total += doc['buckets']['unattributed']['cost'] + doc['buckets']['excluded']['cost']
         self.assertAlmostEqual(total, doc['totals']['cost'], places=3)
+
+    def test_4_3_non_git_folder_is_its_own_project(self):
+        folder = ALICE + '/Documents/校招'
+        self.fs.mkdir(folder + '/notes')
+        d = self.decision(folder)
+        self.assertEqual((d.kind, d.shares), ('cwd', [(folder, 1.0)]))
+        project = self.resolver.project(folder)
+        self.assertEqual((project.name, project.remote, project.path_missing), ('校招', None, False))
+        # a sub-folder is its own folder project, named after itself
+        d = self.decision(folder + '/notes')
+        self.assertEqual(d.shares, [(folder + '/notes', 1.0)])
+        # same id as the deleted-folder fallback, so deleting the folder keeps the project
+        gone = ALICE + '/Documents/old-notes'
+        self.assertEqual(self.decision(gone).shares, [(gone, 1.0)])
+        # git signals still win; file operations inside the folder score nothing
+        d = self.decision(folder, [[A + '/x'], [folder + '/a.md']])
+        self.assertEqual((d.kind, d.shares), ('dominant', [(IA, 1.0)]))
+        # the most used cwd wins
+        s = session(cwd=folder)
+        other = self.fs.mkdir(ALICE + '/Desktop/draft')
+        s.note_cwd(folder, 1)
+        s.note_cwd(other, 3)
+        self.assertEqual(attr.decide(s, self.resolver, self.scratch, Config()).shares, [(other, 1.0)])
+        # excludes and overrides still come first
+        self.assertEqual(self.decision(folder, exclude=[folder]).kind, 'excluded')
+
+    def test_4_3_folder_project_exceptions(self):
+        for path in (ALICE + '/.gemini/antigravity/brain/x/scratch', ALICE + '/.claude/projects',
+                     ALICE + '/.codex', ALICE + '/.cursor/x', ALICE + '/.grok', ALICE + '/.qwen',
+                     ALICE + '/.local/share/kanjo', ALICE + '/Library/Application Support/Qoder',
+                     ALICE + '/AppData/Roaming/x', '/tmp/work', '/private/tmp/work',
+                     '/var/folders/ab/T/work', '/opt/elsewhere'):
+            self.fs.mkdir(path)
+        cases = [ALICE, None, ALICE + '/.gemini/antigravity/brain/x/scratch', ALICE + '/.claude/projects',
+                 ALICE + '/.codex', ALICE + '/.cursor/x', ALICE + '/.grok', ALICE + '/.qwen',
+                 ALICE + '/.local/share/kanjo', ALICE + '/Library/Application Support/Qoder',
+                 ALICE + '/AppData/Roaming/x', '/tmp/work', '/private/tmp/work',
+                 '/var/folders/ab/T/work', '/opt/elsewhere', '/Users', '/']
+        for cwd in cases:
+            with self.subTest(cwd=cwd):
+                d = self.decision(cwd)
+                self.assertEqual((d.kind, d.shares), ('none', [(attr.UNATTRIBUTED, 1.0)]))
+                if cwd:
+                    self.assertIsNone(self.resolver.folder_project(cwd))
+        # the system temporary directory, wherever it is
+        import tempfile
+        tmp_home = os.path.realpath(tempfile.gettempdir())
+        r = Resolver(home=os.path.dirname(tmp_home))
+        self.assertIsNone(r.folder_project(tmp_home))
+
+    def test_4_3_codex_app_chat_folders_are_tool_folders(self):
+        codex = ALICE + '/Documents/Codex'
+        chats = [codex, codex + '/2026-11-19', codex + '/2026-11-19/ni', codex + '/2026-11-19/new-chat',
+                 codex + '/2026-11-19/hi', codex + '/2026-08-06-musespark1-2', ALICE + '/documents/codex/x']
+        for path in chats:
+            self.fs.mkdir(path)
+        for cwd in chats:
+            with self.subTest(cwd=cwd):
+                self.assertEqual(self.decision(cwd).kind, 'none')
+        # real working folders still become projects, also with similar names
+        for cwd in (GITHUB + '/5170-project', ALICE + '/Documents/校招', ALICE + '/Documents/dti5170 project',
+                    ALICE + '/work-int/gk', ALICE + '/Documents/Codex-notes', ALICE + '/Codex/x'):
+            self.fs.mkdir(cwd)
+            with self.subTest(cwd=cwd):
+                self.assertEqual(self.decision(cwd).shares, [(cwd, 1.0)])
+
+    def test_4_3_folder_project_in_export(self):
+        folder = self.fs.mkdir(ALICE + '/Documents/校招')
+        doc = self.export([session('f', cwd=folder), session('h', cwd=ALICE)])
+        by_id = {p['id']: p for p in doc['projects']}
+        self.assertIn(folder, by_id)
+        p = by_id[folder]
+        self.assertEqual((p['name'], p['remote'], p['paths'], p['path_missing']), ('校招', None, [folder], False))
+        self.assertEqual(p['sessions_detail'][0]['attribution'], 'cwd')
+        self.assertEqual(doc['buckets']['unattributed']['sessions'], 1)
 
     def test_case_insensitive_filesystem(self):
         if not os.path.exists(self.fs.real(A.lower())):

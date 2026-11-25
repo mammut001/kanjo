@@ -94,7 +94,7 @@ public enum AgentColors {
 
     public static let defaultLabels: [String: String] = [
         "claude": "Claude Code",
-        "antigravity": "Antigravity CLI",
+        "antigravity": "Antigravity",
         "codex": "Codex CLI",
         "grok": "Grok CLI",
         "qwen": "Qwen Code",

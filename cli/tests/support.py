@@ -30,6 +30,7 @@ def ensure_test_data_dir():
         ("KANJO_CLAUDE_CONFIG", "no-claude.json"),
         ("KANJO_CODEX_AUTH", "no-codex-auth.json"),
         ("KANJO_GROK_AUTH", "no-grok-auth.json"),
+        ("KANJO_ANTIGRAVITY_APP_STORAGE", "no-antigravity-app-storage.json"),
     ]:
         val = os.environ.get(var, "")
         if not val or val == os.path.join(home, ".claude.json") or val.startswith(home + os.sep + "."):

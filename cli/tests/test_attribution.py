@@ -98,7 +98,10 @@ class DecisionTest(unittest.TestCase):
         self.assertNotIn(deleted_cwd2, self.resolver.projects)
 
     def test_unattributed(self):
-        d = self.decide(session(cwd=ALICE + "/Downloads"))
+        # the home directory itself never becomes a project (rule 4 exception)
+        d = self.decide(session(cwd=ALICE))
+        self.assertEqual((d.kind, d.shares), ("none", [(attr.UNATTRIBUTED, 1.0)]))
+        d = self.decide(session(cwd=None))
         self.assertEqual((d.kind, d.shares), ("none", [(attr.UNATTRIBUTED, 1.0)]))
 
     def test_override_and_exclude_longest_prefix(self):
