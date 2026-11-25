@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Optional
 
 from .config import Config, ConfigError, load as load_config
@@ -37,93 +39,84 @@ def _error(message: str) -> int:
     return 1
 
 
-def _git(repo: str, *args: str) -> subprocess.CompletedProcess:
+def _git(repo: str, *args: str, env: Optional[dict] = None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", repo] + list(args),
-                          capture_output=True, text=True, encoding="utf-8", check=False)
+                          capture_output=True, text=True, encoding="utf-8", check=False, env=env)
 
 
 def _git_error(res: subprocess.CompletedProcess) -> str:
     return res.stderr.strip() or res.stdout.strip()
 
 
-def _unpushed_commits(repo: str, branch: str) -> int:
-    """Commits on HEAD that origin/<branch> does not have, e.g. left by an earlier failed push."""
-    res = _git(repo, "rev-list", "--count", "origin/%s..HEAD" % branch)
-    if res.returncode != 0:
-        return 0
-    try:
-        return int(res.stdout.strip() or "0")
-    except ValueError:
-        return 0
-
-
-_USAGE_SUBJECT = "chore: update AI token usage ("
-
-
-def _foreign_commits(repo: str, branch: str, file_rel: str) -> int:
-    """Unpushed commits that are not kanjo usage commits (the user's own work).
-
-    A usage commit has kanjo's subject and touches only ``file_rel``. Those are the
-    only commits publish-usage may push: the website checkout is also where the user
-    works, and a local draft must never reach the remote (which often deploys it).
-    """
-    res = _git(repo, "log", "--format=%H%x00%s", "origin/%s..HEAD" % branch)
-    if res.returncode != 0:
-        return 0
-    want = os.path.normpath(file_rel).replace(os.sep, "/")
-    foreign = 0
-    for line in res.stdout.splitlines():
-        sha, _, subject = line.partition("\0")
-        if not sha:
-            continue
-        if subject.startswith(_USAGE_SUBJECT):
-            files = _git(repo, "diff-tree", "-z", "--no-commit-id", "--name-only", "-r", sha)
-            if files.returncode == 0 and [f for f in files.stdout.split("\0") if f] == [want]:
-                continue
-        foreign += 1
-    return foreign
-
-
-def _foreign_error(count: int) -> str:
-    return ("%d local commit(s) on this branch are not kanjo usage commits and are not pushed yet; "
-            "push or remove them first, kanjo will not publish them" % count)
-
-
-def _rebase(repo: str, branch: str) -> Optional[str]:
-    """Rebase local commits onto origin/<branch>. Returns an error or None.
-
-    A failed rebase is aborted, so the next run does not find the repo mid-rebase
-    (no current branch) and fail for good.
-    """
-    # --autostash: unrelated uncommitted edits in the website repo must not block the retry.
-    rebase_res = _git(repo, "pull", "--rebase", "--autostash", "origin", branch)
-    if rebase_res.returncode != 0:
-        _git(repo, "rebase", "--abort")
-        return "git pull --rebase failed: %s" % _git_error(rebase_res)
-    return None
-
-
-def _push(repo: str, branch: str) -> Optional[str]:
-    """Push HEAD to origin/<branch>, rebasing once if the remote moved. Returns an error or None."""
-    if _git(repo, "push", "origin", branch).returncode == 0:
-        return None
-    err = _rebase(repo, branch)
-    if err:
-        return err
-    retry_res = _git(repo, "push", "origin", branch)
-    if retry_res.returncode != 0:
-        return "git push retry failed: %s" % _git_error(retry_res)
-    return None
-
-
-def _head(repo: str) -> str:
-    return _git(repo, "rev-parse", "HEAD").stdout.strip()
-
-
 def _week_key(doc: dict) -> str:
     if doc.get("weeks"):
         return doc["weeks"][-1]["period"]
     return doc.get("all_time", {}).get("period", "all")
+
+
+def _remote_tip(repo: str, branch: str) -> Optional[str]:
+    res = _git(repo, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/%s^{commit}" % branch)
+    return res.stdout.strip() if res.returncode == 0 and res.stdout.strip() else None
+
+
+def _fetch(repo: str, branch: str) -> Optional[str]:
+    """Update origin/<branch>. Returns an error or None."""
+    res = _git(repo, "fetch", "--quiet", "origin",
+               "+refs/heads/%s:refs/remotes/origin/%s" % (branch, branch))
+    if res.returncode != 0:
+        return "git fetch failed: %s" % _git_error(res)
+    return None
+
+
+def _same_data(repo: str, base: str, file_rel: str, doc: dict) -> bool:
+    """True if <base>:<file_rel> already holds ``doc`` (``generated_at`` aside)."""
+    res = _git(repo, "show", "%s:%s" % (base, file_rel))
+    if res.returncode != 0:
+        return False
+    try:
+        existing = json.loads(res.stdout)
+    except ValueError:
+        return False
+    if not isinstance(existing, dict):
+        return False
+    strip = lambda d: {k: v for k, v in d.items() if k != "generated_at"}
+    return strip(existing) == strip(doc)
+
+
+def _commit_on(repo: str, base: str, file_rel: str, payload: str, message: str):
+    """Make a commit on top of ``base`` that only replaces ``file_rel``. Returns (sha, error).
+
+    Plumbing only, with a throwaway index: the user's checkout, branch, index and
+    uncommitted work in the website repo are never touched, whatever branch they are on.
+    """
+    # Bytes, not text: on Windows text-mode stdin would turn "\n" into "\r\n".
+    blob_res = subprocess.run(["git", "-C", repo, "hash-object", "-w", "--stdin"],
+                              input=payload.encode("utf-8"), capture_output=True, check=False)
+    if blob_res.returncode != 0:
+        return None, "git hash-object failed: %s" % blob_res.stderr.decode("utf-8", "replace").strip()
+    blob_sha = blob_res.stdout.decode("ascii", "replace").strip()
+    tmp = tempfile.mkdtemp(prefix="kanjo-publish-")
+    try:
+        env = dict(os.environ, GIT_INDEX_FILE=os.path.join(tmp, "index"))
+        path = os.path.normpath(file_rel).replace(os.sep, "/")
+        for args in (("read-tree", base),
+                     ("update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob_sha, path))):
+            res = _git(repo, *args, env=env)
+            if res.returncode != 0:
+                return None, "git %s failed: %s" % (args[0], _git_error(res))
+        tree = _git(repo, "write-tree", env=env)
+        if tree.returncode != 0:
+            return None, "git write-tree failed: %s" % _git_error(tree)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    commit = _git(repo, "commit-tree", tree.stdout.strip(), "-p", base, "-m", message)
+    if commit.returncode != 0:
+        return None, "git commit-tree failed: %s" % _git_error(commit)
+    return commit.stdout.strip(), None
+
+
+def _push_commit(repo: str, sha: str, branch: str) -> subprocess.CompletedProcess:
+    return _git(repo, "push", "origin", "%s:refs/heads/%s" % (sha, branch))
 
 
 def cmd_publish_usage(args) -> int:
@@ -135,36 +128,17 @@ def cmd_publish_usage(args) -> int:
     if not os.path.isdir(repo):
         return _error("repository directory does not exist: %s" % repo)
 
-    # 1. Check PATH is a git repository
-    res = subprocess.run(["git", "-C", repo, "rev-parse", "--is-inside-work-tree"],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
+    res = _git(repo, "rev-parse", "--is-inside-work-tree")
     if res.returncode != 0 or res.stdout.strip() != "true":
         return _error("%s is not a git repository" % repo)
 
-    # Check current branch equals required branch
-    res = subprocess.run(["git", "-C", repo, "branch", "--show-current"],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
-    current_branch = res.stdout.strip()
-    if current_branch != branch:
-        return _error("current branch '%s' does not match required branch '%s'" % (current_branch, branch))
-
-    # 2. git -C PATH pull --ff-only origin <branch>
+    # The summary is committed straight onto origin/<branch>, so the branch checked out
+    # in the website repo (and any uncommitted work there) does not matter.
     if not dry_run:
-        res = subprocess.run(["git", "-C", repo, "pull", "--ff-only", "origin", branch],
-                             capture_output=True, text=True, encoding="utf-8", check=False)
-        if res.returncode != 0:
-            err = res.stderr.strip() or res.stdout.strip()
-            # Local usage commits left by a failed push, while the remote moved on:
-            # fast-forward is impossible, so rebase them (as _push would) instead of
-            # failing on every later run. Anything else stays an error.
-            pending = _unpushed_commits(repo, branch)
-            if not pending or _foreign_commits(repo, branch, file_rel):
-                return _error("git pull --ff-only failed: %s" % err)
-            rebase_err = _rebase(repo, branch)
-            if rebase_err:
-                return _error(rebase_err)
+        err = _fetch(repo, branch)
+        if err:
+            return _error(err)
 
-    # 3. Generate public summary
     cfg = _config(args)
     doc = None
     fp = None
@@ -179,80 +153,42 @@ def cmd_publish_usage(args) -> int:
                 fp = source_fingerprint(config=cfg)
             save_fast_public_summary(fp, doc)
 
-    target_path = os.path.join(repo, file_rel)
-    existing_doc = None
-    if os.path.isfile(target_path):
-        try:
-            with open(target_path, "r", encoding="utf-8") as f:
-                existing_doc = json.load(f)
-        except Exception:
-            existing_doc = None
-
-    if existing_doc is not None and isinstance(existing_doc, dict):
-        ex_cmp = {k: v for k, v in existing_doc.items() if k != "generated_at"}
-        new_cmp = {k: v for k, v in doc.items() if k != "generated_at"}
-        if ex_cmp == new_cmp:
-            # The data is already committed, but an earlier push may have failed: push it now,
-            # otherwise the commit would sit on this machine until the numbers change again.
-            pending = 0 if dry_run else _unpushed_commits(repo, branch)
-            foreign = _foreign_commits(repo, branch, file_rel) if pending else 0
-            if foreign and foreign < pending:
-                return _error(_foreign_error(foreign))
-            if pending and not foreign:
-                err = _push(repo, branch)
-                if err:
-                    return _error(err)
-                print(json.dumps({"status": "pushed", "commit": _head(repo), "file": file_rel,
-                                  "period": _week_key(doc), "pending": True}))
-                return 0
-            print(json.dumps({"status": "unchanged"}))
-            return 0
-
-    if dry_run:
-        payload = json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
-        sys.stdout.write(payload)
+    base = _remote_tip(repo, branch)
+    if base is not None and _same_data(repo, base, file_rel, doc):
+        print(json.dumps({"status": "unchanged"}))
         return 0
 
-    foreign = _foreign_commits(repo, branch, file_rel)
-    if foreign:
-        return _error(_foreign_error(foreign))
-
-    # 4. Write file: 2 spaces indent, trailing newline
-    target_dir = os.path.dirname(target_path)
-    if target_dir:
-        os.makedirs(target_dir, exist_ok=True)
     payload = json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
-    with open(target_path, "w", encoding="utf-8") as f:
-        f.write(payload)
+    if dry_run:
+        sys.stdout.write(payload)
+        return 0
+    if base is None:
+        return _error("remote branch 'origin/%s' does not exist" % branch)
 
-    # 5. git -C PATH add -- <file> && commit -m "..." -- <file>
     week_key = _week_key(doc)
-
-    res = subprocess.run(["git", "-C", repo, "add", "--", file_rel],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
-    if res.returncode != 0:
-        err = res.stderr.strip() or res.stdout.strip()
-        return _error("git add failed: %s" % err)
-
-    commit_msg = "chore: update AI token usage (%s)" % week_key
-    res = subprocess.run(["git", "-C", repo, "commit", "-m", commit_msg, "--", file_rel],
-                         capture_output=True, text=True, encoding="utf-8", check=False)
-    if res.returncode != 0:
-        err = res.stderr.strip() or res.stdout.strip()
-        return _error("git commit failed: %s" % err)
-
-    # 6. git -C PATH push origin <branch> with 1 retry
-    err = _push(repo, branch)
+    message = "chore: update AI token usage (%s)" % week_key
+    sha, err = _commit_on(repo, base, file_rel, payload, message)
     if err:
         return _error(err)
-    commit_sha = _head(repo)
+    push = _push_commit(repo, sha, branch)
+    if push.returncode != 0:
+        # The remote moved on (another machine, a bot): rebuild on the new tip once.
+        err = _fetch(repo, branch)
+        if err:
+            return _error("git push failed: %s" % _git_error(push))
+        base = _remote_tip(repo, branch)
+        if base is not None and _same_data(repo, base, file_rel, doc):
+            print(json.dumps({"status": "unchanged"}))
+            return 0
+        if base is None:
+            return _error("git push failed: %s" % _git_error(push))
+        sha, err = _commit_on(repo, base, file_rel, payload, message)
+        if err:
+            return _error(err)
+        retry = _push_commit(repo, sha, branch)
+        if retry.returncode != 0:
+            return _error("git push retry failed: %s" % _git_error(retry))
+    _git(repo, "update-ref", "refs/remotes/origin/%s" % branch, sha)
 
-    # 7. Output success JSON
-    output = {
-        "status": "pushed",
-        "commit": commit_sha,
-        "file": file_rel,
-        "period": week_key,
-    }
-    print(json.dumps(output))
+    print(json.dumps({"status": "pushed", "commit": sha, "file": file_rel, "period": week_key}))
     return 0
