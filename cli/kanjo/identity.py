@@ -35,6 +35,10 @@ _TEMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folde
 # Home subdirectories that hold application and agent data, never projects
 # (dot directories are excluded separately).
 _TOOL_HOME_DIRS = frozenset({"library", "appdata"})
+# Home-relative folders where an app creates one working folder per chat by
+# itself (not projects): the Codex desktop app's ``~/Documents/Codex/<date>/<slug>``
+# and ``~/Documents/Codex/<date>-<slug>``. Compared case-insensitively.
+_TOOL_HOME_PREFIXES = (("documents", "codex"),)
 # "name.ext": treated as a file, so it is not itself checked for a .git entry
 _FILE_LIKE = re.compile(r"[^.]\.[A-Za-z0-9]{1,10}$")
 
@@ -817,7 +821,8 @@ class Resolver:
         is deleted), named after the folder. Callers try this only after
         ``resolve`` found nothing. Not for the home directory, temporary
         directories, tool/state directories (``~/.*``, ``~/Library``,
-        ``~/AppData``), paths outside home or missing directories."""
+        ``~/AppData``, ``~/Documents/Codex``), paths outside home or missing
+        directories."""
         p = self.clean(path)
         if not p or not self._folder_ok(p):
             return None
@@ -841,9 +846,12 @@ class Resolver:
         if tmp and not self.fs_root and (winsupport.is_subpath(p, tmp) or winsupport.is_subpath(_private_alias(p), tmp)):
             return False
         rel = winsupport.relpath(p, self.home).replace("\\", "/")
-        first_comp = rel.split("/")[0]
-        if first_comp.lower() in _TOOL_HOME_DIRS:
+        comps = [c.lower() for c in rel.split("/") if c]
+        if comps and comps[0] in _TOOL_HOME_DIRS:
             return False
+        for prefix in _TOOL_HOME_PREFIXES:
+            if tuple(comps[:len(prefix)]) == prefix:
+                return False
         return True
 
     @staticmethod

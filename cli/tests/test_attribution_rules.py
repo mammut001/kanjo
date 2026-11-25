@@ -185,6 +185,22 @@ class AttributionRules(unittest.TestCase):
         r = Resolver(home=os.path.dirname(tmp_home))
         self.assertIsNone(r.folder_project(tmp_home))
 
+    def test_4_3_codex_app_chat_folders_are_tool_folders(self):
+        codex = ALICE + '/Documents/Codex'
+        chats = [codex, codex + '/2026-11-19', codex + '/2026-11-19/ni', codex + '/2026-11-19/new-chat',
+                 codex + '/2026-11-19/hi', codex + '/2026-08-06-musespark1-2', ALICE + '/documents/codex/x']
+        for path in chats:
+            self.fs.mkdir(path)
+        for cwd in chats:
+            with self.subTest(cwd=cwd):
+                self.assertEqual(self.decision(cwd).kind, 'none')
+        # real working folders still become projects, also with similar names
+        for cwd in (GITHUB + '/5170-project', ALICE + '/Documents/校招', ALICE + '/Documents/dti5170 project',
+                    ALICE + '/work-int/gk', ALICE + '/Documents/Codex-notes', ALICE + '/Codex/x'):
+            self.fs.mkdir(cwd)
+            with self.subTest(cwd=cwd):
+                self.assertEqual(self.decision(cwd).shares, [(cwd, 1.0)])
+
     def test_4_3_folder_project_in_export(self):
         folder = self.fs.mkdir(ALICE + '/Documents/校招')
         doc = self.export([session('f', cwd=folder), session('h', cwd=ALICE)])
