@@ -1,0 +1,4 @@
+/* Widget configuration intent. Looked up in the KanjoWidget bundle, not KanjoCore. */
+"Select Agent" = "Select Agent";
+"Choose which AI agent's quota to display." = "Choose which AI agent's quota to display.";
+"Agent" = "Agent";

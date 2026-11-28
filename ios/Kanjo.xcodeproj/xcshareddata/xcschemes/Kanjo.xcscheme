@@ -21,6 +21,20 @@
                ReferencedContainer = "container:Kanjo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "8A0B198CFEF23E912AA3015C"
+               BuildableName = "KanjoWidget.appex"
+               BlueprintName = "KanjoWidget"
+               ReferencedContainer = "container:Kanjo.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

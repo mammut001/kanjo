@@ -542,6 +542,34 @@
 "ios.empty.step2" = "Ouvrez Réglages Kanjo → Général et activez la synchronisation iCloud";
 "ios.empty.step3" = "Assurez-vous que les deux appareils utilisent le même identifiant Apple";
 
+/* Widgets iOS */
+"ios.widget.today.name" = "Aujourd'hui";
+"ios.widget.today.desc" = "Coût du jour, évolution par rapport à hier et barre thermique récente.";
+"ios.widget.quota.name" = "Quota";
+"ios.widget.quota.desc" = "Utilisation des quotas 5 heures et hebdomadaire avec l'heure de réinitialisation.";
+"ios.widget.quota_ring.name" = "Anneau de quota";
+"ios.widget.quota_ring.desc" = "Pourcentage du quota hebdomadaire utilisé en un coup d'œil.";
+"ios.widget.today_quota.name" = "Aujourd'hui + 5 h";
+"ios.widget.today_quota.desc" = "Coût du jour et quota 5 heures avec l'heure de réinitialisation.";
+"ios.widget.inline.name" = "Aujourd'hui en ligne";
+"ios.widget.inline.desc" = "Coût du jour au-dessus de l'horloge de l'écran verrouillé.";
+"ios.widget.today_title" = "Aujourd'hui";
+"ios.widget.inline_today" = "Aujourd'hui %@";
+"ios.widget.vs_yesterday" = "%@ vs hier";
+"ios.widget.updated_at" = "Mis à jour %@";
+"ios.widget.hours_ago" = "il y a %d h";
+"ios.widget.days_ago" = "il y a %d j";
+"ios.widget.setup_sync" = "Ouvrez Kanjo pour configurer la synchro";
+"ios.widget.quota_reset" = "Réinitialisé";
+"ios.widget.no_quota" = "Aucune donnée de quota";
+"ios.widget.five_hour_short" = "5 h";
+"ios.widget.weekly_short" = "7 j";
+"ios.widget.resets_at" = "Réinit. %@";
+"ios.widget.seven_day_total" = "Total 7 j";
+"ios.widget.daily_average" = "Moy. / jour";
+"ios.widget.intent.agent" = "Agent";
+"ios.widget.intent.auto" = "Automatique (le plus récent)";
+
 /* Gestion des comptes Antigravity */
 "overview.agy.title_quota_week" = "Comptes Antigravity · ce quota hebdomadaire (depuis %@)";
 "overview.agy.title_billing_cycle" = "Comptes Antigravity · ce cycle de facturation (depuis %@)";

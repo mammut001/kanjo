@@ -21,7 +21,7 @@ extension SnapshotSource {
     var lastAccountCode: String? { nil }
 }
 
-/// 读 App bundle 里的 sample-snapshot.json（由 ui/fixtures/sample.json 复制而来）。
+/// 读 App / Widget bundle 里的 sample-snapshot.json（由 ui/fixtures/sample.json 复制而来）。
 struct BundledSampleSnapshotSource: SnapshotSource {
     var bundle: Bundle = .main
     var resourceName = "sample-snapshot"
@@ -32,6 +32,48 @@ struct BundledSampleSnapshotSource: SnapshotSource {
         }
         let data = try Data(contentsOf: url)
         return try ReportDecoder.decode(data)
+    }
+
+    func loadSync() -> UsageReport? {
+        guard let url = bundle.url(forResource: resourceName, withExtension: "json"),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? ReportDecoder.decode(data)
+    }
+
+    func loadWidgetSnapshot(now: Date = Date()) -> WidgetSnapshot? {
+        guard let report = loadSync() else { return nil }
+        // 预览图把示例数据的日期平移到当前时刻，保证小组件库预览始终显示有今日花费与有效额度倒计时。
+        var preview = WidgetSnapshot(report: report, deviceName: "MacBook Pro")
+        let cal = RangeEngine.calendar(timezone: preview.resolvedTimezone)
+        let todayStart = cal.startOfDay(for: now)
+        let shiftedDays: [WidgetDayCost] = preview.days.enumerated().map { idx, item in
+            let offset = -(preview.days.count - 1 - idx)
+            let date = cal.date(byAdding: .day, value: offset, to: todayStart) ?? todayStart
+            return WidgetDayCost(
+                day: RangeEngine.dayString(date, calendar: cal),
+                cost: item.cost,
+                byAgent: item.byAgent
+            )
+        }
+        preview.days = shiftedDays
+        preview.generatedAt = ISO8601DateFormatter().string(from: now)
+        if var windows = preview.quotaWindows {
+            let iso = ISO8601DateFormatter()
+            let fiveReset = iso.string(from: now.addingTimeInterval(2 * 3600 + 15 * 60))
+            let weekReset = iso.string(from: now.addingTimeInterval(4 * 86400 + 6 * 3600))
+            for key in windows.keys {
+                var w = windows[key]!
+                w.weeklyResetsAt = weekReset
+                if w.fiveHourWindowHours != nil || w.fiveHourUsedPercent != nil {
+                    w.fiveHourResetsAt = fiveReset
+                }
+                windows[key] = w
+            }
+            preview.quotaWindows = windows
+        }
+        return preview
     }
 }
 

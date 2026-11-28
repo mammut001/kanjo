@@ -3,6 +3,9 @@ import Foundation
 import KanjoCore
 import Observation
 import os
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 @MainActor
 @Observable
@@ -99,6 +102,12 @@ final class SnapshotStore {
             if let report {
                 state = .loaded(report)
                 SyncLog.sync.info("load finished: snapshot decoded")
+                if !isSampleMode && !(source is BundledSampleSnapshotSource) {
+                    _ = try? WidgetSnapshotCache.write(report: report, deviceName: deviceName)
+                    #if canImport(WidgetKit)
+                    WidgetCenter.shared.reloadAllTimelines()
+                    #endif
+                }
             } else {
                 state = .empty
                 SyncLog.sync.info("load finished: no snapshot, showing empty state")

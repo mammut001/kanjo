@@ -542,6 +542,34 @@
 "ios.empty.step2" = "Open Kanjo Settings → General and turn on iCloud sync";
 "ios.empty.step3" = "Make sure both devices are signed in to the same Apple ID";
 
+/* iOS widgets */
+"ios.widget.today.name" = "Today";
+"ios.widget.today.desc" = "Today's cost, change vs yesterday, and recent daily heat strip.";
+"ios.widget.quota.name" = "Quota";
+"ios.widget.quota.desc" = "5-hour and weekly quota usage with the reset time.";
+"ios.widget.quota_ring.name" = "Quota Ring";
+"ios.widget.quota_ring.desc" = "Weekly quota usage percentage at a glance.";
+"ios.widget.today_quota.name" = "Today + 5h";
+"ios.widget.today_quota.desc" = "Today's cost and 5-hour quota with the reset time.";
+"ios.widget.inline.name" = "Today Inline";
+"ios.widget.inline.desc" = "Today's cost above the lock screen clock.";
+"ios.widget.today_title" = "Today";
+"ios.widget.inline_today" = "Today %@";
+"ios.widget.vs_yesterday" = "%@ vs yesterday";
+"ios.widget.updated_at" = "Updated %@";
+"ios.widget.hours_ago" = "%dh ago";
+"ios.widget.days_ago" = "%dd ago";
+"ios.widget.setup_sync" = "Open Kanjo to set up sync";
+"ios.widget.quota_reset" = "Reset";
+"ios.widget.no_quota" = "No quota data";
+"ios.widget.five_hour_short" = "5h";
+"ios.widget.weekly_short" = "7d";
+"ios.widget.resets_at" = "Resets %@";
+"ios.widget.seven_day_total" = "7-day total";
+"ios.widget.daily_average" = "Daily avg";
+"ios.widget.intent.agent" = "Agent";
+"ios.widget.intent.auto" = "Automatic (Freshest)";
+
 /* Antigravity account management */
 "overview.agy.title_quota_week" = "Antigravity accounts · this quota week (since %@)";
 "overview.agy.title_billing_cycle" = "Antigravity accounts · this billing cycle (since %@)";
