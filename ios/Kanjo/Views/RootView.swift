@@ -1,9 +1,13 @@
 import KanjoCore
 import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 struct RootView: View {
     var store: SnapshotStore
     @AppStorage(SettingsKeys.appLanguage, store: AppDefaults.store) private var language = AppLanguage.system.rawValue
+    @State private var navigationResetID = UUID()
 
     var body: some View {
         NavigationStack {
@@ -18,8 +22,25 @@ struct RootView: View {
                     }
                 }
         }
-        .id(language)
+        .id("\(language)-\(navigationResetID)")
         .task { await store.load() }
+        .onChange(of: language) { _, newValue in
+            WidgetSnapshotCache.syncLanguagePreference(newValue)
+            #if canImport(WidgetKit)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+        }
+        .onOpenURL { url in
+            handleOpenURL(url)
+        }
+    }
+
+    private func handleOpenURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "kanjo" else { return }
+        let host = url.host?.lowercased() ?? ""
+        let path = url.path.lowercased()
+        guard host == "overview" || path == "/overview" || host.isEmpty else { return }
+        navigationResetID = UUID()
     }
 
     @ViewBuilder

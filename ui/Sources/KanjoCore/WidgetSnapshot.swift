@@ -1,0 +1,495 @@
+import Foundation
+
+/// 单日总花费（供小组件缓存与热力条使用，不含任何项目名或会话信息）。
+public struct WidgetDayCost: Codable, Equatable, Sendable, Identifiable {
+    public var day: String
+    public var cost: Double
+    public var byAgent: [String: Double]?
+
+    public var id: String { day }
+
+    enum CodingKeys: String, CodingKey {
+        case day
+        case cost
+        case byAgent = "by_agent"
+    }
+
+    public init(day: String, cost: Double, byAgent: [String: Double]? = nil) {
+        self.day = day
+        self.cost = cost
+        self.byAgent = byAgent
+    }
+}
+
+/// 按报告时区汇总所有项目 `projects[].by_day` 得到的今日、昨日与最近 N 天花费。
+public struct DailyCostSummary: Equatable, Sendable {
+    public var todayCost: Double
+    public var yesterdayCost: Double
+    public var days: [WidgetDayCost]
+
+    public init(todayCost: Double, yesterdayCost: Double, days: [WidgetDayCost]) {
+        self.todayCost = todayCost
+        self.yesterdayCost = yesterdayCost
+        self.days = days
+    }
+}
+
+/// 小组件单条额度进度数据（5 小时或每周窗口）。
+public struct WidgetQuotaBar: Equatable, Sendable, Identifiable {
+    public var id: String          // "five_hour" | "weekly"
+    public var windowHours: Int
+    public var usedPercent: Double?
+    public var resetsAt: Date?
+    public var isReset: Bool
+
+    public init(id: String, windowHours: Int, usedPercent: Double?, resetsAt: Date?, isReset: Bool) {
+        self.id = id
+        self.windowHours = windowHours
+        self.usedPercent = usedPercent
+        self.resetsAt = resetsAt
+        self.isReset = isReset
+    }
+}
+
+/// App Group 瘦身快照模型（`widget-snapshot.json`），仅包含小组件所需的聚合字段，不含项目名。
+public struct WidgetSnapshot: Codable, Equatable, Sendable {
+    public static let defaultDayCount = 15
+    public static let staleThreshold: TimeInterval = 2 * 3600
+
+    public var generatedAt: String
+    public var deviceName: String?
+    public var timezone: String?
+    public var currency: String
+    public var days: [WidgetDayCost]
+    public var quotaWindows: [String: QuotaWindow]?
+
+    enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case deviceName = "device_name"
+        case timezone
+        case currency
+        case days
+        case quotaWindows = "quota_windows"
+    }
+
+    public init(
+        generatedAt: String,
+        deviceName: String? = nil,
+        timezone: String? = nil,
+        currency: String = "USD",
+        days: [WidgetDayCost],
+        quotaWindows: [String: QuotaWindow]? = nil
+    ) {
+        self.generatedAt = generatedAt
+        self.deviceName = deviceName
+        self.timezone = timezone
+        self.currency = currency
+        self.days = days
+        self.quotaWindows = quotaWindows
+    }
+
+    /// 从完整或移动端 `UsageReport` 生成小组件瘦身快照。
+    public init(
+        report: UsageReport,
+        deviceName: String? = nil,
+        now: Date? = nil,
+        dayCount: Int = WidgetSnapshot.defaultDayCount
+    ) {
+        let referenceNow = now ?? ReportDates.parseTimestamp(report.generatedAt) ?? Date()
+        let summary = Self.dailyCosts(from: report, now: referenceNow, dayCount: dayCount)
+        self.generatedAt = report.generatedAt
+        self.deviceName = deviceName
+        self.timezone = report.timezone
+        self.currency = report.currency
+        self.days = summary.days
+        self.quotaWindows = report.quotaWindows
+    }
+
+    // MARK: - 时区与日期
+
+    public var resolvedTimezone: TimeZone {
+        Self.resolveTimezone(timezone)
+    }
+
+    public static func resolveTimezone(_ identifier: String?) -> TimeZone {
+        identifier.flatMap(TimeZone.init(identifier:)) ?? .current
+    }
+
+    public var generatedDate: Date? {
+        ReportDates.parseTimestamp(generatedAt)
+    }
+
+    // MARK: - 按日花费汇总
+
+    /// 按报告时区（若为 nil 则回退到当前时区）汇总 `projects[].by_day`，计算相对于 `now` 的今天、昨天和最近 N 天花费（缺省日补 0，最早的在前，最后一项为今天）。
+    public static func dailyCosts(
+        from report: UsageReport,
+        now: Date = Date(),
+        dayCount: Int = defaultDayCount
+    ) -> DailyCostSummary {
+        dailyCosts(
+            projects: report.projects,
+            timezone: resolveTimezone(report.timezone),
+            now: now,
+            dayCount: dayCount
+        )
+    }
+
+    public static func dailyCosts(
+        projects: [Project],
+        timezoneIdentifier: String?,
+        now: Date = Date(),
+        dayCount: Int = defaultDayCount
+    ) -> DailyCostSummary {
+        dailyCosts(
+            projects: projects,
+            timezone: resolveTimezone(timezoneIdentifier),
+            now: now,
+            dayCount: dayCount
+        )
+    }
+
+    public static func dailyCosts(
+        projects: [Project],
+        timezone: TimeZone? = nil,
+        now: Date = Date(),
+        dayCount: Int = defaultDayCount
+    ) -> DailyCostSummary {
+        let tz = timezone ?? .current
+        let cal = RangeEngine.calendar(timezone: tz)
+        let todayStart = cal.startOfDay(for: now)
+        let todayKey = RangeEngine.dayString(todayStart, calendar: cal)
+        let yesterdayStart = cal.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart
+        let yesterdayKey = RangeEngine.dayString(yesterdayStart, calendar: cal)
+
+        var costByDay: [String: Double] = [:]
+        var agentCostByDay: [String: [String: Double]] = [:]
+
+        for project in projects {
+            let fallback = dominantAgent(project.byAgent)?.agent ?? project.byAgent.first?.agent
+            for entry in project.byDay {
+                guard entry.cost.isFinite else { continue }
+                costByDay[entry.day, default: 0] += entry.cost
+                if let split = entry.byAgent, !split.isEmpty {
+                    for (agent, c) in split where c.isFinite && c > 0 {
+                        agentCostByDay[entry.day, default: [:]][agent, default: 0] += c
+                    }
+                } else if let fallback, entry.cost > 0 {
+                    agentCostByDay[entry.day, default: [:]][fallback, default: 0] += entry.cost
+                }
+            }
+        }
+
+        let count = max(0, dayCount)
+        let recentDays: [WidgetDayCost] = (0..<count).compactMap { index in
+            let offset = -(count - 1 - index)
+            guard let date = cal.date(byAdding: .day, value: offset, to: todayStart) else { return nil }
+            let key = RangeEngine.dayString(date, calendar: cal)
+            let cost = costByDay[key] ?? 0
+            let byAgent = agentCostByDay[key]
+            return WidgetDayCost(
+                day: key,
+                cost: cost,
+                byAgent: (byAgent?.isEmpty == false) ? byAgent : nil
+            )
+        }
+
+        return DailyCostSummary(
+            todayCost: costByDay[todayKey] ?? 0,
+            yesterdayCost: costByDay[yesterdayKey] ?? 0,
+            days: recentDays
+        )
+    }
+
+    // MARK: - 过期与跨天判断
+
+    /// 快照距 `now` 是否已超过阈值（默认 2 小时）。无法解析时间戳时视为过期。
+    public static func isStale(
+        generatedAt: String,
+        now: Date = Date(),
+        threshold: TimeInterval = staleThreshold
+    ) -> Bool {
+        guard let generated = ReportDates.parseTimestamp(generatedAt) else { return true }
+        return now.timeIntervalSince(generated) > threshold
+    }
+
+    public func isStale(now: Date = Date(), threshold: TimeInterval = staleThreshold) -> Bool {
+        Self.isStale(generatedAt: generatedAt, now: now, threshold: threshold)
+    }
+
+    /// 快照的 `generatedAt` 与 `now` 在目标时区下是否处于同一个自然日。
+    /// 若已跨天但尚未有新快照，今天花费未知（必须显示 "—"，不能拿昨天的数字当今天）。
+    public static func isTodayKnown(
+        generatedAt: String,
+        timezone: TimeZone,
+        now: Date = Date()
+    ) -> Bool {
+        guard let generated = ReportDates.parseTimestamp(generatedAt) else { return false }
+        let cal = RangeEngine.calendar(timezone: timezone)
+        return RangeEngine.dayString(generated, calendar: cal) == RangeEngine.dayString(now, calendar: cal)
+    }
+
+    public func isTodayKnown(now: Date = Date(), timezone: TimeZone? = nil) -> Bool {
+        Self.isTodayKnown(generatedAt: generatedAt, timezone: timezone ?? resolvedTimezone, now: now)
+    }
+
+    /// 今天的花费；若跨天尚未同步（`!isTodayKnown`），返回 `nil`（界面显示 "—"）。
+    public func todayCost(now: Date = Date()) -> Double? {
+        guard isTodayKnown(now: now) else { return nil }
+        let cal = RangeEngine.calendar(timezone: resolvedTimezone)
+        let todayKey = RangeEngine.dayString(cal.startOfDay(for: now), calendar: cal)
+        return days.first(where: { $0.day == todayKey })?.cost ?? 0
+    }
+
+    /// 昨天的花费（相对于 `now` 所在报告时区自然日的前一天）。
+    public func yesterdayCost(now: Date = Date()) -> Double {
+        let cal = RangeEngine.calendar(timezone: resolvedTimezone)
+        let todayStart = cal.startOfDay(for: now)
+        guard let yesterdayStart = cal.date(byAdding: .day, value: -1, to: todayStart) else { return 0 }
+        let yesterdayKey = RangeEngine.dayString(yesterdayStart, calendar: cal)
+        return days.first(where: { $0.day == yesterdayKey })?.cost ?? 0
+    }
+
+    /// 返回用于热力条展示的最近 `count` 天（最早的在前，最后一项为 `now` 所在日；缺失日期补 0）。
+    public func recentDays(count: Int, now: Date? = nil) -> [WidgetDayCost] {
+        guard count > 0 else { return [] }
+        let reference = now ?? generatedDate ?? Date()
+        let cal = RangeEngine.calendar(timezone: resolvedTimezone)
+        let todayStart = cal.startOfDay(for: reference)
+        var byKey: [String: WidgetDayCost] = [:]
+        for entry in days {
+            byKey[entry.day] = entry
+        }
+        return (0..<count).compactMap { index in
+            let offset = -(count - 1 - index)
+            guard let date = cal.date(byAdding: .day, value: offset, to: todayStart) else { return nil }
+            let key = RangeEngine.dayString(date, calendar: cal)
+            return byKey[key] ?? WidgetDayCost(day: key, cost: 0)
+        }
+    }
+
+    // MARK: - 额度 Agent 选择与新鲜度排序
+
+    /// 该 `QuotaWindow` 是否带有额度百分比数据（仅设置了手动重置时间但无任何百分比的不算有额度数据）。
+    public static func hasQuotaData(_ window: QuotaWindow?) -> Bool {
+        guard let window else { return false }
+        if let p = window.fiveHourUsedPercent, p.isFinite { return true }
+        if let p = window.weeklyUsedPercent, p.isFinite { return true }
+        if let extra = window.extraWindows, extra.contains(where: { $0.usedPercent?.isFinite == true }) {
+            return true
+        }
+        return false
+    }
+
+    /// 从 `quotaWindows` 中筛出有额度数据的 agent，并按额度数据新鲜度从新到旧排序。
+    ///
+    /// 新鲜度衡量：
+    /// 1. 含有未过期的额度窗口优先于全部窗口已过期的 agent（当提供 `now` 时）；
+    /// 2. 窗口起点（`resetsAt - windowHours`）最新者优先（例如近期开启的 5 小时窗口，或最新开启的周窗口）；
+    /// 3. 最晚重置时刻（`resetsAt`）更晚者优先；
+    /// 4. 数据来源优先级 `live` > `tokei` > `manual`，再以 `"claude"` 及字母序稳定兜底。
+    public static func quotaAgents(
+        in quotaWindows: [String: QuotaWindow]?,
+        now: Date? = nil
+    ) -> [String] {
+        guard let quotaWindows, !quotaWindows.isEmpty else { return [] }
+        let valid = quotaWindows.filter { hasQuotaData($0.value) }
+        guard !valid.isEmpty else { return [] }
+
+        return valid.keys.sorted { lhs, rhs in
+            guard let w1 = valid[lhs], let w2 = valid[rhs] else { return lhs < rhs }
+            let f1 = freshnessKey(for: w1, now: now)
+            let f2 = freshnessKey(for: w2, now: now)
+            if f1.hasActive != f2.hasActive { return f1.hasActive && !f2.hasActive }
+            if f1.latestWindowStart != f2.latestWindowStart {
+                return f1.latestWindowStart > f2.latestWindowStart
+            }
+            if f1.latestReset != f2.latestReset {
+                return f1.latestReset > f2.latestReset
+            }
+            if f1.sourceRank != f2.sourceRank {
+                return f1.sourceRank > f2.sourceRank
+            }
+            if (lhs == "claude") != (rhs == "claude") {
+                return lhs == "claude"
+            }
+            return lhs < rhs
+        }
+    }
+
+    /// 默认 agent：额度数据最新的那个 agent；没有任何可用额度数据时为 `nil`。
+    public static func defaultQuotaAgent(
+        in quotaWindows: [String: QuotaWindow]?,
+        now: Date? = nil
+    ) -> String? {
+        quotaAgents(in: quotaWindows, now: now).first
+    }
+
+    public func quotaAgents(now: Date? = nil) -> [String] {
+        Self.quotaAgents(in: quotaWindows, now: now)
+    }
+
+    public func defaultQuotaAgent(now: Date? = nil) -> String? {
+        Self.defaultQuotaAgent(in: quotaWindows, now: now)
+    }
+
+    private struct FreshnessKey {
+        var hasActive: Bool
+        var latestWindowStart: Date
+        var latestReset: Date
+        var sourceRank: Int
+    }
+
+    private static func freshnessKey(for window: QuotaWindow, now: Date?) -> FreshnessKey {
+        var starts: [Date] = []
+        var resets: [Date] = []
+
+        if window.fiveHourUsedPercent?.isFinite == true,
+           let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp) {
+            let hours = Double(max(1, window.fiveHourWindowHours ?? 5))
+            resets.append(reset)
+            starts.append(reset.addingTimeInterval(-hours * 3600))
+        }
+        if window.weeklyUsedPercent?.isFinite == true,
+           let reset = ReportDates.parseTimestamp(window.weeklyResetsAt) {
+            let hours = Double(max(1, window.weeklyWindowHours))
+            resets.append(reset)
+            starts.append(reset.addingTimeInterval(-hours * 3600))
+        }
+        if let extra = window.extraWindows {
+            for ew in extra where ew.usedPercent?.isFinite == true {
+                if let reset = ew.resetsAt.flatMap(ReportDates.parseTimestamp) {
+                    let hours = Double(max(1, ew.windowHours ?? 168))
+                    resets.append(reset)
+                    starts.append(reset.addingTimeInterval(-hours * 3600))
+                }
+            }
+        }
+
+        let hasActive: Bool
+        if let now {
+            hasActive = resets.contains(where: { $0 > now })
+        } else {
+            hasActive = !resets.isEmpty
+        }
+
+        let sourceRank: Int
+        switch window.source {
+        case "live": sourceRank = 3
+        case "tokei": sourceRank = 2
+        case "manual": sourceRank = 1
+        default: sourceRank = 0
+        }
+
+        return FreshnessKey(
+            hasActive: hasActive,
+            latestWindowStart: starts.max() ?? .distantPast,
+            latestReset: resets.max() ?? .distantPast,
+            sourceRank: sourceRank
+        )
+    }
+
+    // MARK: - 小组件额度行与时间线重置时刻
+
+    /// 小组件紧凑 agent 名称（例如 "claude" → "Claude"，"codex" → "Codex"）。
+    public static func shortAgentLabel(for agent: String) -> String {
+        switch agent {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        case "antigravity": return "Antigravity"
+        case "grok": return "Grok"
+        case "copilot": return "Copilot"
+        case "minimax": return "MiniMax"
+        case "qwen": return "Qwen"
+        case "commandcode": return "Command"
+        case "opencode": return "OpenCode"
+        default: return AgentColors.label(for: agent)
+        }
+    }
+
+    /// 指定 agent 在 `now` 时刻的 5 小时窗口状态。若该 agent 没有 5 小时窗口则返回 `nil`。
+    public func fiveHourQuotaBar(for agent: String, now: Date = Date()) -> WidgetQuotaBar? {
+        guard let window = quotaWindows?[agent], Self.hasQuotaData(window) else { return nil }
+        let hasFiveHour = window.fiveHourWindowHours != nil
+            || window.fiveHourResetsAt != nil
+            || window.fiveHourUsedPercent != nil
+        guard hasFiveHour else { return nil }
+        let hours = window.fiveHourWindowHours ?? 5
+        if let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp),
+           reset > now,
+           let pct = window.fiveHourUsedPercent, pct.isFinite {
+            return WidgetQuotaBar(
+                id: "five_hour",
+                windowHours: hours,
+                usedPercent: min(max(pct, 0), 100),
+                resetsAt: reset,
+                isReset: false
+            )
+        }
+        return WidgetQuotaBar(
+            id: "five_hour",
+            windowHours: hours,
+            usedPercent: nil,
+            resetsAt: nil,
+            isReset: true
+        )
+    }
+
+    /// 指定 agent 在 `now` 时刻的每周窗口状态。若该 agent 无额度数据则返回 `nil`。
+    public func weeklyQuotaBar(for agent: String, now: Date = Date()) -> WidgetQuotaBar? {
+        guard let window = quotaWindows?[agent], Self.hasQuotaData(window) else { return nil }
+        let hours = window.weeklyWindowHours
+        if let reset = ReportDates.parseTimestamp(window.weeklyResetsAt),
+           reset > now,
+           let pct = window.weeklyUsedPercent, pct.isFinite {
+            return WidgetQuotaBar(
+                id: "weekly",
+                windowHours: hours,
+                usedPercent: min(max(pct, 0), 100),
+                resetsAt: reset,
+                isReset: false
+            )
+        }
+        return WidgetQuotaBar(
+            id: "weekly",
+            windowHours: hours,
+            usedPercent: nil,
+            resetsAt: nil,
+            isReset: true
+        )
+    }
+
+    /// 指定 agent 的主额度条（5 小时 + 每周）。若无额度数据返回空数组。
+    public func quotaBars(for agent: String, now: Date = Date()) -> [WidgetQuotaBar] {
+        var out: [WidgetQuotaBar] = []
+        if let five = fiveHourQuotaBar(for: agent, now: now) {
+            out.append(five)
+        }
+        if let weekly = weeklyQuotaBar(for: agent, now: now) {
+            out.append(weekly)
+        }
+        return out
+    }
+
+    /// 所有在 `now` 之后的额度重置时刻（升序去重），供 WidgetKit 时间线在重置点精确刷新为“已重置”状态。
+    public func upcomingResetDates(after now: Date) -> [Date] {
+        guard let quotaWindows else { return [] }
+        var dates = Set<Date>()
+        for window in quotaWindows.values where Self.hasQuotaData(window) {
+            if let d = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp), d > now {
+                dates.insert(d)
+            }
+            if let d = ReportDates.parseTimestamp(window.weeklyResetsAt), d > now {
+                dates.insert(d)
+            }
+            if let extra = window.extraWindows {
+                for ew in extra {
+                    if let d = ew.resetsAt.flatMap(ReportDates.parseTimestamp), d > now {
+                        dates.insert(d)
+                    }
+                }
+            }
+        }
+        return dates.sorted()
+    }
+}

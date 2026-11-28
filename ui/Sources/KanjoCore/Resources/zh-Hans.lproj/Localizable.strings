@@ -542,6 +542,32 @@
 "ios.empty.step2" = "打开 Kanjo 设置 → 通用，开启 iCloud 同步";
 "ios.empty.step3" = "确保两台设备登录同一个 Apple ID";
 
+/* iOS 小组件 */
+"ios.widget.today.name" = "今天";
+"ios.widget.today.desc" = "今天花费、对比昨天变化与近期每日热力条。";
+"ios.widget.quota.name" = "额度";
+"ios.widget.quota.desc" = "5 小时与每周额度进度及重置倒计时。";
+"ios.widget.quota_ring.name" = "额度圆环";
+"ios.widget.quota_ring.desc" = "一目了然查看每周已用额度百分比。";
+"ios.widget.today_quota.name" = "今天 + 5 小时";
+"ios.widget.today_quota.desc" = "今天花费与 5 小时额度及重置倒计时。";
+"ios.widget.inline.name" = "一行";
+"ios.widget.inline.desc" = "在锁屏时钟上方显示今天花费。";
+"ios.widget.today_title" = "今天";
+"ios.widget.inline_today" = "今天 %@";
+"ios.widget.vs_yesterday" = "较昨天 %@";
+"ios.widget.updated_at" = "%@ 更新";
+"ios.widget.hours_ago" = "%d 小时前";
+"ios.widget.days_ago" = "%d 天前";
+"ios.widget.setup_sync" = "打开 Kanjo 设置同步";
+"ios.widget.quota_reset" = "已重置";
+"ios.widget.no_quota" = "无额度数据";
+"ios.widget.five_hour_short" = "5h";
+"ios.widget.weekly_short" = "每周";
+"ios.widget.resets_in_short" = "%@后重置";
+"ios.widget.intent.agent" = "Agent";
+"ios.widget.intent.auto" = "自动（最新）";
+
 /* Antigravity 账号管理 */
 "overview.agy.title_quota_week" = "Antigravity 账号 · 本额度周（%@ 起）";
 "overview.agy.title_billing_cycle" = "Antigravity 账号 · 本账期（%@ 起）";

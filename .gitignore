@@ -21,6 +21,7 @@ data.json
 
 # Xcode build output
 build-dd/
+ios/build-widgets/
 
 # iOS: commit the generated project (regenerate with `cd ios && xcodegen` after editing project.yml)
 !ios/Kanjo.xcodeproj
