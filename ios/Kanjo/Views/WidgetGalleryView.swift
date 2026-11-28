@@ -16,11 +16,9 @@ struct WidgetGalleryView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(state.title)
                                 .font(.headline)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(alignment: .top, spacing: 16) {
-                                    ForEach(WidgetGalleryKind.allCases) { kind in
-                                        galleryCard(kind: kind, entry: state.entry)
-                                    }
+                            GalleryFlowLayout(spacing: 16, lineSpacing: 16) {
+                                ForEach(WidgetGalleryKind.allCases) { kind in
+                                    galleryCard(kind: kind, entry: state.entry)
                                 }
                             }
                         }
@@ -48,18 +46,85 @@ struct WidgetGalleryView: View {
                 .clipShape(shape)
                 .overlay(shape.stroke(Color.primary.opacity(0.15), lineWidth: 1))
         }
+        .frame(width: kind.canvas.width, alignment: .leading)
     }
 
+    /// 主屏小组件在系统里有 16pt 内容边距；锁屏 accessory 没有。边距放在画布尺寸里面，背景仍铺满卡片。
     @ViewBuilder
     private func framed(kind: WidgetGalleryKind, entry: KanjoWidgetEntry) -> some View {
         let view = kind.makeView(entry)
             .environment(\.kanjoWidgetFamilyOverride, kind.family)
-            .environment(\.widgetRenderingMode, .fullColor)
+            .environment(\.widgetRenderingMode, kind.accessory ? .vibrant : .fullColor)
+            .padding(kind.contentMargin)
         if kind.accessory {
             view.environment(\.colorScheme, .dark)
         } else {
             view
         }
+    }
+}
+
+/// 状态行里的卡片换行排，中尺寸不再被横向滚动裁到屏幕外。
+private struct GalleryFlowLayout: Layout {
+    var spacing: CGFloat = 16
+    var lineSpacing: CGFloat = 16
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = rows(maxWidth: proposal.width ?? .greatestFiniteMagnitude, subviews: subviews)
+        let height = rows.reduce(CGFloat(0)) { $0 + $1.height }
+            + lineSpacing * CGFloat(max(rows.count - 1, 0))
+        let width = proposal.width ?? (rows.map(\.width).max() ?? 0)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = rows(maxWidth: bounds.width, subviews: subviews)
+        var y = bounds.minY
+        var index = 0
+        for row in rows {
+            var x = bounds.minX
+            for size in row.sizes {
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: size.width, height: size.height)
+                )
+                x += size.width + spacing
+                index += 1
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private struct Row {
+        var sizes: [CGSize]
+        var width: CGFloat
+        var height: CGFloat
+    }
+
+    private func rows(maxWidth: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var sizes: [CGSize] = []
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        func flush() {
+            guard !sizes.isEmpty else { return }
+            rows.append(Row(sizes: sizes, width: rowWidth, height: rowHeight))
+            sizes = []
+            rowWidth = 0
+            rowHeight = 0
+        }
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if !sizes.isEmpty, rowWidth + spacing + size.width > maxWidth {
+                flush()
+            }
+            rowWidth = sizes.isEmpty ? size.width : rowWidth + spacing + size.width
+            rowHeight = max(rowHeight, size.height)
+            sizes.append(size)
+        }
+        flush()
+        return rows
     }
 }
 
@@ -202,6 +267,11 @@ private enum WidgetGalleryKind: String, CaseIterable, Identifiable {
         case .ring, .rectangular, .inline: return true
         case .todaySmall, .todayMedium, .quotaSmall, .quotaMedium: return false
         }
+    }
+
+    /// 和 WidgetKit 一样：主屏小/中 16pt，锁屏 accessory 无边距。
+    var contentMargin: CGFloat {
+        accessory ? 0 : 16
     }
 
     /// 393pt 宽 iPhone 的主屏小组件画布，以及锁屏圆形 / 矩形 / 一行的 complication 画布。

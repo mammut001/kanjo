@@ -161,15 +161,33 @@ enum WidgetFormatting {
         }
     }
 
-    /// “Resets in …” / “%@后重置” / “Réinitialisation dans %@”。
-    /// 倒计时本身仍是 `Text(date, style: .relative)`，系统会自己跳字，不靠时间线刷新。
-    static func resetsInText(_ date: Date) -> Text {
+    /// 重置时刻，不倒计时。5 小时窗口只显示本地时刻（“Resets 02:12” / “02:12 重置” / “Réinit. 02:12”），
+    /// 周窗口再加应用语言的缩写星期（“Resets Tue 08:40” / “周二 08:40 重置” / “Réinit. mar. 08:40”）。
+    /// 时刻用 `Text(date, style: .time)`，跟随系统 12/24 小时制和本地时区，文本不变，不用为它刷新时间线。
+    static func resetClockText(_ date: Date, weekly: Bool) -> Text {
+        let time = Text(date, style: .time)
+        guard weekly else { return time }
+        return Text(abbreviatedWeekday(date) + " ") + time
+    }
+
+    static func resetsAtText(_ date: Date, weekly: Bool) -> Text {
         let token = "\u{FFFC}"
-        let formatted = L10n.tr("ios.widget.resets_in_short", token)
+        let formatted = L10n.tr("ios.widget.resets_at", token)
         let parts = formatted.components(separatedBy: token)
         let prefix = parts.first ?? ""
         let suffix = parts.dropFirst().joined()
-        return Text(prefix) + Text(date, style: .relative) + Text(suffix)
+        return Text(prefix) + resetClockText(date, weekly: weekly) + Text(suffix)
+    }
+
+    /// 缩写星期跟应用语言走（Tue / 周二 / mar.），和旁边的“Resets / 重置 / Réinit.”一致。
+    /// 时区用本机，和 `Text(date, style: .time)` 的本地时刻对得上。
+    private static func abbreviatedWeekday(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.currentLanguage)
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = .current
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
+        return formatter.string(from: date)
     }
 }
 
@@ -694,6 +712,9 @@ private struct WidgetQuotaBarItemView: View {
         return SubscriptionValue.windowName(hours: bar.windowHours)
     }
 
+    /// 5 小时窗口只写时刻；超过一天的周窗口加上星期。
+    private var showsWeekday: Bool { bar.windowHours > 24 }
+
     var body: some View {
         if compact {
             compactRow
@@ -724,7 +745,7 @@ private struct WidgetQuotaBarItemView: View {
             progressBar(height: 5)
 
             if !bar.isReset, let resetsAt = bar.resetsAt {
-                WidgetFormatting.resetsInText(resetsAt)
+                WidgetFormatting.resetsAtText(resetsAt, weekly: showsWeekday)
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
@@ -758,7 +779,7 @@ private struct WidgetQuotaBarItemView: View {
                 }
             }
             if !bar.isReset, let resetsAt = bar.resetsAt {
-                WidgetFormatting.resetsInText(resetsAt)
+                WidgetFormatting.resetsAtText(resetsAt, weekly: showsWeekday)
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
@@ -929,7 +950,8 @@ struct TodayQuotaRectangularWidgetView: View {
             if bar.isReset {
                 Text("\(name) \(windowLabel) · \(L10n.tr("ios.widget.quota_reset"))")
             } else if let pct = bar.usedPercent, let resetsAt = bar.resetsAt {
-                (Text("\(name) \(windowLabel) \(Int(pct.rounded()))% · ") + WidgetFormatting.resetsInText(resetsAt))
+                (Text("\(name) \(windowLabel) \(Int(pct.rounded()))% · ")
+                    + WidgetFormatting.resetClockText(resetsAt, weekly: bar.windowHours > 24))
                     .opacity(isStale ? 0.65 : 1.0)
                     .minimumScaleFactor(0.6)
             } else {

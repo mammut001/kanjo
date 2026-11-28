@@ -546,11 +546,11 @@
 "ios.widget.today.name" = "Today";
 "ios.widget.today.desc" = "Today's cost, change vs yesterday, and recent daily heat strip.";
 "ios.widget.quota.name" = "Quota";
-"ios.widget.quota.desc" = "5-hour and weekly quota usage with reset countdown.";
+"ios.widget.quota.desc" = "5-hour and weekly quota usage with the reset time.";
 "ios.widget.quota_ring.name" = "Quota Ring";
 "ios.widget.quota_ring.desc" = "Weekly quota usage percentage at a glance.";
 "ios.widget.today_quota.name" = "Today + 5h";
-"ios.widget.today_quota.desc" = "Today's cost and 5-hour quota with reset countdown.";
+"ios.widget.today_quota.desc" = "Today's cost and 5-hour quota with the reset time.";
 "ios.widget.inline.name" = "Today Inline";
 "ios.widget.inline.desc" = "Today's cost above the lock screen clock.";
 "ios.widget.today_title" = "Today";
@@ -564,7 +564,7 @@
 "ios.widget.no_quota" = "No quota data";
 "ios.widget.five_hour_short" = "5h";
 "ios.widget.weekly_short" = "7d";
-"ios.widget.resets_in_short" = "Resets in %@";
+"ios.widget.resets_at" = "Resets %@";
 "ios.widget.seven_day_total" = "7-day total";
 "ios.widget.daily_average" = "Daily avg";
 "ios.widget.intent.agent" = "Agent";

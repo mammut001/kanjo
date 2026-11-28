@@ -546,11 +546,11 @@
 "ios.widget.today.name" = "Aujourd'hui";
 "ios.widget.today.desc" = "Coût du jour, évolution par rapport à hier et barre thermique récente.";
 "ios.widget.quota.name" = "Quota";
-"ios.widget.quota.desc" = "Utilisation des quotas 5 heures et hebdomadaire avec compte à rebours.";
+"ios.widget.quota.desc" = "Utilisation des quotas 5 heures et hebdomadaire avec l'heure de réinitialisation.";
 "ios.widget.quota_ring.name" = "Anneau de quota";
 "ios.widget.quota_ring.desc" = "Pourcentage du quota hebdomadaire utilisé en un coup d'œil.";
 "ios.widget.today_quota.name" = "Aujourd'hui + 5 h";
-"ios.widget.today_quota.desc" = "Coût du jour et quota 5 heures avec compte à rebours.";
+"ios.widget.today_quota.desc" = "Coût du jour et quota 5 heures avec l'heure de réinitialisation.";
 "ios.widget.inline.name" = "Aujourd'hui en ligne";
 "ios.widget.inline.desc" = "Coût du jour au-dessus de l'horloge de l'écran verrouillé.";
 "ios.widget.today_title" = "Aujourd'hui";
@@ -564,7 +564,7 @@
 "ios.widget.no_quota" = "Aucune donnée de quota";
 "ios.widget.five_hour_short" = "5 h";
 "ios.widget.weekly_short" = "7 j";
-"ios.widget.resets_in_short" = "Réinitialisation dans %@";
+"ios.widget.resets_at" = "Réinit. %@";
 "ios.widget.seven_day_total" = "Total 7 j";
 "ios.widget.daily_average" = "Moy. / jour";
 "ios.widget.intent.agent" = "Agent";

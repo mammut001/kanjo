@@ -21,8 +21,8 @@ enum IOSPalette {
     static let heatZero = dynamic(light: 0xC8C8CD, dark: 0x3A3A3C)
 
     /// 热力条非零档。色相沿用 `AgentColors`（和 App 热力条同一套）。
-    /// 最低一档已经是同色相的实色，不再把强调色以很低的不透明度铺在白底上（那会变成近白的粉）。
-    /// 最高一档是该 agent 的完整强调色。
+    /// 四档饱和度大约是强调色的 0.38 / 0.58 / 0.80 / 1.0，浅色再把低档亮度抬高，深色反过来压暗。
+    /// 最低档仍是这个色相的清色，不混白、也不落到灰。零花费不走这里，用 `heatZero`。
     static func heatLevelColor(agent: String, level: Int) -> Color {
         let pair = AgentColors.pair(for: agent)
         let step = min(max(level, 1), HeatStrip.levels - 1)
@@ -30,12 +30,15 @@ enum IOSPalette {
             let isDark = traits.userInterfaceStyle == .dark
             let base = uiColor(isDark ? pair.dark : pair.light, alpha: 1)
             if step >= HeatStrip.levels - 1 { return base }
-            return rampedHeat(base, step: step, steps: HeatStrip.levels - 1)
+            return rampedHeat(base, step: step, dark: isDark)
         })
     }
 
-    /// 在色相上从“仍然饱和的浅一档”走到完整强调色。不往白色里混。
-    private static func rampedHeat(_ color: UIColor, step: Int, steps: Int) -> UIColor {
+    /// 非零档的饱和度比例。最高档直接用强调色本身，不经过这次换算。
+    private static let heatSaturationFractions: [CGFloat] = [0.38, 0.58, 0.80, 1]
+
+    /// 浅色：低档在色相上抬亮（封顶 0.94，避免近白）。深色：镜像，低档压到约 0.62× 亮度，且不低于 0.40。
+    private static func rampedHeat(_ color: UIColor, step: Int, dark: Bool) -> UIColor {
         var hue: CGFloat = 0
         var saturation: CGFloat = 0
         var brightness: CGFloat = 0
@@ -44,12 +47,20 @@ enum IOSPalette {
               saturation > 0.05 else {
             return color
         }
-        let span = CGFloat(max(steps - 1, 1))
-        let t = CGFloat(max(step - 1, 0)) / span
-        let floorSaturation = min(saturation, max(0.58, saturation * 0.82))
-        let liftedBrightness = min(0.92, brightness + (1 - brightness) * 0.22)
-        let outSaturation = floorSaturation + (saturation - floorSaturation) * t
-        let outBrightness = liftedBrightness + (brightness - liftedBrightness) * t
+        let last = heatSaturationFractions.count - 1
+        let index = min(max(step - 1, 0), last)
+        if index >= last { return color }
+        let fraction = heatSaturationFractions[index]
+        let t = CGFloat(index) / CGFloat(last)
+        let outSaturation = saturation * fraction
+        let outBrightness: CGFloat
+        if dark {
+            let floor = min(brightness, max(0.40, brightness * 0.62))
+            outBrightness = floor + (brightness - floor) * t
+        } else {
+            let ceiling = max(brightness, min(0.94, brightness + (1 - brightness) * 0.55))
+            outBrightness = ceiling + (brightness - ceiling) * t
+        }
         return UIColor(hue: hue, saturation: outSaturation, brightness: outBrightness, alpha: 1)
     }
     static let tokenInput = dynamic(light: 0x3E79D6, dark: 0x6FA0F0)
