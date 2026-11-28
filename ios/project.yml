@@ -5,6 +5,12 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
   developmentLanguage: en
+  # 小组件配置意图的文案在扩展 bundle 里，工程要声明这三种语言才会打进包。
+  knownRegions:
+    - en
+    - Base
+    - zh-Hans
+    - fr
 packages:
   KanjoCore:
     path: ../ui
@@ -66,6 +72,11 @@ targets:
     info:
       path: KanjoWidget/Info.plist
       properties:
+        # 扩展自己的本地化列表。不写的话系统只认宿主 App 的开发语言（en）。
+        CFBundleLocalizations:
+          - en
+          - zh-Hans
+          - fr
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

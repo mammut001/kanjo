@@ -4,6 +4,7 @@ import KanjoCore
 
 struct QuotaAgentEntity: AppEntity, Identifiable, Hashable {
     static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        // 与参数标题共用 "Agent" 这一条，翻译在扩展的 Localizable.strings。
         TypeDisplayRepresentation(name: "Agent")
     }
 
@@ -54,6 +55,8 @@ struct QuotaAgentEntityQuery: EntityStringQuery {
 }
 
 struct SelectQuotaAgentIntent: WidgetConfigurationIntent {
+    // App Intents 从小组件扩展自己的 bundle 查这些文案，不走 KanjoCore。
+    // 见 KanjoWidget/{en,zh-Hans,fr}.lproj/Localizable.strings。
     static var title: LocalizedStringResource = "Select Agent"
     static var description = IntentDescription("Choose which AI agent's quota to display.")
 

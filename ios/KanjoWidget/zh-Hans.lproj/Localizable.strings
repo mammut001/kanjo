@@ -1,0 +1,4 @@
+/* 小组件配置意图。从 KanjoWidget 自己的 bundle 查找，不走 KanjoCore。 */
+"Select Agent" = "选择 Agent";
+"Choose which AI agent's quota to display." = "选择要显示哪个 AI Agent 的额度。";
+"Agent" = "Agent";

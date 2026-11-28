@@ -35,6 +35,7 @@
 		E7E2189D2377ADB0FE4EDBDA /* KanjoCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9B8C72260EBD90BDF78E87A /* KanjoCore */; };
 		F091662BF0F2C749337BB615 /* KanjoWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85CB0F2BA1F22DD1F6E2939E /* KanjoWidgetBundle.swift */; };
 		F0CF749DD2F2A30FABF632F7 /* KanjoTimelineProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B486A042D9FD359956616B7B /* KanjoTimelineProvider.swift */; };
+		F8FE051F2D3F90D6C58FD854 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 3AB5C14D51C95CF1F5DED82D /* Localizable.strings */; };
 		FCB440CC4A4C43C8CC292467 /* WidgetSnapshotCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7434796528CA7D71A413510 /* WidgetSnapshotCache.swift */; };
 		FD45AEB6FBD3348CD9B5CC16 /* KanjoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D70329043E5CE090994ECBC9 /* KanjoApp.swift */; };
 		FDC1B631BBF60F50C8301407 /* sample-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = B0908A345408422DD68F8556 /* sample-snapshot.json */; };
@@ -78,6 +79,7 @@
 		11501081076B36A53170935D /* Kanjo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kanjo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		21EAA7B0EADA196C2CAF2499 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		2D3BCBEFE7170B43A61B18A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3332DE380558E8D7BE8335CB /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		3465A7114B6763F70C034E43 /* MosaicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MosaicView.swift; sourceTree = "<group>"; };
 		39D4773DEC1DD1A811985E85 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B9EE86B3C69D02ACDC209C1 /* SnapshotSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotSource.swift; sourceTree = "<group>"; };
@@ -102,7 +104,9 @@
 		E19E89018E4E065FC1F44B46 /* Kanjo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kanjo.entitlements; sourceTree = "<group>"; };
 		E3C46E10884DB3956B665DC7 /* ByModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByModelView.swift; sourceTree = "<group>"; };
 		E60B9589EB25815A18B03D91 /* KanjoWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KanjoWidget.entitlements; sourceTree = "<group>"; };
+		EB8945B76CCBD87BFC02642D /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		EBA42EB2A06C7D6D79D48EB0 /* QuotaAgentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAgentIntent.swift; sourceTree = "<group>"; };
+		F52A824F8C2D9B11AB8CE620 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F7434796528CA7D71A413510 /* WidgetSnapshotCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotCache.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -214,6 +218,7 @@
 				C39F8D1DE8704FCAB03C2E66 /* KanjoWidgetViews.swift */,
 				74D7C52B5ED19C05A733582C /* PrivacyInfo.xcprivacy */,
 				EBA42EB2A06C7D6D79D48EB0 /* QuotaAgentIntent.swift */,
+				3AB5C14D51C95CF1F5DED82D /* Localizable.strings */,
 			);
 			path = KanjoWidget;
 			sourceTree = "<group>";
@@ -348,6 +353,8 @@
 			knownRegions = (
 				Base,
 				en,
+				fr,
+				"zh-Hans",
 			);
 			mainGroup = 2237C690E12D731BE3780DD9;
 			minimizedProjectReferenceProxies = 1;
@@ -381,6 +388,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F8FE051F2D3F90D6C58FD854 /* Localizable.strings in Resources */,
 				C2CDF58128B44AE1BD478B44 /* PrivacyInfo.xcprivacy in Resources */,
 				35E36A1E36EB334DE9C6CA37 /* sample-snapshot.json in Resources */,
 			);
@@ -447,6 +455,19 @@
 			targetProxy = 00FFC9EF8F89EB5D4DEF3283 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		3AB5C14D51C95CF1F5DED82D /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F52A824F8C2D9B11AB8CE620 /* en */,
+				EB8945B76CCBD87BFC02642D /* fr */,
+				3332DE380558E8D7BE8335CB /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		03414271BE8B520E9B40BAD7 /* Debug */ = {

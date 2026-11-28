@@ -1,0 +1,4 @@
+/* Intention de configuration du widget. Lue dans le bundle KanjoWidget, pas dans KanjoCore. */
+"Select Agent" = "Choisir l'agent";
+"Choose which AI agent's quota to display." = "Choisissez l'agent IA dont le quota s'affiche.";
+"Agent" = "Agent";

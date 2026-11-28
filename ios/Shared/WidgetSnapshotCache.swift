@@ -77,13 +77,13 @@ enum WidgetSnapshotCache {
         return try write(snapshot, to: fileURL)
     }
 
-    private enum FetchRaceResult {
-        case fetched(WidgetSnapshot?)
-        case timedOut
-    }
-
     /// 先尝试从 iCloud（KVS / CloudKit）拉取最新快照，最多等待 `timeoutSeconds`（默认 8 秒）；
-    /// 拉取成功则更新缓存并返回，失败或超时则回退到 App Group 缓存。
+    /// 拉取成功且不比缓存旧则更新缓存并返回，失败或超时则回退到 App Group 缓存。
+    ///
+    /// `CloudKitSnapshotSource.load()` 里的 continuation 不响应取消，task group 的
+    /// `cancelAll()` 停不掉它，组还会等所有子任务结束。所以拉取放在无结构 `Task` 里，
+    /// 和超时 `Task` 抢一个只恢复一次的门闩：谁先到，函数就马上返回。超时先到时返回
+    /// 已读到的缓存；拉取若稍后才结束，仍可按“比缓存新才写入”的规则更新缓存。
     static func fetchOrFallbackToCache(
         timeoutSeconds: TimeInterval = defaultTimeoutSeconds,
         fileURL: URL? = nil
@@ -91,47 +91,108 @@ enum WidgetSnapshotCache {
         applySharedLanguagePreference()
         let cached = read(from: fileURL)
 
-        let fetched: WidgetSnapshot? = await withTaskGroup(of: FetchRaceResult.self) { group in
-            group.addTask {
-                do {
-                    let source = CloudKitSnapshotSource()
-                    guard let report = try await source.load() else {
-                        return .fetched(nil)
+        let fetched: WidgetSnapshot? = await withCheckedContinuation { continuation in
+            let gate = ResumeOnce()
+            let timeoutTask = CancelBox()
+
+            Task {
+                let snapshot = await loadLiveSnapshot()
+                if gate.claim() {
+                    timeoutTask.cancel()
+                    continuation.resume(returning: snapshot)
+                } else if let snapshot {
+                    // 函数已经带着缓存返回了。拉取更旧则保留缓存，否则补写。
+                    let current = read(from: fileURL)
+                    if shouldReplaceCache(current, with: snapshot) {
+                        _ = try? write(snapshot, to: fileURL)
                     }
-                    let snapshot = WidgetSnapshot(report: report, deviceName: source.lastDeviceName)
-                    return .fetched(snapshot)
-                } catch {
-                    SyncLog.sync.info("widget live fetch failed, using cache: \(error.localizedDescription, privacy: .private)")
-                    return .fetched(nil)
                 }
             }
-            group.addTask {
+            let timeout = Task {
                 let nanos = UInt64(max(0.1, timeoutSeconds) * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
-                return .timedOut
+                do {
+                    try await Task.sleep(nanoseconds: nanos)
+                } catch {
+                    return
+                }
+                if gate.claim() {
+                    SyncLog.sync.info("widget live fetch timed out after \(timeoutSeconds, privacy: .public)s, using cache")
+                    continuation.resume(returning: nil)
+                }
             }
-
-            let first = await group.next() ?? .timedOut
-            group.cancelAll()
-            switch first {
-            case .fetched(let snapshot):
-                return snapshot
-            case .timedOut:
-                SyncLog.sync.info("widget live fetch timed out after \(timeoutSeconds, privacy: .public)s, using cache")
-                return nil
-            }
+            timeoutTask.store(timeout)
         }
 
         if let fetched {
-            if let cached,
-               let cachedDate = cached.generatedDate,
-               let fetchedDate = fetched.generatedDate,
-               fetchedDate < cachedDate {
-                return cached
+            if shouldReplaceCache(cached, with: fetched) {
+                _ = try? write(fetched, to: fileURL)
+                return fetched
             }
-            _ = try? write(fetched, to: fileURL)
-            return fetched
+            return cached
         }
         return cached
+    }
+
+    /// 拉取到的快照比缓存更旧时保留缓存。任一端没有可解析的生成时间则采用拉取结果。
+    private static func shouldReplaceCache(_ cached: WidgetSnapshot?, with fetched: WidgetSnapshot) -> Bool {
+        if let cached,
+           let cachedDate = cached.generatedDate,
+           let fetchedDate = fetched.generatedDate,
+           fetchedDate < cachedDate {
+            return false
+        }
+        return true
+    }
+
+    private static func loadLiveSnapshot() async -> WidgetSnapshot? {
+        do {
+            let source = CloudKitSnapshotSource()
+            guard let report = try await source.load() else {
+                return nil
+            }
+            return WidgetSnapshot(report: report, deviceName: source.lastDeviceName)
+        } catch {
+            SyncLog.sync.info("widget live fetch failed, using cache: \(error.localizedDescription, privacy: .private)")
+            return nil
+        }
+    }
+
+    /// 只让拉取和超时其中一方恢复 continuation。恢复发生在锁外，避免 resume 同步跑调用方时再入锁。
+    private final class ResumeOnce: @unchecked Sendable {
+        private let lock = NSLock()
+        private var claimed = false
+
+        func claim() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if claimed { return false }
+            claimed = true
+            return true
+        }
+    }
+
+    /// 超时任务可能在 `store` 之前就被拉取结果取消，取消标志要先记下。
+    private final class CancelBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var task: Task<Void, Never>?
+        private var cancelled = false
+
+        func store(_ task: Task<Void, Never>) {
+            lock.lock()
+            let shouldCancel = cancelled
+            self.task = task
+            lock.unlock()
+            if shouldCancel {
+                task.cancel()
+            }
+        }
+
+        func cancel() {
+            lock.lock()
+            cancelled = true
+            let task = self.task
+            lock.unlock()
+            task?.cancel()
+        }
     }
 }
