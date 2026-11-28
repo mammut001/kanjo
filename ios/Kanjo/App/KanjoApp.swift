@@ -30,6 +30,7 @@ enum BackgroundRefreshManager {
 
     private static func handle(task: BGAppRefreshTask) {
         schedule()
+        let gate = CompletionGate()
         let fetchTask = Task {
             let source = CloudKitSnapshotSource()
             do {
@@ -37,14 +38,29 @@ enum BackgroundRefreshManager {
                     _ = try? WidgetSnapshotCache.write(report: report, deviceName: source.lastDeviceName)
                     WidgetCenter.shared.reloadAllTimelines()
                 }
-                task.setTaskCompleted(success: true)
+                gate.finish { task.setTaskCompleted(success: true) }
             } catch {
                 SyncLog.sync.error("BGAppRefreshTask failed: \(error.localizedDescription, privacy: .private)")
-                task.setTaskCompleted(success: false)
+                gate.finish { task.setTaskCompleted(success: false) }
             }
         }
         task.expirationHandler = {
             fetchTask.cancel()
+            gate.finish { task.setTaskCompleted(success: false) }
+        }
+    }
+
+    /// `setTaskCompleted` 只能调用一次；过期回调和拉取任务谁先结束谁提交。
+    private final class CompletionGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var done = false
+
+        func finish(_ body: () -> Void) {
+            lock.lock()
+            let first = !done
+            if first { done = true }
+            lock.unlock()
+            if first { body() }
         }
     }
 }

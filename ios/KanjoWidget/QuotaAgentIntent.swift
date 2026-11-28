@@ -48,9 +48,8 @@ struct QuotaAgentEntityQuery: EntityStringQuery {
     }
 
     private func availableQuotaAgents() -> [String] {
-        let snapshot = WidgetSnapshotCache.read()
-            ?? BundledSampleSnapshotSource().loadWidgetSnapshot()
-        return snapshot?.quotaAgents() ?? []
+        // 只提供真实缓存里有额度的 agent。库预览没有选择时仍走示例快照的默认 agent。
+        WidgetSnapshotCache.read()?.quotaAgents() ?? []
     }
 }
 

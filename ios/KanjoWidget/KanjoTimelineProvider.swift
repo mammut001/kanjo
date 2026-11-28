@@ -110,11 +110,8 @@ struct KanjoStaticTimelineProvider: TimelineProvider {
             completion(.preview())
             return
         }
-        if let cached = WidgetSnapshotCache.read() {
-            completion(KanjoWidgetEntry(date: Date(), snapshot: cached))
-        } else {
-            completion(.preview())
-        }
+        // 真实主屏不用示例数据顶上；没缓存就走“打开 Kanjo 设置同步”。
+        completion(KanjoWidgetEntry(date: Date(), snapshot: WidgetSnapshotCache.read()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<KanjoWidgetEntry>) -> Void) {
@@ -145,10 +142,7 @@ struct KanjoQuotaIntentTimelineProvider: AppIntentTimelineProvider {
         if context.isPreview {
             return .preview(selectedAgentID: selected)
         }
-        if let cached = WidgetSnapshotCache.read() {
-            return KanjoWidgetEntry(date: Date(), snapshot: cached, selectedAgentID: selected)
-        }
-        return .preview(selectedAgentID: selected)
+        return KanjoWidgetEntry(date: Date(), snapshot: WidgetSnapshotCache.read(), selectedAgentID: selected)
     }
 
     func timeline(for configuration: SelectQuotaAgentIntent, in context: Context) async -> Timeline<KanjoWidgetEntry> {

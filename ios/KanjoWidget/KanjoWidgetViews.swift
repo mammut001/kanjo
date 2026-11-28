@@ -125,7 +125,14 @@ struct WidgetDailyHeatStrip: View {
     var cornerRadius: CGFloat = 3
     var spacing: CGFloat = 3
 
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
     private static let opacities: [Double] = [0, 0.3, 0.52, 0.76, 1]
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
         let peak = days.map(\.cost).max() ?? 0
@@ -142,34 +149,42 @@ struct WidgetDailyHeatStrip: View {
     @ViewBuilder
     private func dayCell(_ day: WidgetDayCost, level: Int) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let weekLike = WeekCost(
-            start: .distantPast,
-            cost: day.cost,
-            byAgent: (day.byAgent?.isEmpty == false) ? day.byAgent! : ["claude": day.cost]
-        )
-        let segments = HeatStrip.segments(weekLike)
-        if level == 0 || segments.isEmpty {
-            shape.fill(IOSPalette.heatEmpty)
+        let opacityIndex = min(max(level, 0), Self.opacities.count - 1)
+        if !rendersInFullColor {
+            // 锁屏活力渲染与主屏着色模式不保留自定义色，用透明度分档交给系统着色。
+            shape
+                .fill(Color.primary.opacity(level == 0 ? 0.18 : Self.opacities[opacityIndex]))
+                .widgetAccentable(level > 0)
         } else {
-            let cumulative = segments.indices.map { idx in
-                segments[0...idx].reduce(0.0) { $0 + $1.share }
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .top) {
-                    ForEach(segments.indices.reversed(), id: \.self) { index in
-                        Rectangle()
-                            .fill(IOSPalette.agent(segments[index].agent))
-                            .frame(
-                                height: index == segments.count - 1
-                                    ? geo.size.height
-                                    : LayoutMath.segmentHeight(available: geo.size.height, share: cumulative[index])
-                            )
-                    }
+            let weekLike = WeekCost(
+                start: .distantPast,
+                cost: day.cost,
+                byAgent: (day.byAgent?.isEmpty == false) ? day.byAgent! : ["claude": day.cost]
+            )
+            let segments = HeatStrip.segments(weekLike)
+            if level == 0 || segments.isEmpty {
+                shape.fill(IOSPalette.heatEmpty)
+            } else {
+                let cumulative = segments.indices.map { idx in
+                    segments[0...idx].reduce(0.0) { $0 + $1.share }
                 }
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                .clipShape(shape)
-                .compositingGroup()
-                .opacity(Self.opacities[min(max(level, 0), Self.opacities.count - 1)])
+                GeometryReader { geo in
+                    ZStack(alignment: .top) {
+                        ForEach(segments.indices.reversed(), id: \.self) { index in
+                            Rectangle()
+                                .fill(IOSPalette.agent(segments[index].agent))
+                                .frame(
+                                    height: index == segments.count - 1
+                                        ? geo.size.height
+                                        : LayoutMath.segmentHeight(available: geo.size.height, share: cumulative[index])
+                                )
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                    .clipShape(shape)
+                    .compositingGroup()
+                    .opacity(Self.opacities[opacityIndex])
+                }
             }
         }
     }
@@ -180,6 +195,12 @@ struct WidgetDailyHeatStrip: View {
 struct TodayWidgetView: View {
     let entry: KanjoWidgetEntry
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
         Group {
@@ -229,10 +250,11 @@ struct TodayWidgetView: View {
             Text(amountText)
                 .font(.system(size: isMedium ? 34 : 28, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(stale ? .secondary : .primary)
+                .foregroundStyle(stale && rendersInFullColor ? Color.secondary : Color.primary)
+                .opacity(stale && !rendersInFullColor ? 0.65 : 1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
-                .widgetAccentable()
+                .widgetAccentable(!rendersInFullColor)
 
             if let comparison {
                 Text(comparison.text)
@@ -265,6 +287,12 @@ struct TodayWidgetView: View {
 struct QuotaWidgetView: View {
     let entry: KanjoWidgetEntry
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
         Group {
@@ -361,10 +389,11 @@ struct QuotaWidgetView: View {
                 Text(amountText)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(stale ? .secondary : .primary)
+                    .foregroundStyle(stale && rendersInFullColor ? Color.secondary : Color.primary)
+                    .opacity(stale && !rendersInFullColor ? 0.65 : 1)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
-                    .widgetAccentable()
+                    .widgetAccentable(!rendersInFullColor)
 
                 if let comparison {
                     Text(comparison.text)
@@ -463,6 +492,13 @@ private struct WidgetQuotaBarItemView: View {
     let isStale: Bool
     let compact: Bool
 
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
+
     private var windowTitle: String {
         if compact {
             return bar.id == "five_hour"
@@ -546,11 +582,14 @@ private struct WidgetQuotaBarItemView: View {
 
     private func progressBar(height: CGFloat) -> some View {
         let pct = bar.isReset ? 0 : (bar.usedPercent ?? 0)
+        let tint: Color = rendersInFullColor
+            ? WidgetFormatting.quotaTint(for: pct, agent: agent)
+            : .primary
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.1))
+                Capsule().fill(Color.primary.opacity(0.15))
                 Capsule()
-                    .fill(WidgetFormatting.quotaTint(for: pct, agent: agent))
+                    .fill(tint)
                     .frame(
                         width: LayoutMath.barWidth(
                             available: geo.size.width,
@@ -559,6 +598,7 @@ private struct WidgetQuotaBarItemView: View {
                         )
                     )
                     .opacity(isStale ? 0.55 : 1.0)
+                    .widgetAccentable(!rendersInFullColor)
             }
         }
         .frame(height: height)
@@ -569,6 +609,12 @@ private struct WidgetQuotaBarItemView: View {
 
 struct QuotaRingWidgetView: View {
     let entry: KanjoWidgetEntry
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
         content
@@ -579,9 +625,16 @@ struct QuotaRingWidgetView: View {
     @ViewBuilder
     private var content: some View {
         let now = entry.date
-        if let snapshot = entry.snapshot,
-           let agent = entry.resolvedAgent,
-           let weekly = snapshot.weeklyQuotaBar(for: agent, now: now) {
+        if entry.snapshot == nil {
+            Text(L10n.tr("ios.widget.setup_sync"))
+                .font(.system(size: 11, weight: .medium))
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.4)
+                .lineLimit(4)
+                .widgetAccentable(!rendersInFullColor)
+        } else if let snapshot = entry.snapshot,
+                  let agent = entry.resolvedAgent,
+                  let weekly = snapshot.weeklyQuotaBar(for: agent, now: now) {
             let stale = snapshot.isStale(now: now)
             if !weekly.isReset, let pct = weekly.usedPercent {
                 Gauge(value: min(max(pct, 0), 100), in: 0...100) {
@@ -593,7 +646,7 @@ struct QuotaRingWidgetView: View {
                         .opacity(stale ? 0.6 : 1.0)
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .widgetAccentable()
+                .widgetAccentable(!rendersInFullColor)
             } else {
                 Gauge(value: 0, in: 0...100) {
                     Text(WidgetSnapshot.shortAgentLabel(for: agent))
@@ -604,15 +657,15 @@ struct QuotaRingWidgetView: View {
                         .lineLimit(1)
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
+                .widgetAccentable(!rendersInFullColor)
             }
         } else {
-            Gauge(value: 0, in: 0...100) {
-                Text("Kanjo")
-            } currentValueLabel: {
-                Text("—")
-                    .font(.system(.body, design: .rounded).weight(.semibold))
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
+            Text(L10n.tr("ios.widget.no_quota"))
+                .font(.system(size: 11, weight: .medium))
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.4)
+                .lineLimit(3)
+                .widgetAccentable(!rendersInFullColor)
         }
     }
 }
@@ -621,6 +674,12 @@ struct QuotaRingWidgetView: View {
 
 struct TodayQuotaRectangularWidgetView: View {
     let entry: KanjoWidgetEntry
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
         Group {
@@ -657,7 +716,7 @@ struct TodayQuotaRectangularWidgetView: View {
                     .font(.system(.headline, design: .rounded).weight(.bold))
                     .monospacedDigit()
                     .opacity(stale ? 0.65 : 1.0)
-                    .widgetAccentable()
+                    .widgetAccentable(!rendersInFullColor)
                 Spacer(minLength: 0)
             }
 
@@ -697,15 +756,27 @@ struct TodayQuotaRectangularWidgetView: View {
 
 struct TodayInlineWidgetView: View {
     let entry: KanjoWidgetEntry
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var rendersInFullColor: Bool {
+        if case .fullColor = renderingMode { return true }
+        return false
+    }
 
     var body: some View {
-        let amount: String = {
-            guard let snapshot = entry.snapshot else { return "—" }
-            return WidgetFormatting.todayAmountText(snapshot: snapshot, now: entry.date)
-        }()
-        Text(L10n.tr("ios.widget.inline_today", amount))
-            .monospacedDigit()
-            .widgetURL(WidgetSnapshotCache.overviewDeepLink)
-            .containerBackground(.fill.tertiary, for: .widget)
+        Group {
+            if let snapshot = entry.snapshot {
+                let stale = snapshot.isStale(now: entry.date)
+                Text(L10n.tr("ios.widget.inline_today", WidgetFormatting.todayAmountText(snapshot: snapshot, now: entry.date)))
+                    .monospacedDigit()
+                    .opacity(stale ? 0.65 : 1)
+                    .widgetAccentable(!rendersInFullColor)
+            } else {
+                Text(L10n.tr("ios.widget.setup_sync"))
+                    .widgetAccentable(!rendersInFullColor)
+            }
+        }
+        .widgetURL(WidgetSnapshotCache.overviewDeepLink)
+        .containerBackground(.fill.tertiary, for: .widget)
     }
 }

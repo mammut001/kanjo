@@ -407,17 +407,13 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         }
     }
 
-    /// 指定 agent 在 `now` 时刻的 5 小时窗口状态。若该 agent 没有 5 小时窗口则返回 `nil`。
+    /// 指定 agent 在 `now` 时刻的 5 小时窗口状态。没有有限的 5 小时百分比时返回 `nil`（不把别的窗口显示成“已重置”）。
+    /// 百分比存在但重置点已过（或无法解析）时 `isReset` 为 true，且不再带旧百分比。
     public func fiveHourQuotaBar(for agent: String, now: Date = Date()) -> WidgetQuotaBar? {
-        guard let window = quotaWindows?[agent], Self.hasQuotaData(window) else { return nil }
-        let hasFiveHour = window.fiveHourWindowHours != nil
-            || window.fiveHourResetsAt != nil
-            || window.fiveHourUsedPercent != nil
-        guard hasFiveHour else { return nil }
+        guard let window = quotaWindows?[agent] else { return nil }
+        guard let pct = window.fiveHourUsedPercent, pct.isFinite else { return nil }
         let hours = window.fiveHourWindowHours ?? 5
-        if let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp),
-           reset > now,
-           let pct = window.fiveHourUsedPercent, pct.isFinite {
+        if let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp), reset > now {
             return WidgetQuotaBar(
                 id: "five_hour",
                 windowHours: hours,
@@ -435,13 +431,12 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         )
     }
 
-    /// 指定 agent 在 `now` 时刻的每周窗口状态。若该 agent 无额度数据则返回 `nil`。
+    /// 指定 agent 在 `now` 时刻的每周窗口状态。没有有限的每周百分比时返回 `nil`。
     public func weeklyQuotaBar(for agent: String, now: Date = Date()) -> WidgetQuotaBar? {
-        guard let window = quotaWindows?[agent], Self.hasQuotaData(window) else { return nil }
+        guard let window = quotaWindows?[agent] else { return nil }
+        guard let pct = window.weeklyUsedPercent, pct.isFinite else { return nil }
         let hours = window.weeklyWindowHours
-        if let reset = ReportDates.parseTimestamp(window.weeklyResetsAt),
-           reset > now,
-           let pct = window.weeklyUsedPercent, pct.isFinite {
+        if let reset = ReportDates.parseTimestamp(window.weeklyResetsAt), reset > now {
             return WidgetQuotaBar(
                 id: "weekly",
                 windowHours: hours,
@@ -475,19 +470,14 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public func upcomingResetDates(after now: Date) -> [Date] {
         guard let quotaWindows else { return [] }
         var dates = Set<Date>()
-        for window in quotaWindows.values where Self.hasQuotaData(window) {
-            if let d = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp), d > now {
+        for window in quotaWindows.values {
+            if window.fiveHourUsedPercent?.isFinite == true,
+               let d = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp), d > now {
                 dates.insert(d)
             }
-            if let d = ReportDates.parseTimestamp(window.weeklyResetsAt), d > now {
+            if window.weeklyUsedPercent?.isFinite == true,
+               let d = ReportDates.parseTimestamp(window.weeklyResetsAt), d > now {
                 dates.insert(d)
-            }
-            if let extra = window.extraWindows {
-                for ew in extra {
-                    if let d = ew.resetsAt.flatMap(ReportDates.parseTimestamp), d > now {
-                        dates.insert(d)
-                    }
-                }
             }
         }
         return dates.sorted()
