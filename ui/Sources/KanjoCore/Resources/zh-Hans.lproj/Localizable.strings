@@ -565,6 +565,8 @@
 "ios.widget.five_hour_short" = "5h";
 "ios.widget.weekly_short" = "每周";
 "ios.widget.resets_in_short" = "%@后重置";
+"ios.widget.seven_day_total" = "7 天合计";
+"ios.widget.daily_average" = "日均";
 "ios.widget.intent.agent" = "Agent";
 "ios.widget.intent.auto" = "自动（最新）";
 

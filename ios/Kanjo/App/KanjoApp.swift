@@ -77,16 +77,28 @@ struct KanjoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(store: store)
-                .onAppear {
-                    print("KANJO root appear args=\(CommandLine.arguments)")
-                    BackgroundRefreshManager.schedule()
-                }
+            #if DEBUG
+            if CommandLine.arguments.contains("-widgetGallery") {
+                WidgetGalleryView()
+            } else {
+                appRoot
+            }
+            #else
+            appRoot
+            #endif
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 BackgroundRefreshManager.schedule()
             }
         }
+    }
+
+    private var appRoot: some View {
+        RootView(store: store)
+            .onAppear {
+                print("KANJO root appear args=\(CommandLine.arguments)")
+                BackgroundRefreshManager.schedule()
+            }
     }
 }

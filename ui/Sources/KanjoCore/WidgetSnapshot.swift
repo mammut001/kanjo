@@ -250,6 +250,26 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         return days.first(where: { $0.day == yesterdayKey })?.cost ?? 0
     }
 
+    /// 今天各 agent 的花费，按金额从高到低；金额相同按名字字母序。
+    /// 今天未知，或这一天没有 `by_agent` 拆分（或拆分里没有正花费）时返回 nil。
+    /// 调用方在 nil 时改显示近 7 天合计与日均，不要拿项目名来填。
+    public func todayAgentCosts(now: Date = Date()) -> [(agent: String, cost: Double)]? {
+        guard isTodayKnown(now: now) else { return nil }
+        let cal = RangeEngine.calendar(timezone: resolvedTimezone)
+        let todayKey = RangeEngine.dayString(cal.startOfDay(for: now), calendar: cal)
+        guard let split = days.first(where: { $0.day == todayKey })?.byAgent, !split.isEmpty else {
+            return nil
+        }
+        let ranked = split
+            .filter { $0.value.isFinite && $0.value > 0 }
+            .map { (agent: $0.key, cost: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.cost != rhs.cost { return lhs.cost > rhs.cost }
+                return lhs.agent < rhs.agent
+            }
+        return ranked.isEmpty ? nil : ranked
+    }
+
     /// 返回用于热力条展示的最近 `count` 天（最早的在前，最后一项为 `now` 所在日；缺失日期补 0）。
     public func recentDays(count: Int, now: Date? = nil) -> [WidgetDayCost] {
         guard count > 0 else { return [] }
@@ -268,7 +288,12 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         }
     }
 
-    // MARK: - 额度 Agent 选择与新鲜度排序
+    // MARK: - 额度 Agent 选择
+
+    /// 有额度数据的 agent 的固定展示顺序。快照里没有每个 agent 的拉取时间，
+    /// 窗口起点（重置时刻减窗口长度）不是新鲜度，不能用来挑默认 agent。
+    /// 未出现在这张表里的 agent 排在后面，按名字字母序。
+    public static let quotaAgentPriority: [String] = ["claude", "codex", "antigravity"]
 
     /// 该 `QuotaWindow` 是否带有额度百分比数据（仅设置了手动重置时间但无任何百分比的不算有额度数据）。
     public static func hasQuotaData(_ window: QuotaWindow?) -> Bool {
@@ -281,43 +306,25 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         return false
     }
 
-    /// 从 `quotaWindows` 中筛出有额度数据的 agent，并按额度数据新鲜度从新到旧排序。
-    ///
-    /// 新鲜度衡量：
-    /// 1. 含有未过期的额度窗口优先于全部窗口已过期的 agent（当提供 `now` 时）；
-    /// 2. 窗口起点（`resetsAt - windowHours`）最新者优先（例如近期开启的 5 小时窗口，或最新开启的周窗口）；
-    /// 3. 最晚重置时刻（`resetsAt`）更晚者优先；
-    /// 4. 数据来源优先级 `live` > `tokei` > `manual`，再以 `"claude"` 及字母序稳定兜底。
+    /// 从 `quotaWindows` 中筛出有额度数据的 agent。
+    /// 顺序是 `quotaAgentPriority`，其余按字母序。没有额度数据的 agent 不在结果里。
+    /// `now` 不参与排序（没有可比较的拉取时间）；保留参数是为了让时间线和意图共用同一个签名。
     public static func quotaAgents(
         in quotaWindows: [String: QuotaWindow]?,
-        now: Date? = nil
+        now _: Date? = nil
     ) -> [String] {
         guard let quotaWindows, !quotaWindows.isEmpty else { return [] }
-        let valid = quotaWindows.filter { hasQuotaData($0.value) }
+        let valid = quotaWindows.keys.filter { hasQuotaData(quotaWindows[$0]) }
         guard !valid.isEmpty else { return [] }
-
-        return valid.keys.sorted { lhs, rhs in
-            guard let w1 = valid[lhs], let w2 = valid[rhs] else { return lhs < rhs }
-            let f1 = freshnessKey(for: w1, now: now)
-            let f2 = freshnessKey(for: w2, now: now)
-            if f1.hasActive != f2.hasActive { return f1.hasActive && !f2.hasActive }
-            if f1.latestWindowStart != f2.latestWindowStart {
-                return f1.latestWindowStart > f2.latestWindowStart
-            }
-            if f1.latestReset != f2.latestReset {
-                return f1.latestReset > f2.latestReset
-            }
-            if f1.sourceRank != f2.sourceRank {
-                return f1.sourceRank > f2.sourceRank
-            }
-            if (lhs == "claude") != (rhs == "claude") {
-                return lhs == "claude"
-            }
+        return valid.sorted { lhs, rhs in
+            let rank1 = quotaAgentRank(lhs)
+            let rank2 = quotaAgentRank(rhs)
+            if rank1 != rank2 { return rank1 < rank2 }
             return lhs < rhs
         }
     }
 
-    /// 默认 agent：额度数据最新的那个 agent；没有任何可用额度数据时为 `nil`。
+    /// 默认 agent：`quotaAgents` 的第一个；没有任何可用额度数据时为 `nil`。
     public static func defaultQuotaAgent(
         in quotaWindows: [String: QuotaWindow]?,
         now: Date? = nil
@@ -333,60 +340,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         Self.defaultQuotaAgent(in: quotaWindows, now: now)
     }
 
-    private struct FreshnessKey {
-        var hasActive: Bool
-        var latestWindowStart: Date
-        var latestReset: Date
-        var sourceRank: Int
-    }
-
-    private static func freshnessKey(for window: QuotaWindow, now: Date?) -> FreshnessKey {
-        var starts: [Date] = []
-        var resets: [Date] = []
-
-        if window.fiveHourUsedPercent?.isFinite == true,
-           let reset = window.fiveHourResetsAt.flatMap(ReportDates.parseTimestamp) {
-            let hours = Double(max(1, window.fiveHourWindowHours ?? 5))
-            resets.append(reset)
-            starts.append(reset.addingTimeInterval(-hours * 3600))
-        }
-        if window.weeklyUsedPercent?.isFinite == true,
-           let reset = ReportDates.parseTimestamp(window.weeklyResetsAt) {
-            let hours = Double(max(1, window.weeklyWindowHours))
-            resets.append(reset)
-            starts.append(reset.addingTimeInterval(-hours * 3600))
-        }
-        if let extra = window.extraWindows {
-            for ew in extra where ew.usedPercent?.isFinite == true {
-                if let reset = ew.resetsAt.flatMap(ReportDates.parseTimestamp) {
-                    let hours = Double(max(1, ew.windowHours ?? 168))
-                    resets.append(reset)
-                    starts.append(reset.addingTimeInterval(-hours * 3600))
-                }
-            }
-        }
-
-        let hasActive: Bool
-        if let now {
-            hasActive = resets.contains(where: { $0 > now })
-        } else {
-            hasActive = !resets.isEmpty
-        }
-
-        let sourceRank: Int
-        switch window.source {
-        case "live": sourceRank = 3
-        case "tokei": sourceRank = 2
-        case "manual": sourceRank = 1
-        default: sourceRank = 0
-        }
-
-        return FreshnessKey(
-            hasActive: hasActive,
-            latestWindowStart: starts.max() ?? .distantPast,
-            latestReset: resets.max() ?? .distantPast,
-            sourceRank: sourceRank
-        )
+    private static func quotaAgentRank(_ agent: String) -> Int {
+        quotaAgentPriority.firstIndex(of: agent) ?? quotaAgentPriority.count
     }
 
     // MARK: - 小组件额度行与时间线重置时刻

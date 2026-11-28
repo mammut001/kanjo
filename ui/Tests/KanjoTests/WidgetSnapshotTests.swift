@@ -209,19 +209,36 @@ final class WidgetSnapshotTests: KanjoTestCase {
         XCTAssertTrue(WidgetSnapshot.isStale(generatedAt: "not-a-timestamp", now: now))
     }
 
-    func testDefaultAgentPicksFreshestActiveQuotaAndSkipsAgentsWithoutData() {
+    /// 期望顺序只从 `quotaAgentPriority` 和字母序推出来，不看窗口起点或来源。
+    private func expectedQuotaAgents(_ agents: some Sequence<String>) -> [String] {
+        let present = Set(agents)
+        let pinned = WidgetSnapshot.quotaAgentPriority.filter { present.contains($0) }
+        let rest = present.subtracting(pinned).sorted()
+        return pinned + rest
+    }
+
+    func testQuotaAgentsFollowFixedPriorityAndSkipAgentsWithoutData() {
         let now = Date(timeIntervalSince1970: 1_763_000_000)
+        // Codex 的 5 小时窗口比 Claude 更晚开始（3 小时后重置 vs 1 小时 20 分）。
+        // 旧的“最新窗口起点”会选中 Codex；固定优先级不能跟着窗口时间走。
+        let claudeReset = now.addingTimeInterval(80 * 60)
+        let codexReset = now.addingTimeInterval(3 * 3600)
         let windowHours = 5.0
-        let claudeReset = now.addingTimeInterval(3 * 3600)
-        let codexReset = now.addingTimeInterval(1 * 3600)
-        let claudeStart = claudeReset.addingTimeInterval(-windowHours * 3600)
-        let codexStart = codexReset.addingTimeInterval(-windowHours * 3600)
-        XCTAssertGreaterThan(claudeReset, now)
-        XCTAssertGreaterThan(codexReset, now)
-        XCTAssertGreaterThan(claudeStart, codexStart)
+        XCTAssertGreaterThan(codexReset, claudeReset)
+        XCTAssertGreaterThan(
+            codexReset.addingTimeInterval(-windowHours * 3600),
+            claudeReset.addingTimeInterval(-windowHours * 3600)
+        )
+        // zeta 的窗口最晚开始，旧启发式会把它排到最前。
+        let zetaReset = now.addingTimeInterval(48 * 3600)
+        XCTAssertGreaterThan(zetaReset, codexReset)
 
         let claude = fiveHourWindow(reset: claudeReset, percent: 20, source: "tokei")
         let codex = fiveHourWindow(reset: codexReset, percent: 80, source: "live")
+        let antigravity = fiveHourWindow(reset: now.addingTimeInterval(30 * 60), percent: 10, source: "manual")
+        let copilot = fiveHourWindow(reset: now.addingTimeInterval(-60), percent: 99, source: "live")
+        let beta = fiveHourWindow(reset: now.addingTimeInterval(10 * 3600), percent: 5, source: "live")
+        let zeta = fiveHourWindow(reset: zetaReset, percent: 1, source: "manual")
         let grok = QuotaWindow(
             weeklyResetsAt: iso(now.addingTimeInterval(86400)),
             weeklyUsedPercent: nil,
@@ -229,55 +246,68 @@ final class WidgetSnapshotTests: KanjoTestCase {
         )
         XCTAssertFalse(WidgetSnapshot.hasQuotaData(grok))
         XCTAssertTrue(WidgetSnapshot.hasQuotaData(claude))
+        XCTAssertTrue(WidgetSnapshot.hasQuotaData(copilot))
 
-        let windows = ["codex": codex, "claude": claude, "grok": grok]
-        XCTAssertEqual(WidgetSnapshot.quotaAgents(in: windows, now: now), ["claude", "codex"])
-        XCTAssertEqual(WidgetSnapshot.defaultQuotaAgent(in: windows, now: now), "claude")
+        let windows = [
+            "zeta": zeta,
+            "copilot": copilot,
+            "beta": beta,
+            "grok": grok,
+            "antigravity": antigravity,
+            "codex": codex,
+            "claude": claude,
+        ]
+        let withData = windows.keys.filter { WidgetSnapshot.hasQuotaData(windows[$0]) }
+        let expected = expectedQuotaAgents(withData)
+        XCTAssertEqual(WidgetSnapshot.quotaAgentPriority, ["claude", "codex", "antigravity"])
+        XCTAssertEqual(WidgetSnapshot.quotaAgents(in: windows, now: now), expected)
+        XCTAssertEqual(WidgetSnapshot.defaultQuotaAgent(in: windows, now: now), expected.first)
+        XCTAssertEqual(expected.first, "claude")
+        XCTAssertFalse(expected.contains("grok"))
+        XCTAssertNotEqual(expected.first, "zeta")
     }
 
-    func testDefaultAgentBreaksTiesBySourceThenPrefersClaude() {
+    func testTodayAgentSplitRanksByCostAndIgnoresMissingSplits() {
+        let timeZone = TimeZone(identifier: "UTC")!
+        let calendar = RangeEngine.calendar(timezone: timeZone)
         let now = Date(timeIntervalSince1970: 1_763_000_000)
-        let reset = now.addingTimeInterval(2 * 3600)
-        let live = fiveHourWindow(reset: reset, percent: 10, source: "live")
-        let tokei = fiveHourWindow(reset: reset, percent: 90, source: "tokei")
-        XCTAssertEqual(
-            WidgetSnapshot.quotaAgents(in: ["claude": tokei, "codex": live], now: now).first,
-            "codex"
+        let today = key(0, from: now, calendar: calendar)
+        let costs = ["codex": 4.0, "claude": 9.0, "zeta": 1.0, "antigravity": 4.0, "empty": 0.0]
+        let day = WidgetDayCost(
+            day: today,
+            cost: costs.values.reduce(0.0, +),
+            byAgent: costs
         )
-        XCTAssertEqual(
-            WidgetSnapshot.defaultQuotaAgent(in: ["codex": live, "claude": live], now: now),
-            "claude"
+        let snapshot = WidgetSnapshot(
+            generatedAt: iso(now),
+            timezone: timeZone.identifier,
+            days: [day]
         )
-    }
+        let ranked = snapshot.todayAgentCosts(now: now)
+        let expected = costs
+            .filter { $0.value > 0 }
+            .map { (agent: $0.key, cost: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.cost != rhs.cost { return lhs.cost > rhs.cost }
+                return lhs.agent < rhs.agent
+            }
+        XCTAssertEqual(ranked?.map(\.agent), expected.map(\.agent))
+        XCTAssertEqual(ranked?.map(\.cost) ?? [], expected.map(\.cost))
 
-    func testDefaultAgentPrefersAnActiveWindowOverANewerExpiredOne() {
-        let now = Date(timeIntervalSince1970: 1_763_000_000)
-        let activeReset = now.addingTimeInterval(6 * 86400)
-        let expiredReset = now.addingTimeInterval(-60)
-        let activeStart = activeReset.addingTimeInterval(-168 * 3600)
-        let expiredStart = expiredReset.addingTimeInterval(-5 * 3600)
-        XCTAssertGreaterThan(activeReset, now)
-        XCTAssertLessThan(expiredReset, now)
-        XCTAssertGreaterThan(expiredStart, activeStart)
+        let noSplit = WidgetSnapshot(
+            generatedAt: iso(now),
+            timezone: timeZone.identifier,
+            days: [WidgetDayCost(day: today, cost: 3)]
+        )
+        XCTAssertNil(noSplit.todayAgentCosts(now: now))
 
-        let claude = QuotaWindow(
-            weeklyResetsAt: iso(activeReset),
-            weeklyWindowHours: 168,
-            weeklyUsedPercent: 30,
-            source: "tokei"
+        let yesterday = iso(now.addingTimeInterval(-36 * 3600))
+        let unknownToday = WidgetSnapshot(
+            generatedAt: yesterday,
+            timezone: timeZone.identifier,
+            days: [day]
         )
-        let copilot = QuotaWindow(
-            weeklyResetsAt: iso(now.addingTimeInterval(86400)),
-            weeklyUsedPercent: nil,
-            fiveHourResetsAt: iso(expiredReset),
-            fiveHourWindowHours: 5,
-            fiveHourUsedPercent: 99,
-            source: "live"
-        )
-        XCTAssertEqual(
-            WidgetSnapshot.defaultQuotaAgent(in: ["copilot": copilot, "claude": claude], now: now),
-            "claude"
-        )
+        XCTAssertNil(unknownToday.todayAgentCosts(now: now))
     }
 
     func testExtraQuotaCountsAndAResetTimeAloneDoesNot() {

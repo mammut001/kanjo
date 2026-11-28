@@ -564,7 +564,9 @@
 "ios.widget.no_quota" = "No quota data";
 "ios.widget.five_hour_short" = "5h";
 "ios.widget.weekly_short" = "7d";
-"ios.widget.resets_in_short" = "resets in %@";
+"ios.widget.resets_in_short" = "Resets in %@";
+"ios.widget.seven_day_total" = "7-day total";
+"ios.widget.daily_average" = "Daily avg";
 "ios.widget.intent.agent" = "Agent";
 "ios.widget.intent.auto" = "Automatic (Freshest)";
 

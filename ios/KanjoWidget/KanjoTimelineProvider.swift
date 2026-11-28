@@ -2,59 +2,6 @@ import Foundation
 import KanjoCore
 import WidgetKit
 
-struct KanjoWidgetEntry: TimelineEntry {
-    let date: Date
-    let snapshot: WidgetSnapshot?
-    let selectedAgentID: String?
-    let isPreview: Bool
-
-    init(
-        date: Date,
-        snapshot: WidgetSnapshot?,
-        selectedAgentID: String? = nil,
-        isPreview: Bool = false
-    ) {
-        self.date = date
-        self.snapshot = snapshot
-        self.selectedAgentID = selectedAgentID
-        self.isPreview = isPreview
-    }
-
-    /// 实际展示的单个 agent：用户显式选了就用用户选的；没选则取额度数据最新的默认 agent。
-    var resolvedAgent: String? {
-        if let selectedAgentID, !selectedAgentID.isEmpty {
-            return selectedAgentID
-        }
-        return snapshot?.defaultQuotaAgent(now: date)
-    }
-
-    /// 中尺寸额度小组件最多展示两个 agent：先放主选 agent，再补另一个有额度数据的最新 agent。
-    var resolvedMediumQuotaAgents: [String] {
-        guard let snapshot else { return [] }
-        let available = snapshot.quotaAgents(now: date)
-        if let selectedAgentID, !selectedAgentID.isEmpty {
-            var list = [selectedAgentID]
-            for candidate in available where candidate != selectedAgentID {
-                list.append(candidate)
-                if list.count >= 2 { break }
-            }
-            return list
-        }
-        return Array(available.prefix(2))
-    }
-
-    static func preview(now: Date = Date(), selectedAgentID: String? = nil) -> KanjoWidgetEntry {
-        WidgetSnapshotCache.applySharedLanguagePreference()
-        let sample = BundledSampleSnapshotSource().loadWidgetSnapshot(now: now)
-        return KanjoWidgetEntry(
-            date: now,
-            snapshot: sample,
-            selectedAgentID: selectedAgentID,
-            isPreview: true
-        )
-    }
-}
-
 enum KanjoTimelineBuilder {
     static let refreshInterval: TimeInterval = 30 * 60
 

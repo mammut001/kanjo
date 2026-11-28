@@ -3,6 +3,76 @@ import KanjoCore
 import SwiftUI
 import WidgetKit
 
+// MARK: - 画廊用的 family 覆盖
+
+/// `\.widgetFamily` 在 App 进程里是只读的。DEBUG 画廊用这个键把真实 family 传进同一份视图；
+/// 小组件扩展不设置它，视图继续读系统的 `widgetFamily`。
+struct KanjoWidgetFamilyOverrideKey: EnvironmentKey {
+    static let defaultValue: WidgetFamily? = nil
+}
+
+extension EnvironmentValues {
+    var kanjoWidgetFamilyOverride: WidgetFamily? {
+        get { self[KanjoWidgetFamilyOverrideKey.self] }
+        set { self[KanjoWidgetFamilyOverrideKey.self] = newValue }
+    }
+}
+
+// MARK: - 时间线条目（视图和 Provider 共用；DEBUG 画廊也编译这份文件）
+
+struct KanjoWidgetEntry: TimelineEntry {
+    let date: Date
+    let snapshot: WidgetSnapshot?
+    let selectedAgentID: String?
+    let isPreview: Bool
+
+    init(
+        date: Date,
+        snapshot: WidgetSnapshot?,
+        selectedAgentID: String? = nil,
+        isPreview: Bool = false
+    ) {
+        self.date = date
+        self.snapshot = snapshot
+        self.selectedAgentID = selectedAgentID
+        self.isPreview = isPreview
+    }
+
+    /// 实际展示的单个 agent：用户显式选了就用用户选的；没选则用固定优先级里的默认 agent。
+    var resolvedAgent: String? {
+        if let selectedAgentID, !selectedAgentID.isEmpty {
+            return selectedAgentID
+        }
+        return snapshot?.defaultQuotaAgent(now: date)
+    }
+
+    /// 中尺寸额度小组件最多展示两个 agent：先放主选 agent，再按同一优先级补一个有额度数据的 agent。
+    var resolvedMediumQuotaAgents: [String] {
+        guard let snapshot else { return [] }
+        let available = snapshot.quotaAgents(now: date)
+        if let selectedAgentID, !selectedAgentID.isEmpty {
+            var list = [selectedAgentID]
+            for candidate in available where candidate != selectedAgentID {
+                list.append(candidate)
+                if list.count >= 2 { break }
+            }
+            return list
+        }
+        return Array(available.prefix(2))
+    }
+
+    static func preview(now: Date = Date(), selectedAgentID: String? = nil) -> KanjoWidgetEntry {
+        WidgetSnapshotCache.applySharedLanguagePreference()
+        let sample = BundledSampleSnapshotSource().loadWidgetSnapshot(now: now)
+        return KanjoWidgetEntry(
+            date: now,
+            snapshot: sample,
+            selectedAgentID: selectedAgentID,
+            isPreview: true
+        )
+    }
+}
+
 // MARK: - 状态与格式化辅助
 
 enum WidgetFormatting {
@@ -90,6 +160,17 @@ enum WidgetFormatting {
         case .critical: return IOSPalette.bad
         }
     }
+
+    /// “Resets in …” / “%@后重置” / “Réinitialisation dans %@”。
+    /// 倒计时本身仍是 `Text(date, style: .relative)`，系统会自己跳字，不靠时间线刷新。
+    static func resetsInText(_ date: Date) -> Text {
+        let token = "\u{FFFC}"
+        let formatted = L10n.tr("ios.widget.resets_in_short", token)
+        let parts = formatted.components(separatedBy: token)
+        let prefix = parts.first ?? ""
+        let suffix = parts.dropFirst().joined()
+        return Text(prefix) + Text(date, style: .relative) + Text(suffix)
+    }
 }
 
 // MARK: - 未同步空状态
@@ -116,7 +197,7 @@ struct WidgetEmptySyncView: View {
     }
 }
 
-// MARK: - 按天热力条（沿用 App HeatStrip 配色与 5 档透明度）
+// MARK: - 按天热力条（色相沿用 App HeatStrip / AgentColors，按天按 agent 份额分段）
 
 struct WidgetDailyHeatStrip: View {
     let days: [WidgetDayCost]
@@ -127,7 +208,8 @@ struct WidgetDailyHeatStrip: View {
 
     @Environment(\.widgetRenderingMode) private var renderingMode
 
-    private static let opacities: [Double] = [0, 0.3, 0.52, 0.76, 1]
+    /// 着色 / 活力模式下不能用自定义色。最低非零档也要明显，不能再是近乎看不见的一抹。
+    private static let accentOpacities: [Double] = [0.18, 0.62, 0.78, 0.9, 1]
 
     private var rendersInFullColor: Bool {
         if case .fullColor = renderingMode { return true }
@@ -149,21 +231,17 @@ struct WidgetDailyHeatStrip: View {
     @ViewBuilder
     private func dayCell(_ day: WidgetDayCost, level: Int) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let opacityIndex = min(max(level, 0), Self.opacities.count - 1)
-        if !rendersInFullColor {
-            // 锁屏活力渲染与主屏着色模式不保留自定义色，用透明度分档交给系统着色。
+        if level == 0 {
+            shape.fill(rendersInFullColor ? IOSPalette.heatZero : Color.primary.opacity(Self.accentOpacities[0]))
+        } else if !rendersInFullColor {
+            let opacityIndex = min(max(level, 1), Self.accentOpacities.count - 1)
             shape
-                .fill(Color.primary.opacity(level == 0 ? 0.18 : Self.opacities[opacityIndex]))
-                .widgetAccentable(level > 0)
+                .fill(Color.primary.opacity(Self.accentOpacities[opacityIndex]))
+                .widgetAccentable()
         } else {
-            let weekLike = WeekCost(
-                start: .distantPast,
-                cost: day.cost,
-                byAgent: (day.byAgent?.isEmpty == false) ? day.byAgent! : ["claude": day.cost]
-            )
-            let segments = HeatStrip.segments(weekLike)
-            if level == 0 || segments.isEmpty {
-                shape.fill(IOSPalette.heatEmpty)
+            let segments = agentSegments(for: day)
+            if segments.isEmpty {
+                shape.fill(IOSPalette.heatLevelColor(agent: "claude", level: level))
             } else {
                 let cumulative = segments.indices.map { idx in
                     segments[0...idx].reduce(0.0) { $0 + $1.share }
@@ -172,7 +250,7 @@ struct WidgetDailyHeatStrip: View {
                     ZStack(alignment: .top) {
                         ForEach(segments.indices.reversed(), id: \.self) { index in
                             Rectangle()
-                                .fill(IOSPalette.agent(segments[index].agent))
+                                .fill(IOSPalette.heatLevelColor(agent: segments[index].agent, level: level))
                                 .frame(
                                     height: index == segments.count - 1
                                         ? geo.size.height
@@ -182,11 +260,16 @@ struct WidgetDailyHeatStrip: View {
                     }
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                     .clipShape(shape)
-                    .compositingGroup()
-                    .opacity(Self.opacities[opacityIndex])
                 }
             }
         }
+    }
+
+    /// 和 App 热力条一样按 agent 份额纵向分段。没有 `by_agent` 时整格落到 Claude 的色相上，避免空拆分被画成灰。
+    private func agentSegments(for day: WidgetDayCost) -> [(agent: String, share: Double)] {
+        let byAgent = (day.byAgent?.isEmpty == false) ? day.byAgent! : ["claude": day.cost]
+        let weekLike = WeekCost(start: .distantPast, cost: day.cost, byAgent: byAgent)
+        return HeatStrip.segments(weekLike)
     }
 }
 
@@ -194,8 +277,11 @@ struct WidgetDailyHeatStrip: View {
 
 struct TodayWidgetView: View {
     let entry: KanjoWidgetEntry
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var systemFamily
+    @Environment(\.kanjoWidgetFamilyOverride) private var familyOverride
     @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var family: WidgetFamily { familyOverride ?? systemFamily }
 
     private var rendersInFullColor: Bool {
         if case .fullColor = renderingMode { return true }
@@ -247,8 +333,49 @@ struct TodayWidgetView: View {
 
             Spacer(minLength: 0)
 
+            if isMedium {
+                HStack(alignment: .center, spacing: 12) {
+                    amountColumn(
+                        amountText: amountText,
+                        comparison: comparison,
+                        stale: stale,
+                        isMedium: true
+                    )
+                    TodayAgentSplitColumn(snapshot: snapshot, now: now, stale: stale)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                amountColumn(
+                    amountText: amountText,
+                    comparison: comparison,
+                    stale: stale,
+                    isMedium: false
+                )
+            }
+
+            Spacer(minLength: 2)
+
+            WidgetDailyHeatStrip(
+                days: heatDays,
+                isStale: stale,
+                barHeight: isMedium ? 22 : 18,
+                cornerRadius: 3,
+                spacing: isMedium ? 3.5 : 3
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func amountColumn(
+        amountText: String,
+        comparison: (text: String, symbol: String?)?,
+        stale: Bool,
+        isMedium: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(amountText)
-                .font(.system(size: isMedium ? 34 : 28, weight: .bold, design: .rounded))
+                .font(.system(size: isMedium ? 32 : 28, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(stale && rendersInFullColor ? Color.secondary : Color.primary)
                 .opacity(stale && !rendersInFullColor ? 0.65 : 1)
@@ -267,18 +394,74 @@ struct TodayWidgetView: View {
                     .font(.caption2)
                     .hidden()
             }
-
-            Spacer(minLength: 2)
-
-            WidgetDailyHeatStrip(
-                days: heatDays,
-                isStale: stale,
-                barHeight: isMedium ? 22 : 18,
-                cornerRadius: 3,
-                spacing: isMedium ? 3.5 : 3
-            )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 中尺寸“今天”的右半：今天按 agent 拆分（最多 3 个，按花费从高到低）。
+/// 没有 `by_agent` 时改为近 7 天合计和日均。只显示 agent，不显示项目名。
+private struct TodayAgentSplitColumn: View {
+    let snapshot: WidgetSnapshot
+    let now: Date
+    let stale: Bool
+
+    private static let shownAgents = 3
+    private static let trailingDays = 7
+
+    var body: some View {
+        if let agents = snapshot.todayAgentCosts(now: now) {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(agents.prefix(Self.shownAgents), id: \.agent) { item in
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(IOSPalette.agent(item.agent))
+                            .frame(width: 7, height: 7)
+                        Text(WidgetSnapshot.shortAgentLabel(for: item.agent))
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        Text(Fmt.money(item.cost, currency: snapshot.currency))
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(stale ? Color.secondary : Color.primary)
+                            .lineLimit(1)
+                            .layoutPriority(1)
+                    }
+                }
+            }
+        } else {
+            let days = snapshot.recentDays(count: Self.trailingDays, now: now)
+            let total = days.reduce(0.0) { $0 + ($1.cost.isFinite ? $1.cost : 0) }
+            let average = total / Double(Self.trailingDays)
+            VStack(alignment: .leading, spacing: 5) {
+                fallbackRow(
+                    title: L10n.tr("ios.widget.seven_day_total"),
+                    value: Fmt.money(total, currency: snapshot.currency)
+                )
+                fallbackRow(
+                    title: L10n.tr("ios.widget.daily_average"),
+                    value: Fmt.money(average, currency: snapshot.currency)
+                )
+            }
+        }
+    }
+
+    private func fallbackRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(stale ? Color.secondary : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
     }
 }
 
@@ -286,8 +469,11 @@ struct TodayWidgetView: View {
 
 struct QuotaWidgetView: View {
     let entry: KanjoWidgetEntry
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var systemFamily
+    @Environment(\.kanjoWidgetFamilyOverride) private var familyOverride
     @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var family: WidgetFamily { familyOverride ?? systemFamily }
 
     private var rendersInFullColor: Bool {
         if case .fullColor = renderingMode { return true }
@@ -538,11 +724,12 @@ private struct WidgetQuotaBarItemView: View {
             progressBar(height: 5)
 
             if !bar.isReset, let resetsAt = bar.resetsAt {
-                Text(resetsAt, style: .relative)
+                WidgetFormatting.resetsInText(resetsAt)
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
     }
@@ -571,11 +758,12 @@ private struct WidgetQuotaBarItemView: View {
                 }
             }
             if !bar.isReset, let resetsAt = bar.resetsAt {
-                Text(resetsAt, style: .relative)
+                WidgetFormatting.resetsInText(resetsAt)
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
     }
@@ -741,8 +929,9 @@ struct TodayQuotaRectangularWidgetView: View {
             if bar.isReset {
                 Text("\(name) \(windowLabel) · \(L10n.tr("ios.widget.quota_reset"))")
             } else if let pct = bar.usedPercent, let resetsAt = bar.resetsAt {
-                (Text("\(name) \(windowLabel) \(Int(pct.rounded()))% · ") + Text(resetsAt, style: .relative))
+                (Text("\(name) \(windowLabel) \(Int(pct.rounded()))% · ") + WidgetFormatting.resetsInText(resetsAt))
                     .opacity(isStale ? 0.65 : 1.0)
+                    .minimumScaleFactor(0.6)
             } else {
                 Text(L10n.tr("ios.widget.no_quota"))
             }

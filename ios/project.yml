@@ -22,7 +22,12 @@ targets:
     sources:
       - path: Kanjo
       - path: Shared
+      # 真实小组件视图。Release 用 EXCLUDED_SOURCE_FILE_NAMES 排除，App Store 包里没有画廊。
+      - path: KanjoWidget/KanjoWidgetViews.swift
     settings:
+      configs:
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "KanjoWidgetViews.swift WidgetGalleryView.swift"
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lanshuagent.kanjo.ios
         PRODUCT_NAME: Kanjo
